@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useCanvasStore } from '@/store/canvas-store';
-import { cn } from '@/lib/utils';
+import { useState } from "react";
+import { useCanvasStore } from "@/store/canvas-store";
+import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   MousePointer2,
   Hand,
@@ -25,16 +26,16 @@ import {
   Redo2,
   HelpCircle,
   X,
-} from 'lucide-react';
+} from "lucide-react";
 
 // Kullanılabilir etiketler
 const WALL_LABELS = [
-  { id: 'stage', label: 'Sahne', icon: Music, color: '#3b82f6' },
-  { id: 'bar', label: 'Bar', icon: Wine, color: '#f97316' },
-  { id: 'entrance', label: 'Giriş', icon: DoorOpen, color: '#22c55e' },
-  { id: 'exit', label: 'Çıkış', icon: DoorOpen, color: '#ef4444' },
-  { id: 'dj', label: 'DJ', icon: Disc, color: '#8b5cf6' },
-  { id: 'wc', label: 'WC', icon: Bath, color: '#64748b' },
+  { id: "stage", label: "Sahne", icon: Music, color: "#3b82f6" },
+  { id: "bar", label: "Bar", icon: Wine, color: "#f97316" },
+  { id: "entrance", label: "Giriş", icon: DoorOpen, color: "#22c55e" },
+  { id: "exit", label: "Çıkış", icon: DoorOpen, color: "#ef4444" },
+  { id: "dj", label: "DJ", icon: Disc, color: "#8b5cf6" },
+  { id: "wc", label: "WC", icon: Bath, color: "#64748b" },
 ];
 
 export function CanvasToolbar() {
@@ -68,13 +69,14 @@ export function CanvasToolbar() {
 
   const [showLabelMenu, setShowLabelMenu] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const hasStage = !!layout.stage;
 
   const tools = [
-    { id: 'select', icon: MousePointer2, label: 'Seç' },
-    { id: 'pan', icon: Hand, label: 'Kaydır' },
-    { id: 'draw', icon: Pencil, label: 'Çizgi Çiz' },
-    { id: 'eraser', icon: Eraser, label: 'Sil' },
+    { id: "select", icon: MousePointer2, label: "Seç" },
+    { id: "pan", icon: Hand, label: "Kaydır" },
+    { id: "draw", icon: Pencil, label: "Çizgi Çiz" },
+    { id: "eraser", icon: Eraser, label: "Sil" },
   ] as const;
 
   const isUndoDisabled = !canUndo();
@@ -94,8 +96,8 @@ export function CanvasToolbar() {
             key={tool.id}
             onClick={() => setActiveTool(tool.id)}
             className={cn(
-              'p-2 rounded hover:bg-slate-700 transition-colors',
-              activeTool === tool.id && 'bg-blue-600 hover:bg-blue-500'
+              "p-2 rounded hover:bg-slate-700 transition-colors",
+              activeTool === tool.id && "bg-blue-600 hover:bg-blue-500"
             )}
             title={tool.label}
           >
@@ -110,8 +112,10 @@ export function CanvasToolbar() {
           onClick={undo}
           disabled={isUndoDisabled}
           className={cn(
-            'p-2 rounded transition-colors',
-            isUndoDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-700'
+            "p-2 rounded transition-colors",
+            isUndoDisabled
+              ? "opacity-30 cursor-not-allowed"
+              : "hover:bg-slate-700"
           )}
           title="Geri Al (Ctrl+Z)"
         >
@@ -121,8 +125,10 @@ export function CanvasToolbar() {
           onClick={redo}
           disabled={isRedoDisabled}
           className={cn(
-            'p-2 rounded transition-colors',
-            isRedoDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-700'
+            "p-2 rounded transition-colors",
+            isRedoDisabled
+              ? "opacity-30 cursor-not-allowed"
+              : "hover:bg-slate-700"
           )}
           title="İleri Al (Ctrl+Y)"
         >
@@ -134,8 +140,8 @@ export function CanvasToolbar() {
       <button
         onClick={toggleGrid}
         className={cn(
-          'p-2 rounded hover:bg-slate-700 transition-colors',
-          gridEnabled && 'bg-slate-600'
+          "p-2 rounded hover:bg-slate-700 transition-colors",
+          gridEnabled && "bg-slate-600"
         )}
         title="Izgara"
       >
@@ -172,7 +178,10 @@ export function CanvasToolbar() {
 
       {/* Otomatik Yerleştir / Tümünü Kaldır */}
       {(() => {
-        const totalPending = Object.values(pendingTableCounts).reduce((sum, c) => sum + c, 0);
+        const totalPending = Object.values(pendingTableCounts).reduce(
+          (sum, c) => sum + c,
+          0
+        );
         return (
           <div className="flex items-center gap-1 border-l border-slate-600 pl-2">
             {totalPending > 0 && (
@@ -196,11 +205,7 @@ export function CanvasToolbar() {
                   Düzenle
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm(`${tables.length} masayı silmek istediğinize emin misiniz?`)) {
-                      clearAllTables();
-                    }
-                  }}
+                  onClick={() => setShowClearConfirm(true)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-red-600 rounded-lg text-white text-sm font-medium"
                   title="Tüm masaları kaldır"
                 >
@@ -263,19 +268,23 @@ export function CanvasToolbar() {
                     y: 50,
                     width: 200,
                     height: 80,
-                    label: 'SAHNE',
+                    label: "SAHNE",
                   },
                 });
               }
             }}
             className={cn(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-sm font-medium',
-              selectedWallId ? 'bg-green-600 animate-pulse' : 'bg-blue-600'
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-sm font-medium",
+              selectedWallId ? "bg-green-600 animate-pulse" : "bg-blue-600"
             )}
-            title={selectedWallId ? 'Seçili çizgiyi sahneye dönüştür' : 'Yeni sahne ekle'}
+            title={
+              selectedWallId
+                ? "Seçili çizgiyi sahneye dönüştür"
+                : "Yeni sahne ekle"
+            }
           >
             <Music className="w-4 h-4" />
-            {selectedWallId ? 'Sahne Yap' : 'Sahne Ekle'}
+            {selectedWallId ? "Sahne Yap" : "Sahne Ekle"}
           </button>
         </div>
       )}
@@ -297,7 +306,7 @@ export function CanvasToolbar() {
                 <button
                   key={item.id}
                   onClick={() => {
-                    if (item.id === 'stage') {
+                    if (item.id === "stage") {
                       createStageFromWall(selectedWallId);
                     } else {
                       setWallLabel(selectedWallId, item.id);
@@ -306,9 +315,12 @@ export function CanvasToolbar() {
                     setShowLabelMenu(false);
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded text-white text-sm text-left"
-                  style={{ backgroundColor: item.color + '20' }}
+                  style={{ backgroundColor: item.color + "20" }}
                 >
-                  <item.icon className="w-4 h-4" style={{ color: item.color }} />
+                  <item.icon
+                    className="w-4 h-4"
+                    style={{ color: item.color }}
+                  />
                   {item.label}
                 </button>
               ))}
@@ -344,7 +356,7 @@ export function CanvasToolbar() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-auto p-4 space-y-4">
               {/* Araçlar */}
               <div className="bg-slate-700/50 rounded-lg p-4">
@@ -352,34 +364,52 @@ export function CanvasToolbar() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-3">
                     <MousePointer2 className="w-5 h-5 text-blue-400" />
-                    <span><strong>Seç:</strong> Masaları seçmek ve taşımak için. Shift+tıklama ile çoklu seçim.</span>
+                    <span>
+                      <strong>Seç:</strong> Masaları seçmek ve taşımak için.
+                      Shift+tıklama ile çoklu seçim.
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <Hand className="w-5 h-5 text-blue-400" />
-                    <span><strong>Kaydır:</strong> Canvas&apos;ı sürükleyerek kaydırın.</span>
+                    <span>
+                      <strong>Kaydır:</strong> Canvas&apos;ı sürükleyerek
+                      kaydırın.
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <Pencil className="w-5 h-5 text-blue-400" />
-                    <span><strong>Çizgi Çiz:</strong> Duvar, bölge veya alan çizmek için.</span>
+                    <span>
+                      <strong>Çizgi Çiz:</strong> Duvar, bölge veya alan çizmek
+                      için.
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <Eraser className="w-5 h-5 text-blue-400" />
-                    <span><strong>Sil:</strong> Çizgileri silmek için tıklayın.</span>
+                    <span>
+                      <strong>Sil:</strong> Çizgileri silmek için tıklayın.
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Geri Al / İleri Al */}
               <div className="bg-slate-700/50 rounded-lg p-4">
-                <h3 className="font-semibold text-cyan-400 mb-3">Geri Al / İleri Al</h3>
+                <h3 className="font-semibold text-cyan-400 mb-3">
+                  Geri Al / İleri Al
+                </h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-3">
                     <Undo2 className="w-5 h-5 text-blue-400" />
-                    <span><strong>Geri Al:</strong> Son işlemi geri alır. (Ctrl+Z)</span>
+                    <span>
+                      <strong>Geri Al:</strong> Son işlemi geri alır. (Ctrl+Z)
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <Redo2 className="w-5 h-5 text-blue-400" />
-                    <span><strong>İleri Al:</strong> Geri alınan işlemi tekrar uygular. (Ctrl+Y)</span>
+                    <span>
+                      <strong>İleri Al:</strong> Geri alınan işlemi tekrar
+                      uygular. (Ctrl+Y)
+                    </span>
                   </div>
                 </div>
               </div>
@@ -390,59 +420,108 @@ export function CanvasToolbar() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-3">
                     <Grid3X3 className="w-5 h-5 text-blue-400" />
-                    <span><strong>Izgara:</strong> Hizalama için ızgarayı açar/kapatır.</span>
+                    <span>
+                      <strong>Izgara:</strong> Hizalama için ızgarayı
+                      açar/kapatır.
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <ZoomIn className="w-5 h-5 text-blue-400" />
-                    <span><strong>Yakınlaştır/Uzaklaştır:</strong> Canvas&apos;ı büyütür veya küçültür.</span>
+                    <span>
+                      <strong>Yakınlaştır/Uzaklaştır:</strong> Canvas&apos;ı
+                      büyütür veya küçültür.
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <RotateCcw className="w-5 h-5 text-blue-400" />
-                    <span><strong>Sıfırla:</strong> Zoom&apos;u %100&apos;e döndürür.</span>
+                    <span>
+                      <strong>Sıfırla:</strong> Zoom&apos;u %100&apos;e
+                      döndürür.
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Masa İşlemleri */}
               <div className="bg-slate-700/50 rounded-lg p-4">
-                <h3 className="font-semibold text-cyan-400 mb-3">Masa İşlemleri</h3>
+                <h3 className="font-semibold text-cyan-400 mb-3">
+                  Masa İşlemleri
+                </h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-3">
                     <LayoutGrid className="w-5 h-5 text-purple-400" />
-                    <span><strong>Düzenle:</strong> Masaları otomatik olarak düzenli yerleştirir.</span>
+                    <span>
+                      <strong>Düzenle:</strong> Masaları otomatik olarak düzenli
+                      yerleştirir.
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <Trash2 className="w-5 h-5 text-red-400" />
-                    <span><strong>Tümünü Kaldır:</strong> Tüm masaları siler (Localar hariç).</span>
+                    <span>
+                      <strong>Tümünü Kaldır:</strong> Tüm masaları siler
+                      (Localar hariç).
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Kısayollar */}
               <div className="bg-slate-700/50 rounded-lg p-4">
-                <h3 className="font-semibold text-cyan-400 mb-3">Klavye Kısayolları</h3>
+                <h3 className="font-semibold text-cyan-400 mb-3">
+                  Klavye Kısayolları
+                </h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><kbd className="bg-slate-600 px-2 py-1 rounded">Delete</kbd> Seçili masaları sil</div>
-                  <div><kbd className="bg-slate-600 px-2 py-1 rounded">Ctrl+Z</kbd> Geri al</div>
-                  <div><kbd className="bg-slate-600 px-2 py-1 rounded">Ctrl+Y</kbd> İleri al</div>
-                  <div><kbd className="bg-slate-600 px-2 py-1 rounded">Shift+Tıkla</kbd> Çoklu seçim</div>
-                  <div><kbd className="bg-slate-600 px-2 py-1 rounded">Escape</kbd> Seçimi temizle</div>
-                  <div><kbd className="bg-slate-600 px-2 py-1 rounded">Scroll</kbd> Yakınlaştır/Uzaklaştır</div>
+                  <div>
+                    <kbd className="bg-slate-600 px-2 py-1 rounded">Delete</kbd>{" "}
+                    Seçili masaları sil
+                  </div>
+                  <div>
+                    <kbd className="bg-slate-600 px-2 py-1 rounded">Ctrl+Z</kbd>{" "}
+                    Geri al
+                  </div>
+                  <div>
+                    <kbd className="bg-slate-600 px-2 py-1 rounded">Ctrl+Y</kbd>{" "}
+                    İleri al
+                  </div>
+                  <div>
+                    <kbd className="bg-slate-600 px-2 py-1 rounded">
+                      Shift+Tıkla
+                    </kbd>{" "}
+                    Çoklu seçim
+                  </div>
+                  <div>
+                    <kbd className="bg-slate-600 px-2 py-1 rounded">Escape</kbd>{" "}
+                    Seçimi temizle
+                  </div>
+                  <div>
+                    <kbd className="bg-slate-600 px-2 py-1 rounded">Scroll</kbd>{" "}
+                    Yakınlaştır/Uzaklaştır
+                  </div>
                 </div>
               </div>
 
               {/* İpuçları */}
               <div className="bg-cyan-900/30 border border-cyan-700 rounded-lg p-4">
-                <h3 className="font-semibold text-cyan-400 mb-2">💡 İpuçları</h3>
+                <h3 className="font-semibold text-cyan-400 mb-2">
+                  💡 İpuçları
+                </h3>
                 <ul className="text-sm space-y-1 text-cyan-200">
-                  <li>• Sağ panelden masa türü ve sayısı seçip &quot;Yerleştir&quot; butonuna basın</li>
-                  <li>• Masaları sürükleyerek istediğiniz konuma taşıyabilirsiniz</li>
+                  <li>
+                    • Sağ panelden masa türü ve sayısı seçip
+                    &quot;Yerleştir&quot; butonuna basın
+                  </li>
+                  <li>
+                    • Masaları sürükleyerek istediğiniz konuma taşıyabilirsiniz
+                  </li>
                   <li>• Box selection için boş alana tıklayıp sürükleyin</li>
-                  <li>• Çizgi çizip &quot;Sahne Yap&quot; ile sahneye dönüştürebilirsiniz</li>
+                  <li>
+                    • Çizgi çizip &quot;Sahne Yap&quot; ile sahneye
+                    dönüştürebilirsiniz
+                  </li>
                 </ul>
               </div>
             </div>
-            
+
             <div className="p-4 border-t border-slate-700">
               <button
                 onClick={() => setShowHelp(false)}
@@ -454,6 +533,21 @@ export function CanvasToolbar() {
           </div>
         </div>
       )}
+
+      {/* Tümünü Kaldır Onay Dialog */}
+      <ConfirmDialog
+        open={showClearConfirm}
+        onOpenChange={setShowClearConfirm}
+        title="Tüm Masaları Kaldır"
+        description={`${tables.length} masayı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`}
+        confirmText="Tümünü Kaldır"
+        cancelText="İptal"
+        variant="destructive"
+        onConfirm={() => {
+          clearAllTables();
+          setShowClearConfirm(false);
+        }}
+      />
     </div>
   );
 }

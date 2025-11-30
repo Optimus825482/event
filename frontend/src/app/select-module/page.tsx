@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Calendar, Ticket, QrCode, LogOut } from 'lucide-react';
-import { useAuthStore, MODULES, ModuleType } from '@/store/auth-store';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { Calendar, Ticket, QrCode, LogOut } from "lucide-react";
+import { useAuthStore, MODULES, ModuleType } from "@/store/auth-store";
 
 const iconMap = {
   Calendar,
@@ -17,7 +18,7 @@ export default function SelectModulePage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push("/login");
     }
   }, [isAuthenticated, router]);
 
@@ -30,7 +31,7 @@ export default function SelectModulePage() {
 
   const handleLogout = () => {
     logout();
-    router.push('/login');
+    router.push("/login");
   };
 
   // Kullanıcının erişebildiği modüller
@@ -41,9 +42,14 @@ export default function SelectModulePage() {
       {/* Header */}
       <header className="border-b border-slate-800 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
-            EventFlow PRO
-          </h1>
+          <Image
+            src="/eventflowprologo.png"
+            alt="EventFlow PRO"
+            width={160}
+            height={42}
+            className="h-10 w-auto"
+            priority
+          />
           <div className="flex items-center gap-4">
             <span className="text-slate-400">
               Hoş geldin, <span className="text-white">{user.fullName}</span>

@@ -41,3 +41,13 @@ coverage/
 # Misc
 .vercel
 .turbo
+
+# Uploads (keep folder structure)
+backend/uploads/avatars/*
+backend/uploads/logos/*
+backend/uploads/event-images/*
+backend/uploads/invitation-images/*
+!backend/uploads/avatars/.gitkeep
+!backend/uploads/logos/.gitkeep
+!backend/uploads/event-images/.gitkeep
+!backend/uploads/invitation-images/.gitkeep

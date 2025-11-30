@@ -4,7 +4,7 @@ export interface TableType {
   name: string;
   capacity: number;
   color: string;
-  shape: 'round' | 'rectangle' | 'square';
+  shape: "round" | "rectangle" | "square";
 }
 
 // Canvas üzerindeki Masa
@@ -27,7 +27,7 @@ export interface TableInstance {
 // Canvas Masa (canvasStore için alias)
 export interface CanvasTable extends TableInstance {
   tableType?: TableType;
-  status?: 'available' | 'reserved' | 'occupied';
+  status?: "available" | "reserved" | "occupied";
 }
 
 // Etkinlik
@@ -36,7 +36,7 @@ export interface Event {
   name: string;
   eventDate: string;
   venueLayout: VenueLayout;
-  status: 'draft' | 'published' | 'active' | 'completed';
+  status: "draft" | "published" | "active" | "completed";
   organizerId: string;
   totalCapacity: number;
   createdAt: string;
@@ -63,7 +63,18 @@ export interface Zone {
   height: number;
   label: string;
   color: string;
-  type: 'system' | 'loca' | 'vip' | 'premium' | 'standard' | 'other' | 'stage' | 'stage-extension' | 'stage-end' | 'info' | 'frame';
+  type:
+    | "system"
+    | "loca"
+    | "vip"
+    | "premium"
+    | "standard"
+    | "other"
+    | "stage"
+    | "stage-extension"
+    | "stage-end"
+    | "info"
+    | "frame";
 }
 
 // Duvar/Çizgi
@@ -84,7 +95,7 @@ export interface Stage {
   label: string;
 }
 
-// Müşteri
+// Misafir
 export interface Customer {
   id: string;
   fullName: string;
@@ -95,21 +106,117 @@ export interface Customer {
   isBlacklisted: boolean;
   totalEvents: number;
   notes?: string;
+  // Yeni alanlar
+  lastEventDate?: string;
+  lastEventId?: string;
+  totalAttendedEvents: number;
+  totalReservations: number;
+  noShowCount: number;
+  noteCount?: number; // API'den gelir
 }
+
+// Misafir Notu
+export type GuestNoteType =
+  | "pre_event"
+  | "during_event"
+  | "post_event"
+  | "general";
+
+export interface GuestNote {
+  id: string;
+  customerId: string;
+  eventId?: string;
+  reservationId?: string;
+  content: string;
+  noteType: GuestNoteType;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  event?: Event;
+}
+
+// Rezervasyon Status
+export type ReservationStatus =
+  | "pending"
+  | "confirmed"
+  | "checked_in"
+  | "cancelled"
+  | "no_show";
 
 // Rezervasyon
 export interface Reservation {
   id: string;
   eventId: string;
   tableId: string;
-  customerId: string;
+  customerId?: string;
   customer?: Customer;
+  event?: Event;
   guestCount: number;
   qrCodeHash: string;
-  checkInStatus: boolean;
+  status: ReservationStatus;
   checkInTime?: string;
-  notes?: string;
+  specialRequests?: string;
+  totalAmount: number;
+  isPaid: boolean;
+  // Misafir kaydı olmadan direkt misafir bilgileri
+  guestName?: string;
+  guestPhone?: string;
+  guestEmail?: string;
   createdAt: string;
+  updatedAt: string;
+}
+
+// Rezervasyon Filtreleri
+export interface ReservationFilters {
+  eventId?: string;
+  customerId?: string;
+  status?: ReservationStatus;
+  searchQuery?: string;
+  tableId?: string;
+}
+
+// Rezervasyon Oluşturma DTO
+export interface CreateReservationDto {
+  eventId: string;
+  tableId: string;
+  customerId?: string;
+  guestCount: number;
+  specialRequests?: string;
+  totalAmount?: number;
+  // Misafir kaydı olmadan direkt misafir bilgileri
+  guestName?: string;
+  guestPhone?: string;
+  guestEmail?: string;
+}
+
+// Rezervasyon Güncelleme DTO
+export interface UpdateReservationDto {
+  tableId?: string;
+  guestCount?: number;
+  status?: ReservationStatus;
+  specialRequests?: string;
+  totalAmount?: number;
+  isPaid?: boolean;
+}
+
+// Event İstatistikleri
+export interface EventStats {
+  totalExpected: number;
+  checkedIn: number;
+  remaining: number;
+  cancelled: number;
+  noShow: number;
+}
+
+// QR Kod Sonucu
+export interface QRCodeResult {
+  qrCodeDataUrl: string;
+  content: {
+    eventId: string;
+    tableId: string;
+    qrCodeHash: string;
+  };
+  reservation: Reservation;
 }
 
 // Personel Ataması
@@ -127,7 +234,7 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
-  role: 'admin' | 'organizer' | 'staff' | 'venue_owner';
+  role: "admin" | "organizer" | "staff" | "venue_owner";
   avatar?: string;
   color?: string;
 }

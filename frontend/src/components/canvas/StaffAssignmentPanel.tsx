@@ -1,35 +1,65 @@
 'use client';
 
-import { useState } from 'react';
-import { X, User, Check, Palette } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, User, Check, Wand2, Users, AlertCircle } from 'lucide-react';
 import { useCanvasStore } from '@/store/canvas-store';
 import { User as UserType, StaffAssignment } from '@/types';
+import { staffApi } from '@/lib/api';
 
 interface StaffAssignmentPanelProps {
   onClose: () => void;
+  eventId?: string;
 }
 
-// Mock personel listesi
-const mockStaff: UserType[] = [
+// Fallback mock personel listesi (API çalışmazsa)
+const fallbackStaff: UserType[] = [
   { id: '1', email: 'ahmet@staff.com', fullName: 'Ahmet (Garson)', role: 'staff', color: '#ef4444' },
   { id: '2', email: 'ayse@staff.com', fullName: 'Ayşe (Garson)', role: 'staff', color: '#22c55e' },
   { id: '3', email: 'mehmet@staff.com', fullName: 'Mehmet (Garson)', role: 'staff', color: '#3b82f6' },
   { id: '4', email: 'fatma@staff.com', fullName: 'Fatma (Şef Garson)', role: 'staff', color: '#eab308' },
 ];
 
-export function StaffAssignmentPanel({ onClose }: StaffAssignmentPanelProps) {
+export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelProps) {
   const { selectedTableIds, tables, updateTable, staffAssignments, setStaffAssignments } = useCanvasStore();
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [staffList, setStaffList] = useState<UserType[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Personel listesini API'den yükle
+  useEffect(() => {
+    const loadStaff = async () => {
+      try {
+        const response = await staffApi.getAll(true); // Sadece aktif personel
+        if (response.data && response.data.length > 0) {
+          setStaffList(response.data.map((s: any) => ({
+            id: s.id,
+            email: s.email,
+            fullName: s.fullName,
+            role: 'staff' as const,
+            color: s.color || '#3b82f6',
+          })));
+        } else {
+          setStaffList(fallbackStaff);
+        }
+      } catch (error) {
+        console.log('API bağlantısı yok, mock data kullanılıyor');
+        setStaffList(fallbackStaff);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadStaff();
+  }, []);
 
   const selectedTables = tables.filter((t) => selectedTableIds.includes(t.id));
 
-  const handleAssign = () => {
+  const handleAssign = async () => {
     if (!selectedStaffId || selectedTableIds.length === 0) return;
 
-    const staff = mockStaff.find((s) => s.id === selectedStaffId);
+    const staff = staffList.find((s) => s.id === selectedStaffId);
     if (!staff) return;
 
-    // Masaları güncelle
+    // Masaları güncelle (local state)
     selectedTableIds.forEach((tableId) => {
       updateTable(tableId, {
         staffId: staff.id,
@@ -37,11 +67,10 @@ export function StaffAssignmentPanel({ onClose }: StaffAssignmentPanelProps) {
       });
     });
 
-    // Staff assignment güncelle
+    // Staff assignment güncelle (local state)
     const existingAssignment = staffAssignments.find((a) => a.staffId === staff.id);
     
     if (existingAssignment) {
-      // Mevcut atamaya ekle
       const newTableIds = [...new Set([...existingAssignment.assignedTableIds, ...selectedTableIds])];
       setStaffAssignments(
         staffAssignments.map((a) =>
@@ -49,10 +78,9 @@ export function StaffAssignmentPanel({ onClose }: StaffAssignmentPanelProps) {
         )
       );
     } else {
-      // Yeni atama oluştur
       const newAssignment: StaffAssignment = {
         id: `assign-${Date.now()}`,
-        eventId: '', // Parent'tan gelecek
+        eventId: eventId || '',
         staffId: staff.id,
         staffName: staff.fullName,
         staffColor: staff.color || '#3b82f6',
@@ -61,10 +89,29 @@ export function StaffAssignmentPanel({ onClose }: StaffAssignmentPanelProps) {
       setStaffAssignments([...staffAssignments, newAssignment]);
     }
 
+    // API'ye kaydet (opsiyonel - backend varsa)
+    if (eventId) {
+      try {
+        await staffApi.assignTables({
+          eventId,
+          staffId: staff.id,
+          tableIds: [...new Set([
+            ...(existingAssignment?.assignedTableIds || []),
+            ...selectedTableIds,
+          ])],
+          color: staff.color,
+        });
+      } catch (error) {
+        console.log('API kayıt başarısız, local state güncellendi');
+      }
+    }
+
     onClose();
   };
 
-  const handleRemoveAssignment = () => {
+  const handleRemoveAssignment = async () => {
+    const staffId = selectedTables[0]?.staffId;
+    
     selectedTableIds.forEach((tableId) => {
       updateTable(tableId, {
         staffId: undefined,
@@ -80,12 +127,35 @@ export function StaffAssignmentPanel({ onClose }: StaffAssignmentPanelProps) {
       })).filter((a) => a.assignedTableIds.length > 0)
     );
 
+    // API'den kaldır
+    if (eventId && staffId) {
+      try {
+        const assignment = staffAssignments.find((a) => a.staffId === staffId);
+        if (assignment) {
+          const remainingTables = assignment.assignedTableIds.filter(
+            (id) => !selectedTableIds.includes(id)
+          );
+          if (remainingTables.length > 0) {
+            await staffApi.assignTables({
+              eventId,
+              staffId,
+              tableIds: remainingTables,
+            });
+          } else {
+            await staffApi.removeAssignment(eventId, staffId);
+          }
+        }
+      } catch (error) {
+        console.log('API güncelleme başarısız');
+      }
+    }
+
     onClose();
   };
 
   // Seçili masaların mevcut ataması
   const currentAssignment = selectedTables[0]?.staffId
-    ? mockStaff.find((s) => s.id === selectedTables[0].staffId)
+    ? staffList.find((s) => s.id === selectedTables[0].staffId)
     : null;
 
   return (
@@ -147,39 +217,51 @@ export function StaffAssignmentPanel({ onClose }: StaffAssignmentPanelProps) {
         {/* Personel Listesi */}
         <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
           <p className="text-sm text-slate-400 mb-2">Personel Seç:</p>
-          {mockStaff.map((staff) => {
-            const assignedCount = staffAssignments.find(
-              (a) => a.staffId === staff.id
-            )?.assignedTableIds.length || 0;
+          {loading ? (
+            <div className="text-center py-4 text-slate-400">Yükleniyor...</div>
+          ) : staffList.length === 0 ? (
+            <div className="text-center py-4">
+              <AlertCircle className="w-8 h-8 mx-auto text-slate-500 mb-2" />
+              <p className="text-slate-400 text-sm">Henüz personel eklenmemiş</p>
+              <a href="/staff" className="text-blue-400 text-sm">
+                Personel Ekle →
+              </a>
+            </div>
+          ) : (
+            staffList.map((staff) => {
+              const assignedCount = staffAssignments.find(
+                (a) => a.staffId === staff.id
+              )?.assignedTableIds.length || 0;
 
-            return (
-              <button
-                key={staff.id}
-                onClick={() => setSelectedStaffId(staff.id)}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                  selectedStaffId === staff.id
-                    ? 'bg-blue-600/20 border border-blue-500'
-                    : 'bg-slate-700'
-                }`}
-              >
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: staff.color }}
+              return (
+                <button
+                  key={staff.id}
+                  onClick={() => setSelectedStaffId(staff.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                    selectedStaffId === staff.id
+                      ? 'bg-blue-600/20 border border-blue-500'
+                      : 'bg-slate-700'
+                  }`}
                 >
-                  <User className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="font-medium">{staff.fullName}</p>
-                  <p className="text-sm text-slate-400">
-                    {assignedCount} masa atanmış
-                  </p>
-                </div>
-                {selectedStaffId === staff.id && (
-                  <Check className="w-5 h-5 text-blue-400" />
-                )}
-              </button>
-            );
-          })}
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: staff.color }}
+                  >
+                    <User className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="font-medium">{staff.fullName}</p>
+                    <p className="text-sm text-slate-400">
+                      {assignedCount} masa atanmış
+                    </p>
+                  </div>
+                  {selectedStaffId === staff.id && (
+                    <Check className="w-5 h-5 text-blue-400" />
+                  )}
+                </button>
+              );
+            })
+          )}
         </div>
 
         {/* Footer */}

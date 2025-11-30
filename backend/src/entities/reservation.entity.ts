@@ -1,22 +1,30 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Event } from './event.entity';
-import { Customer } from './customer.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from "typeorm";
+import { Event } from "./event.entity";
+import { Customer } from "./customer.entity";
 
 export enum ReservationStatus {
-  PENDING = 'pending',
-  CONFIRMED = 'confirmed',
-  CHECKED_IN = 'checked_in',
-  CANCELLED = 'cancelled',
-  NO_SHOW = 'no_show'
+  PENDING = "pending",
+  CONFIRMED = "confirmed",
+  CHECKED_IN = "checked_in",
+  CANCELLED = "cancelled",
+  NO_SHOW = "no_show",
 }
 
-@Entity('reservations')
+@Entity("reservations")
 export class Reservation {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @ManyToOne(() => Event, event => event.reservations)
-  @JoinColumn({ name: 'eventId' })
+  @ManyToOne(() => Event, (event) => event.reservations)
+  @JoinColumn({ name: "eventId" })
   event: Event;
 
   @Column()
@@ -25,29 +33,43 @@ export class Reservation {
   @Column()
   tableId: string;
 
-  @ManyToOne(() => Customer, customer => customer.reservations)
-  @JoinColumn({ name: 'customerId' })
+  @ManyToOne(() => Customer, (customer) => customer.reservations)
+  @JoinColumn({ name: "customerId" })
   customer: Customer;
 
-  @Column()
-  customerId: string;
+  @Column({ nullable: true })
+  customerId: string | null;
 
   @Column()
   guestCount: number;
 
+  // Müşteri kaydı olmadan direkt misafir bilgileri
+  @Column({ nullable: true })
+  guestName: string;
+
+  @Column({ nullable: true })
+  guestPhone: string;
+
+  @Column({ nullable: true })
+  guestEmail: string;
+
   @Column({ unique: true })
   qrCodeHash: string;
 
-  @Column({ type: 'enum', enum: ReservationStatus, default: ReservationStatus.PENDING })
+  @Column({
+    type: "enum",
+    enum: ReservationStatus,
+    default: ReservationStatus.PENDING,
+  })
   status: ReservationStatus;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   checkInTime: Date;
 
   @Column({ nullable: true })
   specialRequests: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ type: "decimal", precision: 10, scale: 2, default: 0 })
   totalAmount: number;
 
   @Column({ default: false })

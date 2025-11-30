@@ -1,6 +1,7 @@
-import { io, Socket } from 'socket.io-client';
+import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000";
 
 class SocketService {
   private socket: Socket | null = null;
@@ -8,18 +9,18 @@ class SocketService {
 
   connect() {
     if (this.socket?.connected) return;
-    
+
     this.socket = io(SOCKET_URL, {
-      transports: ['websocket'],
+      transports: ["websocket"],
       autoConnect: true,
     });
 
-    this.socket.on('connect', () => {
-      console.log('🔌 Socket connected:', this.socket?.id);
+    this.socket.on("connect", () => {
+      console.log("🔌 Socket connected:", this.socket?.id);
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('🔌 Socket disconnected');
+    this.socket.on("disconnect", () => {
+      console.log("🔌 Socket disconnected");
     });
   }
 
@@ -28,9 +29,9 @@ class SocketService {
     this.socket = null;
   }
 
-  joinEvent(eventId: string, role: string = 'organizer') {
+  joinEvent(eventId: string, role: string = "organizer") {
     this.eventId = eventId;
-    this.socket?.emit('joinEvent', { eventId, role });
+    this.socket?.emit("joinEvent", { eventId, role });
   }
 
   leaveEvent() {
@@ -40,7 +41,7 @@ class SocketService {
   // Masa güncelleme gönder
   emitTableMove(tableId: string, x: number, y: number, rotation: number) {
     if (!this.eventId) return;
-    this.socket?.emit('tableMove', {
+    this.socket?.emit("tableMove", {
       eventId: this.eventId,
       tableId,
       x,
@@ -57,7 +58,7 @@ class SocketService {
   // Rezervasyon güncelleme gönder
   emitReservationUpdate(reservation: any) {
     if (!this.eventId) return;
-    this.socket?.emit('reservationUpdate', {
+    this.socket?.emit("reservationUpdate", {
       eventId: this.eventId,
       reservation,
     });
@@ -66,7 +67,7 @@ class SocketService {
   // Check-in gönder
   emitCheckIn(reservationId: string, tableId: string) {
     if (!this.eventId) return;
-    this.socket?.emit('checkIn', {
+    this.socket?.emit("checkIn", {
       eventId: this.eventId,
       reservationId,
       tableId,
@@ -75,24 +76,42 @@ class SocketService {
 
   // Event listeners
   onTableUpdated(callback: (data: any) => void) {
-    this.socket?.on('tableUpdated', callback);
+    this.socket?.on("tableUpdated", callback);
   }
 
   onReservationChanged(callback: (data: any) => void) {
-    this.socket?.on('reservationChanged', callback);
+    this.socket?.on("reservationChanged", callback);
   }
 
   onGuestCheckedIn(callback: (data: any) => void) {
-    this.socket?.on('guestCheckedIn', callback);
+    this.socket?.on("guestCheckedIn", callback);
   }
 
   onLiveStats(callback: (data: any) => void) {
-    this.socket?.on('liveStats', callback);
+    this.socket?.on("liveStats", callback);
   }
 
   // Remove listeners
   removeAllListeners() {
     this.socket?.removeAllListeners();
+  }
+
+  // Canvas için check-in güncellemelerini dinle (Requirement 8.4)
+  onTableCheckIn(
+    callback: (data: {
+      tableId: string;
+      reservationId: string;
+      status: string;
+    }) => void
+  ) {
+    this.socket?.on("tableCheckIn", callback);
+  }
+
+  // Canvas için rezervasyon güncellemelerini dinle
+  onTableReservationUpdate(
+    callback: (data: { tableId: string; reservation: any }) => void
+  ) {
+    this.socket?.on("tableReservationUpdate", callback);
   }
 }
 

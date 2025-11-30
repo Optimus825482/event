@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { X, Search, User, Phone, Users, QrCode, Check } from 'lucide-react';
-import { TableInstance, Customer, Reservation } from '@/types';
-import { formatPhone, generateId } from '@/lib/utils';
+import { useState } from "react";
+import { X, Search, User, Phone, Users, QrCode } from "lucide-react";
+import { TableInstance, Customer, Reservation } from "@/types";
+import { formatPhone, generateId } from "@/lib/utils";
 
 interface ReservationPanelProps {
   table: TableInstance | null;
@@ -11,25 +11,25 @@ interface ReservationPanelProps {
   onReservationCreate?: (reservation: Reservation) => void;
 }
 
-// Mock müşteri arama
+// Mock misafir arama
 const mockSearchCustomers = (query: string): Customer[] => {
   if (!query) return [];
   return [
     {
-      id: '1',
-      fullName: 'Ahmet Yılmaz',
-      phone: '5321234567',
-      email: 'ahmet@email.com',
+      id: "1",
+      fullName: "Ahmet Yılmaz",
+      phone: "5321234567",
+      email: "ahmet@email.com",
       vipScore: 85,
-      tags: ['vip'],
+      tags: ["vip"],
       isBlacklisted: false,
       totalEvents: 12,
     },
     {
-      id: '2',
-      fullName: 'Ayşe Kaya',
-      phone: '5339876543',
-      email: 'ayse@email.com',
+      id: "2",
+      fullName: "Ayşe Kaya",
+      phone: "5339876543",
+      email: "ayse@email.com",
       vipScore: 45,
       tags: [],
       isBlacklisted: false,
@@ -42,12 +42,18 @@ const mockSearchCustomers = (query: string): Customer[] => {
   );
 };
 
-export function ReservationPanel({ table, onClose, onReservationCreate }: ReservationPanelProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export function ReservationPanel({
+  table,
+  onClose,
+  onReservationCreate,
+}: ReservationPanelProps) {
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Customer[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
   const [guestCount, setGuestCount] = useState(2);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!table) return null;
@@ -64,13 +70,13 @@ export function ReservationPanel({ table, onClose, onReservationCreate }: Reserv
 
   const handleSelectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
-    setSearchQuery('');
+    setSearchQuery("");
     setSearchResults([]);
   };
 
   const handleCreateReservation = async () => {
     if (!selectedCustomer) {
-      alert('Lütfen müşteri seçin');
+      alert("Lütfen misafir seçin");
       return;
     }
 
@@ -84,22 +90,25 @@ export function ReservationPanel({ table, onClose, onReservationCreate }: Reserv
     try {
       const reservation: Reservation = {
         id: generateId(),
-        eventId: '', // Parent'tan gelecek
+        eventId: "", // Parent'tan gelecek
         tableId: table.id,
         customerId: selectedCustomer.id,
         customer: selectedCustomer,
         guestCount,
         qrCodeHash: generateId(), // Gerçekte backend üretecek
-        checkInStatus: false,
-        notes,
+        status: "pending",
+        specialRequests: notes,
+        totalAmount: 0,
+        isPaid: false,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
       onReservationCreate?.(reservation);
       onClose();
     } catch (error) {
-      console.error('Rezervasyon hatası:', error);
-      alert('Bir hata oluştu');
+      console.error("Rezervasyon hatası:", error);
+      alert("Bir hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -123,11 +132,11 @@ export function ReservationPanel({ table, onClose, onReservationCreate }: Reserv
 
         {/* Content */}
         <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
-          {/* Müşteri Arama */}
+          {/* Misafir Arama */}
           {!selectedCustomer ? (
             <div>
               <label className="block text-sm text-slate-400 mb-2">
-                Müşteri Ara
+                Misafir Ara
               </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -168,13 +177,13 @@ export function ReservationPanel({ table, onClose, onReservationCreate }: Reserv
                 </div>
               )}
 
-              {/* Yeni Müşteri */}
+              {/* Yeni Misafir */}
               <button className="w-full mt-3 p-3 border border-dashed border-slate-600 rounded-lg text-slate-400 text-sm">
-                + Yeni Müşteri Ekle
+                + Yeni Misafir Ekle
               </button>
             </div>
           ) : (
-            /* Seçili Müşteri */
+            /* Seçili Misafir */
             <div className="bg-slate-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -199,7 +208,7 @@ export function ReservationPanel({ table, onClose, onReservationCreate }: Reserv
 
               {selectedCustomer.isBlacklisted && (
                 <div className="mt-3 bg-red-500/10 border border-red-500/50 text-red-400 px-3 py-2 rounded text-sm">
-                  ⚠️ Bu müşteri kara listede!
+                  ⚠️ Bu misafir kara listede!
                 </div>
               )}
             </div>
@@ -258,7 +267,7 @@ export function ReservationPanel({ table, onClose, onReservationCreate }: Reserv
             className="flex-1 py-3 bg-blue-600 rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? (
-              'Kaydediliyor...'
+              "Kaydediliyor..."
             ) : (
               <>
                 <QrCode className="w-4 h-4" />

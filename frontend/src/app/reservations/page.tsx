@@ -1,208 +1,213 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Search,
-  Plus,
   Calendar,
   Users,
-  QrCode,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Filter,
-} from 'lucide-react';
-import { formatDate, formatPhone } from '@/lib/utils';
+  AlertCircle,
+  Loader2,
+  ChevronRight,
+  MapPin,
+} from "lucide-react";
+import { useEvents } from "@/hooks/use-reservations";
+import { formatDate } from "@/lib/utils";
+import type { Event } from "@/types";
+import { PageContainer, PageHeader } from "@/components/ui/PageContainer";
 
-// Mock data
-const mockReservations = [
-  {
-    id: '1',
-    eventName: 'Yılbaşı Galası 2025',
-    eventDate: '2025-12-31T20:00:00',
-    customerName: 'Ahmet Yılmaz',
-    customerPhone: '5321234567',
-    tableLabel: 'VIP-3',
-    guestCount: 8,
-    status: 'confirmed',
-    checkInStatus: false,
-    createdAt: '2025-01-15T10:30:00',
-  },
-  {
-    id: '2',
-    eventName: 'Yılbaşı Galası 2025',
-    eventDate: '2025-12-31T20:00:00',
-    customerName: 'Ayşe Kaya',
-    customerPhone: '5339876543',
-    tableLabel: 'S-12',
-    guestCount: 4,
-    status: 'confirmed',
-    checkInStatus: true,
-    createdAt: '2025-01-14T15:20:00',
-  },
-  {
-    id: '3',
-    eventName: 'Kurumsal Toplantı',
-    eventDate: '2025-02-15T14:00:00',
-    customerName: 'Mehmet Demir',
-    customerPhone: '5441112233',
-    tableLabel: 'P-7',
-    guestCount: 6,
-    status: 'pending',
-    checkInStatus: false,
-    createdAt: '2025-01-16T09:00:00',
-  },
-];
+// Etkinlik seçim store'u - basit state management
+export const useSelectedEvent = () => {
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-const statusLabels: Record<string, { label: string; color: string }> = {
-  confirmed: { label: 'Onaylı', color: 'bg-green-600/20 text-green-400' },
-  pending: { label: 'Beklemede', color: 'bg-yellow-600/20 text-yellow-400' },
-  cancelled: { label: 'İptal', color: 'bg-red-600/20 text-red-400' },
+  useEffect(() => {
+    // localStorage'dan oku
+    const stored = localStorage.getItem("selectedEventId");
+    if (stored) setSelectedEventId(stored);
+  }, []);
+
+  const selectEvent = (eventId: string) => {
+    setSelectedEventId(eventId);
+    localStorage.setItem("selectedEventId", eventId);
+  };
+
+  const clearEvent = () => {
+    setSelectedEventId(null);
+    localStorage.removeItem("selectedEventId");
+  };
+
+  return { selectedEventId, selectEvent, clearEvent };
 };
 
-export default function ReservationsPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+// Kalan gün hesaplama
+function getDaysRemaining(eventDate: string): number {
+  const now = new Date();
+  const event = new Date(eventDate);
+  const diff = event.getTime() - now.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
 
-  const filteredReservations = mockReservations.filter((r) => {
-    const matchesSearch =
-      r.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.customerPhone.includes(searchQuery) ||
-      r.tableLabel.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+// Etkinlik kartı
+function EventCard({
+  event,
+  onSelect,
+}: {
+  event: Event;
+  onSelect: (id: string) => void;
+}) {
+  const daysRemaining = getDaysRemaining(event.eventDate);
+  const isPast = daysRemaining < 0;
+  const isToday = daysRemaining === 0;
 
   return (
-    <div className="min-h-screen bg-slate-900 p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Rezervasyonlar</h1>
-            <p className="text-slate-400">Tüm etkinlik rezervasyonlarını yönetin</p>
-          </div>
-          <Link
-            href="/reservations/new"
-            className="flex items-center gap-2 bg-blue-600 px-4 py-2 rounded-lg"
-          >
-            <Plus className="w-5 h-5" />
-            Yeni Rezervasyon
-          </Link>
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Müşteri adı, telefon veya masa ara..."
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-slate-400" />
-            {['all', 'confirmed', 'pending', 'cancelled'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                  statusFilter === status ? 'bg-blue-600' : 'bg-slate-800'
-                }`}
-              >
-                {status === 'all' ? 'Tümü' : statusLabels[status]?.label}
-              </button>
-            ))}
+    <button
+      onClick={() => onSelect(event.id)}
+      disabled={isPast}
+      className={`w-full p-4 sm:p-6 rounded-xl border-2 text-left transition-all ${
+        isPast
+          ? "border-slate-700 bg-slate-800/50 opacity-50 cursor-not-allowed"
+          : "border-slate-700 bg-slate-800 cursor-pointer"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-base sm:text-xl font-semibold mb-2 truncate">
+            {event.name}
+          </h3>
+          <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-slate-400">
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+              {formatDate(event.eventDate)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+              {event.venueLayout?.tables?.length || 0} masa
+            </span>
           </div>
         </div>
-
-        {/* Reservations List */}
-        <div className="space-y-4">
-          {filteredReservations.map((reservation) => (
-            <div
-              key={reservation.id}
-              className="bg-slate-800 rounded-xl p-6 border border-slate-700"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  {/* Müşteri Bilgisi */}
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-blue-600/20 rounded-full flex items-center justify-center">
-                      <Users className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">{reservation.customerName}</h3>
-                      <p className="text-sm text-slate-400">
-                        {formatPhone(reservation.customerPhone)}
-                      </p>
-                    </div>
-                    <span
-                      className={`ml-auto px-2 py-1 rounded text-xs ${
-                        statusLabels[reservation.status]?.color
-                      }`}
-                    >
-                      {statusLabels[reservation.status]?.label}
-                    </span>
-                  </div>
-
-                  {/* Detaylar */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-slate-500">Etkinlik</p>
-                      <p className="text-slate-300">{reservation.eventName}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Tarih</p>
-                      <p className="text-slate-300 flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        {formatDate(reservation.eventDate)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Masa</p>
-                      <p className="text-slate-300 font-medium">{reservation.tableLabel}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Kişi Sayısı</p>
-                      <p className="text-slate-300">{reservation.guestCount} kişi</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex flex-col items-end gap-2 ml-4">
-                  {reservation.checkInStatus ? (
-                    <span className="flex items-center gap-1 text-green-400 text-sm">
-                      <CheckCircle className="w-4 h-4" />
-                      Giriş Yapıldı
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-slate-400 text-sm">
-                      <Clock className="w-4 h-4" />
-                      Bekleniyor
-                    </span>
-                  )}
-                  <button className="flex items-center gap-1 px-3 py-1 bg-slate-700 rounded text-sm">
-                    <QrCode className="w-4 h-4" />
-                    QR Göster
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          {isPast ? (
+            <span className="px-2 sm:px-3 py-1 bg-slate-700 text-slate-400 rounded-full text-xs sm:text-sm">
+              Geçmiş
+            </span>
+          ) : isToday ? (
+            <span className="px-2 sm:px-3 py-1 bg-green-600/20 text-green-400 rounded-full text-xs sm:text-sm">
+              Bugün
+            </span>
+          ) : (
+            <span className="px-2 sm:px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-xs sm:text-sm">
+              {daysRemaining} gün
+            </span>
+          )}
+          {!isPast && (
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+          )}
         </div>
+      </div>
+    </button>
+  );
+}
 
-        {filteredReservations.length === 0 && (
-          <div className="text-center py-12 text-slate-400">
-            Rezervasyon bulunamadı
+export default function ReservationsPage() {
+  const router = useRouter();
+  const { selectedEventId, selectEvent } = useSelectedEvent();
+  const { data: events, isLoading, error } = useEvents();
+
+  // Etkinlik seçildiğinde dashboard'a yönlendir
+  const handleSelectEvent = (eventId: string) => {
+    selectEvent(eventId);
+    router.push(`/reservations/dashboard?eventId=${eventId}`);
+  };
+
+  // Eğer zaten seçili etkinlik varsa dashboard'a yönlendir
+  useEffect(() => {
+    if (selectedEventId) {
+      router.push(`/reservations/dashboard?eventId=${selectedEventId}`);
+    }
+  }, [selectedEventId, router]);
+
+  // Aktif ve geçmiş etkinlikleri ayır
+  const activeEvents =
+    events?.filter((e) => getDaysRemaining(e.eventDate) >= 0) || [];
+  const pastEvents =
+    events?.filter((e) => getDaysRemaining(e.eventDate) < 0) || [];
+
+  return (
+    <PageContainer maxWidth="4xl">
+      <div className="space-y-6">
+        <PageHeader
+          title="Etkinlik Seçin"
+          description="Rezervasyon işlemleri için bir etkinlik seçin"
+          icon={<Calendar className="w-6 h-6 text-blue-400" />}
+        />
+
+        {isLoading && (
+          <div className="flex items-center justify-center py-8 sm:py-12">
+            <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-blue-500" />
+            <span className="ml-2 text-slate-400 text-sm sm:text-base">
+              Yükleniyor...
+            </span>
           </div>
         )}
+
+        {error && (
+          <div className="flex items-center justify-center py-8 sm:py-12 text-red-400">
+            <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+            <span className="text-sm sm:text-base">Hata oluştu</span>
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <>
+            {/* Aktif Etkinlikler */}
+            {activeEvents.length > 0 && (
+              <div>
+                <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-slate-300">
+                  Aktif Etkinlikler
+                </h2>
+                <div className="space-y-3 sm:space-y-4">
+                  {activeEvents.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onSelect={handleSelectEvent}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Geçmiş Etkinlikler */}
+            {pastEvents.length > 0 && (
+              <div>
+                <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-slate-500">
+                  Geçmiş Etkinlikler
+                </h2>
+                <div className="space-y-3 sm:space-y-4">
+                  {pastEvents.slice(0, 5).map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onSelect={handleSelectEvent}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {events?.length === 0 && (
+              <div className="text-center py-8 sm:py-12 text-slate-400">
+                <Calendar className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm sm:text-base">
+                  Henüz etkinlik oluşturulmamış
+                </p>
+                <p className="text-xs sm:text-sm mt-2">
+                  Etkinlik modülünden yeni etkinlik oluşturabilirsiniz
+                </p>
+              </div>
+            )}
+          </>
+        )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

@@ -1,29 +1,38 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { Stage, Layer, Rect, Circle, Text, Group, Line, Transformer } from 'react-konva';
-import { useCanvasStore } from '@/store/canvas-store';
-import { TableInstance } from '@/types';
-import { generateId } from '@/lib/utils';
-import Konva from 'konva';
+import { useEffect, useRef, useCallback, useState } from "react";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Circle,
+  Text,
+  Group,
+  Line,
+  Transformer,
+} from "react-konva";
+import { useCanvasStore } from "@/store/canvas-store";
+import { TableInstance } from "@/types";
+import { generateId } from "@/lib/utils";
+import Konva from "konva";
 
 // Etiket renkleri
 const LABEL_COLORS: Record<string, string> = {
-  stage: '#3b82f6',
-  bar: '#f97316',
-  entrance: '#22c55e',
-  exit: '#ef4444',
-  dj: '#8b5cf6',
-  wc: '#64748b',
+  stage: "#3b82f6",
+  bar: "#f97316",
+  entrance: "#22c55e",
+  exit: "#ef4444",
+  dj: "#8b5cf6",
+  wc: "#64748b",
 };
 
 const LABEL_NAMES: Record<string, string> = {
-  stage: 'SAHNE',
-  bar: 'BAR',
-  entrance: 'GİRİŞ',
-  exit: 'ÇIKIŞ',
-  dj: 'DJ',
-  wc: 'WC',
+  stage: "SAHNE",
+  bar: "BAR",
+  entrance: "GİRİŞ",
+  exit: "ÇIKIŞ",
+  dj: "DJ",
+  wc: "WC",
 };
 
 interface EventCanvasProps {
@@ -32,26 +41,38 @@ interface EventCanvasProps {
   onTableSelect?: (table: TableInstance | null) => void;
 }
 
-export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProps) {
+export function EventCanvas({
+  readOnly = false,
+  onTableSelect,
+}: EventCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
   const stageShapeRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; wallId: string } | null>(null);
-  
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    wallId: string;
+  } | null>(null);
+
   // Pan (kaydırma) için state
   const [isPanning, setIsPanning] = useState(false);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
-  
+
   // Box selection için state
   const [isSelecting, setIsSelecting] = useState(false);
-  const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [selectionBox, setSelectionBox] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
-  
+
   // Toplu hareket için state
   const [isDraggingGroup, setIsDraggingGroup] = useState(false);
   const [groupDragStart, setGroupDragStart] = useState({ x: 0, y: 0 });
-  
+
   const {
     tables,
     layout,
@@ -77,6 +98,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
     setSelectedWallId,
     setWallLabel,
     createStageFromWall,
+    tableReservations,
   } = useCanvasStore();
 
   // Grid çizimi - performans için optimize edildi (daha büyük aralıklar)
@@ -85,7 +107,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
     const lines = [];
     // Performans için grid aralığını artır
     const gridSize = layout.gridSize * 2;
-    
+
     // Dikey çizgiler
     for (let i = 0; i <= layout.width; i += gridSize) {
       lines.push(
@@ -100,7 +122,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
         />
       );
     }
-    
+
     // Yatay çizgiler
     for (let i = 0; i <= layout.height; i += gridSize) {
       lines.push(
@@ -119,20 +141,23 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
   }, [gridEnabled, layout.gridSize, layout.width, layout.height]);
 
   // Sahne sürükleme
-  const handleStageDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-    if (readOnly) return;
-    const node = e.target;
-    let x = node.x();
-    let y = node.y();
-    
-    // Grid snap
-    if (gridEnabled) {
-      x = Math.round(x / layout.gridSize) * layout.gridSize;
-      y = Math.round(y / layout.gridSize) * layout.gridSize;
-    }
-    
-    updateStage({ x, y });
-  }, [readOnly, gridEnabled, layout.gridSize, updateStage]);
+  const handleStageDragEnd = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      if (readOnly) return;
+      const node = e.target;
+      let x = node.x();
+      let y = node.y();
+
+      // Grid snap
+      if (gridEnabled) {
+        x = Math.round(x / layout.gridSize) * layout.gridSize;
+        y = Math.round(y / layout.gridSize) * layout.gridSize;
+      }
+
+      updateStage({ x, y });
+    },
+    [readOnly, gridEnabled, layout.gridSize, updateStage]
+  );
 
   // Sahne boyutlandırma
   const handleStageTransformEnd = useCallback(() => {
@@ -140,30 +165,33 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
     const node = stageShapeRef.current;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
-    
+
     // Scale'i sıfırla ve boyutları güncelle
     node.scaleX(1);
     node.scaleY(1);
-    
+
     let newWidth = Math.max(50, (layout.stage?.width || 200) * scaleX);
     let newHeight = Math.max(30, (layout.stage?.height || 80) * scaleY);
-    
+
     // Grid snap
     if (gridEnabled) {
       newWidth = Math.round(newWidth / layout.gridSize) * layout.gridSize;
       newHeight = Math.round(newHeight / layout.gridSize) * layout.gridSize;
     }
-    
+
     updateStage({ width: newWidth, height: newHeight });
   }, [gridEnabled, layout.gridSize, layout.stage, updateStage]);
 
   // Sahne tıklama
-  const handleStageShapeClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    e.cancelBubble = true;
-    setSelectedTableIds([]);
-    setStageSelected(true);
-    onTableSelect?.(null);
-  }, [setSelectedTableIds, setStageSelected, onTableSelect]);
+  const handleStageShapeClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      e.cancelBubble = true;
+      setSelectedTableIds([]);
+      setStageSelected(true);
+      onTableSelect?.(null);
+    },
+    [setSelectedTableIds, setStageSelected, onTableSelect]
+  );
 
   // Transformer'ı sahneye bağla
   useEffect(() => {
@@ -182,7 +210,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
         ref={stageShapeRef}
         x={x}
         y={y}
-        draggable={!readOnly && activeTool === 'select'}
+        draggable={!readOnly && activeTool === "select"}
         onDragEnd={handleStageDragEnd}
         onClick={handleStageShapeClick}
         onTap={handleStageShapeClick}
@@ -191,7 +219,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
           width={width}
           height={height}
           fill="#1e293b"
-          stroke={stageSelected ? '#fff' : '#3b82f6'}
+          stroke={stageSelected ? "#fff" : "#3b82f6"}
           strokeWidth={stageSelected ? 3 : 2}
           cornerRadius={8}
           shadowColor="blue"
@@ -201,7 +229,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
         <Text
           y={height / 2 - 10}
           width={width}
-          text={label || 'SAHNE'}
+          text={label || "SAHNE"}
           fontSize={18}
           fontStyle="bold"
           fill="#fff"
@@ -212,269 +240,418 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
   };
 
   // Masa sürükleme
-  const handleTableDragEnd = useCallback((tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (readOnly) return;
-    const node = e.target;
-    let x = node.x();
-    let y = node.y();
-    
-    // Grid snap
-    if (gridEnabled) {
-      x = Math.round(x / layout.gridSize) * layout.gridSize;
-      y = Math.round(y / layout.gridSize) * layout.gridSize;
-    }
-    
-    updateTable(tableId, { x, y });
-  }, [readOnly, gridEnabled, layout.gridSize, updateTable]);
+  const handleTableDragEnd = useCallback(
+    (tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
+      if (readOnly) return;
+      const node = e.target;
+      let x = node.x();
+      let y = node.y();
+
+      // Grid snap
+      if (gridEnabled) {
+        x = Math.round(x / layout.gridSize) * layout.gridSize;
+        y = Math.round(y / layout.gridSize) * layout.gridSize;
+      }
+
+      updateTable(tableId, { x, y });
+    },
+    [readOnly, gridEnabled, layout.gridSize, updateTable]
+  );
 
   // Masa tıklama
-  const handleTableClick = useCallback((table: TableInstance, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    e.cancelBubble = true;
-    
-    const isShiftKey = 'shiftKey' in e.evt && e.evt.shiftKey;
-    if (isShiftKey) {
-      toggleTableSelection(table.id);
-    } else if (!selectedTableIds.includes(table.id)) {
-      // Seçili değilse tek seç
-      setSelectedTableIds([table.id]);
-    }
-    // Zaten seçiliyse seçimi koru (toplu hareket için)
-    
-    onTableSelect?.(table);
-  }, [toggleTableSelection, setSelectedTableIds, selectedTableIds, onTableSelect]);
+  const handleTableClick = useCallback(
+    (
+      table: TableInstance,
+      e: Konva.KonvaEventObject<MouseEvent | TouchEvent>
+    ) => {
+      e.cancelBubble = true;
+
+      const isShiftKey = "shiftKey" in e.evt && e.evt.shiftKey;
+      if (isShiftKey) {
+        toggleTableSelection(table.id);
+      } else if (!selectedTableIds.includes(table.id)) {
+        // Seçili değilse tek seç
+        setSelectedTableIds([table.id]);
+      }
+      // Zaten seçiliyse seçimi koru (toplu hareket için)
+
+      onTableSelect?.(table);
+    },
+    [toggleTableSelection, setSelectedTableIds, selectedTableIds, onTableSelect]
+  );
 
   // Toplu masa sürükleme
-  const handleGroupDragStart = useCallback((tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (selectedTableIds.length > 1 && selectedTableIds.includes(tableId)) {
-      setIsDraggingGroup(true);
-      const node = e.target;
-      // Sürüklenen masanın başlangıç pozisyonunu kaydet
-      setGroupDragStart({ x: node.x(), y: node.y() });
-    }
-  }, [selectedTableIds]);
-
-  const handleGroupDragMove = useCallback((tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (!isDraggingGroup || selectedTableIds.length <= 1) return;
-    
-    const node = e.target;
-    const currentX = node.x();
-    const currentY = node.y();
-    
-    // Hareket miktarını hesapla
-    const dx = currentX - groupDragStart.x;
-    const dy = currentY - groupDragStart.y;
-    
-    if (dx === 0 && dy === 0) return;
-    
-    // Diğer seçili masaları da hareket ettir
-    selectedTableIds.forEach((id) => {
-      if (id !== tableId) {
-        const t = tables.find((tb) => tb.id === id);
-        if (t) {
-          updateTable(id, { x: t.x + dx, y: t.y + dy });
-        }
+  const handleGroupDragStart = useCallback(
+    (tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
+      if (selectedTableIds.length > 1 && selectedTableIds.includes(tableId)) {
+        setIsDraggingGroup(true);
+        const node = e.target;
+        // Sürüklenen masanın başlangıç pozisyonunu kaydet
+        setGroupDragStart({ x: node.x(), y: node.y() });
       }
-    });
-    
-    // Yeni başlangıç noktasını güncelle
-    setGroupDragStart({ x: currentX, y: currentY });
-  }, [isDraggingGroup, selectedTableIds, groupDragStart, tables, updateTable]);
+    },
+    [selectedTableIds]
+  );
 
-  const handleGroupDragEnd = useCallback((tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (readOnly) return;
-    
-    const node = e.target;
-    let x = node.x();
-    let y = node.y();
-    
-    // Grid snap
-    if (gridEnabled) {
-      x = Math.round(x / layout.gridSize) * layout.gridSize;
-      y = Math.round(y / layout.gridSize) * layout.gridSize;
-    }
-    
-    updateTable(tableId, { x, y });
-    
-    // Toplu hareket bitişi - diğer masaları da grid'e snap et
-    if (isDraggingGroup && selectedTableIds.length > 1) {
+  const handleGroupDragMove = useCallback(
+    (tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
+      if (!isDraggingGroup || selectedTableIds.length <= 1) return;
+
+      const node = e.target;
+      const currentX = node.x();
+      const currentY = node.y();
+
+      // Hareket miktarını hesapla
+      const dx = currentX - groupDragStart.x;
+      const dy = currentY - groupDragStart.y;
+
+      if (dx === 0 && dy === 0) return;
+
+      // Diğer seçili masaları da hareket ettir
       selectedTableIds.forEach((id) => {
         if (id !== tableId) {
           const t = tables.find((tb) => tb.id === id);
-          if (t && gridEnabled) {
-            updateTable(id, {
-              x: Math.round(t.x / layout.gridSize) * layout.gridSize,
-              y: Math.round(t.y / layout.gridSize) * layout.gridSize,
-            });
+          if (t) {
+            updateTable(id, { x: t.x + dx, y: t.y + dy });
           }
         }
       });
-    }
-    
-    setIsDraggingGroup(false);
-  }, [readOnly, gridEnabled, layout.gridSize, updateTable, isDraggingGroup, selectedTableIds, tables]);
 
-  // Masa çizimi - büyütülmüş boyut
-  const renderTable = useCallback((table: TableInstance) => {
-    const isSelected = selectedTableIds.includes(table.id);
-    // Loca masaları dikdörtgen, diğerleri yuvarlak
-    const isLoca = table.typeName?.toLowerCase() === 'loca' || table.typeId === 'loca';
-    const size = isLoca ? 50 : 36; // Büyütülmüş boyut
-    
-    return (
-      <Group
-        key={table.id}
-        x={table.x}
-        y={table.y}
-        rotation={table.rotation}
-        draggable={!readOnly && activeTool === 'select' && !isLoca}
-        onDragStart={(e) => !isLoca && handleGroupDragStart(table.id, e)}
-        onDragMove={(e) => !isLoca && handleGroupDragMove(table.id, e)}
-        onDragEnd={(e) => !isLoca && handleGroupDragEnd(table.id, e)}
-        onClick={(e) => handleTableClick(table, e)}
-        onTap={(e) => handleTableClick(table, e)}
-        perfectDrawEnabled={false}
-        listening={true}
-      >
-        {isLoca ? (
-          // Loca masaları - dikdörtgen
-          <Rect
-            width={size}
-            height={size * 0.7}
-            offsetX={size / 2}
-            offsetY={(size * 0.7) / 2}
-            fill={table.staffColor || table.color}
-            stroke={isSelected ? '#fff' : '#dc2626'}
-            strokeWidth={isSelected ? 3 : 2}
-            cornerRadius={6}
-            perfectDrawEnabled={false}
-          />
-        ) : (
-          // Normal masalar - yuvarlak (büyütülmüş)
-          <Circle
-            radius={size / 2}
-            fill={table.staffColor || table.color}
-            stroke={isSelected ? '#fff' : '#64748b'}
-            strokeWidth={isSelected ? 3 : 1.5}
-            perfectDrawEnabled={false}
-          />
-        )}
-        <Text
-          text={table.label}
-          fontSize={isLoca ? 12 : 11}
-          fontStyle="bold"
-          fill="#1e3a5f"
-          align="center"
-          verticalAlign="middle"
-          offsetX={table.label.length * (isLoca ? 3.5 : 3)}
-          offsetY={isLoca ? 5 : 4}
+      // Yeni başlangıç noktasını güncelle
+      setGroupDragStart({ x: currentX, y: currentY });
+    },
+    [isDraggingGroup, selectedTableIds, groupDragStart, tables, updateTable]
+  );
+
+  const handleGroupDragEnd = useCallback(
+    (tableId: string, e: Konva.KonvaEventObject<DragEvent>) => {
+      if (readOnly) return;
+
+      const node = e.target;
+      let x = node.x();
+      let y = node.y();
+
+      // Grid snap
+      if (gridEnabled) {
+        x = Math.round(x / layout.gridSize) * layout.gridSize;
+        y = Math.round(y / layout.gridSize) * layout.gridSize;
+      }
+
+      updateTable(tableId, { x, y });
+
+      // Toplu hareket bitişi - diğer masaları da grid'e snap et
+      if (isDraggingGroup && selectedTableIds.length > 1) {
+        selectedTableIds.forEach((id) => {
+          if (id !== tableId) {
+            const t = tables.find((tb) => tb.id === id);
+            if (t && gridEnabled) {
+              updateTable(id, {
+                x: Math.round(t.x / layout.gridSize) * layout.gridSize,
+                y: Math.round(t.y / layout.gridSize) * layout.gridSize,
+              });
+            }
+          }
+        });
+      }
+
+      setIsDraggingGroup(false);
+    },
+    [
+      readOnly,
+      gridEnabled,
+      layout.gridSize,
+      updateTable,
+      isDraggingGroup,
+      selectedTableIds,
+      tables,
+    ]
+  );
+
+  // Masa çizimi - büyütülmüş boyut + rezervasyon gösterimi (Requirements 8.1, 8.3)
+  const renderTable = useCallback(
+    (table: TableInstance) => {
+      const isSelected = selectedTableIds.includes(table.id);
+      // Loca masaları dikdörtgen, diğerleri yuvarlak
+      const isLoca =
+        table.typeName?.toLowerCase() === "loca" || table.typeId === "loca";
+      const size = isLoca ? 50 : 36; // Büyütülmüş boyut
+
+      // Rezervasyon bilgisi al (Requirements 8.1, 8.3)
+      const reservation = tableReservations[table.id];
+      const isReserved = !!reservation;
+      const isCheckedIn = reservation?.status === "checked_in";
+
+      // Renk belirleme: check-in yeşil, rezerve sarı, normal masa rengi
+      let fillColor = table.staffColor || table.color;
+      let strokeColor = isSelected ? "#fff" : "#64748b";
+
+      if (isCheckedIn) {
+        // Check-in olan masalar yeşil (Requirement 8.4)
+        fillColor = "#22c55e";
+        strokeColor = isSelected ? "#fff" : "#16a34a";
+      } else if (isReserved) {
+        // Rezerve masalar sarı/turuncu (Requirement 8.1)
+        fillColor = "#f59e0b";
+        strokeColor = isSelected ? "#fff" : "#d97706";
+      }
+
+      return (
+        <Group
+          key={table.id}
+          x={table.x}
+          y={table.y}
+          rotation={table.rotation}
+          draggable={!readOnly && activeTool === "select" && !isLoca}
+          onDragStart={(e) => !isLoca && handleGroupDragStart(table.id, e)}
+          onDragMove={(e) => !isLoca && handleGroupDragMove(table.id, e)}
+          onDragEnd={(e) => !isLoca && handleGroupDragEnd(table.id, e)}
+          onClick={(e) => handleTableClick(table, e)}
+          onTap={(e) => handleTableClick(table, e)}
           perfectDrawEnabled={false}
-        />
-      </Group>
-    );
-  }, [selectedTableIds, readOnly, activeTool, handleGroupDragStart, handleGroupDragMove, handleGroupDragEnd, handleTableClick]);
+          listening={true}
+        >
+          {isLoca ? (
+            // Loca masaları - dikdörtgen
+            <Rect
+              width={size}
+              height={size * 0.7}
+              offsetX={size / 2}
+              offsetY={(size * 0.7) / 2}
+              fill={fillColor}
+              stroke={isSelected ? "#fff" : "#dc2626"}
+              strokeWidth={isSelected ? 3 : 2}
+              cornerRadius={6}
+              perfectDrawEnabled={false}
+            />
+          ) : (
+            // Normal masalar - yuvarlak (büyütülmüş)
+            <Circle
+              radius={size / 2}
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth={isSelected ? 3 : 1.5}
+              perfectDrawEnabled={false}
+            />
+          )}
+
+          {/* Masa etiketi */}
+          <Text
+            text={table.label}
+            fontSize={isLoca ? 12 : 11}
+            fontStyle="bold"
+            fill={isReserved || isCheckedIn ? "#fff" : "#1e3a5f"}
+            align="center"
+            verticalAlign="middle"
+            offsetX={table.label.length * (isLoca ? 3.5 : 3)}
+            offsetY={isReserved ? (isLoca ? 12 : 10) : isLoca ? 5 : 4}
+            perfectDrawEnabled={false}
+          />
+
+          {/* Rezervasyon overlay - misafir adı ve kişi sayısı (Requirement 8.3) */}
+          {isReserved && (
+            <>
+              {/* Misafir adı (kısaltılmış) */}
+              <Text
+                text={
+                  reservation.customerName.length > 8
+                    ? reservation.customerName.substring(0, 7) + "."
+                    : reservation.customerName
+                }
+                fontSize={8}
+                fill="#fff"
+                align="center"
+                offsetX={isLoca ? 20 : 15}
+                offsetY={isLoca ? 0 : -2}
+                perfectDrawEnabled={false}
+              />
+              {/* Kişi sayısı badge */}
+              <Circle
+                x={isLoca ? size / 2 - 5 : size / 2 - 3}
+                y={isLoca ? -size * 0.35 + 5 : -size / 2 + 3}
+                radius={7}
+                fill={isCheckedIn ? "#16a34a" : "#dc2626"}
+                perfectDrawEnabled={false}
+              />
+              <Text
+                text={String(reservation.guestCount)}
+                fontSize={8}
+                fontStyle="bold"
+                fill="#fff"
+                x={isLoca ? size / 2 - 8 : size / 2 - 6}
+                y={isLoca ? -size * 0.35 + 2 : -size / 2}
+                perfectDrawEnabled={false}
+              />
+            </>
+          )}
+
+          {/* Check-in göstergesi (Requirement 8.4) */}
+          {isCheckedIn && (
+            <Text
+              text="✓"
+              fontSize={14}
+              fontStyle="bold"
+              fill="#fff"
+              offsetX={4}
+              offsetY={isLoca ? -8 : -12}
+              perfectDrawEnabled={false}
+            />
+          )}
+        </Group>
+      );
+    },
+    [
+      selectedTableIds,
+      readOnly,
+      activeTool,
+      handleGroupDragStart,
+      handleGroupDragMove,
+      handleGroupDragEnd,
+      handleTableClick,
+      tableReservations,
+    ]
+  );
 
   // Zoom kontrolü
-  const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
-    e.evt.preventDefault();
-    const scaleBy = 1.05;
-    const newZoom = e.evt.deltaY > 0 ? zoom / scaleBy : zoom * scaleBy;
-    setZoom(newZoom);
-  }, [zoom, setZoom]);
+  const handleWheel = useCallback(
+    (e: Konva.KonvaEventObject<WheelEvent>) => {
+      e.evt.preventDefault();
+      const scaleBy = 1.05;
+      const newZoom = e.evt.deltaY > 0 ? zoom / scaleBy : zoom * scaleBy;
+      setZoom(newZoom);
+    },
+    [zoom, setZoom]
+  );
 
   // Grid'e snap fonksiyonu
-  const snapToGridValue = useCallback((value: number) => {
-    if (!gridEnabled) return value;
-    return Math.round(value / layout.gridSize) * layout.gridSize;
-  }, [gridEnabled, layout.gridSize]);
+  const snapToGridValue = useCallback(
+    (value: number) => {
+      if (!gridEnabled) return value;
+      return Math.round(value / layout.gridSize) * layout.gridSize;
+    },
+    [gridEnabled, layout.gridSize]
+  );
 
   // Çizgi çizme - Mouse down
-  const handleDrawStart = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (activeTool !== 'draw' || readOnly) return;
-    
-    const stage = e.target.getStage();
-    if (!stage) return;
-    
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    
-    // Zoom'u hesaba kat
-    const x = snapToGridValue(pos.x / zoom);
-    const y = snapToGridValue(pos.y / zoom);
-    
-    setIsDrawing(true);
-    setCurrentDrawingPoints([x, y, x, y]);
-  }, [activeTool, readOnly, zoom, snapToGridValue, setIsDrawing, setCurrentDrawingPoints]);
+  const handleDrawStart = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (activeTool !== "draw" || readOnly) return;
+
+      const stage = e.target.getStage();
+      if (!stage) return;
+
+      const pos = stage.getPointerPosition();
+      if (!pos) return;
+
+      // Zoom'u hesaba kat
+      const x = snapToGridValue(pos.x / zoom);
+      const y = snapToGridValue(pos.y / zoom);
+
+      setIsDrawing(true);
+      setCurrentDrawingPoints([x, y, x, y]);
+    },
+    [
+      activeTool,
+      readOnly,
+      zoom,
+      snapToGridValue,
+      setIsDrawing,
+      setCurrentDrawingPoints,
+    ]
+  );
 
   // Çizgi çizme - Mouse move
-  const handleDrawMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!isDrawing || activeTool !== 'draw') return;
-    
-    const stage = e.target.getStage();
-    if (!stage) return;
-    
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    
-    // Zoom'u hesaba kat ve grid'e snap
-    const x = snapToGridValue(pos.x / zoom);
-    const y = snapToGridValue(pos.y / zoom);
-    
-    // Sadece son noktayı güncelle (düz çizgi için)
-    const points = [...currentDrawingPoints];
-    points[points.length - 2] = x;
-    points[points.length - 1] = y;
-    setCurrentDrawingPoints(points);
-  }, [isDrawing, activeTool, zoom, snapToGridValue, currentDrawingPoints, setCurrentDrawingPoints]);
+  const handleDrawMove = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!isDrawing || activeTool !== "draw") return;
+
+      const stage = e.target.getStage();
+      if (!stage) return;
+
+      const pos = stage.getPointerPosition();
+      if (!pos) return;
+
+      // Zoom'u hesaba kat ve grid'e snap
+      const x = snapToGridValue(pos.x / zoom);
+      const y = snapToGridValue(pos.y / zoom);
+
+      // Sadece son noktayı güncelle (düz çizgi için)
+      const points = [...currentDrawingPoints];
+      points[points.length - 2] = x;
+      points[points.length - 1] = y;
+      setCurrentDrawingPoints(points);
+    },
+    [
+      isDrawing,
+      activeTool,
+      zoom,
+      snapToGridValue,
+      currentDrawingPoints,
+      setCurrentDrawingPoints,
+    ]
+  );
 
   // Çizgi çizme - Mouse up
   const handleDrawEnd = useCallback(() => {
-    if (!isDrawing || activeTool !== 'draw') return;
-    
+    if (!isDrawing || activeTool !== "draw") return;
+
     // Minimum uzunluk kontrolü
     if (currentDrawingPoints.length >= 4) {
       const dx = currentDrawingPoints[2] - currentDrawingPoints[0];
       const dy = currentDrawingPoints[3] - currentDrawingPoints[1];
       const length = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (length > 10) {
         addWall({
           id: generateId(),
           points: currentDrawingPoints,
           strokeWidth: 4,
-          color: '#64748b',
+          color: "#64748b",
         });
       }
     }
-    
+
     setIsDrawing(false);
     setCurrentDrawingPoints([]);
-  }, [isDrawing, activeTool, currentDrawingPoints, addWall, setIsDrawing, setCurrentDrawingPoints]);
+  }, [
+    isDrawing,
+    activeTool,
+    currentDrawingPoints,
+    addWall,
+    setIsDrawing,
+    setCurrentDrawingPoints,
+  ]);
 
   // Pan (kaydırma) - Mouse down
-  const handlePanStart = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (activeTool !== 'pan') return;
-    const stage = e.target.getStage();
-    if (!stage) return;
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    setIsPanning(true);
-    setLastPanPoint({ x: pos.x, y: pos.y });
-  }, [activeTool]);
+  const handlePanStart = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (activeTool !== "pan") return;
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const pos = stage.getPointerPosition();
+      if (!pos) return;
+      setIsPanning(true);
+      setLastPanPoint({ x: pos.x, y: pos.y });
+    },
+    [activeTool]
+  );
 
   // Pan - Mouse move
-  const handlePanMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!isPanning || activeTool !== 'pan') return;
-    const stage = e.target.getStage();
-    if (!stage) return;
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    
-    const dx = pos.x - lastPanPoint.x;
-    const dy = pos.y - lastPanPoint.y;
-    
-    setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-    setLastPanPoint({ x: pos.x, y: pos.y });
-  }, [isPanning, activeTool, lastPanPoint]);
+  const handlePanMove = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!isPanning || activeTool !== "pan") return;
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const pos = stage.getPointerPosition();
+      if (!pos) return;
+
+      const dx = pos.x - lastPanPoint.x;
+      const dy = pos.y - lastPanPoint.y;
+
+      setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      setLastPanPoint({ x: pos.x, y: pos.y });
+    },
+    [isPanning, activeTool, lastPanPoint]
+  );
 
   // Pan - Mouse up
   const handlePanEnd = useCallback(() => {
@@ -482,54 +659,69 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
   }, []);
 
   // Duvar tıklama
-  const handleWallClick = useCallback((wallId: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    e.cancelBubble = true;
-    if (activeTool === 'eraser') {
-      removeWall(wallId);
-    } else if (activeTool === 'select') {
-      setSelectedWallId(wallId);
-      setSelectedTableIds([]);
-      setStageSelected(false);
-    }
-  }, [activeTool, removeWall, setSelectedWallId, setSelectedTableIds, setStageSelected]);
+  const handleWallClick = useCallback(
+    (wallId: string, e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      e.cancelBubble = true;
+      if (activeTool === "eraser") {
+        removeWall(wallId);
+      } else if (activeTool === "select") {
+        setSelectedWallId(wallId);
+        setSelectedTableIds([]);
+        setStageSelected(false);
+      }
+    },
+    [
+      activeTool,
+      removeWall,
+      setSelectedWallId,
+      setSelectedTableIds,
+      setStageSelected,
+    ]
+  );
 
   // Duvar sürükleme
-  const handleWallDragEnd = useCallback((wallId: string, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (readOnly) return;
-    const node = e.target;
-    let dx = node.x();
-    let dy = node.y();
-    
-    // Grid snap
-    if (gridEnabled) {
-      dx = Math.round(dx / layout.gridSize) * layout.gridSize;
-      dy = Math.round(dy / layout.gridSize) * layout.gridSize;
-    }
-    
-    // Pozisyonu sıfırla ve noktaları güncelle
-    node.x(0);
-    node.y(0);
-    
-    const wall = walls.find((w) => w.id === wallId);
-    if (wall) {
-      const newPoints = wall.points.map((p, i) => {
-        return i % 2 === 0 ? p + dx : p + dy;
-      });
-      useCanvasStore.getState().updateWall(wallId, { points: newPoints });
-    }
-  }, [readOnly, gridEnabled, layout.gridSize, walls]);
+  const handleWallDragEnd = useCallback(
+    (wallId: string, e: Konva.KonvaEventObject<DragEvent>) => {
+      if (readOnly) return;
+      const node = e.target;
+      let dx = node.x();
+      let dy = node.y();
+
+      // Grid snap
+      if (gridEnabled) {
+        dx = Math.round(dx / layout.gridSize) * layout.gridSize;
+        dy = Math.round(dy / layout.gridSize) * layout.gridSize;
+      }
+
+      // Pozisyonu sıfırla ve noktaları güncelle
+      node.x(0);
+      node.y(0);
+
+      const wall = walls.find((w) => w.id === wallId);
+      if (wall) {
+        const newPoints = wall.points.map((p, i) => {
+          return i % 2 === 0 ? p + dx : p + dy;
+        });
+        useCanvasStore.getState().updateWall(wallId, { points: newPoints });
+      }
+    },
+    [readOnly, gridEnabled, layout.gridSize, walls]
+  );
 
   // Duvar sağ tıklama (context menu)
-  const handleWallContextMenu = useCallback((wallId: string, e: Konva.KonvaEventObject<PointerEvent>) => {
-    e.evt.preventDefault();
-    e.cancelBubble = true;
-    const stage = e.target.getStage();
-    if (!stage) return;
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    setContextMenu({ x: pos.x, y: pos.y, wallId });
-    setSelectedWallId(wallId);
-  }, [setSelectedWallId]);
+  const handleWallContextMenu = useCallback(
+    (wallId: string, e: Konva.KonvaEventObject<PointerEvent>) => {
+      e.evt.preventDefault();
+      e.cancelBubble = true;
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const pos = stage.getPointerPosition();
+      if (!pos) return;
+      setContextMenu({ x: pos.x, y: pos.y, wallId });
+      setSelectedWallId(wallId);
+    },
+    [setSelectedWallId]
+  );
 
   // Context menu kapat
   const closeContextMenu = useCallback(() => {
@@ -541,20 +733,20 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
     return walls.map((wall) => {
       const isSelected = selectedWallId === wall.id;
       const labelColor = wall.label ? LABEL_COLORS[wall.label] : wall.color;
-      
+
       // Etiket için orta nokta hesapla
       const midX = (wall.points[0] + wall.points[2]) / 2;
       const midY = (wall.points[1] + wall.points[3]) / 2;
-      
+
       return (
         <Group
           key={wall.id}
-          draggable={!readOnly && activeTool === 'select'}
+          draggable={!readOnly && activeTool === "select"}
           onDragEnd={(e) => handleWallDragEnd(wall.id, e)}
         >
           <Line
             points={wall.points}
-            stroke={isSelected ? '#fff' : labelColor}
+            stroke={isSelected ? "#fff" : labelColor}
             strokeWidth={isSelected ? 6 : wall.strokeWidth}
             lineCap="round"
             lineJoin="round"
@@ -606,19 +798,31 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
   };
 
   // Canvas tıklama (seçimi temizle)
-  const handleCanvasClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    if (e.target === e.target.getStage()) {
-      setSelectedTableIds([]);
-      setStageSelected(false);
-      setSelectedWallId(null);
-      closeContextMenu();
-      onTableSelect?.(null);
-    }
-  }, [setSelectedTableIds, setStageSelected, setSelectedWallId, closeContextMenu, onTableSelect]);
+  const handleCanvasClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (e.target === e.target.getStage()) {
+        setSelectedTableIds([]);
+        setStageSelected(false);
+        setSelectedWallId(null);
+        closeContextMenu();
+        onTableSelect?.(null);
+      }
+    },
+    [
+      setSelectedTableIds,
+      setStageSelected,
+      setSelectedWallId,
+      closeContextMenu,
+      onTableSelect,
+    ]
+  );
 
   // Container boyutunu hesapla
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerSize, setContainerSize] = useState({ width: layout.width, height: layout.height });
+  const [containerSize, setContainerSize] = useState({
+    width: layout.width,
+    height: layout.height,
+  });
 
   useEffect(() => {
     const updateSize = () => {
@@ -628,8 +832,8 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
       }
     };
     updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
   }, []);
 
   // Canvas'ın container'a sığması için zoom hesapla
@@ -647,66 +851,86 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
 
   // Cursor belirleme
   const getCursor = () => {
-    if (activeTool === 'draw') return 'crosshair';
-    if (activeTool === 'pan') return isPanning ? 'grabbing' : 'grab';
-    if (isSelecting) return 'crosshair';
-    return 'default';
+    if (activeTool === "draw") return "crosshair";
+    if (activeTool === "pan") return isPanning ? "grabbing" : "grab";
+    if (isSelecting) return "crosshair";
+    return "default";
   };
 
   // Box selection - masaları seç (sol tuş basılı tutarak sürükle)
-  const handleBoxSelectionStart = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Sadece select modunda çalış
-    if (activeTool !== 'select') return;
-    
-    // Eğer bir masaya tıklandıysa box selection başlatma
-    const target = e.target;
-    const targetName = target.getClassName();
-    
-    // Circle veya Rect (masa) ise box selection başlatma
-    if (targetName === 'Circle' || (targetName === 'Rect' && target.attrs?.id !== 'canvas-background')) {
-      // Frame rect'leri hariç
-      if (target.attrs?.fill !== 'transparent' && target.attrs?.fill !== '#0f172a') {
-        return;
-      }
-    }
-    
-    const stage = target.getStage();
-    if (!stage) return;
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    
-    // Stage koordinatlarına çevir (scale hesaba katılarak)
-    const scale = zoom * fitZoom;
-    const x = (pos.x - baseOffsetX - panOffset.x) / scale;
-    const y = (pos.y - baseOffsetY - panOffset.y) / scale;
-    
-    console.log('Box selection başladı:', { x, y, scale });
-    
-    setIsSelecting(true);
-    setSelectionStart({ x, y });
-    setSelectionBox({ x, y, width: 0, height: 0 });
-  }, [activeTool, baseOffsetX, baseOffsetY, panOffset, zoom, fitZoom]);
+  const handleBoxSelectionStart = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      // Sadece select modunda çalış
+      if (activeTool !== "select") return;
 
-  const handleBoxSelectionMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!isSelecting) return;
-    
-    const stage = e.target.getStage();
-    if (!stage) return;
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    
-    const scale = zoom * fitZoom;
-    const currentX = (pos.x - baseOffsetX - panOffset.x) / scale;
-    const currentY = (pos.y - baseOffsetY - panOffset.y) / scale;
-    
-    // Selection box hesapla (negatif boyutları düzelt)
-    const x = Math.min(selectionStart.x, currentX);
-    const y = Math.min(selectionStart.y, currentY);
-    const width = Math.abs(currentX - selectionStart.x);
-    const height = Math.abs(currentY - selectionStart.y);
-    
-    setSelectionBox({ x, y, width, height });
-  }, [isSelecting, selectionStart, baseOffsetX, baseOffsetY, panOffset, zoom, fitZoom]);
+      // Eğer bir masaya tıklandıysa box selection başlatma
+      const target = e.target;
+      const targetName = target.getClassName();
+
+      // Circle veya Rect (masa) ise box selection başlatma
+      if (
+        targetName === "Circle" ||
+        (targetName === "Rect" && target.attrs?.id !== "canvas-background")
+      ) {
+        // Frame rect'leri hariç
+        if (
+          target.attrs?.fill !== "transparent" &&
+          target.attrs?.fill !== "#0f172a"
+        ) {
+          return;
+        }
+      }
+
+      const stage = target.getStage();
+      if (!stage) return;
+      const pos = stage.getPointerPosition();
+      if (!pos) return;
+
+      // Stage koordinatlarına çevir (scale hesaba katılarak)
+      const scale = zoom * fitZoom;
+      const x = (pos.x - baseOffsetX - panOffset.x) / scale;
+      const y = (pos.y - baseOffsetY - panOffset.y) / scale;
+
+      console.log("Box selection başladı:", { x, y, scale });
+
+      setIsSelecting(true);
+      setSelectionStart({ x, y });
+      setSelectionBox({ x, y, width: 0, height: 0 });
+    },
+    [activeTool, baseOffsetX, baseOffsetY, panOffset, zoom, fitZoom]
+  );
+
+  const handleBoxSelectionMove = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!isSelecting) return;
+
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const pos = stage.getPointerPosition();
+      if (!pos) return;
+
+      const scale = zoom * fitZoom;
+      const currentX = (pos.x - baseOffsetX - panOffset.x) / scale;
+      const currentY = (pos.y - baseOffsetY - panOffset.y) / scale;
+
+      // Selection box hesapla (negatif boyutları düzelt)
+      const x = Math.min(selectionStart.x, currentX);
+      const y = Math.min(selectionStart.y, currentY);
+      const width = Math.abs(currentX - selectionStart.x);
+      const height = Math.abs(currentY - selectionStart.y);
+
+      setSelectionBox({ x, y, width, height });
+    },
+    [
+      isSelecting,
+      selectionStart,
+      baseOffsetX,
+      baseOffsetY,
+      panOffset,
+      zoom,
+      fitZoom,
+    ]
+  );
 
   const handleBoxSelectionEnd = useCallback(() => {
     if (!isSelecting || !selectionBox) {
@@ -714,14 +938,14 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
       setSelectionBox(null);
       return;
     }
-    
+
     // Minimum boyut kontrolü (çok küçük seçimler için)
     if (selectionBox.width < 5 && selectionBox.height < 5) {
       setIsSelecting(false);
       setSelectionBox(null);
       return;
     }
-    
+
     // Selection box içindeki masaları bul
     const selectedIds: string[] = [];
     tables.forEach((table) => {
@@ -735,38 +959,44 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
         selectedIds.push(table.id);
       }
     });
-    
-    console.log('Box selection bitti:', { box: selectionBox, selectedCount: selectedIds.length });
-    
+
+    console.log("Box selection bitti:", {
+      box: selectionBox,
+      selectedCount: selectedIds.length,
+    });
+
     if (selectedIds.length > 0) {
       setSelectedTableIds(selectedIds);
     }
-    
+
     setIsSelecting(false);
     setSelectionBox(null);
   }, [isSelecting, selectionBox, tables, setSelectedTableIds]);
 
   // Mouse event handler'ları birleştir
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (activeTool === 'pan') handlePanStart(e);
-    else if (activeTool === 'draw') handleDrawStart(e);
-    else if (activeTool === 'select') handleBoxSelectionStart(e);
+    if (activeTool === "pan") handlePanStart(e);
+    else if (activeTool === "draw") handleDrawStart(e);
+    else if (activeTool === "select") handleBoxSelectionStart(e);
   };
 
   const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (activeTool === 'pan') handlePanMove(e);
-    else if (activeTool === 'draw') handleDrawMove(e);
+    if (activeTool === "pan") handlePanMove(e);
+    else if (activeTool === "draw") handleDrawMove(e);
     else if (isSelecting) handleBoxSelectionMove(e);
   };
 
   const handleMouseUp = () => {
-    if (activeTool === 'pan') handlePanEnd();
-    else if (activeTool === 'draw') handleDrawEnd();
+    if (activeTool === "pan") handlePanEnd();
+    else if (activeTool === "draw") handleDrawEnd();
     else if (isSelecting) handleBoxSelectionEnd();
   };
 
   return (
-    <div ref={containerRef} className="relative w-full h-full bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center"
+    >
       <Stage
         ref={stageRef}
         x={baseOffsetX + panOffset.x}
@@ -795,20 +1025,20 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
             listening={true}
             id="canvas-background"
           />
-          
+
           {/* Grid */}
           {renderGrid()}
-          
+
           {/* Zones (System Kontrol, Loca, Sahne vb.) */}
           {layout.zones?.map((zone) => {
-            const isLoca = zone.type === 'loca';
-            const isStage = zone.type === 'stage';
-            const isStageExtension = zone.type === 'stage-extension';
-            const isStageEnd = zone.type === 'stage-end';
-            const isInfo = zone.type === 'info';
-            const isSystem = zone.type === 'system';
-            const isFrame = zone.type === 'frame';
-            
+            const isLoca = zone.type === "loca";
+            const isStage = zone.type === "stage";
+            const isStageExtension = zone.type === "stage-extension";
+            const isStageEnd = zone.type === "stage-end";
+            const isInfo = zone.type === "info";
+            const isSystem = zone.type === "system";
+            const isFrame = zone.type === "frame";
+
             // Ana çerçeve - sadece kırmızı border
             if (isFrame) {
               return (
@@ -823,7 +1053,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
                 </Group>
               );
             }
-            
+
             // Sahne üst kısmı - açık mavi, kırmızı çerçeve
             if (isStage) {
               return (
@@ -847,7 +1077,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
                 </Group>
               );
             }
-            
+
             // Sahne bilgi kutusu - açık mavi, kırmızı çerçeve
             if (isInfo) {
               return (
@@ -871,7 +1101,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
                 </Group>
               );
             }
-            
+
             // Sahne ön uzantısı - açık mavi
             if (isStageExtension) {
               return (
@@ -884,7 +1114,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
                 </Group>
               );
             }
-            
+
             // Sahne ön ucu - kırmızı çerçeveli
             if (isStageEnd) {
               return (
@@ -899,7 +1129,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
                 </Group>
               );
             }
-            
+
             // System Kontrol - kırmızı
             if (isSystem) {
               return (
@@ -922,7 +1152,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
                 </Group>
               );
             }
-            
+
             // Loca alanı - açık kırmızı çerçeve
             if (isLoca) {
               return (
@@ -948,7 +1178,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
                 </Group>
               );
             }
-            
+
             // Diğer zone'lar
             return (
               <Group key={zone.id} x={zone.x} y={zone.y}>
@@ -973,18 +1203,18 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
               </Group>
             );
           })}
-          
+
           {/* Duvarlar/Çizgiler */}
           {renderWalls()}
-          
+
           {/* Çizim sırasındaki geçici çizgi */}
           {renderCurrentDrawing()}
-          
+
           {/* Sahne - artık zone olarak render ediliyor, eski renderStage kaldırıldı */}
-          
+
           {/* Masalar */}
           {tables.map(renderTable)}
-          
+
           {/* Box Selection Rectangle */}
           {isSelecting && selectionBox && (
             <Rect
@@ -999,7 +1229,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
               listening={false}
             />
           )}
-          
+
           {/* Sahne Transformer (boyutlandırma için) */}
           {stageSelected && layout.stage && (
             <Transformer
@@ -1016,21 +1246,21 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
           )}
         </Layer>
       </Stage>
-      
+
       {/* Zoom göstergesi */}
       <div className="absolute bottom-4 right-4 bg-slate-800 px-3 py-1 rounded text-sm text-white">
         {Math.round(zoom * 100)}%
       </div>
-      
+
       {/* Aktif araç göstergesi */}
-      {activeTool === 'draw' && (
+      {activeTool === "draw" && (
         <div className="absolute top-4 left-4 bg-blue-600 px-3 py-1 rounded text-sm text-white">
           Çizgi çizme modu - Grid&apos;e hizalı
         </div>
       )}
 
       {/* Seçili çizgi göstergesi */}
-      {selectedWallId && activeTool === 'select' && (
+      {selectedWallId && activeTool === "select" && (
         <div className="absolute top-4 left-4 bg-purple-600 px-3 py-1 rounded text-sm text-white">
           Çizgi seçili - Toolbar&apos;dan etiket ekleyebilirsiniz
         </div>
@@ -1054,7 +1284,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
           </button>
           <button
             onClick={() => {
-              setWallLabel(contextMenu.wallId, 'bar');
+              setWallLabel(contextMenu.wallId, "bar");
               closeContextMenu();
             }}
             className="w-full px-4 py-2 text-left text-sm text-white flex items-center gap-2"
@@ -1064,7 +1294,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
           </button>
           <button
             onClick={() => {
-              setWallLabel(contextMenu.wallId, 'entrance');
+              setWallLabel(contextMenu.wallId, "entrance");
               closeContextMenu();
             }}
             className="w-full px-4 py-2 text-left text-sm text-white flex items-center gap-2"
@@ -1074,7 +1304,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
           </button>
           <button
             onClick={() => {
-              setWallLabel(contextMenu.wallId, 'exit');
+              setWallLabel(contextMenu.wallId, "exit");
               closeContextMenu();
             }}
             className="w-full px-4 py-2 text-left text-sm text-white flex items-center gap-2"
@@ -1084,7 +1314,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
           </button>
           <button
             onClick={() => {
-              setWallLabel(contextMenu.wallId, 'dj');
+              setWallLabel(contextMenu.wallId, "dj");
               closeContextMenu();
             }}
             className="w-full px-4 py-2 text-left text-sm text-white flex items-center gap-2"
@@ -1094,7 +1324,7 @@ export function EventCanvas({ readOnly = false, onTableSelect }: EventCanvasProp
           </button>
           <button
             onClick={() => {
-              setWallLabel(contextMenu.wallId, 'wc');
+              setWallLabel(contextMenu.wallId, "wc");
               closeContextMenu();
             }}
             className="w-full px-4 py-2 text-left text-sm text-white flex items-center gap-2"
