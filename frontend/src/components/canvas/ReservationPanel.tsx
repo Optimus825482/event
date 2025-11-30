@@ -24,6 +24,9 @@ const mockSearchCustomers = (query: string): Customer[] => {
       tags: ["vip"],
       isBlacklisted: false,
       totalEvents: 12,
+      totalAttendedEvents: 10,
+      totalReservations: 12,
+      noShowCount: 0,
     },
     {
       id: "2",
@@ -34,6 +37,9 @@ const mockSearchCustomers = (query: string): Customer[] => {
       tags: [],
       isBlacklisted: false,
       totalEvents: 3,
+      totalAttendedEvents: 2,
+      totalReservations: 3,
+      noShowCount: 1,
     },
   ].filter(
     (c) =>
