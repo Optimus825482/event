@@ -70,7 +70,7 @@ import { InvitationsModule } from "./modules/invitations/invitations.module";
           EventInvitation,
           GuestNote,
         ],
-        synchronize: configService.get("NODE_ENV") !== "production",
+        synchronize: true, // Tablolar oluşturulsun
         logging: configService.get("NODE_ENV") === "development",
       }),
     }),
