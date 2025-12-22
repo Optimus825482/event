@@ -49,13 +49,13 @@ services:
       - eventflow-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`${SERVICE_FQDN_BACKEND}`)"
-      - "traefik.http.routers.backend.entrypoints=http"
-      - "traefik.http.routers.backend-secure.rule=Host(`${SERVICE_FQDN_BACKEND}`)"
-      - "traefik.http.routers.backend-secure.entrypoints=https"
-      - "traefik.http.routers.backend-secure.tls=true"
-      - "traefik.http.routers.backend-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.services.backend.loadbalancer.server.port=4000"
+      - "traefik.http.routers.eventflow-backend.rule=Host(`api.eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-backend.entrypoints=http"
+      - "traefik.http.routers.eventflow-backend-secure.rule=Host(`api.eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-backend-secure.entrypoints=https"
+      - "traefik.http.routers.eventflow-backend-secure.tls=true"
+      - "traefik.http.routers.eventflow-backend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eventflow-backend.loadbalancer.server.port=4000"
 
   # Next.js Frontend
   frontend:
@@ -77,13 +77,13 @@ services:
       - eventflow-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`${SERVICE_FQDN_FRONTEND}`)"
-      - "traefik.http.routers.frontend.entrypoints=http"
-      - "traefik.http.routers.frontend-secure.rule=Host(`${SERVICE_FQDN_FRONTEND}`)"
-      - "traefik.http.routers.frontend-secure.entrypoints=https"
-      - "traefik.http.routers.frontend-secure.tls=true"
-      - "traefik.http.routers.frontend-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.eventflow-frontend.rule=Host(`eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-frontend.entrypoints=http"
+      - "traefik.http.routers.eventflow-frontend-secure.rule=Host(`eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-frontend-secure.entrypoints=https"
+      - "traefik.http.routers.eventflow-frontend-secure.tls=true"
+      - "traefik.http.routers.eventflow-frontend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eventflow-frontend.loadbalancer.server.port=3000"
 
 volumes:
   postgres_data:
