@@ -1,109 +1,102 @@
-import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { ChevronRight, MoreHorizontal } from "lucide-react"
+"use client";
 
-import { cn } from "@/lib/utils"
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { ChevronRight, Home } from "lucide-react";
 
-function Breadcrumb({ ...props }: React.ComponentProps<"nav">) {
-  return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />
-}
+// Path segment'lerini Türkçe label'lara çevir
+const PATH_LABELS: Record<string, string> = {
+  dashboard: "Dashboard",
+  events: "Etkinlikler",
+  staff: "Ekip Yönetimi",
+  venues: "Alan Şablonları",
+  templates: "Şablonlar",
+  admin: "Admin",
+  settings: "Ayarlar",
+  users: "Kullanıcılar",
+  "team-organization": "Ekip Organizasyonu",
+  venue: "Alan Planı",
+  new: "Yeni",
+  edit: "Düzenle",
+  personnel: "Personel Yönetimi",
+  teams: "Ekip Organizasyonu",
+  "event-assignment": "Etkinlik Ekip Organizasyonu",
+  reservations: "Rezervasyonlar",
+  customers: "Müşteriler",
+  invitations: "Davetiyeler",
+};
 
-function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
+// Dinamik segment'leri tespit et (UUID veya ID formatında)
+const isDynamicSegment = (segment: string): boolean => {
+  // UUID formatı veya sadece sayı
   return (
-    <ol
-      data-slot="breadcrumb-list"
-      className={cn(
-        "text-muted-foreground flex flex-wrap items-center gap-1.5 text-sm break-words sm:gap-2.5",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      segment
+    ) || /^\d+$/.test(segment)
+  );
+};
 
-function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
+export function Breadcrumb() {
+  const pathname = usePathname();
+
+  // Path'i segment'lere ayır
+  const segments = pathname.split("/").filter(Boolean);
+
+  // Breadcrumb item'larını oluştur
+  const breadcrumbItems: { label: string; href: string; isLast: boolean }[] =
+    [];
+
+  let currentPath = "";
+
+  segments.forEach((segment, index) => {
+    currentPath += `/${segment}`;
+    const isLast = index === segments.length - 1;
+
+    // Dinamik segment'leri atla (ID'ler)
+    if (isDynamicSegment(segment)) {
+      return;
+    }
+
+    const label =
+      PATH_LABELS[segment] ||
+      segment.charAt(0).toUpperCase() + segment.slice(1);
+
+    breadcrumbItems.push({
+      label,
+      href: currentPath,
+      isLast,
+    });
+  });
+
+  if (breadcrumbItems.length === 0) {
+    return null;
+  }
+
   return (
-    <li
-      data-slot="breadcrumb-item"
-      className={cn("inline-flex items-center gap-1.5", className)}
-      {...props}
-    />
-  )
-}
+    <nav className="flex items-center gap-1 text-sm">
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
+      >
+        <Home className="w-4 h-4" />
+        <span>Etkinlik Planlama</span>
+      </Link>
 
-function BreadcrumbLink({
-  asChild,
-  className,
-  ...props
-}: React.ComponentProps<"a"> & {
-  asChild?: boolean
-}) {
-  const Comp = asChild ? Slot : "a"
-
-  return (
-    <Comp
-      data-slot="breadcrumb-link"
-      className={cn("hover:text-foreground transition-colors", className)}
-      {...props}
-    />
-  )
-}
-
-function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
-  return (
-    <span
-      data-slot="breadcrumb-page"
-      role="link"
-      aria-disabled="true"
-      aria-current="page"
-      className={cn("text-foreground font-normal", className)}
-      {...props}
-    />
-  )
-}
-
-function BreadcrumbSeparator({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"li">) {
-  return (
-    <li
-      data-slot="breadcrumb-separator"
-      role="presentation"
-      aria-hidden="true"
-      className={cn("[&>svg]:size-3.5", className)}
-      {...props}
-    >
-      {children ?? <ChevronRight />}
-    </li>
-  )
-}
-
-function BreadcrumbEllipsis({
-  className,
-  ...props
-}: React.ComponentProps<"span">) {
-  return (
-    <span
-      data-slot="breadcrumb-ellipsis"
-      role="presentation"
-      aria-hidden="true"
-      className={cn("flex size-9 items-center justify-center", className)}
-      {...props}
-    >
-      <MoreHorizontal className="size-4" />
-      <span className="sr-only">More</span>
-    </span>
-  )
-}
-
-export {
-  Breadcrumb,
-  BreadcrumbList,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-  BreadcrumbEllipsis,
+      {breadcrumbItems.map((item, index) => (
+        <div key={item.href} className="flex items-center gap-1">
+          <ChevronRight className="w-4 h-4 text-slate-600" />
+          {item.isLast ? (
+            <span className="text-slate-300 font-medium">{item.label}</span>
+          ) : (
+            <Link
+              href={item.href}
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              {item.label}
+            </Link>
+          )}
+        </div>
+      ))}
+    </nav>
+  );
 }

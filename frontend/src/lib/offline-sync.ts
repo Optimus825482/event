@@ -137,13 +137,11 @@ export async function syncSingleCheckIn(
 export async function syncOfflineQueue(): Promise<SyncResult[]> {
   // Zaten sync yapılıyorsa bekle
   if (syncLock) {
-    console.log("[OfflineSync] Sync zaten devam ediyor, atlanıyor...");
     return [];
   }
 
   // Online değilse sync yapma
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    console.log("[OfflineSync] Çevrimdışı, sync atlanıyor...");
     return [];
   }
 
@@ -156,14 +154,9 @@ export async function syncOfflineQueue(): Promise<SyncResult[]> {
     const unsyncedCheckIns = await getUnsyncedCheckIns();
 
     if (unsyncedCheckIns.length === 0) {
-      console.log("[OfflineSync] Senkronize edilecek öğe yok");
       syncLock = false;
       return [];
     }
-
-    console.log(
-      `[OfflineSync] ${unsyncedCheckIns.length} öğe senkronize ediliyor...`
-    );
 
     notifySyncStatus({
       isSyncing: true,
@@ -209,13 +202,7 @@ export async function syncOfflineQueue(): Promise<SyncResult[]> {
       pendingCount: queueCount.unsynced,
       failedCount,
     });
-
-    console.log(
-      `[OfflineSync] Sync tamamlandı: ${successCount}/${results.length} başarılı`
-    );
   } catch (error: any) {
-    console.error("[OfflineSync] Sync hatası:", error);
-
     await addSyncLog("sync_failed", error.message);
 
     notifySyncStatus({
@@ -244,10 +231,6 @@ export async function retryFailedCheckIns(): Promise<SyncResult[]> {
     return [];
   }
 
-  console.log(
-    `[OfflineSync] ${failedCheckIns.length} başarısız öğe yeniden deneniyor...`
-  );
-
   const results: SyncResult[] = [];
 
   for (const checkIn of failedCheckIns) {
@@ -270,7 +253,6 @@ let autoSyncInterval: NodeJS.Timeout | null = null;
  */
 function handleOnlineStatusChange(): void {
   if (typeof navigator !== "undefined" && navigator.onLine) {
-    console.log("[OfflineSync] Çevrimiçi olundu, sync başlatılıyor...");
     syncOfflineQueue();
   }
 }
@@ -299,8 +281,6 @@ export function startAutoSync(intervalMs: number = 30000): void {
   if (typeof navigator !== "undefined" && navigator.onLine) {
     syncOfflineQueue();
   }
-
-  console.log("[OfflineSync] Otomatik sync başlatıldı");
 }
 
 /**
@@ -319,8 +299,6 @@ export function stopAutoSync(): void {
     clearInterval(autoSyncInterval);
     autoSyncInterval = null;
   }
-
-  console.log("[OfflineSync] Otomatik sync durduruldu");
 }
 
 /**
@@ -333,18 +311,12 @@ export async function resolveConflict(
 ): Promise<"use_local" | "use_server" | "skip"> {
   // Server'da zaten check-in yapılmışsa, local'i atla
   if (serverData?.status === "checked_in") {
-    console.log(
-      `[OfflineSync] Conflict: ${localCheckIn.id} zaten check-in yapılmış, atlanıyor`
-    );
     await markCheckInSynced(localCheckIn.id);
     return "skip";
   }
 
   // Server'da iptal edilmişse, local'i atla
   if (serverData?.status === "cancelled") {
-    console.log(
-      `[OfflineSync] Conflict: ${localCheckIn.id} iptal edilmiş, atlanıyor`
-    );
     await markCheckInFailed(localCheckIn.id, "Rezervasyon iptal edilmiş");
     return "skip";
   }
@@ -375,7 +347,6 @@ export async function syncSingleItem(
   const checkIn = unsyncedCheckIns.find((c) => c.id === checkInId);
 
   if (!checkIn) {
-    console.log(`[OfflineSync] Check-in bulunamadı: ${checkInId}`);
     return null;
   }
 

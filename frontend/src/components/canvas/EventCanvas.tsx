@@ -891,8 +891,6 @@ export function EventCanvas({
       const x = (pos.x - baseOffsetX - panOffset.x) / scale;
       const y = (pos.y - baseOffsetY - panOffset.y) / scale;
 
-      console.log("Box selection başladı:", { x, y, scale });
-
       setIsSelecting(true);
       setSelectionStart({ x, y });
       setSelectionBox({ x, y, width: 0, height: 0 });
@@ -958,11 +956,6 @@ export function EventCanvas({
       ) {
         selectedIds.push(table.id);
       }
-    });
-
-    console.log("Box selection bitti:", {
-      box: selectionBox,
-      selectedCount: selectedIds.length,
     });
 
     if (selectedIds.length > 0) {

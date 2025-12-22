@@ -3,6 +3,43 @@ import { io, Socket } from "socket.io-client";
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000";
 
+// Socket event tipleri
+export interface TableUpdateData {
+  tableId: string;
+  x: number;
+  y: number;
+  rotation: number;
+  updatedBy?: string;
+}
+
+export interface ReservationData {
+  id: string;
+  tableId: string;
+  customerId?: string;
+  customerName?: string;
+  guestCount: number;
+  status: string;
+  notes?: string;
+}
+
+export interface CheckInData {
+  reservationId: string;
+  tableId: string;
+  tableLabel?: string;
+  customerName: string;
+  guestCount: number;
+  checkInTime: string;
+}
+
+export interface LiveStatsData {
+  totalExpected: number;
+  checkedIn: number;
+  remaining: number;
+  cancelled: number;
+  noShow: number;
+  timestamp: string;
+}
+
 class SocketService {
   private socket: Socket | null = null;
   private eventId: string | null = null;
@@ -16,11 +53,11 @@ class SocketService {
     });
 
     this.socket.on("connect", () => {
-      console.log("🔌 Socket connected:", this.socket?.id);
+      // Socket bağlantısı kuruldu
     });
 
     this.socket.on("disconnect", () => {
-      console.log("🔌 Socket disconnected");
+      // Socket bağlantısı kesildi
     });
   }
 
@@ -56,7 +93,7 @@ class SocketService {
   }
 
   // Rezervasyon güncelleme gönder
-  emitReservationUpdate(reservation: any) {
+  emitReservationUpdate(reservation: ReservationData) {
     if (!this.eventId) return;
     this.socket?.emit("reservationUpdate", {
       eventId: this.eventId,
@@ -75,19 +112,19 @@ class SocketService {
   }
 
   // Event listeners
-  onTableUpdated(callback: (data: any) => void) {
+  onTableUpdated(callback: (data: TableUpdateData) => void) {
     this.socket?.on("tableUpdated", callback);
   }
 
-  onReservationChanged(callback: (data: any) => void) {
+  onReservationChanged(callback: (data: ReservationData) => void) {
     this.socket?.on("reservationChanged", callback);
   }
 
-  onGuestCheckedIn(callback: (data: any) => void) {
+  onGuestCheckedIn(callback: (data: CheckInData) => void) {
     this.socket?.on("guestCheckedIn", callback);
   }
 
-  onLiveStats(callback: (data: any) => void) {
+  onLiveStats(callback: (data: LiveStatsData) => void) {
     this.socket?.on("liveStats", callback);
   }
 
@@ -109,7 +146,7 @@ class SocketService {
 
   // Canvas için rezervasyon güncellemelerini dinle
   onTableReservationUpdate(
-    callback: (data: { tableId: string; reservation: any }) => void
+    callback: (data: { tableId: string; reservation: ReservationData }) => void
   ) {
     this.socket?.on("tableReservationUpdate", callback);
   }

@@ -36,7 +36,7 @@ export interface CheckInRecord {
 
 @WebSocketGateway({
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001"],
+    origin: true, // Production'da tüm origin'lere izin ver (Coolify reverse proxy arkasında)
     credentials: true,
   },
 })
@@ -50,12 +50,10 @@ export class RealtimeGateway
     new Map();
 
   handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
     this.connectedClients.set(client.id, {});
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
     this.connectedClients.delete(client.id);
   }
 
@@ -70,9 +68,6 @@ export class RealtimeGateway
       eventId: data.eventId,
       role: data.role,
     });
-    console.log(
-      `Client ${client.id} joined event:${data.eventId} as ${data.role}`
-    );
     return { success: true, message: `Joined event ${data.eventId}` };
   }
 
@@ -145,9 +140,6 @@ export class RealtimeGateway
       .to(`event:${data.eventId}`)
       .emit("guestCheckedIn", checkInRecord);
 
-    console.log(
-      `Check-in broadcast: Event ${data.eventId}, Table ${data.tableId}`
-    );
     return { success: true, checkInRecord };
   }
 
@@ -162,9 +154,6 @@ export class RealtimeGateway
       ...stats,
       timestamp: new Date().toISOString(),
     });
-    console.log(
-      `Stats broadcast: Event ${eventId}, CheckedIn: ${stats.checkedIn}/${stats.totalExpected}`
-    );
   }
 
   /**
@@ -187,10 +176,6 @@ export class RealtimeGateway
       ...stats,
       timestamp: new Date().toISOString(),
     });
-
-    console.log(
-      `Check-in + Stats broadcast: Event ${eventId}, ${checkInRecord.customerName} checked in`
-    );
   }
 
   /**

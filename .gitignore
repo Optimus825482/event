@@ -9,7 +9,7 @@ build/
 .next/
 out/
 
-# Environment files
+# Environment files (GÜVENLİK - GitHub'a gitmemeli!)
 .env
 .env.local
 .env.*.local
@@ -41,6 +41,10 @@ coverage/
 # Misc
 .vercel
 .turbo
+
+# Database dumps (büyük dosyalar)
+*.dump
+*.sql
 
 # Uploads (keep folder structure)
 backend/uploads/avatars/*

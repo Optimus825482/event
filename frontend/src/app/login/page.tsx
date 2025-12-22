@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    email: "",
+    username: "",
     password: "",
   });
   const [error, setError] = useState("");
@@ -22,7 +22,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
 
-    if (!formData.email || !formData.password) {
+    if (!formData.username || !formData.password) {
       setError("Lütfen tüm alanları doldurun");
       return;
     }
@@ -30,10 +30,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const success = await login(formData.email, formData.password);
+      const result = await login(formData.username, formData.password);
+      console.log("Login result:", result);
+      console.log("Result type:", typeof result);
+      console.log("Is leader?:", result === "leader");
 
-      if (success) {
-        router.push("/select-module");
+      if (result) {
+        // Login fonksiyonu artık role döndürüyor (string veya false)
+        if (result === "leader") {
+          console.log("Redirecting to /leader");
+          router.push("/leader");
+        } else {
+          console.log("Redirecting to /select-module");
+          router.push("/select-module");
+        }
       } else {
         setError("Kullanıcı adı veya şifre hatalı");
       }
@@ -72,18 +82,20 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm text-slate-400 mb-2">E-posta</label>
+            <label className="block text-sm text-slate-400 mb-2">
+              Kullanıcı Adı
+            </label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
-                type="email"
-                value={formData.email}
+                type="text"
+                value={formData.username}
                 onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
+                  setFormData({ ...formData, username: e.target.value })
                 }
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-blue-500"
-                placeholder="ornek@email.com"
-                autoComplete="email"
+                placeholder="kullaniciadi"
+                autoComplete="username"
               />
             </div>
           </div>
@@ -100,6 +112,7 @@ export default function LoginPage() {
                 }
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-12 py-3 focus:outline-none focus:border-blue-500"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
               <button
                 type="button"
@@ -137,7 +150,7 @@ export default function LoginPage() {
         {/* Bilgi */}
         <div className="mt-6 bg-slate-800/50 rounded-xl p-4">
           <p className="text-xs text-slate-500 mb-2">
-            Hesabınız yoksa önce kayıt olun veya admin ile iletişime geçin.
+            Hesabınız yoksa admin ile iletişime geçin.
           </p>
         </div>
       </div>

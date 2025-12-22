@@ -1,20 +1,31 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
-import { User } from './user.entity';
-import { VenueTemplate } from './venue-template.entity';
-import { Reservation } from './reservation.entity';
-import { StaffAssignment } from './staff-assignment.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+} from "typeorm";
+import { User } from "./user.entity";
+import { VenueTemplate } from "./venue-template.entity";
+import { Reservation } from "./reservation.entity";
+import { StaffAssignment } from "./staff-assignment.entity";
+import { ServiceTeam } from "./service-team.entity";
+import { EventStaffAssignment } from "./event-staff-assignment.entity";
 
 export enum EventStatus {
-  DRAFT = 'draft',
-  PUBLISHED = 'published',
-  ACTIVE = 'active',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled'
+  DRAFT = "draft",
+  PUBLISHED = "published",
+  ACTIVE = "active",
+  COMPLETED = "completed",
+  CANCELLED = "cancelled",
 }
 
-@Entity('events')
+@Entity("events")
 export class Event {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column()
@@ -23,13 +34,13 @@ export class Event {
   @Column({ nullable: true })
   description: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: "timestamp" })
   eventDate: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   eventEndDate: Date | null;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: "jsonb", nullable: true })
   venueLayout: {
     tables: Array<{
       id: string;
@@ -56,8 +67,11 @@ export class Event {
     };
   };
 
-  @Column({ type: 'enum', enum: EventStatus, default: EventStatus.DRAFT })
+  @Column({ type: "enum", enum: EventStatus, default: EventStatus.DRAFT })
   status: EventStatus;
+
+  @Column({ nullable: true })
+  eventType: string;
 
   @Column({ nullable: true })
   coverImage: string;
@@ -65,25 +79,31 @@ export class Event {
   @Column({ default: 0 })
   totalCapacity: number;
 
-  @ManyToOne(() => User, user => user.events, { nullable: true })
-  @JoinColumn({ name: 'organizerId' })
+  @ManyToOne(() => User, (user) => user.events, { nullable: true })
+  @JoinColumn({ name: "organizerId" })
   organizer: User;
 
   @Column({ nullable: true })
   organizerId: string;
 
   @ManyToOne(() => VenueTemplate, { nullable: true })
-  @JoinColumn({ name: 'venueTemplateId' })
+  @JoinColumn({ name: "venueTemplateId" })
   venueTemplate: VenueTemplate;
 
   @Column({ nullable: true })
   venueTemplateId: string;
 
-  @OneToMany(() => Reservation, reservation => reservation.event)
+  @OneToMany(() => Reservation, (reservation) => reservation.event)
   reservations: Reservation[];
 
-  @OneToMany(() => StaffAssignment, assignment => assignment.event)
+  @OneToMany(() => StaffAssignment, (assignment) => assignment.event)
   staffAssignments: StaffAssignment[];
+
+  @OneToMany(() => ServiceTeam, (team) => team.event)
+  serviceTeams: ServiceTeam[];
+
+  @OneToMany(() => EventStaffAssignment, (assignment) => assignment.event)
+  eventStaffAssignments: EventStaffAssignment[];
 
   @CreateDateColumn()
   createdAt: Date;

@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { X, User, Check, Wand2, Users, AlertCircle } from 'lucide-react';
-import { useCanvasStore } from '@/store/canvas-store';
-import { User as UserType, StaffAssignment } from '@/types';
-import { staffApi } from '@/lib/api';
+import { useState, useEffect } from "react";
+import { X, User, Check, Wand2, Users, AlertCircle } from "lucide-react";
+import { useCanvasStore } from "@/store/canvas-store";
+import { User as UserType, StaffAssignment } from "@/types";
+import { staffApi } from "@/lib/api";
 
 interface StaffAssignmentPanelProps {
   onClose: () => void;
@@ -13,14 +13,47 @@ interface StaffAssignmentPanelProps {
 
 // Fallback mock personel listesi (API çalışmazsa)
 const fallbackStaff: UserType[] = [
-  { id: '1', email: 'ahmet@staff.com', fullName: 'Ahmet (Garson)', role: 'staff', color: '#ef4444' },
-  { id: '2', email: 'ayse@staff.com', fullName: 'Ayşe (Garson)', role: 'staff', color: '#22c55e' },
-  { id: '3', email: 'mehmet@staff.com', fullName: 'Mehmet (Garson)', role: 'staff', color: '#3b82f6' },
-  { id: '4', email: 'fatma@staff.com', fullName: 'Fatma (Şef Garson)', role: 'staff', color: '#eab308' },
+  {
+    id: "1",
+    email: "ahmet@staff.com",
+    fullName: "Ahmet (Garson)",
+    role: "staff",
+    color: "#ef4444",
+  },
+  {
+    id: "2",
+    email: "ayse@staff.com",
+    fullName: "Ayşe (Garson)",
+    role: "staff",
+    color: "#22c55e",
+  },
+  {
+    id: "3",
+    email: "mehmet@staff.com",
+    fullName: "Mehmet (Garson)",
+    role: "staff",
+    color: "#3b82f6",
+  },
+  {
+    id: "4",
+    email: "fatma@staff.com",
+    fullName: "Fatma (Şef Garson)",
+    role: "staff",
+    color: "#eab308",
+  },
 ];
 
-export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelProps) {
-  const { selectedTableIds, tables, updateTable, staffAssignments, setStaffAssignments } = useCanvasStore();
+export function StaffAssignmentPanel({
+  onClose,
+  eventId,
+}: StaffAssignmentPanelProps) {
+  const {
+    selectedTableIds,
+    tables,
+    updateTable,
+    staffAssignments,
+    setStaffAssignments,
+  } = useCanvasStore();
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,18 +64,20 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
       try {
         const response = await staffApi.getAll(true); // Sadece aktif personel
         if (response.data && response.data.length > 0) {
-          setStaffList(response.data.map((s: any) => ({
-            id: s.id,
-            email: s.email,
-            fullName: s.fullName,
-            role: 'staff' as const,
-            color: s.color || '#3b82f6',
-          })));
+          setStaffList(
+            response.data.map((s: any) => ({
+              id: s.id,
+              email: s.email,
+              fullName: s.fullName,
+              role: "staff" as const,
+              color: s.color || "#3b82f6",
+            }))
+          );
         } else {
           setStaffList(fallbackStaff);
         }
-      } catch (error) {
-        console.log('API bağlantısı yok, mock data kullanılıyor');
+      } catch {
+        // API bağlantısı yok, fallback data kullan
         setStaffList(fallbackStaff);
       } finally {
         setLoading(false);
@@ -68,10 +103,17 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
     });
 
     // Staff assignment güncelle (local state)
-    const existingAssignment = staffAssignments.find((a) => a.staffId === staff.id);
-    
+    const existingAssignment = staffAssignments.find(
+      (a) => a.staffId === staff.id
+    );
+
     if (existingAssignment) {
-      const newTableIds = [...new Set([...existingAssignment.assignedTableIds, ...selectedTableIds])];
+      const newTableIds = [
+        ...new Set([
+          ...existingAssignment.assignedTableIds,
+          ...selectedTableIds,
+        ]),
+      ];
       setStaffAssignments(
         staffAssignments.map((a) =>
           a.staffId === staff.id ? { ...a, assignedTableIds: newTableIds } : a
@@ -80,10 +122,10 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
     } else {
       const newAssignment: StaffAssignment = {
         id: `assign-${Date.now()}`,
-        eventId: eventId || '',
+        eventId: eventId || "",
         staffId: staff.id,
         staffName: staff.fullName,
-        staffColor: staff.color || '#3b82f6',
+        staffColor: staff.color || "#3b82f6",
         assignedTableIds: selectedTableIds,
       };
       setStaffAssignments([...staffAssignments, newAssignment]);
@@ -95,14 +137,16 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
         await staffApi.assignTables({
           eventId,
           staffId: staff.id,
-          tableIds: [...new Set([
-            ...(existingAssignment?.assignedTableIds || []),
-            ...selectedTableIds,
-          ])],
+          tableIds: [
+            ...new Set([
+              ...(existingAssignment?.assignedTableIds || []),
+              ...selectedTableIds,
+            ]),
+          ],
           color: staff.color,
         });
-      } catch (error) {
-        console.log('API kayıt başarısız, local state güncellendi');
+      } catch {
+        // API kayıt başarısız, local state güncellendi
       }
     }
 
@@ -111,7 +155,7 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
 
   const handleRemoveAssignment = async () => {
     const staffId = selectedTables[0]?.staffId;
-    
+
     selectedTableIds.forEach((tableId) => {
       updateTable(tableId, {
         staffId: undefined,
@@ -121,10 +165,14 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
 
     // Staff assignments'tan da kaldır
     setStaffAssignments(
-      staffAssignments.map((a) => ({
-        ...a,
-        assignedTableIds: a.assignedTableIds.filter((id) => !selectedTableIds.includes(id)),
-      })).filter((a) => a.assignedTableIds.length > 0)
+      staffAssignments
+        .map((a) => ({
+          ...a,
+          assignedTableIds: a.assignedTableIds.filter(
+            (id) => !selectedTableIds.includes(id)
+          ),
+        }))
+        .filter((a) => a.assignedTableIds.length > 0)
     );
 
     // API'den kaldır
@@ -145,8 +193,8 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
             await staffApi.removeAssignment(eventId, staffId);
           }
         }
-      } catch (error) {
-        console.log('API güncelleme başarısız');
+      } catch {
+        // API güncelleme başarısız
       }
     }
 
@@ -182,7 +230,9 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
               <span
                 key={table.id}
                 className="px-3 py-1 bg-slate-700 rounded text-sm"
-                style={{ borderLeft: `3px solid ${table.staffColor || table.color}` }}
+                style={{
+                  borderLeft: `3px solid ${table.staffColor || table.color}`,
+                }}
               >
                 {table.label}
               </span>
@@ -222,16 +272,18 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
           ) : staffList.length === 0 ? (
             <div className="text-center py-4">
               <AlertCircle className="w-8 h-8 mx-auto text-slate-500 mb-2" />
-              <p className="text-slate-400 text-sm">Henüz personel eklenmemiş</p>
+              <p className="text-slate-400 text-sm">
+                Henüz personel eklenmemiş
+              </p>
               <a href="/staff" className="text-blue-400 text-sm">
                 Personel Ekle →
               </a>
             </div>
           ) : (
             staffList.map((staff) => {
-              const assignedCount = staffAssignments.find(
-                (a) => a.staffId === staff.id
-              )?.assignedTableIds.length || 0;
+              const assignedCount =
+                staffAssignments.find((a) => a.staffId === staff.id)
+                  ?.assignedTableIds.length || 0;
 
               return (
                 <button
@@ -239,8 +291,8 @@ export function StaffAssignmentPanel({ onClose, eventId }: StaffAssignmentPanelP
                   onClick={() => setSelectedStaffId(staff.id)}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
                     selectedStaffId === staff.id
-                      ? 'bg-blue-600/20 border border-blue-500'
-                      : 'bg-slate-700'
+                      ? "bg-blue-600/20 border border-blue-500"
+                      : "bg-slate-700"
                   }`}
                 >
                   <div

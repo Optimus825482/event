@@ -47,22 +47,26 @@ api.interceptors.response.use(
 
 // Auth API
 export const authApi = {
-  login: (email: string, password: string) =>
-    api.post("/auth/login", { email, password }),
-  register: (data: { email: string; password: string; fullName: string }) =>
-    api.post("/auth/register", data),
+  login: (username: string, password: string) =>
+    api.post("/auth/login", { username, password }),
+  register: (data: {
+    username: string;
+    email?: string;
+    password: string;
+    fullName: string;
+  }) => api.post("/auth/register", data),
   me: () => api.get("/auth/me"),
 };
 
 // Events API
 export const eventsApi = {
-  getAll: () => api.get("/events"),
+  getAll: () => api.get("/events?all=true"),
   getOne: (id: string) => api.get(`/events/${id}`),
   create: (data: any) => api.post("/events", data),
   update: (id: string, data: any) => api.put(`/events/${id}`, data),
   delete: (id: string) => api.delete(`/events/${id}`),
-  updateLayout: (id: string, layout: any) =>
-    api.patch(`/events/${id}/layout`, { layout }),
+  updateLayout: (id: string, data: { venueLayout: any }) =>
+    api.patch(`/events/${id}/layout`, data),
 };
 
 // Tables API
@@ -281,12 +285,10 @@ export const staffApi = {
 
   // Yeni ekip oluştur
   createTeam: (data: {
-    eventId: string;
     name: string;
-    color: string;
-    members?: any[];
+    color?: string;
+    memberIds?: string[];
     leaderId?: string;
-    tableIds?: string[];
   }) => api.post("/staff/teams", data),
 
   // Ekip güncelle
@@ -295,9 +297,8 @@ export const staffApi = {
     data: {
       name?: string;
       color?: string;
-      members?: any[];
+      memberIds?: string[];
       leaderId?: string;
-      tableIds?: string[];
     }
   ) => api.put(`/staff/teams/${teamId}`, data),
 
@@ -305,8 +306,8 @@ export const staffApi = {
   deleteTeam: (teamId: string) => api.delete(`/staff/teams/${teamId}`),
 
   // Ekibe üye ekle
-  addMemberToTeam: (teamId: string, member: any) =>
-    api.post(`/staff/teams/${teamId}/members`, member),
+  addMemberToTeam: (teamId: string, data: { memberId: string }) =>
+    api.post(`/staff/teams/${teamId}/members`, data),
 
   // Ekipten üye çıkar
   removeMemberFromTeam: (teamId: string, memberId: string) =>
@@ -328,6 +329,263 @@ export const staffApi = {
       tableIds: string[];
     }>
   ) => api.post(`/staff/event/${eventId}/teams/save`, { teams }),
+
+  // ==================== TABLE GROUP API ====================
+
+  // Etkinlik için tüm masa gruplarını getir
+  getEventTableGroups: (eventId: string) =>
+    api.get(`/staff/event/${eventId}/table-groups`),
+
+  // Yeni masa grubu oluştur
+  createTableGroup: (data: {
+    eventId: string;
+    name: string;
+    color?: string;
+    tableIds: string[];
+    groupType?: string;
+    notes?: string;
+  }) => api.post("/staff/table-groups", data),
+
+  // Masa grubu güncelle
+  updateTableGroup: (
+    groupId: string,
+    data: {
+      name?: string;
+      color?: string;
+      tableIds?: string[];
+      groupType?: string;
+      notes?: string;
+      assignedTeamId?: string;
+      assignedSupervisorId?: string;
+      sortOrder?: number;
+    }
+  ) => api.put(`/staff/table-groups/${groupId}`, data),
+
+  // Masa grubu sil
+  deleteTableGroup: (groupId: string) =>
+    api.delete(`/staff/table-groups/${groupId}`),
+
+  // Gruba masa ekle
+  addTablesToGroup: (groupId: string, tableIds: string[]) =>
+    api.post(`/staff/table-groups/${groupId}/tables`, { tableIds }),
+
+  // Gruptan masa çıkar
+  removeTablesFromGroup: (groupId: string, tableIds: string[]) =>
+    api.delete(`/staff/table-groups/${groupId}/tables`, { data: { tableIds } }),
+
+  // Gruba süpervizör ata
+  assignSupervisorToGroup: (groupId: string, supervisorId: string) =>
+    api.post(`/staff/table-groups/${groupId}/supervisor`, { supervisorId }),
+
+  // Gruptan süpervizör kaldır
+  removeSupervisorFromGroup: (groupId: string) =>
+    api.delete(`/staff/table-groups/${groupId}/supervisor`),
+
+  // Gruba ekip ata
+  assignTeamToGroup: (groupId: string, teamId: string) =>
+    api.post(`/staff/table-groups/${groupId}/team`, { teamId }),
+
+  // Tüm masa gruplarını toplu kaydet
+  saveEventTableGroups: (
+    eventId: string,
+    groups: Array<{
+      id?: string;
+      name: string;
+      color: string;
+      tableIds: string[];
+      groupType?: string;
+      assignedTeamId?: string;
+      assignedSupervisorId?: string;
+      notes?: string;
+      sortOrder?: number;
+    }>
+  ) => api.post(`/staff/event/${eventId}/table-groups/save`, { groups }),
+
+  // Süpervizörleri getir
+  getSupervisors: () => api.get("/staff/supervisors"),
+
+  // Etkinlik organizasyon özeti
+  getEventOrganizationSummary: (eventId: string) =>
+    api.get(`/staff/event/${eventId}/organization-summary`),
+
+  // ==================== STAFF ROLES API ====================
+
+  // Tüm rolleri getir
+  getRoles: () => api.get("/staff/roles"),
+
+  // Yeni rol oluştur
+  createRole: (data: {
+    key: string;
+    label: string;
+    color: string;
+    badgeColor?: string;
+    bgColor?: string;
+  }) => api.post("/staff/roles", data),
+
+  // Rol güncelle
+  updateRole: (
+    id: string,
+    data: {
+      label?: string;
+      color?: string;
+      badgeColor?: string;
+      bgColor?: string;
+      sortOrder?: number;
+    }
+  ) => api.put(`/staff/roles/${id}`, data),
+
+  // Rol sil (soft delete)
+  deleteRole: (id: string) => api.delete(`/staff/roles/${id}`),
+
+  // Rol kalıcı sil
+  hardDeleteRole: (id: string) => api.delete(`/staff/roles/${id}/hard`),
+
+  // ==================== WORK SHIFTS (ÇALIŞMA SAATLERİ) API ====================
+
+  // Tüm çalışma saatlerini getir
+  getShifts: () => api.get("/staff/shifts"),
+
+  // Yeni çalışma saati oluştur
+  createShift: (data: {
+    name: string;
+    startTime: string;
+    endTime: string;
+    color?: string;
+  }) => api.post("/staff/shifts", data),
+
+  // Çalışma saati güncelle
+  updateShift: (
+    id: string,
+    data: {
+      name?: string;
+      startTime?: string;
+      endTime?: string;
+      color?: string;
+      sortOrder?: number;
+    }
+  ) => api.put(`/staff/shifts/${id}`, data),
+
+  // Çalışma saati sil
+  deleteShift: (id: string) => api.delete(`/staff/shifts/${id}`),
+
+  // ==================== TEAMS (EKİPLER) API - YENİ ====================
+
+  // Tüm ekipleri getir (yeni teams tablosu)
+  getTeams: () => api.get("/staff/teams"),
+
+  // Yeni ekip oluştur
+  createNewTeam: (data: {
+    name: string;
+    color?: string;
+    memberIds?: string[];
+    leaderId?: string;
+  }) => api.post("/staff/teams", data),
+
+  // Ekip güncelle
+  updateNewTeam: (
+    id: string,
+    data: {
+      name?: string;
+      color?: string;
+      memberIds?: string[];
+      leaderId?: string;
+      sortOrder?: number;
+    }
+  ) => api.put(`/staff/teams/${id}`, data),
+
+  // Ekip sil
+  deleteNewTeam: (id: string) => api.delete(`/staff/teams/${id}`),
+
+  // Ekibe üye ekle
+  addMemberToNewTeam: (teamId: string, memberId: string) =>
+    api.post(`/staff/teams/${teamId}/members`, { memberId }),
+
+  // Ekipten üye çıkar
+  removeMemberFromNewTeam: (teamId: string, memberId: string) =>
+    api.delete(`/staff/teams/${teamId}/members/${memberId}`),
+
+  // ==================== EVENT STAFF ASSIGNMENT API ====================
+
+  // Personelin tüm etkinliklerdeki atamalarını getir
+  getStaffEventAssignments: (staffId: string) =>
+    api.get(`/staff/${staffId}/event-assignments`),
+
+  // Etkinlik için tüm personel atamalarını getir
+  getEventStaffAssignments: (eventId: string) =>
+    api.get(`/staff/event/${eventId}/staff-assignments`),
+
+  // Personel ata (masa/masalara)
+  assignStaffToTables: (
+    eventId: string,
+    data: {
+      staffId: string;
+      tableIds: string[];
+      shiftId?: string;
+      teamId?: string;
+      color?: string;
+      assignmentType?: "table" | "special_task";
+      specialTaskLocation?: string;
+      specialTaskStartTime?: string;
+      specialTaskEndTime?: string;
+    }
+  ) => api.post(`/staff/event/${eventId}/staff-assignments`, data),
+
+  // Personel atamasını güncelle
+  updateStaffAssignment: (
+    assignmentId: string,
+    data: {
+      tableIds?: string[];
+      shiftId?: string;
+      teamId?: string;
+      color?: string;
+      notes?: string;
+    }
+  ) => api.put(`/staff/staff-assignments/${assignmentId}`, data),
+
+  // Personel atamasını kaldır
+  removeStaffAssignment: (assignmentId: string) =>
+    api.delete(`/staff/staff-assignments/${assignmentId}`),
+
+  // Tüm etkinlik atamalarını kaydet (toplu)
+  saveEventStaffAssignments: (
+    eventId: string,
+    assignments: Array<{
+      staffId: string;
+      tableIds: string[];
+      shiftId?: string;
+      teamId?: string;
+      color?: string;
+    }>
+  ) =>
+    api.post(`/staff/event/${eventId}/staff-assignments/save`, { assignments }),
+
+  // ==================== ORGANIZATION TEMPLATE API ====================
+
+  // Tüm şablonları getir
+  getOrganizationTemplates: () => api.get("/staff/organization-templates"),
+
+  // Tek şablon getir
+  getOrganizationTemplate: (id: string) =>
+    api.get(`/staff/organization-templates/${id}`),
+
+  // Şablon oluştur (mevcut etkinlik organizasyonundan)
+  createOrganizationTemplate: (data: {
+    name: string;
+    description?: string;
+    eventId: string;
+  }) => api.post("/staff/organization-templates", data),
+
+  // Şablonu etkinliğe uygula
+  applyOrganizationTemplate: (templateId: string, eventId: string) =>
+    api.post(`/staff/organization-templates/${templateId}/apply`, { eventId }),
+
+  // Şablon sil
+  deleteOrganizationTemplate: (id: string) =>
+    api.delete(`/staff/organization-templates/${id}`),
+
+  // Varsayılan şablon yap
+  setDefaultTemplate: (id: string) =>
+    api.post(`/staff/organization-templates/${id}/set-default`),
 };
 
 // Upload API
@@ -410,6 +668,42 @@ export const invitationsApi = {
     api.get(`/invitations/reservation/${reservationId}/whatsapp-link`),
 };
 
+// Users API (Admin)
+export const usersApi = {
+  getAll: () => api.get("/users"),
+  getOne: (id: string) => api.get(`/users/${id}`),
+  create: (data: {
+    username: string;
+    email?: string;
+    password: string;
+    fullName: string;
+    role?: string;
+    phone?: string;
+    position?: string;
+  }) => api.post("/users", data),
+  update: (
+    id: string,
+    data: {
+      username?: string;
+      email?: string;
+      fullName?: string;
+      role?: string;
+      phone?: string;
+      position?: string;
+      isActive?: boolean;
+      color?: string;
+    }
+  ) => api.put(`/users/${id}`, data),
+  delete: (id: string) => api.delete(`/users/${id}`),
+  toggleStatus: (id: string) => api.patch(`/users/${id}/toggle-status`),
+  changePassword: (
+    id: string,
+    data: { currentPassword?: string; newPassword: string }
+  ) => api.patch(`/users/${id}/password`, data),
+  getStats: () => api.get("/users/stats"),
+  migrateUsernames: () => api.post("/users/migrate-usernames"),
+};
+
 // Settings API
 export const settingsApi = {
   // System Settings
@@ -434,4 +728,45 @@ export const settingsApi = {
   testSmtpConnection: () => api.post("/settings/smtp/test"),
   sendTestEmail: (email: string) =>
     api.post("/settings/smtp/test-email", { email }),
+};
+
+// Leader API
+export const leaderApi = {
+  // Dashboard
+  getDashboard: () => api.get("/leader/dashboard"),
+
+  // Etkinlik detayları
+  getEventDetails: (eventId: string) => api.get(`/leader/events/${eventId}`),
+
+  // Değerlendirme için takım üyeleri
+  getTeamMembersForReview: (eventId: string) =>
+    api.get(`/leader/events/${eventId}/team-members`),
+
+  // Etkinlik değerlendirmeleri
+  getEventReviews: (eventId: string) =>
+    api.get(`/leader/events/${eventId}/reviews`),
+
+  // Tek değerlendirme oluştur
+  createReview: (data: {
+    staffId: string;
+    eventId: string;
+    score: number;
+    rating: string;
+    comment?: string;
+  }) => api.post("/leader/reviews", data),
+
+  // Toplu değerlendirme
+  createBulkReviews: (
+    eventId: string,
+    reviews: Array<{
+      staffId: string;
+      score: number;
+      rating: string;
+      comment?: string;
+    }>
+  ) => api.post(`/leader/events/${eventId}/reviews/bulk`, { reviews }),
+
+  // Personel değerlendirme geçmişi
+  getStaffReviews: (staffId: string) =>
+    api.get(`/leader/staff/${staffId}/reviews`),
 };

@@ -1,0 +1,330 @@
+{
+  "backup_date": "2025-12-21",
+  "source": "memory-mcp-full-export",
+  "entities": [
+    {
+      "name": "CORE_CONTEXT",
+      "type": "SystemConfig",
+      "data": [
+        "BU ENTITY HER OTURUMDA ÖNCE OKUNMALI",
+        "Erkan: Türkçe, samimi hitap, hover yok, ücretsiz servisler",
+        "Stack: Tauri v2 + Python backend + React/Nuxt frontend",
+        "Letta: openrouter/text-embedding-3-small kullan (letta-free 500 veriyor)",
+        "Kod: Try-catch, Türkçe yorum, input validasyonu otomatik",
+        "Aktif Projeler: YENILETTA, HACCP, Minibar, YouTube Assistant",
+        "Murphy Agent ID: agent-38777650-b9ad-4775-86bf-54dc919b0b61",
+        "Context7 ile kütüphane docs çek, Memory MCP ile bilgi sakla"
+      ]
+    },
+    {
+      "name": "PROJECT_YENILETTA",
+      "type": "ActiveProject",
+      "data": [
+        "Letta tabanlı kişisel asistan - Tauri v2 desktop app",
+        "Murphy Agent ID: agent-38777650-b9ad-4775-86bf-54dc919b0b61",
+        "Sesli sohbet: Web Speech API (STT) + Edge TTS",
+        "Multi-agent takım sistemi kurulu",
+        "Workspace: YENILETTA klasörü",
+        "Ses ayarları artık sunucu tarafında voice_settings.json dosyasında saklanıyor",
+        "API: GET/POST /api/voice/settings - ses ayarları yönetimi",
+        "Gelişmiş VAD: Çift eşik, Enerji+ZCR, Düşünme modu, Sesli komutlar eklendi",
+        "Sürekli dinleme modu: Shift+Tıkla ile aktif, 'Dur' komutuyla kapat",
+        "Wake Word Sistemi eklendi (Aralık 2024): Arka planda 'Hey Murphy' dinleme, otomatik sesli sohbet başlatma, düşük kaynak kullanımı için optimize edilmiş Web Speech API tabanlı çözüm"
+      ]
+    },
+    {
+      "name": "PROJECT_HACCP",
+      "type": "ActiveProject",
+      "data": [
+        "Beyaz et parçalama tesisi HACCP dokümantasyon sistemi",
+        "Tauri + React + TypeScript + Rust",
+        "RAG sistemi entegre (384 dim MiniLM embedding)",
+        "AI belge oluşturma özelliği var",
+        "50+ HACCP dokümanı mevcut"
+      ]
+    },
+    {
+      "name": "PROJECT_MINIBAR",
+      "type": "ActiveProject",
+      "data": [
+        "Otel minibar takip sistemi",
+        "Flask versiyon: Flask 3.0 + PostgreSQL",
+        "Next.js versiyon: Next.js 16 + Prisma 7",
+        "Preline UI, Tailwind CSS v4"
+      ]
+    },
+    {
+      "name": "PROJECT_YOUTUBE_ASSISTANT",
+      "type": "ActiveProject",
+      "data": [
+        "YouTube video asistanı - Nuxt.js + FastAPI + Tauri",
+        "Letta Groups API entegrasyonu",
+        "Groq Whisper STT, Edge TTS",
+        "Multi-agent arama sistemi"
+      ]
+    },
+    {
+      "name": "Letta_Hafiza_Sistemi",
+      "type": "project_feature",
+      "data": [
+        "PostgreSQL + pgvector kullanıyor",
+        "4 katmanlı hafıza: episodik, semantik, prosedürel, çalışma",
+        "Pekiştirmeli öğrenme desteği var",
+        "Mistral embed ile vektör embedding",
+        "DATABASE_URL .env'de tanımlı"
+      ]
+    },
+    {
+      "name": "Letta_Chat_UI_Design",
+      "type": "UIDesign",
+      "data": [
+        "Profesyonel 3-panel layout: Sol (Sohbet Geçmişi) + Orta (Chat) + Sağ (Araçlar)",
+        "Header: Logo, başlık, hafıza istatistikleri, tema toggle",
+        "Footer: Input alanı, mikrofon, gönder butonu, karakter sayacı",
+        "Sol Panel: Sohbet geçmişi listesi, arama, yeni sohbet butonu",
+        "Sağ Panel: Kullanılabilir araçlar, aktif araç animasyonu, araç logları",
+        "Orta Panel: Mesaj akışı (aşağıdan yukarı), typing indicator, scroll-to-bottom",
+        "Araç kullanımında pulse/glow animasyonu",
+        "Mesajlar: Avatar, zaman damgası, kopyala butonu, feedback butonları",
+        "Dark/Light mode desteği",
+        "Responsive tasarım - mobilde paneller collapse olur"
+      ]
+    },
+    {
+      "name": "Letta_Chat_System_Update",
+      "type": "feature_update",
+      "data": [
+        "Sohbet geçmişi artık chatStore üzerinden yönetiliyor",
+        "settingsStore eklendi - seçilen model veritabanından yükleniyor",
+        "ChatInterface artık settingsStore.selectedModel kullanıyor",
+        "Yeni sohbet oluşturma ve sohbet seçme fonksiyonları eklendi",
+        "Tema ayarı veritabanına kaydediliyor",
+        "LocalStorage fallback mekanizması mevcut"
+      ]
+    },
+    {
+      "name": "Letta_AI_Projesi",
+      "type": "project",
+      "data": [
+        "Nuxt 3.20.2 + Vue 3.5.25 + Tailwind CSS v4 kullanıyor",
+        "PostgreSQL + pgvector veritabanı",
+        "Mistral AI entegrasyonu",
+        "Araçlar: Web arama (Brave), derin araştırma, YouTube analiz, kod çalıştırma (E2B)",
+        "AI araç kullanımı sorunu çözüldü - smartToolExecution fonksiyonu kullanılıyor",
+        "Araç tetikleme API üzerinden yapılıyor (/api/tools/suggest)",
+        "Mistral Tool Calling entegrasyonu eklendi",
+        "chat.post.js tamamen yeniden yazıldı - tools array ve toolChoice: auto",
+        "Araçlar: web_search, youtube_analyze, deep_research",
+        "AI sistem prompt'u güncellendi - hafıza sistemini biliyor",
+        "3 katmanlı hafıza sistemi (episodik, semantik, prosedürel)",
+        "Kendi kendine öğrenme sistemi eklendi",
+        "4 yeni hafıza aracı: save_knowledge, save_skill, save_preference, consolidate_memory",
+        "Hafıza konsolidasyonu: Episodik → Semantik/Prosedürel otomatik aktarım",
+        "memoryConsolidation.js servisi oluşturuldu",
+        "Periyodik konsolidasyon: 5 dakikada bir otomatik çalışabilir"
+      ]
+    },
+    {
+      "name": "Otel_Buggy_Shuttle_Projesi",
+      "type": "Proje",
+      "data": [
+        "Otel içi misafir ulaşımı için buggy araç takip sistemi",
+        "Sürücüler sadece telsiz kullanacak - ek yazılım istemiyorlar",
+        "GPS tabanlı gerçek zamanlı araç takibi",
+        "Durak çağrı butonları mevcut",
+        "Merkez operatör haritadan araçları görüp yönlendiriyor",
+        "GSM kartlı GPS tracker önerildi (Teltonika FMB920)",
+        "Sadece GPS tabanlı sistem - Geofence ile otomatik görev tamamlama",
+        "Toplam başlangıç maliyeti: ~120.000 TL (10 araç + 15 durak)",
+        "Aylık işletme maliyeti: ~3.000 TL",
+        "Proje süresi: 6 hafta",
+        "Geofence yarıçapı: 15 metre",
+        "Traccar sunucusu Coolify üzerinde kuruldu",
+        "Port 8082: Web arayüzü, Port 5055: Mobil client",
+        "Konum güncelleme sıklığı: 10 saniye"
+      ]
+    },
+    {
+      "name": "Lujo_Hotel_Buggy_Projesi",
+      "type": "Project",
+      "data": [
+        "Lujo Hotel Bodrum için buggy shuttle takip sistemi",
+        "Konum: Güvercinlik, Bodrum, Türkiye",
+        "GPS Merkez Koordinat: 37.135644, 27.561163",
+        "Toplam 20 buggy durağı mevcut",
+        "Tahmini rota uzunluğu: 2-2.5 km",
+        "Traccar sunucusu: http://185.9.38.66:5055",
+        "Traccar web panel: traccar.optimistdemo.cloud",
+        "GPSLogger + OsmAnd protokolü test edildi ve çalışıyor",
+        "GPSLogger tercih edildi - pil tasarrufu için",
+        "Test cihazı: erkan-test ID ile Traccar'a eklendi"
+      ]
+    },
+    {
+      "name": "Lujo_Buggy_Duraklari",
+      "type": "LocationData",
+      "data": [
+        "GİRİŞ BÖLGESİ (3 durak): 1100 Blok, 1200 Blok, P yanı",
+        "MERKEZ/LOBİ BÖLGESİ (5 durak): 1300, Lobi(1 numara), 1400-1500 arası, 1800, 1900",
+        "ORTA BLOKLAR (6 durak): 2100, 2200, 2300, 2400, 2500, 2600",
+        "VİLLA BÖLGESİ (4 durak): 8-9 arası, 11-12 arası, Sunset Restaurant önü, 18 numara yanı",
+        "PLAJ BÖLGESİ (3 durak): 4000 Blok, 23 numara, 5000 Blok altı",
+        "Her durak için önerilen geofence yarıçapı: 15-20 metre"
+      ]
+    },
+    {
+      "name": "Lujo_Oda_Bloklari",
+      "type": "LocationData",
+      "data": [
+        "1100 Blok - Sol üst villa bölgesi",
+        "1200 Blok - Giriş/Otopark yanı",
+        "1300 Blok - Ana bina sol",
+        "1400 Blok - Ana bina merkez",
+        "1500 Blok - Ana bina sağ üst",
+        "1600 Blok - Tenis kortları üstü",
+        "1700 Blok - Sağ üst köşe",
+        "1800 Blok - Tenis altı",
+        "1900 Blok - Sağ kenar",
+        "2100 Blok - Orta sol",
+        "2200-2300 Blok - Merkez",
+        "2400 Blok - Merkez alt",
+        "2500 Blok - Sol alt",
+        "2600 Blok - Üst orta",
+        "3000 Blok - Üst merkez",
+        "4000 Blok - Plaj üstü sol",
+        "5000 Blok - Sağ alt plaj bölgesi"
+      ]
+    },
+    {
+      "name": "Lujo_Onemli_Noktalar",
+      "type": "LocationData",
+      "data": [
+        "1 numara - Ana Lobi/Reception",
+        "2 numara - 1500 Blok yanı",
+        "Sunset Restaurant - Villa bölgesi alt kısmı",
+        "23 numara - Sol plaj bölgesi",
+        "24 numara - Tenis kortları yanı",
+        "P - Otopark (giriş)",
+        "Emergency Assembly Point - 5000 Blok yanı"
+      ]
+    },
+    {
+      "name": "ErkanERDEM_NextJS_Portfolio",
+      "type": "Project",
+      "data": [
+        "Next.js 16 + TypeScript + Tailwind CSS",
+        "Cyberpunk temalı portfolyo sitesi",
+        "App Router kullanılıyor",
+        "Sayfalar: Ana sayfa, Projeler, Yazılar, Videolar, Hakkımda",
+        "Konum: portfolio-nextjs klasörü",
+        "Port: localhost:3000",
+        "Animasyonlu hero slider komponenti var",
+        "İletişim formu validasyonlu"
+      ]
+    },
+    {
+      "name": "EventFlow_PRO",
+      "type": "Project",
+      "data": [
+        "Modüler etkinlik yönetim sistemi",
+        "Modüller: events (Etkinlik Planlama), reservations (Rezervasyon), checkin (Check-in), admin (Sistem)",
+        "Etkinlik Planlama modülü navbar: Dashboard, Etkinlikler, Alan Şablonları, Ekip",
+        "Ayarlar dağıtımı: Genel Ayarlar→Admin modülü, Masa Türleri→Etkinlik Alanı Düzenleme, Ekip Renkleri→Ekip",
+        "Current workspace: d:\\event"
+      ]
+    },
+    {
+      "name": "EventFlow_Etkinlik_Modulu_Duzeltmeleri",
+      "type": "CodeFix",
+      "date": "20 Aralık 2025",
+      "data": [
+        "events.service.ts - Update metodundaki upsert mantığı düzeltildi",
+        "event.dto.ts - any tipler kaldırıldı, VenueLayoutDto, TableLayoutDto, WallLayoutDto, StageLayoutDto, DimensionsDto interface'leri eklendi",
+        "event.dto.ts - IsFutureDate custom validator eklendi",
+        "ReservationPanel.tsx - Mock data kaldırıldı, customersApi.searchAutocomplete() ile gerçek API entegrasyonu",
+        "ReservationPanel.tsx - useDebounce hook eklendi (300ms)",
+        "ReservationPanel.tsx - AbortController ile önceki istekleri iptal etme",
+        "Console.log kalıntıları temizlendi",
+        "XSS koruması eklendi: sanitizeInput transformer",
+        "MaxLength validasyonu: name (200), description (2000)",
+        "Canvas store memory leak önleme: saveToHistory'ye 300ms debounce"
+      ]
+    },
+    {
+      "name": "EventFlow_Cleanup_Task",
+      "type": "Task",
+      "data": [
+        "Console.log temizliği tamamlandı",
+        "N+1 Query düzeltildi - findAll metoduna reservations ve staffAssignments join eklendi",
+        "TypeScript any tipleri düzeltildi - socket.ts için interface'ler eklendi",
+        "Error Boundary eklendi - CanvasErrorBoundary.tsx ve SafeEventCanvas.tsx",
+        "Auth modülü askıya alındı - rol bazlı entegrasyon için bekliyor"
+      ]
+    },
+    {
+      "name": "EventFlow_API_Analiz_Raporu",
+      "type": "AnalysisReport",
+      "date": "20 Aralık 2024",
+      "data": [
+        "Çift yönlü API-Frontend uyumluluk analizi tamamlandı",
+        "Canvas Store: saveAsTemplate ve loadFromTemplate implementasyonu tamamlandı",
+        "Customers sayfası: Mock data kaldırıldı, customersApi.getAllWithStats ile API bağlantısı",
+        "Events sayfası: Silme fonksiyonu eklendi - AlertDialog + eventsApi.delete",
+        "Staff sayfası: TeamFormDialog bileşeni oluşturuldu",
+        "Venues sayfası: create/update/delete + şablon kullanma tamamlandı",
+        "Tüm ana sayfalar tutarlı toast notification sistemi kullanıyor"
+      ]
+    },
+    {
+      "name": "EventPlanningDashboard",
+      "type": "Component",
+      "data": [
+        "Etkinlik Planlama Modülü Dashboard'u yeniden tasarlandı",
+        "3 ana modül kartı: Etkinlik Oluşturma (blue), Etkinlik Alanı Planlama (green), Ekip Organizasyonu (purple)",
+        "Hızlı İşlemler bölümü: 4 quick action button",
+        "Hatırlatmalar bölümü: yaklaşan etkinlikler, taslaklar, personel uyarıları",
+        "Breadcrumb sistemi eklendi",
+        "Navbar güncellendi - modül bazlı menü ve modül strip",
+        "Admin modülü eklendi",
+        "Admin sayfaları: /admin (dashboard), /admin/users, /admin/settings",
+        "Switch bileşeni eklendi - @radix-ui/react-switch"
+      ]
+    },
+    {
+      "name": "VenuePlannerSystem",
+      "type": "Feature",
+      "data": [
+        "3 sekmeli yapı: 1) Masa Planı, 2) Sahne/Catwalk Seçimi, 3) Alan Düzenleme Canvas",
+        "Masa Tipleri: STANDART (Gri), PREMIUM (Mavi), VIP (Altın/Amber)",
+        "Sahne seçenekleri: Sadece Sahne VEYA Sahne + Catwalk Alanı",
+        "Canvas'ta önce sahne/catwalk yerleşimi, sağ tık ile sabitleme",
+        "Masa yerleşimi: Tek tek veya grup halinde yerleştirme",
+        "Sağ tık menüsü: Değiştir seçeneği ile masa tipi ve kişi sayısı değiştirilebilir",
+        "Grid mıknatıs sistemi: Açılıp kapatılabilir",
+        "Kaydetme sonrası şablon olarak kaydetme seçeneği"
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from": "Lujo_Hotel_Buggy_Projesi",
+      "to": "Lujo_Buggy_Duraklari",
+      "type": "contains"
+    },
+    {
+      "from": "Lujo_Hotel_Buggy_Projesi",
+      "to": "Lujo_Oda_Bloklari",
+      "type": "references"
+    },
+    {
+      "from": "Lujo_Hotel_Buggy_Projesi",
+      "to": "Lujo_Onemli_Noktalar",
+      "type": "references"
+    },
+    {
+      "from": "Lujo_Buggy_Duraklari",
+      "to": "Lujo_Oda_Bloklari",
+      "type": "located_near"
+    }
+  ]
+}

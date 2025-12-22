@@ -1,8 +1,6 @@
-export * from "./EventCanvas";
-export * from "./CanvasToolbar";
-export * from "./TablePanel";
-export * from "./TableShape";
-export * from "./StageElement";
-export * from "./ReservationPanel";
-export * from "./ReservationDetailPanel";
-export * from "./StaffAssignmentPanel";
+// Canvas bileşenleri barrel export
+export { EventCanvas } from "./EventCanvas";
+export { CanvasErrorBoundary } from "./CanvasErrorBoundary";
+
+// Error Boundary ile sarılmış Canvas
+export { default as SafeEventCanvas } from "./SafeEventCanvas";

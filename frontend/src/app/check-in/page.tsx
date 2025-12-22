@@ -110,7 +110,6 @@ export default function CheckInPage() {
 
     // Live stats listener (Requirement 5.2)
     socketService.onLiveStats((data) => {
-      console.log("[CheckIn] Live stats received:", data);
       setLiveStats({
         totalExpected: data.totalExpected,
         checkedIn: data.checkedIn,
@@ -122,7 +121,6 @@ export default function CheckInPage() {
 
     // Guest check-in listener (Requirement 5.3)
     socketService.onGuestCheckedIn((data) => {
-      console.log("[CheckIn] Guest checked in:", data);
       setLiveCheckIns((prev) => [data, ...prev.slice(0, 9)]);
     });
 

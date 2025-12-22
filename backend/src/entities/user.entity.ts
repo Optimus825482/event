@@ -12,24 +12,23 @@ import { StaffAssignment } from "./staff-assignment.entity";
 export enum UserRole {
   ADMIN = "admin",
   ORGANIZER = "organizer",
+  LEADER = "leader",
   STAFF = "staff",
   VENUE_OWNER = "venue_owner",
 }
 
-// Personel görev tanımları
-export enum StaffPosition {
-  SEF = "sef", // Şef
-  GARSON = "garson", // Garson
-  KOMI = "komi", // Komi
-  SUPERVIZOR = "supervizor", // Süpervizör
-}
+// Personel görev tanımları - Artık dinamik, staff_roles tablosundan geliyor
+export type StaffPosition = string;
 
 @Entity("users")
 export class User {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ unique: true })
+  @Column({ unique: true, nullable: true })
+  username: string;
+
+  @Column({ unique: true, nullable: true })
   email: string;
 
   @Column()
@@ -47,8 +46,8 @@ export class User {
   @Column({ nullable: true })
   avatar: string;
 
-  @Column({ type: "enum", enum: StaffPosition, nullable: true })
-  position: StaffPosition; // Personel görev tanımı (şef, garson, komi, debarasör)
+  @Column({ type: "varchar", nullable: true })
+  position: string; // Personel görev tanımı - dinamik, staff_roles tablosundan key değeri
 
   @Column({ nullable: true })
   color: string; // Staff color for table assignments

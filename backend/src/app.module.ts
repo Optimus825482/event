@@ -19,7 +19,14 @@ import {
   InvitationTemplate,
   EventInvitation,
   GuestNote,
+  TableGroup,
+  StaffRole,
+  WorkShift,
+  Team,
+  EventStaffAssignment,
+  OrganizationTemplate,
 } from "./entities";
+import { StaffPerformanceReview } from "./entities/staff-performance-review.entity";
 
 // Modules
 import { AuthModule } from "./modules/auth/auth.module";
@@ -33,6 +40,8 @@ import { RealtimeModule } from "./modules/realtime/realtime.module";
 import { SettingsModule } from "./modules/settings/settings.module";
 import { UploadModule } from "./modules/upload/upload.module";
 import { InvitationsModule } from "./modules/invitations/invitations.module";
+import { UsersModule } from "./modules/users/users.module";
+import { LeaderModule } from "./modules/leader/leader.module";
 
 @Module({
   imports: [
@@ -69,6 +78,13 @@ import { InvitationsModule } from "./modules/invitations/invitations.module";
           InvitationTemplate,
           EventInvitation,
           GuestNote,
+          TableGroup,
+          StaffRole,
+          WorkShift,
+          Team,
+          EventStaffAssignment,
+          OrganizationTemplate,
+          StaffPerformanceReview,
         ],
         synchronize: true, // Tablolar oluşturulsun
         logging: configService.get("NODE_ENV") === "development",
@@ -85,6 +101,8 @@ import { InvitationsModule } from "./modules/invitations/invitations.module";
     SettingsModule,
     UploadModule,
     InvitationsModule,
+    UsersModule,
+    LeaderModule,
   ],
 })
 export class AppModule {}

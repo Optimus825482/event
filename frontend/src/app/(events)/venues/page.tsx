@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Plus,
@@ -20,10 +20,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { venuesApi } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-notification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,10 +61,20 @@ interface VenueTemplate {
   createdBy?: string;
   rating?: number;
   thumbnail?: string;
+  layout?: any;
   createdAt?: string;
 }
 
+interface VenueFormData {
+  name: string;
+  description: string;
+  capacity: number;
+  isPublic: boolean;
+}
+
 export default function VenuesPage() {
+  const router = useRouter();
+  const toast = useToast();
   const [venues, setVenues] = useState<VenueTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -73,71 +84,161 @@ export default function VenuesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<VenueTemplate | null>(
     null
   );
+  const [saving, setSaving] = useState(false);
+
+  // Form state
+  const [formData, setFormData] = useState<VenueFormData>({
+    name: "",
+    description: "",
+    capacity: 100,
+    isPublic: false,
+  });
+
+  // Venues yükle
+  const loadVenues = async () => {
+    try {
+      setLoading(true);
+      const response = await venuesApi.getAll();
+      setVenues(response.data || []);
+    } catch (error) {
+      console.error("Mekan şablonları yüklenemedi:", error);
+      toast.error("Şablonlar yüklenemedi");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadVenues = async () => {
-      try {
-        const response = await venuesApi.getAll();
-        setVenues(response.data || []);
-      } catch (error) {
-        console.error("Mekan şablonları yüklenemedi:", error);
-        // Mock data
-        setVenues([
-          {
-            id: "1",
-            name: "Çırağan Sarayı Balo Salonu",
-            description: "Klasik düğün salonu düzeni, 50 yuvarlak masa",
-            isPublic: true,
-            usageCount: 156,
-            capacity: 500,
-            createdBy: "EventFlow Team",
-            rating: 4.8,
-          },
-          {
-            id: "2",
-            name: "Zorlu PSM Ana Sahne",
-            description: "Tiyatro düzeni konferans salonu",
-            isPublic: true,
-            usageCount: 89,
-            capacity: 1200,
-            createdBy: "EventFlow Team",
-            rating: 4.6,
-          },
-          {
-            id: "3",
-            name: "Hilton Balo Salonu",
-            description: "Gala düzeni, VIP ve standart masalar",
-            isPublic: true,
-            usageCount: 67,
-            capacity: 400,
-            createdBy: "EventFlow Team",
-            rating: 4.5,
-          },
-          {
-            id: "4",
-            name: "Özel Düğün Salonu",
-            description: "Kendi oluşturduğum düğün düzeni",
-            isPublic: false,
-            usageCount: 12,
-            capacity: 300,
-            createdBy: "Benim",
-          },
-          {
-            id: "5",
-            name: "Konferans Düzeni A",
-            description: "U şeklinde konferans masası",
-            isPublic: false,
-            usageCount: 5,
-            capacity: 50,
-            createdBy: "Benim",
-          },
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadVenues();
   }, []);
+
+  // Form reset
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      description: "",
+      capacity: 100,
+      isPublic: false,
+    });
+  };
+
+  // Modal açıldığında form'u doldur
+  useEffect(() => {
+    if (editingVenue) {
+      setFormData({
+        name: editingVenue.name,
+        description: editingVenue.description || "",
+        capacity: editingVenue.capacity || 100,
+        isPublic: editingVenue.isPublic,
+      });
+    } else {
+      resetForm();
+    }
+  }, [editingVenue, showCreateModal]);
+
+  // Şablon oluştur
+  const handleCreate = async () => {
+    if (!formData.name.trim()) {
+      toast.error("Şablon adı gerekli");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await venuesApi.create({
+        name: formData.name,
+        description: formData.description,
+        capacity: formData.capacity,
+        isPublic: formData.isPublic,
+        layout: {
+          width: 1200,
+          height: 800,
+          tables: [],
+          walls: [],
+          gridSize: 20,
+        },
+      });
+
+      setVenues((prev) => [response.data, ...prev]);
+      setShowCreateModal(false);
+      resetForm();
+      toast.success("Şablon oluşturuldu");
+
+      // Yeni şablonu düzenlemek için etkinlik sayfasına yönlendir
+      // router.push(`/events/new?templateId=${response.data.id}`);
+    } catch (error: any) {
+      console.error("Şablon oluşturma hatası:", error);
+      toast.error(error.response?.data?.message || "Şablon oluşturulamadı");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Şablon güncelle
+  const handleUpdate = async () => {
+    if (!editingVenue || !formData.name.trim()) {
+      toast.error("Şablon adı gerekli");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await venuesApi.update(editingVenue.id, {
+        name: formData.name,
+        description: formData.description,
+        capacity: formData.capacity,
+        isPublic: formData.isPublic,
+      });
+
+      setVenues((prev) =>
+        prev.map((v) => (v.id === editingVenue.id ? response.data : v))
+      );
+      setEditingVenue(null);
+      resetForm();
+      toast.success("Şablon güncellendi");
+    } catch (error: any) {
+      console.error("Şablon güncelleme hatası:", error);
+      toast.error(error.response?.data?.message || "Şablon güncellenemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Şablon kullan - Yeni etkinlik oluştur
+  const handleUseTemplate = async (venue: VenueTemplate) => {
+    try {
+      // Kullanım sayısını artır
+      await venuesApi.update(venue.id, {
+        usageCount: (venue.usageCount || 0) + 1,
+      });
+
+      // Yeni etkinlik sayfasına şablon ID'si ile yönlendir
+      router.push(`/events/new?templateId=${venue.id}`);
+    } catch (error) {
+      console.error("Şablon kullanım hatası:", error);
+      // Hata olsa bile yönlendir
+      router.push(`/events/new?templateId=${venue.id}`);
+    }
+  };
+
+  // Şablon kopyala
+  const handleDuplicate = async (venue: VenueTemplate) => {
+    try {
+      const response = await venuesApi.create({
+        name: `${venue.name} (Kopya)`,
+        description: venue.description,
+        capacity: venue.capacity,
+        isPublic: false,
+        layout: venue.layout,
+      });
+
+      setVenues((prev) => [response.data, ...prev]);
+      toast.success("Şablon kopyalandı");
+    } catch (error) {
+      console.error("Şablon kopyalama hatası:", error);
+      toast.error("Şablon kopyalanamadı");
+    }
+  };
 
   const filteredVenues = venues.filter((v) => {
     const matchesSearch = v.name
@@ -155,12 +256,17 @@ export default function VenuesPage() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
+    setSaving(true);
     try {
       await venuesApi.delete(deleteConfirm.id);
       setVenues((prev) => prev.filter((v) => v.id !== deleteConfirm.id));
       setDeleteConfirm(null);
-    } catch (error) {
+      toast.success("Şablon silindi");
+    } catch (error: any) {
       console.error("Silme hatası:", error);
+      toast.error(error.response?.data?.message || "Şablon silinemedi");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -176,6 +282,7 @@ export default function VenuesPage() {
             size="sm"
             variant="secondary"
             className="bg-white/20 backdrop-blur"
+            onClick={() => handleUseTemplate(venue)}
           >
             <Eye className="w-4 h-4 mr-1" />
             Önizle
@@ -212,7 +319,10 @@ export default function VenuesPage() {
               align="end"
               className="bg-slate-800 border-slate-700"
             >
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => handleUseTemplate(venue)}
+              >
                 <Eye className="w-4 h-4 mr-2" />
                 Görüntüle
               </DropdownMenuItem>
@@ -223,7 +333,10 @@ export default function VenuesPage() {
                 <Edit2 className="w-4 h-4 mr-2" />
                 Düzenle
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => handleDuplicate(venue)}
+              >
                 <Copy className="w-4 h-4 mr-2" />
                 Kopyala
               </DropdownMenuItem>
@@ -240,17 +353,17 @@ export default function VenuesPage() {
         </div>
 
         <p className="text-sm text-slate-400 line-clamp-2 mb-3">
-          {venue.description}
+          {venue.description || "Açıklama yok"}
         </p>
 
         <div className="flex items-center gap-3 text-sm text-slate-400 mb-3">
           <span className="flex items-center gap-1">
             <Users className="w-4 h-4" />
-            {venue.capacity}
+            {venue.capacity || 0}
           </span>
           <span className="flex items-center gap-1">
             <Download className="w-4 h-4" />
-            {venue.usageCount}
+            {venue.usageCount || 0}
           </span>
           {venue.rating && venue.rating > 0 && (
             <span className="flex items-center gap-1 text-yellow-400">
@@ -261,8 +374,14 @@ export default function VenuesPage() {
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t border-slate-700">
-          <span className="text-xs text-slate-500">{venue.createdBy}</span>
-          <Button size="sm" className="bg-blue-600">
+          <span className="text-xs text-slate-500">
+            {venue.createdBy || "Ben"}
+          </span>
+          <Button
+            size="sm"
+            className="bg-blue-600"
+            onClick={() => handleUseTemplate(venue)}
+          >
             Kullan
           </Button>
         </div>
@@ -418,9 +537,12 @@ export default function VenuesPage() {
       {/* Create/Edit Modal */}
       <Dialog
         open={showCreateModal || !!editingVenue}
-        onOpenChange={() => {
-          setShowCreateModal(false);
-          setEditingVenue(null);
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowCreateModal(false);
+            setEditingVenue(null);
+            resetForm();
+          }
         }}
       >
         <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
@@ -440,7 +562,10 @@ export default function VenuesPage() {
               <Input
                 placeholder="Örn: Düğün Salonu A"
                 className="bg-slate-700 border-slate-600"
-                defaultValue={editingVenue?.name}
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
               />
             </div>
             <div className="space-y-2">
@@ -449,7 +574,10 @@ export default function VenuesPage() {
                 placeholder="Şablon hakkında kısa açıklama..."
                 rows={3}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                defaultValue={editingVenue?.description}
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -459,13 +587,22 @@ export default function VenuesPage() {
                   type="number"
                   placeholder="300"
                   className="bg-slate-700 border-slate-600"
-                  defaultValue={editingVenue?.capacity}
+                  value={formData.capacity}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      capacity: parseInt(e.target.value) || 0,
+                    })
+                  }
                 />
               </div>
               <div className="space-y-2">
                 <Label>Görünürlük</Label>
                 <Select
-                  defaultValue={editingVenue?.isPublic ? "public" : "private"}
+                  value={formData.isPublic ? "public" : "private"}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, isPublic: value === "public" })
+                  }
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600">
                     <SelectValue />
@@ -490,13 +627,20 @@ export default function VenuesPage() {
               onClick={() => {
                 setShowCreateModal(false);
                 setEditingVenue(null);
+                resetForm();
               }}
               className="border-slate-600"
+              disabled={saving}
             >
               İptal
             </Button>
-            <Button className="bg-green-600">
-              {editingVenue ? "Güncelle" : "Oluştur ve Düzenle"}
+            <Button
+              className="bg-green-600"
+              onClick={editingVenue ? handleUpdate : handleCreate}
+              disabled={saving || !formData.name.trim()}
+            >
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {editingVenue ? "Güncelle" : "Oluştur"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -520,10 +664,16 @@ export default function VenuesPage() {
               variant="outline"
               onClick={() => setDeleteConfirm(null)}
               className="border-slate-600"
+              disabled={saving}
             >
               İptal
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={saving}
+            >
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Sil
             </Button>
           </DialogFooter>

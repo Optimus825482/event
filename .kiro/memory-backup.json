@@ -1,0 +1,60 @@
+{
+  "backup_date": "2025-12-21",
+  "source": "memory-mcp",
+  "core_context": {
+    "user": "Erkan",
+    "language": "Türkçe",
+    "style": "Samimi, arkadaşça",
+    "preferences": ["hover yok", "ücretsiz servisler"],
+    "stack": "Tauri v2 + Python backend + React/Nuxt frontend",
+    "letta_embedding": "openrouter/text-embedding-3-small",
+    "murphy_agent_id": "agent-38777650-b9ad-4775-86bf-54dc919b0b61"
+  },
+  "active_projects": {
+    "YENILETTA": {
+      "type": "Letta tabanlı kişisel asistan - Tauri v2 desktop app",
+      "features": [
+        "Web Speech API STT",
+        "Edge TTS",
+        "Multi-agent takım",
+        "Wake Word (Hey Murphy)",
+        "Sürekli dinleme modu"
+      ]
+    },
+    "HACCP": {
+      "type": "Beyaz et parçalama tesisi HACCP dokümantasyon sistemi",
+      "stack": "Tauri + React + TypeScript + Rust",
+      "features": [
+        "RAG sistemi (384 dim MiniLM)",
+        "AI belge oluşturma",
+        "50+ doküman"
+      ]
+    },
+    "MINIBAR": {
+      "type": "Otel minibar takip sistemi",
+      "versions": ["Flask 3.0 + PostgreSQL", "Next.js 16 + Prisma 7"],
+      "ui": "Preline UI, Tailwind CSS v4"
+    },
+    "YOUTUBE_ASSISTANT": {
+      "type": "YouTube video asistanı",
+      "stack": "Nuxt.js + FastAPI + Tauri",
+      "features": [
+        "Letta Groups API",
+        "Groq Whisper STT",
+        "Edge TTS",
+        "Multi-agent arama"
+      ]
+    },
+    "EventFlow_PRO": {
+      "type": "Modüler etkinlik yönetim sistemi",
+      "modules": ["events", "reservations", "checkin", "admin"],
+      "current_workspace": "d:\\event"
+    },
+    "Lujo_Buggy": {
+      "type": "Otel buggy shuttle takip sistemi",
+      "location": "Lujo Hotel Bodrum",
+      "traccar_server": "traccar.optimistdemo.cloud",
+      "durak_sayisi": 20
+    }
+  }
+}

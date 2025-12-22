@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { X, Search, User, Phone, Users, QrCode } from "lucide-react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { X, Search, User, Phone, Users, QrCode, Loader2 } from "lucide-react";
 import { TableInstance, Customer, Reservation } from "@/types";
 import { formatPhone, generateId } from "@/lib/utils";
+import { customersApi } from "@/lib/api";
 
 interface ReservationPanelProps {
   table: TableInstance | null;
@@ -11,42 +12,22 @@ interface ReservationPanelProps {
   onReservationCreate?: (reservation: Reservation) => void;
 }
 
-// Mock misafir arama
-const mockSearchCustomers = (query: string): Customer[] => {
-  if (!query) return [];
-  return [
-    {
-      id: "1",
-      fullName: "Ahmet Yılmaz",
-      phone: "5321234567",
-      email: "ahmet@email.com",
-      vipScore: 85,
-      tags: ["vip"],
-      isBlacklisted: false,
-      totalEvents: 12,
-      totalAttendedEvents: 10,
-      totalReservations: 12,
-      noShowCount: 0,
-    },
-    {
-      id: "2",
-      fullName: "Ayşe Kaya",
-      phone: "5339876543",
-      email: "ayse@email.com",
-      vipScore: 45,
-      tags: [],
-      isBlacklisted: false,
-      totalEvents: 3,
-      totalAttendedEvents: 2,
-      totalReservations: 3,
-      noShowCount: 1,
-    },
-  ].filter(
-    (c) =>
-      c.fullName.toLowerCase().includes(query.toLowerCase()) ||
-      c.phone.includes(query)
-  );
-};
+// Debounce hook - gereksiz API çağrılarını önler
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 export function ReservationPanel({
   table,
@@ -61,17 +42,70 @@ export function ReservationPanel({
   const [guestCount, setGuestCount] = useState(2);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  // Debounced search query - 300ms bekle
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Abort controller ref - önceki istekleri iptal etmek için
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   if (!table) return null;
 
+  // API ile misafir arama
+  const searchCustomers = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    // Önceki isteği iptal et
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    setSearchLoading(true);
+    setSearchError(null);
+
+    try {
+      const response = await customersApi.searchAutocomplete(query, 10);
+
+      // İstek iptal edilmediyse sonuçları güncelle
+      if (response.data) {
+        setSearchResults(response.data);
+      }
+    } catch (error: any) {
+      // İptal edilen istekleri yoksay
+      if (error?.name === "CanceledError" || error?.code === "ERR_CANCELED") {
+        return;
+      }
+
+      console.error("Misafir arama hatası:", error);
+      setSearchError("Arama yapılırken bir hata oluştu");
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  // Debounced query değiştiğinde arama yap
+  useEffect(() => {
+    searchCustomers(debouncedSearchQuery);
+
+    // Cleanup: component unmount olduğunda isteği iptal et
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [debouncedSearchQuery, searchCustomers]);
+
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    if (query.length >= 2) {
-      const results = mockSearchCustomers(query);
-      setSearchResults(results);
-    } else {
-      setSearchResults([]);
-    }
+    // Debounce ile otomatik arama yapılacak
   };
 
   const handleSelectCustomer = (customer: Customer) => {
@@ -156,7 +190,20 @@ export function ReservationPanel({
               </div>
 
               {/* Arama Sonuçları */}
-              {searchResults.length > 0 && (
+              {searchLoading && (
+                <div className="mt-2 bg-slate-700 rounded-lg p-4 flex items-center justify-center gap-2 text-slate-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Aranıyor...</span>
+                </div>
+              )}
+
+              {searchError && (
+                <div className="mt-2 bg-red-500/10 border border-red-500/50 text-red-400 px-3 py-2 rounded text-sm">
+                  {searchError}
+                </div>
+              )}
+
+              {!searchLoading && !searchError && searchResults.length > 0 && (
                 <div className="mt-2 bg-slate-700 rounded-lg overflow-hidden">
                   {searchResults.map((customer) => (
                     <button
@@ -182,6 +229,15 @@ export function ReservationPanel({
                   ))}
                 </div>
               )}
+
+              {!searchLoading &&
+                !searchError &&
+                searchQuery.length >= 2 &&
+                searchResults.length === 0 && (
+                  <div className="mt-2 bg-slate-700 rounded-lg p-4 text-center text-slate-400 text-sm">
+                    Sonuç bulunamadı
+                  </div>
+                )}
 
               {/* Yeni Misafir */}
               <button className="w-full mt-3 p-3 border border-dashed border-slate-600 rounded-lg text-slate-400 text-sm">

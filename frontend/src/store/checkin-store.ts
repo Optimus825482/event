@@ -165,9 +165,6 @@ export const useCheckInStore = create<CheckInState>()(
             } catch (apiError: any) {
               // API hatası - offline queue'ya ekle
               if (!apiError.response || apiError.code === "ERR_NETWORK") {
-                console.log(
-                  "[CheckInStore] API erişilemedi, offline queue'ya ekleniyor..."
-                );
                 set({ isOnline: false });
 
                 // Offline olarak işle
@@ -213,8 +210,6 @@ export const useCheckInStore = create<CheckInState>()(
             return result;
           }
         } catch (error: any) {
-          console.error("[CheckInStore] Check-in hatası:", error);
-
           const result: CheckInResult = {
             success: false,
             message: error.message || "Bir hata oluştu",
@@ -235,8 +230,8 @@ export const useCheckInStore = create<CheckInState>()(
             offlineQueue: queue,
             queueCount: count,
           });
-        } catch (error) {
-          console.error("[CheckInStore] Queue yükleme hatası:", error);
+        } catch {
+          // Queue yükleme hatası - sessizce devam et
         }
       },
 
@@ -245,15 +240,14 @@ export const useCheckInStore = create<CheckInState>()(
         const { isOnline } = get();
 
         if (!isOnline) {
-          console.log("[CheckInStore] Çevrimdışı, sync atlanıyor");
           return;
         }
 
         try {
           await syncOfflineQueue();
           await get().loadOfflineQueue();
-        } catch (error) {
-          console.error("[CheckInStore] Sync hatası:", error);
+        } catch {
+          // Sync hatası - sessizce devam et
         }
       },
 
@@ -262,15 +256,14 @@ export const useCheckInStore = create<CheckInState>()(
         const { isOnline } = get();
 
         if (!isOnline) {
-          console.log("[CheckInStore] Çevrimdışı, retry atlanıyor");
           return;
         }
 
         try {
           await retryFailedCheckIns();
           await get().loadOfflineQueue();
-        } catch (error) {
-          console.error("[CheckInStore] Retry hatası:", error);
+        } catch {
+          // Retry hatası - sessizce devam et
         }
       },
 
@@ -279,8 +272,8 @@ export const useCheckInStore = create<CheckInState>()(
         try {
           await clearSyncedCheckIns();
           await get().loadOfflineQueue();
-        } catch (error) {
-          console.error("[CheckInStore] Temizleme hatası:", error);
+        } catch {
+          // Temizleme hatası - sessizce devam et
         }
       },
 
@@ -289,8 +282,8 @@ export const useCheckInStore = create<CheckInState>()(
         try {
           await deleteOfflineCheckIn(id);
           await get().loadOfflineQueue();
-        } catch (error) {
-          console.error("[CheckInStore] Silme hatası:", error);
+        } catch {
+          // Silme hatası - sessizce devam et
         }
       },
 

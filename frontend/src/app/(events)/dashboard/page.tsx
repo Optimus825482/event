@@ -6,34 +6,30 @@ import {
   Calendar,
   Users,
   MapPin,
-  TrendingUp,
-  Clock,
   CheckCircle2,
-  AlertCircle,
-  Plus,
+  CalendarCheck,
+  Timer,
+  LayoutGrid,
+  UsersRound,
   ArrowRight,
-  Loader2,
-  LayoutDashboard,
+  Sparkles,
 } from "lucide-react";
-import { eventsApi, staffApi, customersApi } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { eventsApi, staffApi, venuesApi } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  PageContainer,
-  PageHeader,
-  StatsGrid,
-} from "@/components/ui/PageContainer";
+import { PageContainer } from "@/components/ui/PageContainer";
 
 interface DashboardStats {
   totalEvents: number;
-  upcomingEvents: number;
   completedEvents: number;
+  upcomingEvents: number;
+  draftEvents: number;
   totalStaff: number;
-  totalCustomers: number;
-  totalReservations: number;
+  totalTeams: number;
+  venueTemplates: number;
+  orgTemplates: number;
 }
 
 interface UpcomingEvent {
@@ -41,70 +37,87 @@ interface UpcomingEvent {
   name: string;
   eventDate: string;
   status: string;
-  totalCapacity: number;
-  reservedCount: number;
+  hasVenueLayout: boolean;
+  hasTeamAssignment: boolean;
 }
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
+  const [upcomingEvent, setUpcomingEvent] = useState<UpcomingEvent | null>(
+    null
+  );
+  const [countdown, setCountdown] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Paralel API çağrıları
-        const [eventsRes, staffRes, customersRes] = await Promise.all([
+        const [eventsRes, staffRes, teamsRes, venuesRes] = await Promise.all([
           eventsApi.getAll().catch(() => ({ data: [] })),
           staffApi.getAll().catch(() => ({ data: [] })),
-          customersApi.getAll().catch(() => ({ data: [] })),
+          staffApi.getTeams().catch(() => ({ data: [] })),
+          venuesApi.getAll().catch(() => ({ data: [] })),
         ]);
 
         const events = eventsRes.data || [];
+        const staff = staffRes.data || [];
+        const teams = teamsRes.data || [];
+        const venues = venuesRes.data || [];
         const now = new Date();
 
-        // İstatistikleri hesapla
-        const upcoming = events.filter(
-          (e: any) => new Date(e.eventDate) > now && e.status !== "completed"
-        );
+        // Etkinlik istatistikleri
         const completed = events.filter(
           (e: any) => e.status === "completed" || new Date(e.eventDate) < now
         );
+        const upcoming = events.filter(
+          (e: any) => new Date(e.eventDate) >= now && e.status !== "completed"
+        );
+        const draft = events.filter((e: any) => e.status === "draft");
 
         setStats({
           totalEvents: events.length,
-          upcomingEvents: upcoming.length,
           completedEvents: completed.length,
-          totalStaff: (staffRes.data || []).length,
-          totalCustomers: (customersRes.data || []).length,
-          totalReservations: events.reduce(
-            (acc: number, e: any) => acc + (e.reservedCount || 0),
-            0
-          ),
+          upcomingEvents: upcoming.length,
+          draftEvents: draft.length,
+          totalStaff: staff.length,
+          totalTeams: teams.length,
+          venueTemplates: venues.length,
+          orgTemplates: 0, // TODO: API'den çekilecek
         });
 
-        // Yaklaşan etkinlikler (en yakın 5)
-        setUpcomingEvents(
-          upcoming
-            .sort(
-              (a: any, b: any) =>
-                new Date(a.eventDate).getTime() -
-                new Date(b.eventDate).getTime()
-            )
-            .slice(0, 5)
-        );
+        // En yakın etkinliği bul (yerleşim planı ve ekip ataması tamamlanmış)
+        const readyEvents = upcoming
+          .filter((e: any) => {
+            const hasVenue =
+              e.venueLayout?.placedTables?.length > 0 || e.hasVenueLayout;
+            const hasTeam = e.hasTeamAssignment;
+            return hasVenue && hasTeam;
+          })
+          .sort(
+            (a: any, b: any) =>
+              new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+          );
+
+        if (readyEvents.length > 0) {
+          const event = readyEvents[0];
+          setUpcomingEvent({
+            id: event.id,
+            name: event.name,
+            eventDate: event.eventDate,
+            status: event.status,
+            hasVenueLayout:
+              event.venueLayout?.placedTables?.length > 0 ||
+              event.hasVenueLayout,
+            hasTeamAssignment: event.hasTeamAssignment,
+          });
+        }
       } catch (error) {
         console.error("Dashboard verileri yüklenemedi:", error);
-        // Mock data
-        setStats({
-          totalEvents: 12,
-          upcomingEvents: 5,
-          completedEvents: 7,
-          totalStaff: 24,
-          totalCustomers: 156,
-          totalReservations: 342,
-        });
-        setUpcomingEvents([]);
       } finally {
         setLoading(false);
       }
@@ -113,351 +126,392 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
-  // Kalan gün hesaplama
-  const getDaysRemaining = (dateStr: string) => {
-    const eventDate = new Date(dateStr);
-    const now = new Date();
-    const diff = Math.ceil(
-      (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    return diff;
-  };
+  // Geri sayım timer
+  useEffect(() => {
+    if (!upcomingEvent) return;
+
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const eventTime = new Date(upcomingEvent.eventDate).getTime();
+      const diff = eventTime - now;
+
+      if (diff <= 0) {
+        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      setCountdown({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      });
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [upcomingEvent]);
 
   if (loading) {
-    return (
-      <PageContainer>
-        <div className="space-y-6">
-          <StatsGrid columns={4}>
-            {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="bg-slate-800 border-slate-700">
-                <CardContent className="p-4 sm:p-6">
-                  <Skeleton className="h-4 w-24 mb-2 bg-slate-700" />
-                  <Skeleton className="h-8 w-16 bg-slate-700" />
-                </CardContent>
-              </Card>
-            ))}
-          </StatsGrid>
-        </div>
-      </PageContainer>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
     <PageContainer>
       <div className="space-y-6">
-        {/* Başlık */}
-        <PageHeader
-          title="Dashboard"
-          description="Etkinlik planlama genel görünümü"
-          icon={<LayoutDashboard className="w-6 h-6 text-blue-400" />}
-          actions={
-            <Button asChild className="bg-blue-600 w-full sm:w-auto">
-              <Link href="/events/new">
-                <Plus className="w-4 h-4 mr-2" />
-                Yeni Etkinlik
-              </Link>
-            </Button>
-          }
-        />
+        {/* Hoşgeldin Başlık */}
+        <div className="text-center py-4">
+          <h1 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
+            <Sparkles className="w-6 h-6 text-amber-400" />
+            EventFlow PRO Dashboard
+          </h1>
+          <p className="text-slate-400 mt-1">
+            Etkinlik planlama ve yönetim merkezi
+          </p>
+        </div>
+
+        {/* Geri Sayım - Yaklaşan Etkinlik (Kompakt) */}
+        {upcomingEvent && (
+          <Card className="bg-gradient-to-r from-emerald-600/10 via-teal-600/10 to-cyan-600/10 border-emerald-500/30">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center justify-between gap-4">
+                {/* Sol - Etkinlik Bilgisi */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <Timer className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">
+                      {upcomingEvent.name}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {new Date(upcomingEvent.eventDate).toLocaleDateString(
+                        "tr-TR",
+                        {
+                          day: "numeric",
+                          month: "long",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Orta - Geri Sayım (Kompakt) */}
+                <div className="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5">
+                  <div className="text-center">
+                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
+                      {String(countdown.days).padStart(2, "0")}
+                    </span>
+                    <span className="text-[9px] text-slate-500 block">GÜN</span>
+                  </div>
+                  <span className="text-emerald-500 font-bold">:</span>
+                  <div className="text-center">
+                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
+                      {String(countdown.hours).padStart(2, "0")}
+                    </span>
+                    <span className="text-[9px] text-slate-500 block">
+                      SAAT
+                    </span>
+                  </div>
+                  <span className="text-emerald-500 font-bold">:</span>
+                  <div className="text-center">
+                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
+                      {String(countdown.minutes).padStart(2, "0")}
+                    </span>
+                    <span className="text-[9px] text-slate-500 block">DK</span>
+                  </div>
+                  <span className="text-emerald-500 font-bold">:</span>
+                  <div className="text-center">
+                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
+                      {String(countdown.seconds).padStart(2, "0")}
+                    </span>
+                    <span className="text-[9px] text-slate-500 block">SN</span>
+                  </div>
+                </div>
+
+                {/* Sağ - Badge'ler ve Buton */}
+                <div className="flex items-center gap-2">
+                  {upcomingEvent.hasVenueLayout && (
+                    <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                      <MapPin className="w-3 h-3 mr-1" />
+                      Yerleşim
+                    </Badge>
+                  )}
+                  {upcomingEvent.hasTeamAssignment && (
+                    <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                      <Users className="w-3 h-3 mr-1" />
+                      Ekip
+                    </Badge>
+                  )}
+                  <Button
+                    asChild
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 h-8"
+                  >
+                    <Link href={`/events/${upcomingEvent.id}`}>
+                      Detaylar
+                      <ArrowRight className="w-3 h-3 ml-1" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* İstatistik Kartları */}
-        <StatsGrid columns={4}>
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-slate-400">
-                    Toplam Etkinlik
-                  </p>
-                  <p className="text-2xl sm:text-3xl font-bold text-white">
-                    {stats?.totalEvents || 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-blue-600/20 flex items-center justify-center">
-                  <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-blue-400" />
-                </div>
-              </div>
-              <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-                <Badge
-                  variant="outline"
-                  className="bg-green-500/10 text-green-400 border-green-500/30"
-                >
-                  {stats?.upcomingEvents || 0} yaklaşan
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="bg-slate-500/10 text-slate-400 border-slate-500/30"
-                >
-                  {stats?.completedEvents || 0} tamamlanan
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-3 gap-4">
+          <StatCard
+            icon={<Calendar className="w-6 h-6" />}
+            label="Toplam Etkinlik"
+            value={stats?.totalEvents || 0}
+            color="blue"
+            href="/events"
+          />
+          <StatCard
+            icon={<CheckCircle2 className="w-6 h-6" />}
+            label="Tamamlanan"
+            value={stats?.completedEvents || 0}
+            color="green"
+            href="/events"
+          />
+          <StatCard
+            icon={<CalendarCheck className="w-6 h-6" />}
+            label="Yaklaşan"
+            value={stats?.upcomingEvents || 0}
+            color="amber"
+            highlight
+            href="/events"
+          />
+        </div>
 
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-slate-400">Personel</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-white">
-                    {stats?.totalStaff || 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-purple-600/20 flex items-center justify-center">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-purple-400" />
-                </div>
-              </div>
-              <div className="mt-3 sm:mt-4">
-                <Link
-                  href="/staff"
-                  className="text-xs sm:text-sm text-purple-400 flex items-center gap-1"
-                >
-                  Ekibi Yönet <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-slate-400">
-                    Misafirler
-                  </p>
-                  <p className="text-2xl sm:text-3xl font-bold text-white">
-                    {stats?.totalCustomers || 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-green-600/20 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-400" />
-                </div>
-              </div>
-              <div className="mt-3 sm:mt-4">
-                <Link
-                  href="/customers"
-                  className="text-xs sm:text-sm text-green-400 flex items-center gap-1"
-                >
-                  CRM'e Git <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-slate-400">
-                    Toplam Rezervasyon
-                  </p>
-                  <p className="text-2xl sm:text-3xl font-bold text-white">
-                    {stats?.totalReservations || 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-amber-600/20 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-amber-400" />
-                </div>
-              </div>
-              <div className="mt-3 sm:mt-4">
-                <Link
-                  href="/reservations"
-                  className="text-xs sm:text-sm text-amber-400 flex items-center gap-1"
-                >
-                  Rezervasyonlar <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </StatsGrid>
-
-        {/* Yaklaşan Etkinlikler ve Hızlı Erişim */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* Yaklaşan Etkinlikler */}
-          <div className="lg:col-span-2">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 sm:px-6">
-                <CardTitle className="text-base sm:text-lg font-semibold text-white">
-                  Yaklaşan Etkinlikler
-                </CardTitle>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link
-                    href="/events"
-                    className="text-blue-400 text-xs sm:text-sm"
-                  >
-                    Tümünü Gör
-                  </Link>
-                </Button>
-              </CardHeader>
-              <CardContent className="px-4 sm:px-6">
-                {upcomingEvents.length === 0 ? (
-                  <div className="text-center py-6 sm:py-8">
-                    <Calendar className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-600 mb-3" />
-                    <p className="text-slate-400 mb-4 text-sm sm:text-base">
-                      Yaklaşan etkinlik bulunmuyor
-                    </p>
-                    <Button asChild size="sm" className="bg-blue-600">
-                      <Link href="/events/new">
-                        <Plus className="w-4 h-4 mr-1" />
-                        Etkinlik Oluştur
-                      </Link>
-                    </Button>
+        {/* Alt Kartlar - Ekip ve Şablonlar */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Ekipler */}
+          <Card className="bg-slate-800/50 border-slate-700 hover:border-purple-500/50 transition-colors">
+            <CardContent className="p-5">
+              <Link href="/staff" className="block">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                    <UsersRound className="w-6 h-6 text-purple-400" />
                   </div>
-                ) : (
-                  <div className="space-y-3 sm:space-y-4">
-                    {upcomingEvents.map((event) => {
-                      const daysRemaining = getDaysRemaining(event.eventDate);
-                      const fillRate =
-                        event.totalCapacity > 0
-                          ? ((event.reservedCount || 0) / event.totalCapacity) *
-                            100
-                          : 0;
-
-                      return (
-                        <Link
-                          key={event.id}
-                          href={`/events/${event.id}`}
-                          className="block p-3 sm:p-4 rounded-lg bg-slate-700/50 border border-slate-600 transition-colors"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
-                            <div>
-                              <h3 className="font-medium text-white text-sm sm:text-base">
-                                {event.name}
-                              </h3>
-                              <p className="text-xs sm:text-sm text-slate-400">
-                                {new Date(event.eventDate).toLocaleDateString(
-                                  "tr-TR",
-                                  {
-                                    day: "numeric",
-                                    month: "long",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
-                                )}
-                              </p>
-                            </div>
-                            <Badge
-                              variant="outline"
-                              className={`self-start text-xs ${
-                                daysRemaining <= 3
-                                  ? "bg-red-500/10 text-red-400 border-red-500/30"
-                                  : daysRemaining <= 7
-                                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                                  : "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                              }`}
-                            >
-                              <Clock className="w-3 h-3 mr-1" />
-                              {daysRemaining} gün
-                            </Badge>
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-xs sm:text-sm">
-                              <span className="text-slate-400">Doluluk</span>
-                              <span className="text-white">
-                                {event.reservedCount || 0} /{" "}
-                                {event.totalCapacity} kişi
-                              </span>
-                            </div>
-                            <Progress value={fillRate} className="h-2" />
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Hızlı Erişim */}
-          <div className="space-y-4">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle className="text-base sm:text-lg font-semibold text-white">
-                  Hızlı Erişim
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 sm:space-y-3 px-4 sm:px-6">
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full justify-start border-slate-600 bg-slate-700/50 text-sm"
-                >
-                  <Link href="/events/new">
-                    <Plus className="w-4 h-4 mr-2 text-blue-400" />
-                    Yeni Etkinlik Oluştur
-                  </Link>
-                </Button>
-
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full justify-start border-slate-600 bg-slate-700/50 text-sm"
-                >
-                  <Link href="/staff">
-                    <Users className="w-4 h-4 mr-2 text-purple-400" />
-                    Ekip Organizasyonu
-                  </Link>
-                </Button>
-
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full justify-start border-slate-600 bg-slate-700/50 text-sm"
-                >
-                  <Link href="/venues">
-                    <MapPin className="w-4 h-4 mr-2 text-green-400" />
-                    Alan Şablonları
-                  </Link>
-                </Button>
-
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full justify-start border-slate-600 bg-slate-700/50 text-sm"
-                >
-                  <Link href="/customers">
-                    <TrendingUp className="w-4 h-4 mr-2 text-amber-400" />
-                    Misafir Yönetimi
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Uyarılar */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
-                  Hatırlatmalar
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 sm:px-6">
-                <div className="space-y-3 text-sm">
-                  {upcomingEvents.filter(
-                    (e) => getDaysRemaining(e.eventDate) <= 3
-                  ).length > 0 ? (
-                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                      <p className="text-amber-400 text-xs sm:text-sm">
-                        {
-                          upcomingEvents.filter(
-                            (e) => getDaysRemaining(e.eventDate) <= 3
-                          ).length
-                        }{" "}
-                        etkinlik 3 gün içinde!
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 text-center py-4 text-xs sm:text-sm">
-                      Acil hatırlatma yok
-                    </p>
-                  )}
+                  <ArrowRight className="w-5 h-5 text-slate-500" />
                 </div>
-              </CardContent>
-            </Card>
+                <h3 className="text-lg font-semibold text-white mb-1">
+                  Ekip Yönetimi
+                </h3>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-slate-400">
+                    <span className="text-purple-400 font-bold">
+                      {stats?.totalStaff || 0}
+                    </span>{" "}
+                    Personel
+                  </span>
+                  <span className="text-slate-400">
+                    <span className="text-purple-400 font-bold">
+                      {stats?.totalTeams || 0}
+                    </span>{" "}
+                    Ekip
+                  </span>
+                </div>
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* Yerleşim Şablonları */}
+          <Card className="bg-slate-800/50 border-slate-700 hover:border-green-500/50 transition-colors">
+            <CardContent className="p-5">
+              <Link href="/templates" className="block">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <MapPin className="w-6 h-6 text-green-400" />
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-slate-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-1">
+                  Yerleşim Şablonları
+                </h3>
+                <p className="text-sm text-slate-400">
+                  <span className="text-green-400 font-bold">
+                    {stats?.venueTemplates || 0}
+                  </span>{" "}
+                  şablon kayıtlı
+                </p>
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* Organizasyon Şablonları */}
+          <Card className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 transition-colors">
+            <CardContent className="p-5">
+              <Link href="/templates" className="block">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                    <LayoutGrid className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-slate-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-1">
+                  Ekip Atama Şablonları
+                </h3>
+                <p className="text-sm text-slate-400">
+                  <span className="text-amber-400 font-bold">
+                    {stats?.orgTemplates || 0}
+                  </span>{" "}
+                  şablon kayıtlı
+                </p>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Hızlı Erişim */}
+        <Card className="bg-slate-800/30 border-slate-700">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button
+                asChild
+                variant="outline"
+                className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+              >
+                <Link href="/events/new">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Yeni Etkinlik
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+              >
+                <Link href="/staff">
+                  <Users className="w-4 h-4 mr-2" />
+                  Ekip Yönetimi
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="border-green-500/30 text-green-400 hover:bg-green-500/10"
+              >
+                <Link href="/templates">
+                  <LayoutGrid className="w-4 h-4 mr-2" />
+                  Şablonlar
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </PageContainer>
+  );
+}
+
+// İstatistik Kartı
+interface StatCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  color: "blue" | "green" | "amber" | "slate" | "purple";
+  highlight?: boolean;
+  href: string;
+}
+
+const statColors = {
+  blue: {
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/30",
+    text: "text-blue-400",
+    icon: "bg-blue-500/20",
+  },
+  green: {
+    bg: "bg-green-500/10",
+    border: "border-green-500/30",
+    text: "text-green-400",
+    icon: "bg-green-500/20",
+  },
+  amber: {
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/30",
+    text: "text-amber-400",
+    icon: "bg-amber-500/20",
+  },
+  slate: {
+    bg: "bg-slate-500/10",
+    border: "border-slate-500/30",
+    text: "text-slate-400",
+    icon: "bg-slate-500/20",
+  },
+  purple: {
+    bg: "bg-purple-500/10",
+    border: "border-purple-500/30",
+    text: "text-purple-400",
+    icon: "bg-purple-500/20",
+  },
+};
+
+function StatCard({
+  icon,
+  label,
+  value,
+  color,
+  highlight,
+  href,
+}: StatCardProps) {
+  const colors = statColors[color];
+  return (
+    <Link href={href}>
+      <Card
+        className={`${highlight ? colors.bg : "bg-slate-800/50"} ${
+          colors.border
+        } border hover:scale-105 transition-transform cursor-pointer`}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-lg ${colors.icon} flex items-center justify-center ${colors.text}`}
+            >
+              {icon}
+            </div>
+            <div>
+              <p
+                className={`text-2xl font-bold ${
+                  highlight ? colors.text : "text-white"
+                }`}
+              >
+                {value}
+              </p>
+              <p className="text-xs text-slate-400">{label}</p>
+            </div>
           </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+// Skeleton
+function DashboardSkeleton() {
+  return (
+    <PageContainer>
+      <div className="space-y-6">
+        <div className="text-center py-4">
+          <Skeleton className="h-8 w-64 mx-auto mb-2 bg-slate-700" />
+          <Skeleton className="h-4 w-48 mx-auto bg-slate-700" />
+        </div>
+        <Skeleton className="h-40 w-full bg-slate-700 rounded-xl" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 bg-slate-700 rounded-xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32 bg-slate-700 rounded-xl" />
+          ))}
         </div>
       </div>
     </PageContainer>

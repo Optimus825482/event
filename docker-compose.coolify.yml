@@ -4,24 +4,24 @@
 # Bu dosyayı Coolify'da Docker Compose olarak kullanın
 # Environment variables Coolify panelinden ayarlanmalı
 
-version: "3.8"
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_DB: ${DB_NAME:-eventflow}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - eventflow-network
 
   # NestJS Backend API
   backend:
@@ -36,16 +36,21 @@ services:
       NODE_ENV: production
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USERNAME: ${DB_USERNAME}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
+      DB_NAME: ${DB_NAME:-eventflow}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 4000
+      FRONTEND_URL: ${FRONTEND_URL:-*}
     volumes:
       - uploads_data:/app/uploads
-    expose:
-      - "4000"
+    ports:
+      - "4000:4000"
+    networks:
+      - eventflow-network
+    labels:
+      - "coolify.managed=true"
 
   # Next.js Frontend
   frontend:
@@ -54,14 +59,24 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
     restart: unless-stopped
     depends_on:
       - backend
     environment:
       NODE_ENV: production
-    expose:
-      - "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3000:3000"
+    networks:
+      - eventflow-network
+    labels:
+      - "coolify.managed=true"
 
 volumes:
   postgres_data:
   uploads_data:
+
+networks:
+  eventflow-network:
+    driver: bridge

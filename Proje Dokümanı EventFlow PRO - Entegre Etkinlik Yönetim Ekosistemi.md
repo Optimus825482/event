@@ -37,8 +37,7 @@ Sistemin kurulum ve paylaşım merkezidir.
 - **Sistem Ayarları:**
   - Masa Türleri (VIP, Standart, Loca), Renk Kodları, Varsayılan Kapasiteler.
 - **Şablon Pazarı (Marketplace):**
-  - Kullanıcılar, sık kullandıkları mekanların (Örn: Çırağan Sarayı Balo Salonu, Zorlu PSM Ana Sahne) planlarını şablon olarak kaydedebilir.
-  - **Public Marketplace:** Onaylanan şablonlar diğer organizatörlerin kullanımına sunulur. Yeni etkinlik oluştururken "Şablondan Yükle" denilerek tüm sahne ve duvar yapıları hazır gelir.
+  - Kullanıcılar, sık kullandıkları masa yerleşim düzenlerini kaydedebiliri ilerideki farklı etkinliklerde kullanabilirler
 
 ### 3.2. Etkinlik Oluşturma ve Kapasite Mühendisliği
 

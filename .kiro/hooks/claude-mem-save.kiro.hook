@@ -1,0 +1,15 @@
+{
+  "title": "Claude-Mem Session Save",
+  "description": "Her dosya kaydedildiğinde claude-mem worker'a observation gönderir",
+  "event": "onFileSave",
+  "filePatterns": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.json", "**/*.md"],
+  "action": {
+    "type": "command",
+    "command": "node",
+    "args": [
+      "-e",
+      "const http = require('http'); const data = JSON.stringify({session_id: 'kiro-' + Date.now(), tool_name: 'FileSave', tool_input: {file: process.env.KIRO_FILE_PATH || 'unknown'}, tool_output: {success: true}, created_at_epoch: Math.floor(Date.now()/1000)}); const req = http.request({hostname: '127.0.0.1', port: 37777, path: '/api/observations', method: 'POST', headers: {'Content-Type': 'application/json', 'Content-Length': data.length}}, (res) => {let body = ''; res.on('data', chunk => body += chunk); res.on('end', () => console.log('Saved:', body));}); req.on('error', (e) => console.error('Error:', e.message)); req.write(data); req.end();"
+    ]
+  },
+  "enabled": true
+}

@@ -24,11 +24,14 @@ export class ServiceTeam {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @ManyToOne(() => Event, { onDelete: "CASCADE" })
+  @ManyToOne(() => Event, (event) => event.serviceTeams, {
+    onDelete: "CASCADE",
+    nullable: true,
+  })
   @JoinColumn({ name: "eventId" })
   event: Event;
 
-  @Column()
+  @Column({ nullable: true })
   eventId: string;
 
   @Column()

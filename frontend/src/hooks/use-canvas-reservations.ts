@@ -48,7 +48,6 @@ export function useCanvasReservations({
 
     // Check-in güncellemelerini dinle
     socketService.onTableCheckIn((data) => {
-      console.log("Canvas: Check-in güncelleme alındı", data);
       handleCheckInUpdate(
         data.tableId,
         data.status as "checked_in" | "cancelled" | "no_show"
@@ -56,15 +55,13 @@ export function useCanvasReservations({
     });
 
     // Rezervasyon güncellemelerini dinle
-    socketService.onTableReservationUpdate((data) => {
-      console.log("Canvas: Rezervasyon güncelleme alındı", data);
+    socketService.onTableReservationUpdate(() => {
       // Tüm rezervasyonları yeniden çek
       refetch();
     });
 
     // Genel check-in event'ini de dinle
     socketService.onGuestCheckedIn((data) => {
-      console.log("Canvas: Misafir check-in yaptı", data);
       if (data.tableId) {
         handleCheckInUpdate(data.tableId, "checked_in");
       }

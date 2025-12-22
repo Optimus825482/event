@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { Navbar } from "@/components/ui/Navbar";
+import { ToastProvider } from "@/components/ui/toast-notification";
 
 export default function EventsModuleLayout({
   children,
@@ -51,9 +52,9 @@ export default function EventsModuleLayout({
   }
 
   return (
-    <>
+    <ToastProvider>
       <Navbar />
       {children}
-    </>
+    </ToastProvider>
   );
 }

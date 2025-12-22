@@ -27,12 +27,13 @@ export class AuthService implements OnModuleInit {
   private async ensureDefaultAdmin() {
     try {
       const adminExists = await this.userRepository.findOne({
-        where: { email: "admin@eventflow.com" },
+        where: { username: "admin" },
       });
 
       if (!adminExists) {
         const hashedPassword = await bcrypt.hash("Admin123!", 10);
         const admin = this.userRepository.create({
+          username: "admin",
           email: "admin@eventflow.com",
           password: hashedPassword,
           fullName: "System Admin",
@@ -40,9 +41,7 @@ export class AuthService implements OnModuleInit {
           isActive: true,
         });
         await this.userRepository.save(admin);
-        console.log(
-          "✅ Varsayılan admin kullanıcısı oluşturuldu: admin@eventflow.com"
-        );
+        console.log("✅ Varsayılan admin kullanıcısı oluşturuldu: admin");
       }
     } catch (error) {
       console.error("Admin kullanıcısı oluşturulurken hata:", error.message);
@@ -50,11 +49,22 @@ export class AuthService implements OnModuleInit {
   }
 
   async register(dto: RegisterDto) {
-    const existingUser = await this.userRepository.findOne({
-      where: { email: dto.email },
+    // Username kontrolü
+    const existingUsername = await this.userRepository.findOne({
+      where: { username: dto.username },
     });
-    if (existingUser) {
-      throw new ConflictException("Bu email adresi zaten kayıtlı");
+    if (existingUsername) {
+      throw new ConflictException("Bu kullanıcı adı zaten kayıtlı");
+    }
+
+    // Email kontrolü (opsiyonel)
+    if (dto.email) {
+      const existingEmail = await this.userRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (existingEmail) {
+        throw new ConflictException("Bu email adresi zaten kayıtlı");
+      }
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -70,15 +80,19 @@ export class AuthService implements OnModuleInit {
 
   async login(dto: LoginDto) {
     const user = await this.userRepository.findOne({
-      where: { email: dto.email },
+      where: { username: dto.username },
     });
     if (!user) {
-      throw new UnauthorizedException("Geçersiz email veya şifre");
+      throw new UnauthorizedException("Geçersiz kullanıcı adı veya şifre");
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException("Hesabınız pasif durumda");
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException("Geçersiz email veya şifre");
+      throw new UnauthorizedException("Geçersiz kullanıcı adı veya şifre");
     }
 
     const { password, ...result } = user;
@@ -90,7 +104,7 @@ export class AuthService implements OnModuleInit {
   }
 
   private generateToken(user: User) {
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, username: user.username, role: user.role };
     return this.jwtService.sign(payload);
   }
 }

@@ -121,6 +121,17 @@ interface CanvasState {
     tableId: string,
     status: "checked_in" | "cancelled" | "no_show"
   ) => void;
+
+  // Şablon Fonksiyonları (Venues entegrasyonu)
+  saveAsTemplate: (
+    name: string,
+    description: string,
+    isPublic: boolean
+  ) => Promise<{ success: boolean; templateId?: string; error?: string }>;
+  loadFromTemplate: (
+    templateId: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  isLoadingTemplate: boolean;
 }
 
 const defaultLayout: VenueLayout = {
@@ -135,8 +146,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   // History
   history: [],
   historyIndex: -1,
+  _lastHistorySave: 0, // Debounce için son kayıt zamanı
   saveToHistory: () =>
     set((state) => {
+      // Debounce: 300ms içinde tekrar kaydetme (memory leak önleme)
+      const now = Date.now();
+      if (now - (state as any)._lastHistorySave < 300) {
+        return state;
+      }
+
       const snapshot: CanvasSnapshot = {
         tables: JSON.parse(JSON.stringify(state.tables)),
         walls: JSON.parse(JSON.stringify(state.walls)),
@@ -144,9 +162,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       };
       const newHistory = state.history.slice(0, state.historyIndex + 1);
       newHistory.push(snapshot);
-      // Max 50 history
-      if (newHistory.length > 50) newHistory.shift();
-      return { history: newHistory, historyIndex: newHistory.length - 1 };
+      // Max 30 history (memory optimizasyonu için 50'den düşürüldü)
+      if (newHistory.length > 30) newHistory.shift();
+      return {
+        history: newHistory,
+        historyIndex: newHistory.length - 1,
+        _lastHistorySave: now,
+      } as any;
     }),
   undo: () =>
     set((state) => {
@@ -459,24 +481,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         );
       });
 
-      // Debug log
-      console.log("placeAllPendingTables çağrıldı");
-      console.log(
-        "tableTypes:",
-        tableTypes.map((t) => ({ id: t.id, name: t.name }))
-      );
-      console.log("pendingTableCounts:", pendingTableCounts);
-      console.log("Bulunan türler:", {
-        stdType: stdType?.name,
-        vipType: vipType?.name,
-        prmType: prmType?.name,
-      });
-
       // Eğer hiçbir tür bulunamadıysa, tüm pending masaları genel olarak yerleştir
       if (!stdType && !vipType && !prmType && totalPending > 0) {
-        console.log(
-          "Özel tür bulunamadı, tüm masaları genel olarak yerleştiriyorum"
-        );
         let num = 1;
         Object.entries(pendingTableCounts).forEach(([typeId, count]) => {
           const type = tableTypes.find((t) => t.id === typeId);
@@ -795,4 +801,115 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         },
       };
     }),
+
+  // Şablon Fonksiyonları (Venues entegrasyonu)
+  isLoadingTemplate: false,
+
+  saveAsTemplate: async (
+    name: string,
+    description: string,
+    isPublic: boolean
+  ) => {
+    const state = get();
+
+    try {
+      // Mevcut canvas durumunu şablon olarak kaydet
+      const templateData = {
+        name,
+        description,
+        isPublic,
+        isTemplate: true,
+        layout: {
+          width: state.layout.width,
+          height: state.layout.height,
+          gridSize: state.layout.gridSize,
+          tables: state.tables.map((t) => ({
+            id: t.id,
+            typeId: t.typeId,
+            typeName: t.typeName,
+            x: t.x,
+            y: t.y,
+            rotation: t.rotation,
+            capacity: t.capacity,
+            color: t.color,
+            shape: t.shape,
+            label: t.label,
+          })),
+          walls: state.walls.map((w) => ({
+            id: w.id,
+            points: w.points,
+            label: w.label,
+            color: w.color,
+            strokeWidth: w.strokeWidth,
+          })),
+          stage: state.layout.stage,
+        },
+      };
+
+      // API'ye gönder
+      const { venuesApi } = await import("@/lib/api");
+      const response = await venuesApi.create(templateData);
+
+      return {
+        success: true,
+        templateId: response.data.id,
+      };
+    } catch (error: any) {
+      console.error("Şablon kaydetme hatası:", error);
+      return {
+        success: false,
+        error: error.response?.data?.message || "Şablon kaydedilemedi",
+      };
+    }
+  },
+
+  loadFromTemplate: async (templateId: string) => {
+    set({ isLoadingTemplate: true });
+
+    try {
+      const { venuesApi } = await import("@/lib/api");
+      const response = await venuesApi.getOne(templateId);
+      const template = response.data;
+
+      if (!template || !template.layout) {
+        set({ isLoadingTemplate: false });
+        return { success: false, error: "Şablon bulunamadı veya geçersiz" };
+      }
+
+      const layout = template.layout;
+
+      // History'ye kaydet (geri alma için)
+      get().saveToHistory();
+
+      // Canvas'ı şablondan yükle
+      set({
+        layout: {
+          width: layout.width || 1200,
+          height: layout.height || 800,
+          gridSize: layout.gridSize || 20,
+          tables: layout.tables || [],
+          walls: layout.walls || [],
+          stage: layout.stage,
+        },
+        tables: (layout.tables || []).map((t: any) => ({
+          ...t,
+          id: `t${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Yeni ID ata
+        })),
+        walls: (layout.walls || []).map((w: any) => ({
+          ...w,
+          id: `w${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Yeni ID ata
+        })),
+        isLoadingTemplate: false,
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("Şablon yükleme hatası:", error);
+      set({ isLoadingTemplate: false });
+      return {
+        success: false,
+        error: error.response?.data?.message || "Şablon yüklenemedi",
+      };
+    }
+  },
 }));
