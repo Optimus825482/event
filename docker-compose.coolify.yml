@@ -45,8 +45,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-*}
     volumes:
       - uploads_data:/app/uploads
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     networks:
       - eventflow-network
     labels:
@@ -66,8 +66,8 @@ services:
     environment:
       NODE_ENV: production
       HOSTNAME: "0.0.0.0"
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     networks:
       - eventflow-network
     labels:
