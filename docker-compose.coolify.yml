@@ -1,6 +1,7 @@
 # ===========================================
 # EventFlow PRO - Coolify Production Setup
 # ===========================================
+# Coolify Docker Compose Build Pack
 
 services:
   # PostgreSQL Database
@@ -18,6 +19,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - coolify
+      - default
 
   # NestJS Backend API
   backend:
@@ -43,6 +47,24 @@ services:
       - uploads_data:/app/uploads
     expose:
       - "4000"
+    networks:
+      - coolify
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eventflow-backend.rule=Host(`api.eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-backend.entrypoints=http"
+      - "traefik.http.routers.eventflow-backend-secure.rule=Host(`api.eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-backend-secure.entrypoints=https"
+      - "traefik.http.routers.eventflow-backend-secure.tls=true"
+      - "traefik.http.routers.eventflow-backend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eventflow-backend.loadbalancer.server.port=4000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/api"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # Next.js Frontend
   frontend:
@@ -60,7 +82,31 @@ services:
       HOSTNAME: "0.0.0.0"
     expose:
       - "3000"
+    networks:
+      - coolify
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eventflow-frontend.rule=Host(`eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-frontend.entrypoints=http"
+      - "traefik.http.routers.eventflow-frontend-secure.rule=Host(`eventflow.optimistdemo.cloud`)"
+      - "traefik.http.routers.eventflow-frontend-secure.entrypoints=https"
+      - "traefik.http.routers.eventflow-frontend-secure.tls=true"
+      - "traefik.http.routers.eventflow-frontend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eventflow-frontend.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
   postgres_data:
   uploads_data:
+
+networks:
+  coolify:
+    external: true
+  default:
+    driver: bridge
