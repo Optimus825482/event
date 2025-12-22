@@ -1,8 +1,6 @@
 # ===========================================
 # EventFlow PRO - Coolify Production Setup
 # ===========================================
-# Bu dosyayı Coolify'da Docker Compose olarak kullanın
-# Environment variables Coolify panelinden ayarlanmalı
 
 services:
   # PostgreSQL Database
@@ -50,7 +48,14 @@ services:
     networks:
       - eventflow-network
     labels:
-      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`${SERVICE_FQDN_BACKEND}`)"
+      - "traefik.http.routers.backend.entrypoints=http"
+      - "traefik.http.routers.backend-secure.rule=Host(`${SERVICE_FQDN_BACKEND}`)"
+      - "traefik.http.routers.backend-secure.entrypoints=https"
+      - "traefik.http.routers.backend-secure.tls=true"
+      - "traefik.http.routers.backend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backend.loadbalancer.server.port=4000"
 
   # Next.js Frontend
   frontend:
@@ -71,7 +76,14 @@ services:
     networks:
       - eventflow-network
     labels:
-      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${SERVICE_FQDN_FRONTEND}`)"
+      - "traefik.http.routers.frontend.entrypoints=http"
+      - "traefik.http.routers.frontend-secure.rule=Host(`${SERVICE_FQDN_FRONTEND}`)"
+      - "traefik.http.routers.frontend-secure.entrypoints=https"
+      - "traefik.http.routers.frontend-secure.tls=true"
+      - "traefik.http.routers.frontend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
 
 volumes:
   postgres_data:
