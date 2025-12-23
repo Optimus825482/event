@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Calendar, Ticket, QrCode, Shield, LogOut } from "lucide-react";
+import { Calendar, Ticket, QrCode, Shield, LogOut, Users } from "lucide-react";
 import { useAuthStore, MODULES, ModuleType } from "@/store/auth-store";
 
 const iconMap = {
@@ -11,6 +11,7 @@ const iconMap = {
   Ticket,
   QrCode,
   Shield,
+  Users,
 };
 
 // Modül renk konfigürasyonu
@@ -38,6 +39,11 @@ const moduleColors: Record<
     iconBg: "bg-amber-600/20",
     border: "border-amber-500/30 hover:border-amber-500/50",
   },
+  leader: {
+    gradient: "from-cyan-500/20 to-cyan-600/10",
+    iconBg: "bg-cyan-600/20",
+    border: "border-cyan-500/30 hover:border-cyan-500/50",
+  },
 };
 
 const iconColors: Record<ModuleType, string> = {
@@ -45,6 +51,7 @@ const iconColors: Record<ModuleType, string> = {
   reservations: "text-purple-400",
   checkin: "text-emerald-400",
   admin: "text-amber-400",
+  leader: "text-cyan-400",
 };
 
 export default function SelectModulePage() {
@@ -79,16 +86,17 @@ export default function SelectModulePage() {
   // Kullanıcının erişebildiği modüller - admin modülü en sona
   const allowedModules = user.allowedModules
     .map((id) => MODULES[id])
+    .filter(Boolean)
     .sort((a, b) => {
       // Admin modülünü en sona koy
-      if (a.adminOnly) return 1;
-      if (b.adminOnly) return -1;
+      if (a.id === "admin") return 1;
+      if (b.id === "admin") return -1;
       return 0;
     });
 
   // Normal modüller ve admin modülü ayrımı
-  const regularModules = allowedModules.filter((m) => !m.adminOnly);
-  const adminModules = allowedModules.filter((m) => m.adminOnly);
+  const regularModules = allowedModules.filter((m) => m.id !== "admin");
+  const adminModules = allowedModules.filter((m) => m.id === "admin");
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col">

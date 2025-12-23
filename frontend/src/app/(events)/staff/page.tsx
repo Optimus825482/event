@@ -22,8 +22,10 @@ import {
   Upload,
   FileSpreadsheet,
   ChevronRight,
+  Star,
+  Loader2,
 } from "lucide-react";
-import { staffApi, eventsApi, API_BASE } from "@/lib/api";
+import { staffApi, eventsApi, API_BASE, leaderApi } from "@/lib/api";
 import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
@@ -128,6 +130,23 @@ interface WorkShift {
   isActive: boolean;
 }
 
+interface StaffReview {
+  id: string;
+  staffId: string;
+  eventId: string;
+  reviewerId: string;
+  overallScore: number;
+  punctualityScore: number;
+  attitudeScore: number;
+  teamworkScore: number;
+  efficiencyScore: number;
+  comment?: string;
+  isCompleted: boolean;
+  createdAt: string;
+  event?: { id: string; name: string; eventDate: string };
+  reviewer?: { id: string; fullName: string };
+}
+
 const EVENT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
   planning: {
     label: "Planlama",
@@ -195,6 +214,25 @@ export default function StaffManagementPage() {
     useState<any>(null);
   const [eventVenueLayout, setEventVenueLayout] = useState<any>(null);
   const [loadingEventLayout, setLoadingEventLayout] = useState(false);
+
+  // Değerlendirme state'leri
+  const [staffReviews, setStaffReviews] = useState<StaffReview[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
+  // Personel Değerlendirmeleri modülü state'leri
+  const [allStaffReviewsSummary, setAllStaffReviewsSummary] = useState<any[]>(
+    []
+  );
+  const [loadingReviewsSummary, setLoadingReviewsSummary] = useState(false);
+  const [selectedStaffForReviews, setSelectedStaffForReviews] = useState<
+    any | null
+  >(null);
+  const [staffEventReviews, setStaffEventReviews] = useState<any[]>([]);
+  const [loadingStaffEventReviews, setLoadingStaffEventReviews] =
+    useState(false);
+  const [selectedEventReview, setSelectedEventReview] = useState<any | null>(
+    null
+  );
 
   // Rolleri API'den yükle
   const loadRoles = async () => {
@@ -266,6 +304,41 @@ export default function StaffManagementPage() {
     }
   };
 
+  // Tüm personellerin değerlendirme özetlerini yükle
+  const loadAllStaffReviewsSummary = async () => {
+    setLoadingReviewsSummary(true);
+    try {
+      const response = await leaderApi.getAllStaffReviewsSummary();
+      setAllStaffReviewsSummary(response.data || []);
+    } catch (error: any) {
+      console.error(
+        "Değerlendirme özetleri yüklenemedi:",
+        error?.response?.data || error
+      );
+      setAllStaffReviewsSummary([]);
+    } finally {
+      setLoadingReviewsSummary(false);
+    }
+  };
+
+  // Personelin etkinlik bazlı değerlendirmelerini yükle
+  const loadStaffEventReviewsData = async (staffId: string) => {
+    setLoadingStaffEventReviews(true);
+    setSelectedEventReview(null);
+    try {
+      const response = await leaderApi.getStaffEventReviews(staffId);
+      setStaffEventReviews(response.data || []);
+    } catch (error: any) {
+      console.error(
+        "Personel etkinlik değerlendirmeleri yüklenemedi:",
+        error?.response?.data || error
+      );
+      setStaffEventReviews([]);
+    } finally {
+      setLoadingStaffEventReviews(false);
+    }
+  };
+
   useEffect(() => {
     loadRoles();
     loadStaff();
@@ -273,6 +346,22 @@ export default function StaffManagementPage() {
     loadShifts();
     loadTeams();
   }, []);
+
+  // Reviews modülü açıldığında verileri yükle
+  useEffect(() => {
+    if (activeModule === "reviews") {
+      loadAllStaffReviewsSummary();
+    }
+  }, [activeModule]);
+
+  // viewingStaff değiştiğinde değerlendirmeleri yükle
+  useEffect(() => {
+    if (viewingStaff) {
+      loadStaffReviews(viewingStaff.id);
+    } else {
+      setStaffReviews([]);
+    }
+  }, [viewingStaff]);
 
   // Geri sayım timer - hazır etkinlikler için
   useEffect(() => {
@@ -387,6 +476,35 @@ export default function StaffManagementPage() {
     } catch (error) {
       console.error("Ekip silme hatası:", error);
     }
+  };
+
+  // Personel değerlendirmelerini yükle
+  const loadStaffReviews = async (staffId: string) => {
+    setLoadingReviews(true);
+    try {
+      const res = await leaderApi.getStaffReviews(staffId);
+      setStaffReviews(res.data || []);
+    } catch (error) {
+      console.error("Değerlendirmeler yüklenemedi:", error);
+      setStaffReviews([]);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const calculateAverageScore = (reviews: StaffReview[]) => {
+    if (reviews.length === 0) return 0;
+    const completedReviews = reviews.filter((r) => r.isCompleted);
+    if (completedReviews.length === 0) return 0;
+    const total = completedReviews.reduce((sum, r) => sum + r.overallScore, 0);
+    return (total / completedReviews.length).toFixed(1);
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 4.5) return "text-green-400";
+    if (score >= 3.5) return "text-blue-400";
+    if (score >= 2.5) return "text-amber-400";
+    return "text-red-400";
   };
 
   const handleEventClick = (eventId: string) => {
@@ -589,9 +707,62 @@ export default function StaffManagementPage() {
           </>
         )}
 
-        {/* Giriş Ekranı - 3 Blok */}
+        {/* Modül Header - Personel Değerlendirmeleri */}
+        {activeModule === "reviews" && (
+          <>
+            {/* Geri Butonu ve Breadcrumb */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => {
+                  setActiveModule(null);
+                  setSelectedStaffForReviews(null);
+                  setSelectedEventReview(null);
+                }}
+                className="text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                <ArrowLeft className="w-10 h-10" strokeWidth={1.5} />
+              </button>
+              <nav className="flex items-center gap-1 text-sm">
+                <button
+                  onClick={() => {
+                    setActiveModule(null);
+                    setSelectedStaffForReviews(null);
+                    setSelectedEventReview(null);
+                  }}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  Ekip Yönetimi
+                </button>
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+                <span className="text-white font-medium">
+                  Personel Değerlendirmeleri
+                </span>
+              </nav>
+            </div>
+
+            {/* Başlık Card - Ortalanmış */}
+            <div className="flex justify-center">
+              <Card className="bg-slate-800/50 border-slate-700 w-full max-w-md">
+                <CardContent className="py-1">
+                  <h1 className="font-semibold text-white text-center">
+                    PERSONEL DEĞERLENDİRMELERİ
+                  </h1>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Bilgi Satırı */}
+            <div className="flex items-center justify-end">
+              <p className="text-slate-400 text-sm">
+                {allStaffReviewsSummary.length} personel
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Giriş Ekranı - 4 Blok */}
         {!activeModule && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* 1. Personel İşlemleri */}
             <Card
               className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-purple-500/50 transition-all cursor-pointer group"
@@ -674,6 +845,35 @@ export default function StaffManagementPage() {
                     className="bg-amber-500/10 border-amber-500/30 text-amber-400"
                   >
                     {events.length} Etkinlik
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 4. Personel Değerlendirmeleri */}
+            <Card
+              className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-green-500/50 transition-all cursor-pointer group"
+              onClick={() => setActiveModule("reviews")}
+            >
+              <CardContent className="p-6">
+                <div className="flex flex-col items-center text-center space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
+                    <Star className="w-8 h-8 text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      Personel Değerlendirmeleri
+                    </h3>
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      Tüm personellerin etkinlik bazlı performans
+                      değerlendirmeleri
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="bg-green-500/10 border-green-500/30 text-green-400"
+                  >
+                    Değerlendirmeler
                   </Badge>
                 </div>
               </CardContent>
@@ -1387,6 +1587,435 @@ export default function StaffManagementPage() {
                 </div>
               )}
             </TabsContent>
+
+            {/* TAB 4: Personel Değerlendirmeleri */}
+            <TabsContent value="reviews" className="mt-0 space-y-4">
+              {loadingReviewsSummary ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <Skeleton key={i} className="h-40 w-full bg-slate-700" />
+                  ))}
+                </div>
+              ) : allStaffReviewsSummary.length === 0 ? (
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardContent className="p-12 text-center">
+                    <Star className="w-16 h-16 mx-auto text-slate-600 mb-4" />
+                    <p className="text-slate-400 mb-2">
+                      Henüz değerlendirme yapılmamış
+                    </p>
+                    <p className="text-slate-500 text-sm">
+                      Personel değerlendirmeleri etkinlik sonrası liderler
+                      tarafından yapılır
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {allStaffReviewsSummary.map((staffSummary) => (
+                    <Card
+                      key={staffSummary.id}
+                      onClick={() => {
+                        setSelectedStaffForReviews(staffSummary);
+                        loadStaffEventReviewsData(staffSummary.id);
+                      }}
+                      className={`bg-slate-800 border-slate-700 hover:border-green-500/50 transition-all cursor-pointer group ${
+                        selectedStaffForReviews?.id === staffSummary.id
+                          ? "border-green-500 ring-1 ring-green-500/30"
+                          : ""
+                      }`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex flex-col items-center text-center space-y-3">
+                          <Avatar
+                            className="w-14 h-14 border-2 group-hover:scale-105 transition-transform"
+                            style={{
+                              borderColor: staffSummary.color || "#3b82f6",
+                            }}
+                          >
+                            <AvatarImage
+                              src={getAvatarUrl(staffSummary.avatar)}
+                              alt={staffSummary.fullName}
+                            />
+                            <AvatarFallback
+                              style={{
+                                backgroundColor:
+                                  staffSummary.color || "#3b82f6",
+                              }}
+                              className="text-white font-bold text-lg"
+                            >
+                              {staffSummary.fullName?.charAt(0).toUpperCase() ||
+                                "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h4 className="font-medium text-white text-sm truncate max-w-[120px]">
+                              {staffSummary.fullName}
+                            </h4>
+                            {staffSummary.position && (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] mt-1 ${getRoleBadgeColor(
+                                  staffSummary.position
+                                )}`}
+                              >
+                                {getRoleLabel(staffSummary.position)}
+                              </Badge>
+                            )}
+                          </div>
+                          {/* Puan */}
+                          <div className="w-full">
+                            {staffSummary.totalReviews > 0 ? (
+                              <div className="flex flex-col items-center">
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                                  <span
+                                    className={`text-lg font-bold ${
+                                      staffSummary.averageScore >= 80
+                                        ? "text-green-400"
+                                        : staffSummary.averageScore >= 60
+                                        ? "text-blue-400"
+                                        : staffSummary.averageScore >= 40
+                                        ? "text-amber-400"
+                                        : "text-red-400"
+                                    }`}
+                                  >
+                                    {staffSummary.averageScore}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-500">
+                                  {staffSummary.totalReviews} değerlendirme
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <span className="text-slate-500 text-xs">
+                                  Değerlendirme yok
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* Seçili Personelin Etkinlik Değerlendirmeleri Modal */}
+              <Dialog
+                open={!!selectedStaffForReviews}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSelectedStaffForReviews(null);
+                    setStaffEventReviews([]);
+                    setSelectedEventReview(null);
+                  }
+                }}
+              >
+                <DialogContent className="bg-slate-800 border-slate-700 !max-w-[700px] max-h-[85vh] overflow-hidden flex flex-col">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-3">
+                      {selectedStaffForReviews && (
+                        <>
+                          <Avatar
+                            className="w-10 h-10 border-2"
+                            style={{
+                              borderColor:
+                                selectedStaffForReviews.color || "#3b82f6",
+                            }}
+                          >
+                            <AvatarImage
+                              src={getAvatarUrl(selectedStaffForReviews.avatar)}
+                              alt={selectedStaffForReviews.fullName}
+                            />
+                            <AvatarFallback
+                              style={{
+                                backgroundColor:
+                                  selectedStaffForReviews.color || "#3b82f6",
+                              }}
+                              className="text-white font-bold"
+                            >
+                              {selectedStaffForReviews.fullName
+                                ?.charAt(0)
+                                .toUpperCase() || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <span className="text-white">
+                              {selectedStaffForReviews.fullName}
+                            </span>
+                            <p className="text-sm text-slate-400 font-normal">
+                              Etkinlik Değerlendirmeleri
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  <div className="flex-1 overflow-y-auto py-4">
+                    {loadingStaffEventReviews ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-8 h-8 animate-spin text-green-400" />
+                      </div>
+                    ) : staffEventReviews.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Calendar className="w-12 h-12 mx-auto text-slate-600 mb-3" />
+                        <p className="text-slate-400">
+                          Bu personel henüz hiçbir etkinliğe atanmamış
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {staffEventReviews.map((eventReview) => (
+                          <Card
+                            key={eventReview.eventId}
+                            onClick={() =>
+                              setSelectedEventReview(
+                                selectedEventReview?.eventId ===
+                                  eventReview.eventId
+                                  ? null
+                                  : eventReview
+                              )
+                            }
+                            className={`bg-slate-700/50 border-slate-600 hover:border-slate-500 transition-all cursor-pointer ${
+                              selectedEventReview?.eventId ===
+                              eventReview.eventId
+                                ? "border-green-500 ring-1 ring-green-500/30"
+                                : ""
+                            }`}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-12 h-12 rounded-lg bg-slate-600/50 flex flex-col items-center justify-center">
+                                    <span className="text-sm font-bold text-white">
+                                      {new Date(
+                                        eventReview.eventDate
+                                      ).getDate()}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 uppercase">
+                                      {new Date(
+                                        eventReview.eventDate
+                                      ).toLocaleDateString("tr-TR", {
+                                        month: "short",
+                                      })}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-medium text-white">
+                                      {eventReview.eventName}
+                                    </h4>
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] mt-1 ${
+                                        EVENT_STATUS_LABELS[
+                                          eventReview.eventStatus
+                                        ]?.color ||
+                                        "bg-slate-500/20 text-slate-400"
+                                      }`}
+                                    >
+                                      {EVENT_STATUS_LABELS[
+                                        eventReview.eventStatus
+                                      ]?.label || eventReview.eventStatus}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {eventReview.hasReview ? (
+                                    <div className="flex items-center gap-2">
+                                      <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                                      <span
+                                        className={`font-bold ${
+                                          eventReview.review.score >= 80
+                                            ? "text-green-400"
+                                            : eventReview.review.score >= 60
+                                            ? "text-blue-400"
+                                            : eventReview.review.score >= 40
+                                            ? "text-amber-400"
+                                            : "text-red-400"
+                                        }`}
+                                      >
+                                        {eventReview.review.score}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-slate-600/50 text-slate-400 border-slate-500"
+                                    >
+                                      Değerlendirme Yok
+                                    </Badge>
+                                  )}
+                                  <ChevronRight
+                                    className={`w-5 h-5 text-slate-500 transition-transform ${
+                                      selectedEventReview?.eventId ===
+                                      eventReview.eventId
+                                        ? "rotate-90"
+                                        : ""
+                                    }`}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Detay Açılır Panel */}
+                              {selectedEventReview?.eventId ===
+                                eventReview.eventId &&
+                                eventReview.hasReview && (
+                                  <div className="mt-4 pt-4 border-t border-slate-600 space-y-3">
+                                    {/* Kategori Puanları */}
+                                    {eventReview.review.categoryScores && (
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        {Object.entries(
+                                          eventReview.review.categoryScores
+                                        ).map(([key, value]) => {
+                                          const labels: Record<string, string> =
+                                            {
+                                              communication: "İletişim",
+                                              punctuality: "Dakiklik",
+                                              teamwork: "Takım Çalışması",
+                                              customerService:
+                                                "Müşteri Hizmeti",
+                                              technicalSkills: "Teknik Beceri",
+                                              initiative: "İnisiyatif",
+                                              appearance: "Görünüm",
+                                              stressManagement:
+                                                "Stres Yönetimi",
+                                            };
+                                          return (
+                                            <div
+                                              key={key}
+                                              className="bg-slate-600/30 rounded-lg p-2 text-center"
+                                            >
+                                              <div className="text-xs text-slate-400 mb-1">
+                                                {labels[key] || key}
+                                              </div>
+                                              <div className="flex items-center justify-center gap-1">
+                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                  <Star
+                                                    key={star}
+                                                    className={`w-3 h-3 ${
+                                                      star <= (value as number)
+                                                        ? "text-amber-400 fill-amber-400"
+                                                        : "text-slate-600"
+                                                    }`}
+                                                  />
+                                                ))}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {/* Güçlü Yönler */}
+                                    {eventReview.review.strengths?.length >
+                                      0 && (
+                                      <div>
+                                        <span className="text-xs text-slate-400">
+                                          Güçlü Yönler:
+                                        </span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {eventReview.review.strengths.map(
+                                            (s: string, i: number) => (
+                                              <Badge
+                                                key={i}
+                                                variant="outline"
+                                                className="bg-green-500/10 text-green-400 border-green-500/30 text-xs"
+                                              >
+                                                {s}
+                                              </Badge>
+                                            )
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Gelişim Alanları */}
+                                    {eventReview.review.improvements?.length >
+                                      0 && (
+                                      <div>
+                                        <span className="text-xs text-slate-400">
+                                          Gelişim Alanları:
+                                        </span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {eventReview.review.improvements.map(
+                                            (s: string, i: number) => (
+                                              <Badge
+                                                key={i}
+                                                variant="outline"
+                                                className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs"
+                                              >
+                                                {s}
+                                              </Badge>
+                                            )
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Yorum */}
+                                    {eventReview.review.comment && (
+                                      <div className="bg-slate-600/30 rounded-lg p-3">
+                                        <span className="text-xs text-slate-400 block mb-1">
+                                          Yorum:
+                                        </span>
+                                        <p className="text-sm text-white">
+                                          {eventReview.review.comment}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    {/* Değerlendiren */}
+                                    <div className="flex items-center justify-between text-xs text-slate-500">
+                                      <span>
+                                        Değerlendiren:{" "}
+                                        {eventReview.review.reviewerName ||
+                                          "Bilinmiyor"}
+                                      </span>
+                                      <span>
+                                        {new Date(
+                                          eventReview.review.createdAt
+                                        ).toLocaleDateString("tr-TR")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+
+                              {/* Değerlendirme Yok Mesajı */}
+                              {selectedEventReview?.eventId ===
+                                eventReview.eventId &&
+                                !eventReview.hasReview && (
+                                  <div className="mt-4 pt-4 border-t border-slate-600 text-center py-4">
+                                    <Star className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                                    <p className="text-slate-400 text-sm">
+                                      Bu etkinlik için değerlendirme yapılmamış
+                                    </p>
+                                  </div>
+                                )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedStaffForReviews(null);
+                        setStaffEventReviews([]);
+                        setSelectedEventReview(null);
+                      }}
+                      className="border-slate-600"
+                    >
+                      Kapat
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </TabsContent>
           </Tabs>
         )}
 
@@ -1411,12 +2040,12 @@ export default function StaffManagementPage() {
           open={!!viewingStaff}
           onOpenChange={() => setViewingStaff(null)}
         >
-          <DialogContent className="bg-slate-800 border-slate-700">
+          <DialogContent className="bg-slate-800 border-slate-700 !max-w-[650px] max-h-[85vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle>Personel Detayı</DialogTitle>
             </DialogHeader>
             {viewingStaff && (
-              <div className="space-y-4 py-4">
+              <div className="space-y-4 py-4 flex-1 overflow-y-auto">
                 <div className="flex items-center gap-4">
                   <Avatar
                     className="w-16 h-16 border-2"
@@ -1466,6 +2095,136 @@ export default function StaffManagementPage() {
                       Durum: {viewingStaff.isActive ? "Aktif" : "Pasif"}
                     </span>
                   </div>
+                </div>
+
+                {/* Değerlendirmeler Bölümü */}
+                <div className="border-t border-slate-700 pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Star className="w-5 h-5 text-amber-400" />
+                    <h4 className="font-semibold text-white">
+                      Performans Değerlendirmeleri
+                    </h4>
+                  </div>
+
+                  {loadingReviews ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                    </div>
+                  ) : staffReviews.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500">
+                      <Star className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Henüz değerlendirme yapılmamış</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Özet */}
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+                          <div
+                            className={`text-xl font-bold ${getScoreColor(
+                              Number(calculateAverageScore(staffReviews))
+                            )}`}
+                          >
+                            {calculateAverageScore(staffReviews)}
+                          </div>
+                          <div className="text-xs text-slate-400">Ortalama</div>
+                        </div>
+                        <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+                          <div className="text-xl font-bold text-blue-400">
+                            {staffReviews.filter((r) => r.isCompleted).length}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            Değerlendirme
+                          </div>
+                        </div>
+                        <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+                          <div className="text-xl font-bold text-purple-400">
+                            {
+                              new Set(
+                                staffReviews
+                                  .filter((r) => r.isCompleted)
+                                  .map((r) => r.eventId)
+                              ).size
+                            }
+                          </div>
+                          <div className="text-xs text-slate-400">Etkinlik</div>
+                        </div>
+                      </div>
+
+                      {/* Değerlendirme Listesi */}
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                        {staffReviews
+                          .filter((r) => r.isCompleted)
+                          .sort(
+                            (a, b) =>
+                              new Date(b.createdAt).getTime() -
+                              new Date(a.createdAt).getTime()
+                          )
+                          .map((review) => (
+                            <div
+                              key={review.id}
+                              className="bg-slate-700/30 rounded-lg p-3 border border-slate-600/50"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div>
+                                  <span className="font-medium text-white text-sm">
+                                    {review.event?.name || "Etkinlik"}
+                                  </span>
+                                  <div className="text-xs text-slate-500">
+                                    {review.event?.eventDate
+                                      ? new Date(
+                                          review.event.eventDate
+                                        ).toLocaleDateString("tr-TR")
+                                      : ""}{" "}
+                                    • {review.reviewer?.fullName || ""}
+                                  </div>
+                                </div>
+                                <div
+                                  className={`text-xl font-bold ${getScoreColor(
+                                    review.overallScore
+                                  )}`}
+                                >
+                                  {review.overallScore.toFixed(1)}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-4 gap-1 text-xs">
+                                <div className="text-center">
+                                  <div className="text-slate-300">
+                                    {review.punctualityScore}
+                                  </div>
+                                  <div className="text-slate-500">Dakiklik</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-slate-300">
+                                    {review.attitudeScore}
+                                  </div>
+                                  <div className="text-slate-500">Tutum</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-slate-300">
+                                    {review.teamworkScore}
+                                  </div>
+                                  <div className="text-slate-500">Takım</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-slate-300">
+                                    {review.efficiencyScore}
+                                  </div>
+                                  <div className="text-slate-500">
+                                    Verimlilik
+                                  </div>
+                                </div>
+                              </div>
+                              {review.comment && (
+                                <div className="mt-2 text-xs text-slate-400 italic bg-slate-800/50 rounded p-2">
+                                  &quot;{review.comment}&quot;
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -2832,12 +3591,12 @@ function BulkUploadInfoModal({
                   <tr>
                     <td className="px-2 py-1.5">Ahmet Yılmaz</td>
                     <td className="px-2 py-1.5">ahmet@email.com</td>
-                    <td className="px-2 py-1.5">garson</td>
+                    <td className="px-2 py-1.5">captan</td>
                   </tr>
                   <tr>
                     <td className="px-2 py-1.5">Mehmet Demir</td>
                     <td className="px-2 py-1.5">mehmet@email.com</td>
-                    <td className="px-2 py-1.5">komi</td>
+                    <td className="px-2 py-1.5">personel</td>
                   </tr>
                 </tbody>
               </table>

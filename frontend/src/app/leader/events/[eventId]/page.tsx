@@ -9,9 +9,6 @@ import {
   ArrowLeft,
   AlertCircle,
   Clock,
-  Star,
-  Save,
-  CheckCircle,
   Table2,
   X,
 } from "lucide-react";
@@ -25,39 +22,6 @@ import { leaderApi, API_BASE } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast-notification";
 
-const RATING_OPTIONS = [
-  {
-    value: "very_bad",
-    label: "Çok Kötü",
-    color: "#ef4444",
-    minScore: 0,
-    maxScore: 20,
-  },
-  { value: "bad", label: "Kötü", color: "#f97316", minScore: 21, maxScore: 40 },
-  {
-    value: "average",
-    label: "İdare Eder",
-    color: "#eab308",
-    minScore: 41,
-    maxScore: 55,
-  },
-  { value: "good", label: "İyi", color: "#22c55e", minScore: 56, maxScore: 70 },
-  {
-    value: "successful",
-    label: "Çok İyi",
-    color: "#3b82f6",
-    minScore: 71,
-    maxScore: 85,
-  },
-  {
-    value: "excellent",
-    label: "Mükemmel",
-    color: "#8b5cf6",
-    minScore: 86,
-    maxScore: 100,
-  },
-];
-
 interface TableGroupInfo {
   id: string;
   name: string;
@@ -68,12 +32,6 @@ interface ShiftInfo {
   name: string;
   startTime: string;
   endTime: string;
-}
-interface ExistingReview {
-  id: string;
-  score: number;
-  rating: string;
-  comment?: string;
 }
 
 interface TeamMember {
@@ -89,7 +47,6 @@ interface TeamMember {
   specialTaskStartTime?: string;
   specialTaskEndTime?: string;
   tableGroups: TableGroupInfo[];
-  existingReview?: ExistingReview | null;
 }
 
 interface EventDetails {
@@ -111,12 +68,6 @@ interface EventDetails {
   venueLayout?: any;
 }
 
-interface ReviewData {
-  score: number;
-  rating: string;
-  comment: string;
-}
-
 export default function LeaderEventDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -127,11 +78,7 @@ export default function LeaderEventDetailPage() {
   const [data, setData] = useState<EventDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"layout" | "list" | "review">(
-    "layout"
-  );
-  const [reviews, setReviews] = useState<Record<string, ReviewData>>({});
-  const [savingReview, setSavingReview] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"layout" | "list">("layout");
   const [tableGroupModal, setTableGroupModal] = useState<{
     open: boolean;
     group: TableGroupInfo | null;
@@ -143,18 +90,7 @@ export default function LeaderEventDetailPage() {
       setLoading(true);
       const res = await leaderApi.getEventDetails(eventId);
       setData(res.data);
-      const initialReviews: Record<string, ReviewData> = {};
-      res.data.members.forEach((member: TeamMember) => {
-        if (member.existingReview) {
-          initialReviews[member.id] = {
-            score: member.existingReview.score,
-            rating: member.existingReview.rating,
-            comment: member.existingReview.comment || "",
-          };
-        }
-      });
-      setReviews(initialReviews);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Etkinlik detayları yüklenemedi:", error);
       toast.error("Etkinlik detayları yüklenemedi");
     } finally {
@@ -169,73 +105,6 @@ export default function LeaderEventDetailPage() {
     }
     loadEventDetails();
   }, [user, loadEventDetails, router]);
-
-  const handleScoreChange = (memberId: string, score: number) => {
-    const rating = RATING_OPTIONS.find(
-      (r) => score >= r.minScore && score <= r.maxScore
-    );
-    setReviews((prev) => ({
-      ...prev,
-      [memberId]: {
-        ...prev[memberId],
-        score,
-        rating: rating?.value || "average",
-        comment: prev[memberId]?.comment || "",
-      },
-    }));
-  };
-
-  const handleRatingChange = (memberId: string, ratingValue: string) => {
-    const rating = RATING_OPTIONS.find((r) => r.value === ratingValue);
-    if (rating) {
-      const avgScore = Math.round((rating.minScore + rating.maxScore) / 2);
-      setReviews((prev) => ({
-        ...prev,
-        [memberId]: {
-          ...prev[memberId],
-          score: avgScore,
-          rating: ratingValue,
-          comment: prev[memberId]?.comment || "",
-        },
-      }));
-    }
-  };
-
-  const saveReview = async (memberId: string) => {
-    const review = reviews[memberId];
-    if (!review || review.score === undefined) {
-      toast.error("Lütfen puan girin");
-      return;
-    }
-    try {
-      setSavingReview(memberId);
-      await leaderApi.createReview({
-        staffId: memberId,
-        eventId,
-        score: review.score,
-        rating: review.rating,
-        comment: review.comment || undefined,
-      });
-      toast.success("Değerlendirme kaydedildi");
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              members: prev.members.map((m) =>
-                m.id === memberId
-                  ? { ...m, existingReview: { id: "temp", ...review } }
-                  : m
-              ),
-            }
-          : prev
-      );
-    } catch (error) {
-      console.error("Değerlendirme kaydedilemedi:", error);
-      toast.error("Değerlendirme kaydedilemedi");
-    } finally {
-      setSavingReview(null);
-    }
-  };
 
   if (loading) {
     return (
@@ -600,17 +469,6 @@ export default function LeaderEventDetailPage() {
             <Table2 className="w-4 h-4 mr-1" />
             Ekip Listesi
           </Button>
-          {isEventCompleted && (
-            <Button
-              variant={activeTab === "review" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("review")}
-              className={activeTab === "review" ? "bg-amber-600" : ""}
-            >
-              <Star className="w-4 h-4 mr-1" />
-              Değerlendirme
-            </Button>
-          )}
         </div>
 
         {activeTab === "layout" && (
@@ -1018,185 +876,6 @@ export default function LeaderEventDetailPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {activeTab === "review" && isEventCompleted && (
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Star className="w-5 h-5 text-amber-400" />
-                Performans Değerlendirmesi
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {members.length === 0 ? (
-                <p className="text-slate-500 text-center py-8">
-                  Değerlendirilecek ekip üyesi bulunamadı
-                </p>
-              ) : (
-                <div className="space-y-6">
-                  {members.map((member) => {
-                    const review = reviews[member.id] || {
-                      score: 50,
-                      rating: "average",
-                      comment: "",
-                    };
-                    const hasExistingReview = !!member.existingReview;
-                    return (
-                      <div
-                        key={member.id}
-                        className="p-4 bg-slate-700/30 rounded-lg border border-slate-600"
-                      >
-                        <div className="flex items-start gap-4">
-                          <Avatar className="w-12 h-12">
-                            {member.avatar && (
-                              <AvatarImage
-                                src={`${API_BASE}${member.avatar}`}
-                              />
-                            )}
-                            <AvatarFallback
-                              style={{
-                                backgroundColor: member.color || "#3b82f6",
-                              }}
-                            >
-                              {member.fullName.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-medium text-white">
-                                {member.fullName}
-                              </h4>
-                              {hasExistingReview && (
-                                <Badge className="bg-green-500/20 text-green-400 text-xs">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Değerlendirildi
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-slate-400 capitalize">
-                              {member.position || "Personel"}
-                            </p>
-                            {member.tableGroups.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {member.tableGroups.map((group) => (
-                                  <Badge
-                                    key={group.id}
-                                    className="text-[10px]"
-                                    style={{
-                                      backgroundColor: group.color + "30",
-                                      color: group.color,
-                                    }}
-                                  >
-                                    {group.name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm text-slate-400 mb-2">
-                              Puan:{" "}
-                              <span className="text-white font-bold text-lg">
-                                {review.score}
-                              </span>
-                              /100
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={review.score}
-                              onChange={(e) =>
-                                handleScoreChange(
-                                  member.id,
-                                  parseInt(e.target.value)
-                                )
-                              }
-                              className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                            />
-                            <div className="flex justify-between text-xs text-slate-500 mt-1">
-                              <span>0</span>
-                              <span>50</span>
-                              <span>100</span>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-sm text-slate-400 mb-2">
-                              Değerlendirme
-                            </label>
-                            <div className="flex flex-wrap gap-1">
-                              {RATING_OPTIONS.map((option) => (
-                                <button
-                                  key={option.value}
-                                  onClick={() =>
-                                    handleRatingChange(member.id, option.value)
-                                  }
-                                  className={`px-2 py-1 rounded text-xs font-medium transition-all ${
-                                    review.rating === option.value
-                                      ? "ring-2 ring-white ring-offset-1 ring-offset-slate-800"
-                                      : "opacity-60 hover:opacity-100"
-                                  }`}
-                                  style={{
-                                    backgroundColor: option.color,
-                                    color: "white",
-                                  }}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="mt-4">
-                          <label className="block text-sm text-slate-400 mb-2">
-                            Not (Opsiyonel)
-                          </label>
-                          <textarea
-                            value={review.comment}
-                            onChange={(e) =>
-                              setReviews((prev) => ({
-                                ...prev,
-                                [member.id]: {
-                                  ...prev[member.id],
-                                  comment: e.target.value,
-                                },
-                              }))
-                            }
-                            placeholder="Bu personel hakkında not ekleyin..."
-                            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"
-                            rows={2}
-                          />
-                        </div>
-                        <div className="mt-4 flex justify-end">
-                          <Button
-                            onClick={() => saveReview(member.id)}
-                            disabled={savingReview === member.id}
-                            className="bg-blue-600 hover:bg-blue-700"
-                            size="sm"
-                          >
-                            {savingReview === member.id ? (
-                              <>
-                                <span className="animate-spin mr-1">⏳</span>
-                                Kaydediliyor...
-                              </>
-                            ) : (
-                              <>
-                                <Save className="w-4 h-4 mr-1" />
-                                {hasExistingReview ? "Güncelle" : "Kaydet"}
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </CardContent>

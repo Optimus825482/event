@@ -19,6 +19,10 @@ import {
   ChevronsUpDown,
   ChevronLeft,
   ChevronRight,
+  Star,
+  Calendar,
+  TrendingUp,
+  Eye,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,7 +55,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { usersApi, API_BASE } from "@/lib/api";
+import { usersApi, API_BASE, leaderApi } from "@/lib/api";
 import { useToast } from "@/components/ui/toast-notification";
 
 interface User {
@@ -60,7 +64,7 @@ interface User {
   fullName: string;
   email?: string;
   phone?: string;
-  role: "admin" | "organizer" | "staff" | "venue_owner";
+  role: "admin" | "organizer" | "leader" | "staff" | "venue_owner";
   position?: string;
   color?: string;
   avatar?: string;
@@ -73,6 +77,23 @@ interface UserStats {
   total: number;
   active: number;
   byRole: Record<string, number>;
+}
+
+interface StaffReview {
+  id: string;
+  staffId: string;
+  eventId: string;
+  reviewerId: string;
+  overallScore: number;
+  punctualityScore: number;
+  attitudeScore: number;
+  teamworkScore: number;
+  efficiencyScore: number;
+  comment?: string;
+  isCompleted: boolean;
+  createdAt: string;
+  event?: { id: string; name: string; eventDate: string };
+  reviewer?: { id: string; fullName: string };
 }
 
 const roleConfig: Record<string, { label: string; color: string; bg: string }> =
@@ -152,6 +173,9 @@ export default function AdminUsersPage() {
   const [formData, setFormData] = useState(initialFormData);
   const [newPassword, setNewPassword] = useState("");
   const [migrating, setMigrating] = useState(false);
+  const [reviewsUser, setReviewsUser] = useState<User | null>(null);
+  const [staffReviews, setStaffReviews] = useState<StaffReview[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
 
   // Sorting
   const [sortField, setSortField] = useState<SortField>("createdAt");
@@ -402,6 +426,35 @@ export default function AdminUsersPage() {
     }
   };
 
+  const loadStaffReviews = async (user: User) => {
+    setReviewsUser(user);
+    setLoadingReviews(true);
+    try {
+      const res = await leaderApi.getStaffReviews(user.id);
+      setStaffReviews(res.data || []);
+    } catch (error: any) {
+      toast.error("Değerlendirmeler yüklenemedi");
+      setStaffReviews([]);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const calculateAverageScore = (reviews: StaffReview[]) => {
+    if (reviews.length === 0) return 0;
+    const completedReviews = reviews.filter((r) => r.isCompleted);
+    if (completedReviews.length === 0) return 0;
+    const total = completedReviews.reduce((sum, r) => sum + r.overallScore, 0);
+    return (total / completedReviews.length).toFixed(1);
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 4.5) return "text-green-400";
+    if (score >= 3.5) return "text-blue-400";
+    if (score >= 2.5) return "text-amber-400";
+    return "text-red-400";
+  };
+
   // Username'i olmayan kullanıcı sayısı
   const usersWithoutUsername = users.filter((u) => !u.username).length;
 
@@ -640,7 +693,11 @@ export default function AdminUsersPage() {
                   paginatedUsers.map((user) => (
                     <tr
                       key={user.id}
-                      className="border-b border-slate-700/50 hover:bg-slate-700/30"
+                      className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer"
+                      onClick={() =>
+                        (user.role === "staff" || user.role === "leader") &&
+                        loadStaffReviews(user)
+                      }
                     >
                       <td className="p-3">
                         <span className="text-blue-400 font-mono text-sm">
@@ -713,17 +770,38 @@ export default function AdminUsersPage() {
                             className="bg-slate-800 border-slate-700"
                           >
                             <DropdownMenuItem
-                              onClick={() => openEditModal(user)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditModal(user);
+                              }}
                             >
                               <Edit2 className="w-4 h-4 mr-2" /> Düzenle
                             </DropdownMenuItem>
+                            {(user.role === "staff" ||
+                              user.role === "leader") && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  loadStaffReviews(user);
+                                }}
+                              >
+                                <Star className="w-4 h-4 mr-2" />{" "}
+                                Değerlendirmeler
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
-                              onClick={() => setShowPasswordModal(user)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowPasswordModal(user);
+                              }}
                             >
                               <Key className="w-4 h-4 mr-2" /> Şifre Değiştir
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => toggleUserStatus(user)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleUserStatus(user);
+                              }}
                             >
                               {user.isActive ? (
                                 <>
@@ -738,7 +816,10 @@ export default function AdminUsersPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator className="bg-slate-700" />
                             <DropdownMenuItem
-                              onClick={() => setDeleteConfirm(user)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm(user);
+                              }}
                               className="text-red-400"
                             >
                               <Trash2 className="w-4 h-4 mr-2" /> Sil
@@ -1060,6 +1141,180 @@ export default function AdminUsersPage() {
               >
                 {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Sil
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Staff Reviews Modal */}
+        <Dialog
+          open={!!reviewsUser}
+          onOpenChange={() => {
+            setReviewsUser(null);
+            setStaffReviews([]);
+          }}
+        >
+          <DialogContent className="bg-slate-800 border-slate-700 !max-w-[700px] max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <Avatar className="w-10 h-10">
+                  {reviewsUser?.avatar && (
+                    <AvatarImage src={`${API_BASE}${reviewsUser.avatar}`} />
+                  )}
+                  <AvatarFallback
+                    className="text-white"
+                    style={{ backgroundColor: reviewsUser?.color || "#3b82f6" }}
+                  >
+                    {reviewsUser?.fullName?.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <span className="text-white">{reviewsUser?.fullName}</span>
+                  <p className="text-sm text-slate-400 font-normal">
+                    {reviewsUser?.position || "Personel"} • Değerlendirme
+                    Geçmişi
+                  </p>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+
+            {loadingReviews ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+              </div>
+            ) : staffReviews.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <Star className="w-12 h-12 mb-3 opacity-30" />
+                <p>Henüz değerlendirme yapılmamış</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {/* Genel Özet */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                    <div
+                      className={`text-2xl font-bold ${getScoreColor(
+                        Number(calculateAverageScore(staffReviews))
+                      )}`}
+                    >
+                      {calculateAverageScore(staffReviews)}
+                    </div>
+                    <div className="text-xs text-slate-400">Genel Ortalama</div>
+                  </div>
+                  <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-blue-400">
+                      {staffReviews.filter((r) => r.isCompleted).length}
+                    </div>
+                    <div className="text-xs text-slate-400">Tamamlanan</div>
+                  </div>
+                  <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-purple-400">
+                      {
+                        new Set(
+                          staffReviews
+                            .filter((r) => r.isCompleted)
+                            .map((r) => r.eventId)
+                        ).size
+                      }
+                    </div>
+                    <div className="text-xs text-slate-400">Etkinlik</div>
+                  </div>
+                </div>
+
+                {/* Değerlendirme Listesi */}
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                  {staffReviews
+                    .filter((r) => r.isCompleted)
+                    .sort(
+                      (a, b) =>
+                        new Date(b.createdAt).getTime() -
+                        new Date(a.createdAt).getTime()
+                    )
+                    .map((review) => (
+                      <div
+                        key={review.id}
+                        className="bg-slate-700/30 rounded-lg p-4 border border-slate-600/50"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-slate-400" />
+                              <span className="font-medium text-white">
+                                {review.event?.name || "Etkinlik"}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              {review.event?.eventDate
+                                ? new Date(
+                                    review.event.eventDate
+                                  ).toLocaleDateString("tr-TR")
+                                : ""}{" "}
+                              • Değerlendiren:{" "}
+                              {review.reviewer?.fullName || "Bilinmiyor"}
+                            </div>
+                          </div>
+                          <div
+                            className={`text-2xl font-bold ${getScoreColor(
+                              review.overallScore
+                            )}`}
+                          >
+                            {review.overallScore.toFixed(1)}
+                          </div>
+                        </div>
+
+                        {/* Detay Puanlar */}
+                        <div className="grid grid-cols-4 gap-2 mb-3">
+                          <div className="text-center">
+                            <div className="text-sm font-medium text-slate-300">
+                              {review.punctualityScore}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              Dakiklik
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-medium text-slate-300">
+                              {review.attitudeScore}
+                            </div>
+                            <div className="text-xs text-slate-500">Tutum</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-medium text-slate-300">
+                              {review.teamworkScore}
+                            </div>
+                            <div className="text-xs text-slate-500">Takım</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-medium text-slate-300">
+                              {review.efficiencyScore}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              Verimlilik
+                            </div>
+                          </div>
+                        </div>
+
+                        {review.comment && (
+                          <div className="bg-slate-800/50 rounded p-2 text-sm text-slate-400 italic">
+                            &quot;{review.comment}&quot;
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setReviewsUser(null);
+                  setStaffReviews([]);
+                }}
+                className="border-slate-600"
+              >
+                Kapat
               </Button>
             </DialogFooter>
           </DialogContent>

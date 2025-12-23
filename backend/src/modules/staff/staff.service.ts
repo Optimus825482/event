@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -20,6 +22,7 @@ import {
 import { TeamMember } from "../../entities/service-team.entity";
 import { UserRole } from "../../entities/user.entity";
 import * as bcrypt from "bcrypt";
+import { NotificationsService } from "../notifications/notifications.service";
 
 // Varsayılan personel renkleri
 const DEFAULT_STAFF_COLORS = [
@@ -57,14 +60,20 @@ export class StaffService {
     @InjectRepository(EventStaffAssignment)
     private eventStaffAssignmentRepository: Repository<EventStaffAssignment>,
     @InjectRepository(OrganizationTemplate)
-    private organizationTemplateRepository: Repository<OrganizationTemplate>
+    private organizationTemplateRepository: Repository<OrganizationTemplate>,
+    @Inject(forwardRef(() => NotificationsService))
+    private notificationsService: NotificationsService
   ) {}
 
-  // Personel listesi (role = 'staff')
+  // Personel listesi (role = 'staff' veya 'leader')
   async findAllStaff(onlyActive = false): Promise<User[]> {
-    const where: any = { role: UserRole.STAFF };
+    const baseWhere = [{ role: UserRole.STAFF }, { role: UserRole.LEADER }];
+
+    let where: any;
     if (onlyActive) {
-      where.isActive = true;
+      where = baseWhere.map((w) => ({ ...w, isActive: true }));
+    } else {
+      where = baseWhere;
     }
 
     return this.userRepository.find({
@@ -87,7 +96,10 @@ export class StaffService {
   // Tek personel getir
   async getStaffById(id: string): Promise<User> {
     const staff = await this.userRepository.findOne({
-      where: { id, role: UserRole.STAFF },
+      where: [
+        { id, role: UserRole.STAFF },
+        { id, role: UserRole.LEADER },
+      ],
       select: [
         "id",
         "fullName",
@@ -130,13 +142,19 @@ export class StaffService {
     let color = dto.color;
     if (!color) {
       const staffCount = await this.userRepository.count({
-        where: { role: UserRole.STAFF },
+        where: [{ role: UserRole.STAFF }, { role: UserRole.LEADER }],
       });
       color = DEFAULT_STAFF_COLORS[staffCount % DEFAULT_STAFF_COLORS.length];
     }
 
     // Şifreyi hashle
     const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    // Captan ve Supervizor için role=leader, diğerleri için role=staff
+    const leaderPositions = ["captan", "supervizor", "sef"];
+    const role = leaderPositions.includes(dto.position?.toLowerCase() || "")
+      ? UserRole.LEADER
+      : UserRole.STAFF;
 
     const staff = this.userRepository.create({
       email: dto.email,
@@ -146,11 +164,22 @@ export class StaffService {
       color,
       position: dto.position,
       avatar: dto.avatar,
-      role: UserRole.STAFF,
+      role,
       isActive: true,
     });
 
     const saved = await this.userRepository.save(staff);
+
+    // Bildirim gönder: Yeni personel eklendi
+    try {
+      await this.notificationsService.notifyNewStaffAdded(
+        saved.fullName,
+        saved.position || "Personel",
+        "" // createdById - controller'dan geçirilecek
+      );
+    } catch {
+      // Bildirim hatası ana işlemi etkilemesin
+    }
 
     // Şifreyi response'dan çıkar
     const { password, ...result } = saved;
@@ -170,11 +199,22 @@ export class StaffService {
     }
   ): Promise<User> {
     const staff = await this.userRepository.findOne({
-      where: { id, role: UserRole.STAFF },
+      where: [
+        { id, role: UserRole.STAFF },
+        { id, role: UserRole.LEADER },
+      ],
     });
 
     if (!staff) {
       throw new NotFoundException("Personel bulunamadı");
+    }
+
+    // Pozisyon değiştiyse role'u da güncelle
+    if (dto.position) {
+      const leaderPositions = ["captan", "supervizor", "sef"];
+      staff.role = leaderPositions.includes(dto.position.toLowerCase())
+        ? UserRole.LEADER
+        : UserRole.STAFF;
     }
 
     Object.assign(staff, dto);
@@ -189,7 +229,10 @@ export class StaffService {
     id: string
   ): Promise<{ success: boolean; message: string }> {
     const staff = await this.userRepository.findOne({
-      where: { id, role: UserRole.STAFF },
+      where: [
+        { id, role: UserRole.STAFF },
+        { id, role: UserRole.LEADER },
+      ],
     });
 
     if (!staff) {
@@ -1684,7 +1727,8 @@ export class StaffService {
       shiftId?: string;
       teamId?: string;
       color?: string;
-    }>
+    }>,
+    createdById?: string
   ): Promise<{ success: boolean; savedCount: number }> {
     // Önce mevcut atamaları deaktif et
     await this.eventStaffAssignmentRepository.update(
@@ -1712,6 +1756,23 @@ export class StaffService {
       });
       await this.eventStaffAssignmentRepository.save(assignment);
       savedCount++;
+    }
+
+    // Bildirim gönder: Ekip organizasyonu tamamlandı
+    if (savedCount > 0 && createdById) {
+      try {
+        const event = await this.eventRepository.findOne({
+          where: { id: eventId },
+        });
+        if (event) {
+          await this.notificationsService.notifyTeamOrganizationCompleted(
+            event,
+            createdById
+          );
+        }
+      } catch {
+        // Bildirim hatası ana işlemi etkilemesin
+      }
     }
 
     return { success: true, savedCount };

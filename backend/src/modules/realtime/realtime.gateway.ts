@@ -34,6 +34,22 @@ export interface CheckInRecord {
   checkInTime: string;
 }
 
+/**
+ * NotificationPayload interface - Real-time bildirimler için
+ */
+export interface NotificationPayload {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  priority: string;
+  targetRole: string;
+  eventId?: string | null;
+  actionUrl?: string | null;
+  createdAt: string;
+  metadata?: Record<string, unknown> | null;
+}
+
 @WebSocketGateway({
   cors: {
     origin: true, // Production'da tüm origin'lere izin ver (Coolify reverse proxy arkasında)
@@ -46,8 +62,10 @@ export class RealtimeGateway
   @WebSocketServer()
   server: Server;
 
-  private connectedClients: Map<string, { eventId?: string; role?: string }> =
-    new Map();
+  private connectedClients: Map<
+    string,
+    { eventId?: string; role?: string; userId?: string }
+  > = new Map();
 
   handleConnection(client: Socket) {
     this.connectedClients.set(client.id, {});
@@ -57,6 +75,32 @@ export class RealtimeGateway
     this.connectedClients.delete(client.id);
   }
 
+  // Kullanıcı odasına katıl (bildirimler için)
+  @SubscribeMessage("joinUser")
+  handleJoinUser(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { userId: string; role: string }
+  ) {
+    // Kullanıcı kendi odasına katılır
+    client.join(`user:${data.userId}`);
+    // Role bazlı odaya da katılır
+    client.join(`role:${data.role}`);
+    // Genel bildirimler için
+    client.join("notifications:all");
+
+    const clientData = this.connectedClients.get(client.id) || {};
+    this.connectedClients.set(client.id, {
+      ...clientData,
+      userId: data.userId,
+      role: data.role,
+    });
+
+    return {
+      success: true,
+      message: `User ${data.userId} joined notification channels`,
+    };
+  }
+
   // Etkinlik odasına katıl
   @SubscribeMessage("joinEvent")
   handleJoinEvent(
@@ -64,7 +108,9 @@ export class RealtimeGateway
     @MessageBody() data: { eventId: string; role: string }
   ) {
     client.join(`event:${data.eventId}`);
+    const clientData = this.connectedClients.get(client.id) || {};
     this.connectedClients.set(client.id, {
+      ...clientData,
       eventId: data.eventId,
       role: data.role,
     });
@@ -205,5 +251,56 @@ export class RealtimeGateway
       if (data.eventId === eventId) count++;
     });
     return count;
+  }
+
+  // ==================== NOTIFICATION METHODS ====================
+
+  /**
+   * Tüm kullanıcılara bildirim gönder
+   * @param notification Bildirim payload'ı
+   */
+  broadcastNotificationToAll(notification: NotificationPayload): void {
+    this.server.to("notifications:all").emit("newNotification", notification);
+  }
+
+  /**
+   * Belirli bir role bildirim gönder
+   * @param role Hedef rol (admin, leader, staff)
+   * @param notification Bildirim payload'ı
+   */
+  broadcastNotificationToRole(
+    role: string,
+    notification: NotificationPayload
+  ): void {
+    this.server.to(`role:${role}`).emit("newNotification", notification);
+  }
+
+  /**
+   * Belirli bir kullanıcıya bildirim gönder
+   * @param userId Hedef kullanıcı ID
+   * @param notification Bildirim payload'ı
+   */
+  broadcastNotificationToUser(
+    userId: string,
+    notification: NotificationPayload
+  ): void {
+    this.server.to(`user:${userId}`).emit("newNotification", notification);
+  }
+
+  /**
+   * Hedef role göre bildirim gönder
+   * @param targetRole Hedef rol (all, admin, leader, staff)
+   * @param notification Bildirim payload'ı
+   */
+  broadcastNotification(
+    targetRole: string,
+    notification: NotificationPayload
+  ): void {
+    if (targetRole === "all") {
+      this.broadcastNotificationToAll(notification);
+    } else {
+      // Hem role özel hem de all kanalına gönder
+      this.broadcastNotificationToRole(targetRole, notification);
+    }
   }
 }

@@ -15,3 +15,5 @@ export * from "./work-shift.entity";
 export * from "./team.entity";
 export * from "./event-staff-assignment.entity";
 export * from "./organization-template.entity";
+export * from "./notification.entity";
+export * from "./staff-performance-review.entity";

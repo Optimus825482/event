@@ -8,9 +8,12 @@ import {
   Param,
   Query,
   BadRequestException,
+  UseGuards,
+  Request,
 } from "@nestjs/common";
 import { StaffService } from "./staff.service";
 import { StaffPosition } from "../../entities/user.entity";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 
 // DTO tanımları
 interface CreateStaffDto {
@@ -633,6 +636,7 @@ export class StaffController {
 
   // Tüm etkinlik atamalarını kaydet (toplu)
   @Post("event/:eventId/staff-assignments/save")
+  @UseGuards(JwtAuthGuard)
   saveEventStaffAssignments(
     @Param("eventId") eventId: string,
     @Body()
@@ -644,11 +648,14 @@ export class StaffController {
         teamId?: string;
         color?: string;
       }>;
-    }
+    },
+    @Request() req
   ) {
+    const userId = req.user?.id;
     return this.staffService.saveEventStaffAssignments(
       eventId,
-      dto.assignments
+      dto.assignments,
+      userId
     );
   }
 

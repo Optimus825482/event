@@ -193,11 +193,31 @@ export class CustomersService {
   }
 
   /**
-   * Tüm misafirleri detaylı listele
+   * Tüm misafirleri detaylı listele - Optimize edilmiş
    */
   async findAllWithStats(search?: string) {
     const queryBuilder = this.customerRepository
       .createQueryBuilder("customer")
+      .leftJoin("guest_notes", "notes", "notes.customerId = customer.id")
+      .select([
+        "customer.id",
+        "customer.fullName",
+        "customer.phone",
+        "customer.email",
+        "customer.vipScore",
+        "customer.tags",
+        "customer.isBlacklisted",
+        "customer.totalSpent",
+        "customer.eventCount",
+        "customer.totalAttendedEvents",
+        "customer.totalReservations",
+        "customer.noShowCount",
+        "customer.lastEventDate",
+        "customer.createdAt",
+        "customer.updatedAt",
+      ])
+      .addSelect("COUNT(notes.id)", "noteCount")
+      .groupBy("customer.id")
       .orderBy("customer.createdAt", "DESC");
 
     if (search) {
@@ -207,18 +227,18 @@ export class CustomersService {
       );
     }
 
-    const customers = await queryBuilder.getMany();
+    const rawResults = await queryBuilder.getRawAndEntities();
 
-    const customersWithNotes = await Promise.all(
-      customers.map(async (customer) => {
-        const noteCount = await this.guestNoteRepository.count({
-          where: { customerId: customer.id },
-        });
-        return { ...customer, noteCount };
-      })
-    );
+    // Raw sonuçlardan noteCount'u entity'lere ekle
+    const noteCountMap = new Map<string, number>();
+    rawResults.raw.forEach((row: any) => {
+      noteCountMap.set(row.customer_id, parseInt(row.noteCount) || 0);
+    });
 
-    return customersWithNotes;
+    return rawResults.entities.map((customer) => ({
+      ...customer,
+      noteCount: noteCountMap.get(customer.id) || 0,
+    }));
   }
 
   /**

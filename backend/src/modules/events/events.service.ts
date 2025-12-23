@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Event, EventStatus } from "../../entities/event.entity";
@@ -7,12 +12,15 @@ import {
   UpdateEventDto,
   UpdateLayoutDto,
 } from "./dto/event.dto";
+import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectRepository(Event)
-    private eventRepository: Repository<Event>
+    private eventRepository: Repository<Event>,
+    @Inject(forwardRef(() => NotificationsService))
+    private notificationsService: NotificationsService
   ) {}
 
   async create(dto: CreateEventDto, organizerId: string) {
@@ -22,7 +30,19 @@ export class EventsService {
       eventDate: new Date(dto.eventDate),
       eventEndDate: dto.eventEndDate ? new Date(dto.eventEndDate) : null,
     });
-    return this.eventRepository.save(event);
+    const savedEvent = await this.eventRepository.save(event);
+
+    // Bildirim gönder: Yeni etkinlik oluşturuldu
+    try {
+      await this.notificationsService.notifyEventCreated(
+        savedEvent,
+        organizerId
+      );
+    } catch {
+      // Bildirim hatası ana işlemi etkilemesin
+    }
+
+    return savedEvent;
   }
 
   async findAll(organizerId?: string) {
@@ -101,8 +121,12 @@ export class EventsService {
     return this.eventRepository.save(event);
   }
 
-  async updateLayout(id: string, dto: UpdateLayoutDto) {
+  async updateLayout(id: string, dto: UpdateLayoutDto, userId?: string) {
     const event = await this.findOne(id);
+    const hadLayoutBefore = !!(
+      event.venueLayout && (event.venueLayout as any).placedTables?.length > 0
+    );
+
     event.venueLayout = dto.venueLayout as any;
     // Toplam kapasiteyi hesapla - yeni format: placedTables
     if (dto.venueLayout?.placedTables) {
@@ -111,7 +135,22 @@ export class EventsService {
         0
       );
     }
-    return this.eventRepository.save(event);
+    const savedEvent = await this.eventRepository.save(event);
+
+    // Bildirim gönder: Mekan yerleşimi tamamlandı (ilk kez yerleşim yapıldıysa)
+    const hasLayoutNow = (dto.venueLayout?.placedTables?.length ?? 0) > 0;
+    if (!hadLayoutBefore && hasLayoutNow && userId) {
+      try {
+        await this.notificationsService.notifyVenueLayoutCompleted(
+          savedEvent,
+          userId
+        );
+      } catch {
+        // Bildirim hatası ana işlemi etkilemesin
+      }
+    }
+
+    return savedEvent;
   }
 
   async updateStatus(id: string, status: EventStatus) {

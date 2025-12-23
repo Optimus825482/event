@@ -40,9 +40,25 @@ export interface LiveStatsData {
   timestamp: string;
 }
 
+// Bildirim payload tipi
+export interface NotificationPayload {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  priority: string;
+  targetRole: string;
+  eventId?: string | null;
+  actionUrl?: string | null;
+  createdAt: string;
+  metadata?: Record<string, unknown> | null;
+}
+
 class SocketService {
   private socket: Socket | null = null;
   private eventId: string | null = null;
+  private userId: string | null = null;
+  private userRole: string | null = null;
 
   connect() {
     if (this.socket?.connected) return;
@@ -53,7 +69,10 @@ class SocketService {
     });
 
     this.socket.on("connect", () => {
-      // Socket bağlantısı kuruldu
+      // Socket bağlantısı kuruldu - kullanıcı bilgisi varsa odaya katıl
+      if (this.userId && this.userRole) {
+        this.joinUserRoom(this.userId, this.userRole);
+      }
     });
 
     this.socket.on("disconnect", () => {
@@ -64,6 +83,13 @@ class SocketService {
   disconnect() {
     this.socket?.disconnect();
     this.socket = null;
+  }
+
+  // Kullanıcı bildirim odasına katıl
+  joinUserRoom(userId: string, role: string) {
+    this.userId = userId;
+    this.userRole = role;
+    this.socket?.emit("joinUser", { userId, role });
   }
 
   joinEvent(eventId: string, role: string = "organizer") {
@@ -149,6 +175,28 @@ class SocketService {
     callback: (data: { tableId: string; reservation: ReservationData }) => void
   ) {
     this.socket?.on("tableReservationUpdate", callback);
+  }
+
+  // ==================== NOTIFICATION METHODS ====================
+
+  // Yeni bildirim dinleyicisi
+  onNewNotification(callback: (data: NotificationPayload) => void) {
+    this.socket?.on("newNotification", callback);
+  }
+
+  // Bildirim dinleyicisini kaldır
+  offNewNotification() {
+    this.socket?.off("newNotification");
+  }
+
+  // Bağlantı durumunu kontrol et
+  isConnected(): boolean {
+    return this.socket?.connected ?? false;
+  }
+
+  // Socket instance'ını al (advanced kullanım için)
+  getSocket(): Socket | null {
+    return this.socket;
   }
 }
 

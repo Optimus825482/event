@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { Event } from "./event.entity";
 import { Customer } from "./customer.entity";
@@ -19,6 +20,9 @@ export enum ReservationStatus {
 }
 
 @Entity("reservations")
+@Index("IDX_reservation_event_status", ["eventId", "status"]) // Performans: Event bazlı filtreleme
+@Index("IDX_reservation_customer", ["customerId"]) // Performans: Müşteri geçmişi sorguları
+@Index("IDX_reservation_event_table", ["eventId", "tableId"]) // Performans: Masa müsaitlik kontrolü
 export class Reservation {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -27,6 +31,7 @@ export class Reservation {
   @JoinColumn({ name: "eventId" })
   event: Event;
 
+  @Index("IDX_reservation_eventId") // Performans: Event bazlı sorgular
   @Column()
   eventId: string;
 
@@ -47,6 +52,7 @@ export class Reservation {
   @Column({ nullable: true })
   guestName: string;
 
+  @Index("IDX_reservation_guestPhone") // Performans: Telefon ile arama
   @Column({ nullable: true })
   guestPhone: string;
 
@@ -56,6 +62,7 @@ export class Reservation {
   @Column({ unique: true })
   qrCodeHash: string;
 
+  @Index("IDX_reservation_status") // Performans: Status bazlı filtreleme
   @Column({
     type: "enum",
     enum: ReservationStatus,

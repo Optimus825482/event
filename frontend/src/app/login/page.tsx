@@ -31,17 +31,12 @@ export default function LoginPage() {
 
     try {
       const result = await login(formData.username, formData.password);
-      console.log("Login result:", result);
-      console.log("Result type:", typeof result);
-      console.log("Is leader?:", result === "leader");
 
       if (result) {
         // Login fonksiyonu artık role döndürüyor (string veya false)
         if (result === "leader") {
-          console.log("Redirecting to /leader");
           router.push("/leader");
         } else {
-          console.log("Redirecting to /select-module");
           router.push("/select-module");
         }
       } else {

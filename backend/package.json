@@ -6,10 +6,18 @@
   "scripts": {
     "start": "node dist/main.js",
     "start:dev": "nodemon --exec ts-node src/main.ts",
+    "start:prod": "NODE_ENV=production node dist/main.js",
     "build": "tsc",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage"
+    "test:cov": "jest --coverage",
+    "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
+    "migration:generate": "npm run typeorm -- migration:generate -d src/config/typeorm.config.ts",
+    "migration:run": "npm run typeorm -- migration:run -d src/config/typeorm.config.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/config/typeorm.config.ts",
+    "migration:show": "npm run typeorm -- migration:show -d src/config/typeorm.config.ts",
+    "schema:sync": "npm run typeorm -- schema:sync -d src/config/typeorm.config.ts",
+    "schema:drop": "npm run typeorm -- schema:drop -d src/config/typeorm.config.ts"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +32,8 @@
     "@nestjs/platform-express": "^11.1.9",
     "@nestjs/platform-socket.io": "^11.1.9",
     "@nestjs/serve-static": "^5.0.4",
+    "@nestjs/swagger": "^11.2.3",
+    "@nestjs/terminus": "^11.0.0",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.9",
     "@types/multer": "^2.0.0",
@@ -62,6 +72,7 @@
     "nodemon": "^3.1.11",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"
   }
 }

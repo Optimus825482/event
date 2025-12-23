@@ -5,14 +5,19 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from "typeorm";
 import { Reservation } from "./reservation.entity";
 
 @Entity("customers")
+@Index("IDX_customer_phone", ["phone"]) // Performans: Telefon ile arama
+@Index("IDX_customer_email", ["email"]) // Performans: Email ile arama
+@Index("IDX_customer_vipScore", ["vipScore"]) // Performans: VIP sıralama
 export class Customer {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
+  @Index("IDX_customer_fullName") // Performans: İsim ile arama
   @Column()
   fullName: string;
 

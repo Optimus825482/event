@@ -56,6 +56,13 @@ export const authApi = {
     fullName: string;
   }) => api.post("/auth/register", data),
   me: () => api.get("/auth/me"),
+  updateProfile: (data: {
+    fullName?: string;
+    email?: string;
+    phone?: string;
+  }) => api.patch("/auth/profile", data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post("/auth/change-password", { currentPassword, newPassword }),
 };
 
 // Events API
@@ -738,6 +745,14 @@ export const leaderApi = {
   // Etkinlik detayları
   getEventDetails: (eventId: string) => api.get(`/leader/events/${eventId}`),
 
+  // Etkinlik review izinleri
+  getEventReviewPermissions: (eventId: string) =>
+    api.get(`/leader/events/${eventId}/review-permissions`),
+
+  // Review izin kontrolü (alias)
+  checkReviewPermission: (eventId: string) =>
+    api.get(`/leader/events/${eventId}/review-permissions`),
+
   // Değerlendirme için takım üyeleri
   getTeamMembersForReview: (eventId: string) =>
     api.get(`/leader/events/${eventId}/team-members`),
@@ -746,13 +761,53 @@ export const leaderApi = {
   getEventReviews: (eventId: string) =>
     api.get(`/leader/events/${eventId}/reviews`),
 
+  // Etkinlik performans özeti
+  getEventPerformanceSummary: (eventId: string) =>
+    api.get(`/leader/events/${eventId}/performance-summary`),
+
+  // Auto-save: Anlık değerlendirme kaydetme
+  autoSaveReview: (
+    eventId: string,
+    staffId: string,
+    data: {
+      categoryScores?: {
+        communication: number;
+        punctuality: number;
+        teamwork: number;
+        customerService: number;
+        technicalSkills: number;
+        initiative: number;
+        appearance: number;
+        stressManagement: number;
+      };
+      strengths?: string[];
+      improvements?: string[];
+      comment?: string;
+      privateNotes?: string;
+      nextEventNotes?: string;
+    }
+  ) => api.post("/leader/reviews/auto-save", { staffId, eventId, ...data }),
+
   // Tek değerlendirme oluştur
   createReview: (data: {
     staffId: string;
     eventId: string;
-    score: number;
-    rating: string;
+    categoryScores?: {
+      communication: number;
+      punctuality: number;
+      teamwork: number;
+      customerService: number;
+      technicalSkills: number;
+      initiative: number;
+      appearance: number;
+      stressManagement: number;
+    };
+    strengths?: string[];
+    improvements?: string[];
     comment?: string;
+    privateNotes?: string;
+    nextEventNotes?: string;
+    isCompleted?: boolean;
   }) => api.post("/leader/reviews", data),
 
   // Toplu değerlendirme
@@ -760,13 +815,123 @@ export const leaderApi = {
     eventId: string,
     reviews: Array<{
       staffId: string;
-      score: number;
-      rating: string;
+      categoryScores?: {
+        communication: number;
+        punctuality: number;
+        teamwork: number;
+        customerService: number;
+        technicalSkills: number;
+        initiative: number;
+        appearance: number;
+        stressManagement: number;
+      };
+      strengths?: string[];
+      improvements?: string[];
       comment?: string;
+      privateNotes?: string;
+      nextEventNotes?: string;
+      isCompleted?: boolean;
     }>
   ) => api.post(`/leader/events/${eventId}/reviews/bulk`, { reviews }),
+
+  // Tek değerlendirmeyi tamamla
+  completeReview: (eventId: string, staffId: string) =>
+    api.patch(`/leader/events/${eventId}/reviews/${staffId}/complete`),
+
+  // Tüm değerlendirmeleri tamamla
+  completeAllReviews: (eventId: string) =>
+    api.patch(`/leader/events/${eventId}/reviews/complete-all`),
 
   // Personel değerlendirme geçmişi
   getStaffReviews: (staffId: string) =>
     api.get(`/leader/staff/${staffId}/reviews`),
+
+  // Personel performans analizi
+  getStaffPerformanceAnalysis: (staffId: string) =>
+    api.get(`/leader/staff/${staffId}/performance-analysis`),
+
+  // Tüm personellerin değerlendirme özetleri
+  getAllStaffReviewsSummary: () => api.get("/leader/staff-reviews-summary"),
+
+  // Personelin atandığı etkinlikler ve değerlendirmeleri
+  getStaffEventReviews: (staffId: string) =>
+    api.get(`/leader/staff/${staffId}/event-reviews`),
+};
+
+// Admin API
+export const adminApi = {
+  // Sistem istatistikleri
+  getStats: () => api.get("/admin/stats"),
+
+  // Etkinlik review ayarları
+  getAllEventsReviewSettings: () => api.get("/admin/events/review-settings"),
+  getEventReviewSettings: (eventId: string) =>
+    api.get(`/admin/events/${eventId}/review-settings`),
+  updateEventReviewSettings: (
+    eventId: string,
+    settings: { reviewEnabled?: boolean; reviewHistoryVisible?: boolean }
+  ) => api.patch(`/admin/events/${eventId}/review-settings`, settings),
+  bulkUpdateReviewSettings: (
+    eventIds: string[],
+    settings: { reviewEnabled?: boolean; reviewHistoryVisible?: boolean }
+  ) => api.post("/admin/events/review-settings/bulk", { eventIds, settings }),
+};
+
+// Health API
+export const healthApi = {
+  // Basit health check
+  check: () => api.get("/health"),
+  // Detaylı health check
+  detailed: () => api.get("/health/detailed"),
+  // Sistem metrikleri
+  metrics: () => api.get("/health/metrics"),
+};
+
+// Notifications API
+export const notificationsApi = {
+  // Kullanıcının bildirimlerini getir
+  getNotifications: (options?: {
+    limit?: number;
+    offset?: number;
+    unreadOnly?: boolean;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.limit) params.append("limit", options.limit.toString());
+    if (options?.offset) params.append("offset", options.offset.toString());
+    if (options?.unreadOnly) params.append("unreadOnly", "true");
+    return api.get(`/notifications?${params.toString()}`);
+  },
+
+  // Okunmamış bildirim sayısı
+  getUnreadCount: () => api.get("/notifications/unread-count"),
+
+  // Tek bildirim detayı
+  getNotification: (id: string) => api.get(`/notifications/${id}`),
+
+  // Bildirimi okundu olarak işaretle
+  markAsRead: (id: string) => api.post(`/notifications/${id}/read`),
+
+  // Tüm bildirimleri okundu olarak işaretle
+  markAllAsRead: () => api.post("/notifications/mark-all-read"),
+
+  // Admin: Tüm bildirimleri getir
+  getAllNotifications: (options?: {
+    limit?: number;
+    offset?: number;
+    type?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.limit) params.append("limit", options.limit.toString());
+    if (options?.offset) params.append("offset", options.offset.toString());
+    if (options?.type) params.append("type", options.type);
+    return api.get(`/notifications/admin/all?${params.toString()}`);
+  },
+
+  // Admin: Bildirim istatistikleri
+  getNotificationStats: (id: string) =>
+    api.get(`/notifications/admin/${id}/stats`),
+
+  // Admin: Bildirimi sil
+  deleteNotification: (id: string) =>
+    api.post(`/notifications/admin/${id}/delete`),
 };

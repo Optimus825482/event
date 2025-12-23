@@ -50,8 +50,13 @@ export class EventsController {
   }
 
   @Patch(":id/layout")
-  updateLayout(@Param("id") id: string, @Body() dto: UpdateLayoutDto) {
-    return this.eventsService.updateLayout(id, dto);
+  updateLayout(
+    @Param("id") id: string,
+    @Body() dto: UpdateLayoutDto,
+    @Request() req
+  ) {
+    const userId = req.user?.id;
+    return this.eventsService.updateLayout(id, dto, userId);
   }
 
   @Patch(":id/status")

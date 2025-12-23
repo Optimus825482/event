@@ -15,20 +15,22 @@ import {
   LayoutGrid,
   UsersRound,
   Table2,
-  Armchair,
   Crown,
   Star,
   Circle,
   Sofa,
-  X,
   Loader2,
+  ClipboardList,
+  CalendarCheck,
 } from "lucide-react";
-import { eventsApi, staffApi } from "@/lib/api";
+import { eventsApi, staffApi, adminApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/toast-notification";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +48,9 @@ interface Event {
   hasVenueLayout?: boolean;
   hasTeamAssignment?: boolean;
   totalCapacity?: number;
+  reviewEnabled?: boolean;
+  reviewHistoryVisible?: boolean;
+  reservationEnabled?: boolean;
 }
 
 interface Team {
@@ -87,6 +92,7 @@ const TABLE_TYPE_COLORS: Record<
 export default function EventSummaryPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const eventId = params.id as string;
 
   const [event, setEvent] = useState<Event | null>(null);
@@ -101,6 +107,37 @@ export default function EventSummaryPage() {
   });
   const [showVenueModal, setShowVenueModal] = useState(false);
   const [showTeamModal, setShowTeamModal] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Ayar güncelleme fonksiyonu
+  const handleSettingChange = async (
+    setting: "reviewEnabled" | "reviewHistoryVisible" | "reservationEnabled",
+    value: boolean
+  ) => {
+    if (!event) return;
+
+    try {
+      setSavingSettings(true);
+
+      // Review ayarları için adminApi kullan (bildirim tetiklemesi için)
+      if (setting === "reviewEnabled" || setting === "reviewHistoryVisible") {
+        await adminApi.updateEventReviewSettings(eventId, { [setting]: value });
+      } else {
+        // Diğer ayarlar için eventsApi kullan
+        await eventsApi.update(eventId, { [setting]: value });
+      }
+
+      setEvent((prev) => (prev ? { ...prev, [setting]: value } : null));
+      toast.success(
+        value ? "Özellik aktifleştirildi" : "Özellik devre dışı bırakıldı"
+      );
+    } catch (error) {
+      console.error("Ayar güncellenemedi:", error);
+      toast.error("Ayar güncellenemedi");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // Veri yükleme
   useEffect(() => {
@@ -338,6 +375,132 @@ export default function EventSummaryPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Etkinlik Ayarları - Geri sayımın hemen altında, yan yana 3'lü grid */}
+        {isReady && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Rezervasyon Sistemi */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <CalendarCheck className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        Rezervasyon Sistemi
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Bu etkinlik için rezervasyon alınabilsin
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={event?.reservationEnabled ?? true}
+                      onCheckedChange={(checked) =>
+                        handleSettingChange("reservationEnabled", checked)
+                      }
+                      disabled={savingSettings}
+                    />
+                    <span
+                      className={`text-xs font-medium ${
+                        event?.reservationEnabled !== false
+                          ? "text-green-400"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {event?.reservationEnabled !== false ? "Açık" : "Kapalı"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Ekip Değerlendirme Sistemi */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                      <ClipboardList className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        Ekip Değerlendirme
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Liderler personel değerlendirmesi yapabilsin
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={event?.reviewEnabled || false}
+                      onCheckedChange={(checked) =>
+                        handleSettingChange("reviewEnabled", checked)
+                      }
+                      disabled={savingSettings}
+                    />
+                    <span
+                      className={`text-xs font-medium ${
+                        event?.reviewEnabled
+                          ? "text-green-400"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {event?.reviewEnabled ? "Açık" : "Kapalı"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Geçmiş Değerlendirmeler Görünürlüğü */}
+            <Card
+              className={`bg-slate-800/50 border-slate-700 transition-opacity ${
+                !event?.reviewEnabled ? "opacity-50" : ""
+              }`}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                      <Eye className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        Geçmiş Değerlendirmeler
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Liderler önceki değerlendirmeleri görebilsin
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={event?.reviewHistoryVisible || false}
+                      onCheckedChange={(checked) =>
+                        handleSettingChange("reviewHistoryVisible", checked)
+                      }
+                      disabled={savingSettings || !event?.reviewEnabled}
+                    />
+                    <span
+                      className={`text-xs font-medium ${
+                        event?.reviewHistoryVisible
+                          ? "text-green-400"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {event?.reviewHistoryVisible ? "Görünür" : "Gizli"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Ana İçerik - İki Sütun */}

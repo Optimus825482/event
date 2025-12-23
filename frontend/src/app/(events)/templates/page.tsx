@@ -107,14 +107,9 @@ export default function TemplatesPage() {
       try {
         const [venuesRes, orgRes, teamsRes] = await Promise.all([
           venuesApi.getAll().catch(() => ({ data: [] })),
-          staffApi.getOrganizationTemplates().catch((e) => {
-            console.error("Org templates error:", e);
-            return { data: [] };
-          }),
+          staffApi.getOrganizationTemplates().catch(() => ({ data: [] })),
           staffApi.getTeams().catch(() => ({ data: [] })),
         ]);
-        console.log("Venues response:", venuesRes);
-        console.log("Org templates response:", orgRes);
 
         const venues = Array.isArray(venuesRes.data)
           ? venuesRes.data
@@ -379,71 +374,43 @@ export default function TemplatesPage() {
           setStageElementsForOrg([]);
         }}
       >
-        <DialogContent className="bg-slate-800 border-slate-700 w-[65vw] !max-w-[65vw] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-slate-800 border-slate-700 max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-amber-400" />
               {previewOrgTemplate?.name} - Ekip Organizasyonu
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Şablondaki personel atamaları ve masa grupları
+              Şablondaki ekip atamaları ve masa grupları
             </DialogDescription>
           </DialogHeader>
-
-          {previewOrgTemplate && (
-            <div className="mt-4 space-y-4">
-              {/* Canvas Yerleşim Önizlemesi - ÜST */}
-              {placedTablesForOrg.length > 0 && (
-                <div>
-                  <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-green-400" />
-                    Ekip Yerleşim Planı
-                  </h4>
-                  <OrgLayoutPreview
-                    placedTables={placedTablesForOrg}
-                    tableGroups={previewOrgTemplate.tableGroups || []}
-                    stageElements={stageElementsForOrg}
-                    teams={teamsData}
-                  />
-                </div>
-              )}
-
-              {/* Özet İstatistikler - ALT */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-amber-400">
-                    {previewOrgTemplate.staffAssignments?.length || 0}
-                  </div>
-                  <div className="text-xs text-slate-400">Personel Ataması</div>
-                </div>
-                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-blue-400">
-                    {previewOrgTemplate.tableGroups?.length || 0}
-                  </div>
-                  <div className="text-xs text-slate-400">Masa Grubu</div>
-                </div>
-                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-green-400">
-                    {
-                      new Set(
-                        previewOrgTemplate.tableGroups
-                          ?.map((g: any) => g.assignedTeamId)
-                          .filter(Boolean)
-                      ).size
-                    }
-                  </div>
-                  <div className="text-xs text-slate-400">Ekip</div>
-                </div>
-              </div>
+          <div className="mt-4">
+            {previewOrgTemplate && (
+              <OrgLayoutPreview
+                placedTables={placedTablesForOrg}
+                tableGroups={previewOrgTemplate.tableGroups || []}
+                stageElements={stageElementsForOrg}
+                teams={teamsData}
+              />
+            )}
+          </div>
+          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-700">
+            <div className="flex items-center gap-4 text-sm text-slate-400">
+              <span className="flex items-center gap-1">
+                <Users className="w-4 h-4" />
+                {previewOrgTemplate?.staffAssignments?.length || 0} personel
+              </span>
+              <span className="flex items-center gap-1">
+                <LayoutGrid className="w-4 h-4" />
+                {previewOrgTemplate?.tableGroups?.length || 0} grup
+              </span>
             </div>
-          )}
-
-          <div className="flex justify-end mt-4 pt-4 border-t border-slate-700">
             <Button
               variant="outline"
               onClick={() => {
                 setPreviewOrgTemplate(null);
                 setPlacedTablesForOrg([]);
+                setStageElementsForOrg([]);
               }}
               className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
@@ -644,223 +611,137 @@ function OrgLayoutPreview({
   stageElements?: any[];
   teams?: any[];
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  if (placedTables.length === 0) {
+    return (
+      <div className="bg-slate-900 rounded-lg p-8 text-center">
+        <MapPin className="w-12 h-12 mx-auto text-slate-600 mb-3" />
+        <p className="text-slate-400">Yerleşim verisi bulunamadı</p>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || placedTables.length === 0) return;
+  // Bounding box hesapla - orijinal koordinatlar
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  placedTables.forEach((table) => {
+    minX = Math.min(minX, table.x || 0);
+    minY = Math.min(minY, table.y || 0);
+    maxX = Math.max(maxX, (table.x || 0) + 40);
+    maxY = Math.max(maxY, (table.y || 0) + 40);
+  });
 
-    const width = canvas.width;
-    const height = canvas.height;
+  stageElements.forEach((element: any) => {
+    minX = Math.min(minX, element.x || 0);
+    minY = Math.min(minY, element.y || 0);
+    maxX = Math.max(maxX, (element.x || 0) + (element.width || 100));
+    maxY = Math.max(maxY, (element.y || 0) + (element.height || 50));
+  });
 
-    // Arka plan
-    ctx.fillStyle = "#1e293b";
-    ctx.fillRect(0, 0, width, height);
+  // Orijinal içerik boyutları
+  const contentWidth = maxX - minX || 1;
+  const contentHeight = maxY - minY || 1;
 
-    // Grid çiz
-    ctx.strokeStyle = "#334155";
-    ctx.lineWidth = 0.5;
-    const gridSize = 20;
-    for (let x = 0; x <= width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
+  // Scale hesapla - daha küçük scale ile tüm içerik görünsün
+  // Modal genişliği ~850px, yükseklik ~450px (lejant için yer bırak)
+  const scale = Math.min(400 / contentWidth, 600 / contentHeight);
+  const scaledWidth = contentWidth * scale;
+  const scaledHeight = contentHeight * scale;
 
-    // Takım ID -> Takım bilgisi mapping
-    const teamInfoMap = new Map<string, { name: string; color: string }>();
-    teams.forEach((team: any) => {
-      teamInfoMap.set(team.id, {
-        name: team.name,
-        color: team.color || "#64748b",
-      });
-    });
+  // Masa -> Ekip eşleştirmesi
+  const getTableTeam = (tableId: string) => {
+    const group = tableGroups.find((g: any) => g.tableIds?.includes(tableId));
+    if (!group?.assignedTeamId) return null;
+    return teams.find((t: any) => t.id === group.assignedTeamId);
+  };
 
-    // Benzersiz takımları bul (tableGroups'tan)
-    const uniqueTeamIds = [
-      ...new Set(tableGroups.map((g: any) => g.assignedTeamId).filter(Boolean)),
-    ];
-
-    // tableId -> color mapping oluştur (takım rengine göre)
-    const tableColorMap = new Map<string, string>();
-    tableGroups.forEach((group: any) => {
-      const teamInfo = group.assignedTeamId
-        ? teamInfoMap.get(group.assignedTeamId)
-        : null;
-      const color = teamInfo?.color || "#64748b";
-      (group.tableIds || []).forEach((tableId: string) => {
-        tableColorMap.set(tableId, color);
-      });
-    });
-
-    // Bounding box hesapla - stageElements dahil
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-
-    placedTables.forEach((table) => {
-      const x = table.x || 0;
-      const y = table.y || 0;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x + 40);
-      maxY = Math.max(maxY, y + 40);
-    });
-
-    stageElements.forEach((element: any) => {
-      const x = element.x || 0;
-      const y = element.y || 0;
-      const w = element.width || 100;
-      const h = element.height || 50;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x + w);
-      maxY = Math.max(maxY, y + h);
-    });
-
-    const padding = 25;
-    const contentWidth = maxX - minX || 1;
-    const contentHeight = maxY - minY || 1;
-    const scaleX = (width - padding * 2) / contentWidth;
-    const scaleY = (height - padding * 2 - 35) / contentHeight; // Lejant için alan bırak
-    const scale = Math.min(scaleX, scaleY);
-
-    const offsetX = (width - contentWidth * scale) / 2 - minX * scale;
-    const offsetY = padding - minY * scale;
-
-    // Sahne elemanlarını çiz (önce çiz ki masalar üstüne gelmesin)
-    stageElements.forEach((element: any) => {
-      const x = (element.x || 0) * scale + offsetX;
-      const y = (element.y || 0) * scale + offsetY;
-      const w = (element.width || 100) * scale;
-      const h = (element.height || 50) * scale;
-
-      ctx.fillStyle = "#64748b40";
-      ctx.strokeStyle = "#64748b";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(x, y, w, h, 4);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = `bold ${Math.max(10, 12 * scale)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(element.label || element.type || "", x + w / 2, y + h / 2);
-    });
-
-    // Masaları çiz
-    placedTables.forEach((table) => {
-      const x = (table.x || 0) * scale + offsetX;
-      const y = (table.y || 0) * scale + offsetY;
-      const w = 30 * scale;
-      const h = 30 * scale;
-      const isLoca = table.isLoca;
-
-      // Grup rengini al, yoksa gri
-      const groupColor = tableColorMap.get(table.id) || "#64748b";
-
-      ctx.fillStyle = groupColor + "80"; // %50 opacity
-      ctx.strokeStyle = groupColor;
-      ctx.lineWidth = 2;
-
-      if (isLoca) {
-        // Loca dikdörtgen
-        ctx.beginPath();
-        ctx.roundRect(x, y, w * 1.2, h * 0.8, 3);
-        ctx.fill();
-        ctx.stroke();
-      } else {
-        // Normal masa daire
-        const radius = Math.min(w, h) / 2;
-        ctx.beginPath();
-        ctx.arc(x + w / 2, y + h / 2, radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-
-      // Masa numarası
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `bold ${Math.max(7, 9 * scale)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      let displayLabel = "";
-      if (isLoca && table.locaName) {
-        displayLabel = table.locaName;
-      } else if (table.tableNumber) {
-        displayLabel = String(table.tableNumber);
-      }
-
-      if (isLoca) {
-        ctx.fillText(displayLabel, x + (w * 1.2) / 2, y + (h * 0.8) / 2);
-      } else {
-        ctx.fillText(displayLabel, x + w / 2, y + h / 2);
-      }
-    });
-
-    // Lejant - takım isimleri ve renkleri
-    const legendY = height - 25;
-    ctx.font = "11px sans-serif";
-    let legendX = 15;
-
-    // Takım renklerini göster
-    uniqueTeamIds.forEach((teamId) => {
-      const teamInfo = teamInfoMap.get(teamId as string);
-      const color = teamInfo?.color || "#64748b";
-      const label = teamInfo?.name || "Bilinmeyen";
-
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(legendX, legendY, 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#94a3b8";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText(label, legendX + 12, legendY);
-      legendX += ctx.measureText(label).width + 25;
-
-      if (legendX > width - 100) return;
-    });
-
-    // Atanmamış masalar için gri ekle
-    const hasUnassigned = placedTables.some((t) => !tableColorMap.has(t.id));
-    if (hasUnassigned && legendX < width - 100) {
-      ctx.fillStyle = "#64748b";
-      ctx.beginPath();
-      ctx.arc(legendX, legendY, 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#94a3b8";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText("Atanmamış", legendX + 12, legendY);
-    }
-  }, [placedTables, tableGroups]);
+  // Aktif ekipleri bul
+  const activeTeams = teams.filter((t: any) =>
+    tableGroups.some((g: any) => g.assignedTeamId === t.id)
+  );
 
   return (
-    <div className="bg-slate-900 rounded-lg p-4">
-      <canvas
-        ref={canvasRef}
-        width={1400}
-        height={550}
-        className="w-full h-auto rounded border border-slate-700"
-      />
-      <div className="mt-3 text-xs text-slate-500 text-center">
-        Her renk farklı bir takımı temsil eder. Gri masalar henüz atanmamış.
+    <div
+      className="relative bg-slate-900 rounded-lg overflow-hidden"
+      style={{ height: "520px" }}
+    >
+      <div
+        className="absolute left-1/2 top-1/2 border border-slate-600 rounded"
+        style={{
+          width: scaledWidth,
+          height: scaledHeight,
+          transform: "translate(-50%, -85%)",
+          background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+        }}
+      >
+        {/* Sahne elemanları */}
+        {stageElements.map((stage: any) => (
+          <div
+            key={stage.id}
+            className="absolute flex items-center justify-center text-xs font-medium"
+            style={{
+              left: (stage.x - minX) * scale,
+              top: (stage.y - minY) * scale,
+              width: stage.width * scale,
+              height: stage.height * scale,
+              backgroundColor:
+                stage.type === "system_control" ? "#dc2626" : "#3b82f6",
+              opacity: 0.8,
+              borderRadius: "4px",
+            }}
+          >
+            <span className="text-white text-[10px]">{stage.label}</span>
+          </div>
+        ))}
+
+        {/* Masalar - Ekip renkleriyle */}
+        {placedTables.map((table) => {
+          const team = getTableTeam(table.id);
+          const isLoca = table.isLoca;
+          const size = isLoca ? 16 : 20;
+
+          return (
+            <div
+              key={table.id}
+              className="absolute flex items-center justify-center"
+              style={{
+                left: (table.x - minX) * scale - size / 2,
+                top: (table.y - minY) * scale - size / 2,
+                width: size,
+                height: isLoca ? 14 : size,
+                backgroundColor: team?.color || "#475569",
+                borderRadius: isLoca ? "3px" : "50%",
+                border: team ? "2px solid rgba(255,255,255,0.3)" : "none",
+              }}
+            >
+              <span className="text-white text-[8px] font-bold">
+                {isLoca ? table.locaName : table.tableNumber}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Ekip Renk Açıklaması */}
+      <div className="absolute bottom-4 left-4 bg-slate-800/90 rounded-lg p-3">
+        <p className="text-xs text-slate-400 mb-2">Ekipler</p>
+        <div className="flex flex-wrap gap-2">
+          {activeTeams.map((team: any) => (
+            <div key={team.id} className="flex items-center gap-1.5">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: team.color }}
+              />
+              <span className="text-xs text-white">{team.name}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-slate-500" />
+            <span className="text-xs text-slate-400">Atanmamış</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -875,24 +756,31 @@ function VenueTemplateCard({
   onDelete: () => void;
   onPreview: () => void;
 }) {
-  const tableCount = template.layoutData?.tables?.length || 0;
-  const totalCapacity =
-    template.layoutData?.tables?.reduce(
-      (sum: number, t: any) => sum + (t.capacity || 0),
-      0
-    ) || 0;
+  // placedTables veya tables kullan
+  const tables =
+    template.layoutData?.placedTables || template.layoutData?.tables || [];
+  const tableCount = tables.length;
+  const totalCapacity = tables.reduce(
+    (sum: number, t: any) => sum + (t.capacity || 0),
+    0
+  );
 
   return (
-    <Card className="bg-slate-800/50 border-slate-700 hover:border-green-500/50 transition-colors overflow-hidden">
+    <Card
+      className="bg-slate-800/50 border-slate-700 hover:border-green-500/50 transition-all cursor-pointer group overflow-hidden"
+      onClick={onPreview}
+    >
       <div className="h-1 bg-gradient-to-r from-green-500 to-emerald-500" />
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
               <MapPin className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <h3 className="font-semibold text-white">{template.name}</h3>
+              <h3 className="font-semibold text-white group-hover:text-green-300 transition-colors">
+                {template.name}
+              </h3>
               {template.description && (
                 <p className="text-xs text-slate-400 line-clamp-1">
                   {template.description}
@@ -900,61 +788,48 @@ function VenueTemplateCard({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onPreview}
-              className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-500/20"
-              title="Önizle"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-400"
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="bg-slate-800 border-slate-700"
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400 hover:text-white"
               >
-                <DropdownMenuItem
-                  onClick={onPreview}
-                  className="text-slate-300 hover:text-white"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Önizle
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-slate-300 hover:text-white">
-                  <Copy className="w-4 h-4 mr-2" />
-                  Kopyala
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={onDelete}
-                  className="text-red-400 hover:text-red-300"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Sil
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="bg-slate-800 border-slate-700"
+            >
+              <DropdownMenuItem className="text-slate-300 hover:text-white">
+                <Copy className="w-4 h-4 mr-2" />
+                Kopyala
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="text-red-400 hover:text-red-300"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Sil
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <div className="flex items-center gap-4 text-sm mb-3">
-          <div className="flex items-center gap-1 text-slate-400">
-            <LayoutGrid className="w-4 h-4" />
-            <span>{tableCount} masa</span>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-slate-700/50 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold text-green-400">{tableCount}</div>
+            <div className="text-xs text-slate-400">Masa</div>
           </div>
-          <div className="flex items-center gap-1 text-slate-400">
-            <Users className="w-4 h-4" />
-            <span>{totalCapacity} kişi</span>
+          <div className="bg-slate-700/50 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold text-blue-400">
+              {totalCapacity}
+            </div>
+            <div className="text-xs text-slate-400">Kapasite</div>
           </div>
         </div>
 
@@ -969,15 +844,10 @@ function VenueTemplateCard({
           >
             {template.isPublic ? "Marketplace" : "Özel"}
           </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onPreview}
-            className="text-green-400 hover:text-green-300 hover:bg-green-500/20"
-          >
-            <Eye className="w-4 h-4 mr-1" />
-            Önizle
-          </Button>
+          <span className="text-xs text-slate-500 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Eye className="w-3 h-3" />
+            Önizlemek için tıkla
+          </span>
         </div>
       </CardContent>
     </Card>
@@ -995,18 +865,26 @@ function OrgTemplateCard({
 }) {
   const staffCount = template.staffAssignments?.length || 0;
   const groupCount = template.tableGroups?.length || 0;
+  const teamCount = new Set(
+    template.tableGroups?.map((g: any) => g.assignedTeamId).filter(Boolean)
+  ).size;
 
   return (
-    <Card className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 transition-colors overflow-hidden">
+    <Card
+      className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 transition-all cursor-pointer group overflow-hidden"
+      onClick={onPreview}
+    >
       <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:bg-amber-500/30 transition-colors">
               <Users className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <h3 className="font-semibold text-white">{template.name}</h3>
+              <h3 className="font-semibold text-white group-hover:text-amber-300 transition-colors">
+                {template.name}
+              </h3>
               {template.description && (
                 <p className="text-xs text-slate-400 line-clamp-1">
                   {template.description}
@@ -1014,57 +892,46 @@ function OrgTemplateCard({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onPreview}
-              className="h-8 w-8 text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
-              title="Önizle"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-400"
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="bg-slate-800 border-slate-700"
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400 hover:text-white"
               >
-                <DropdownMenuItem
-                  onClick={onPreview}
-                  className="text-slate-300 hover:text-white"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Detaylar
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={onDelete}
-                  className="text-red-400 hover:text-red-300"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Sil
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="bg-slate-800 border-slate-700"
+            >
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="text-red-400 hover:text-red-300"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Sil
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <div className="flex items-center gap-4 text-sm mb-3">
-          <div className="flex items-center gap-1 text-slate-400">
-            <Users className="w-4 h-4" />
-            <span>{staffCount} personel</span>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-slate-700/50 rounded-lg px-2 py-2 text-center">
+            <div className="text-lg font-bold text-amber-400">{staffCount}</div>
+            <div className="text-xs text-slate-400">Personel</div>
           </div>
-          <div className="flex items-center gap-1 text-slate-400">
-            <LayoutGrid className="w-4 h-4" />
-            <span>{groupCount} grup</span>
+          <div className="bg-slate-700/50 rounded-lg px-2 py-2 text-center">
+            <div className="text-lg font-bold text-blue-400">{groupCount}</div>
+            <div className="text-xs text-slate-400">Grup</div>
+          </div>
+          <div className="bg-slate-700/50 rounded-lg px-2 py-2 text-center">
+            <div className="text-lg font-bold text-green-400">{teamCount}</div>
+            <div className="text-xs text-slate-400">Ekip</div>
           </div>
         </div>
 
@@ -1084,17 +951,15 @@ function OrgTemplateCard({
                   {tag}
                 </Badge>
               ))}
+              {(!template.tags || template.tags.length === 0) && (
+                <span className="text-xs text-slate-500">Etiket yok</span>
+              )}
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onPreview}
-            className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
-          >
-            <Eye className="w-4 h-4 mr-1" />
-            Detaylar
-          </Button>
+          <span className="text-xs text-slate-500 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Eye className="w-3 h-3" />
+            Detaylar için tıkla
+          </span>
         </div>
       </CardContent>
     </Card>

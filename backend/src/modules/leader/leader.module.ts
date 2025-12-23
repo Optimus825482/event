@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { LeaderController } from "./leader.controller";
 import { LeaderService } from "./leader.service";
@@ -8,6 +8,7 @@ import { Team } from "../../entities/team.entity";
 import { EventStaffAssignment } from "../../entities/event-staff-assignment.entity";
 import { StaffPerformanceReview } from "../../entities/staff-performance-review.entity";
 import { TableGroup } from "../../entities/table-group.entity";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { TableGroup } from "../../entities/table-group.entity";
       StaffPerformanceReview,
       TableGroup,
     ]),
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [LeaderController],
   providers: [LeaderService],

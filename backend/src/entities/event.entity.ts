@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { User } from "./user.entity";
 import { VenueTemplate } from "./venue-template.entity";
@@ -24,6 +25,8 @@ export enum EventStatus {
 }
 
 @Entity("events")
+@Index("IDX_event_organizer_date", ["organizerId", "eventDate"]) // Performans: Organizatör bazlı listeleme
+@Index("IDX_event_status_date", ["status", "eventDate"]) // Performans: Status ve tarih filtreleme
 export class Event {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -104,6 +107,17 @@ export class Event {
 
   @OneToMany(() => EventStaffAssignment, (assignment) => assignment.event)
   eventStaffAssignments: EventStaffAssignment[];
+
+  // Performans değerlendirme sistemi ayarları
+  @Column({ type: "boolean", default: false })
+  reviewEnabled: boolean; // Liderler değerlendirme yapabilir mi?
+
+  @Column({ type: "boolean", default: false })
+  reviewHistoryVisible: boolean; // Liderler geçmiş değerlendirmeleri görebilir mi?
+
+  // Rezervasyon sistemi ayarı
+  @Column({ type: "boolean", default: true })
+  reservationEnabled: boolean; // Bu etkinlik için rezervasyon alınabilir mi?
 
   @CreateDateColumn()
   createdAt: Date;

@@ -12,16 +12,67 @@ services:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-eventflow}
+      # PostgreSQL Performance Tuning
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=768MB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
+      - "-c"
+      - "max_worker_processes=4"
+      - "-c"
+      - "max_parallel_workers_per_gather=2"
+      - "-c"
+      - "max_parallel_workers=4"
+      - "-c"
+      - "max_parallel_maintenance_workers=2"
+      - "-c"
+      - "log_min_duration_statement=1000"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-eventflow}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - coolify
       - default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
 
   # NestJS Backend API
   backend:
@@ -42,23 +93,58 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 4000
-      FRONTEND_URL: ${FRONTEND_URL:-*}
+      FRONTEND_URL: ${FRONTEND_URL:-https://eventflow.optimistdemo.cloud}
     volumes:
       - uploads_data:/app/uploads
     expose:
       - "4000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:4000/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - coolify
       - default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     labels:
       - "traefik.enable=true"
+      # HTTP Router (redirect to HTTPS)
       - "traefik.http.routers.eventflow-backend.rule=Host(`api.eventflow.optimistdemo.cloud`)"
       - "traefik.http.routers.eventflow-backend.entrypoints=http"
+      - "traefik.http.routers.eventflow-backend.middlewares=redirect-to-https@docker"
+      # HTTPS Router
       - "traefik.http.routers.eventflow-backend-secure.rule=Host(`api.eventflow.optimistdemo.cloud`)"
       - "traefik.http.routers.eventflow-backend-secure.entrypoints=https"
       - "traefik.http.routers.eventflow-backend-secure.tls=true"
       - "traefik.http.routers.eventflow-backend-secure.tls.certresolver=letsencrypt"
+      # Service
       - "traefik.http.services.eventflow-backend.loadbalancer.server.port=4000"
+      - "traefik.http.services.eventflow-backend.loadbalancer.healthcheck.path=/api/health"
+      - "traefik.http.services.eventflow-backend.loadbalancer.healthcheck.interval=30s"
+      # HTTPS Redirect Middleware
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+      # Security Headers
+      - "traefik.http.middlewares.eventflow-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.eventflow-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.eventflow-headers.headers.stsPreload=true"
+      - "traefik.http.routers.eventflow-backend-secure.middlewares=eventflow-headers@docker"
+
   # Next.js Frontend
   frontend:
     build:
@@ -69,24 +155,52 @@ services:
         NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       HOSTNAME: "0.0.0.0"
     expose:
       - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - coolify
       - default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     labels:
       - "traefik.enable=true"
+      # HTTP Router (redirect to HTTPS)
       - "traefik.http.routers.eventflow-frontend.rule=Host(`eventflow.optimistdemo.cloud`)"
       - "traefik.http.routers.eventflow-frontend.entrypoints=http"
+      - "traefik.http.routers.eventflow-frontend.middlewares=redirect-to-https@docker"
+      # HTTPS Router
       - "traefik.http.routers.eventflow-frontend-secure.rule=Host(`eventflow.optimistdemo.cloud`)"
       - "traefik.http.routers.eventflow-frontend-secure.entrypoints=https"
       - "traefik.http.routers.eventflow-frontend-secure.tls=true"
       - "traefik.http.routers.eventflow-frontend-secure.tls.certresolver=letsencrypt"
+      # Service
       - "traefik.http.services.eventflow-frontend.loadbalancer.server.port=3000"
+      # Security Headers
+      - "traefik.http.routers.eventflow-frontend-secure.middlewares=eventflow-headers@docker"
+
 volumes:
   postgres_data:
   uploads_data:

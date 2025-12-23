@@ -262,6 +262,18 @@ export class UpdateEventDto {
   @IsOptional()
   @IsNumber()
   totalCapacity?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  reviewEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  reviewHistoryVisible?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  reservationEnabled?: boolean;
 }
 
 export class UpdateLayoutDto {

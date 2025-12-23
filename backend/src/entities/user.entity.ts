@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from "typeorm";
 import { Event } from "./event.entity";
 import { StaffAssignment } from "./staff-assignment.entity";
@@ -21,6 +22,7 @@ export enum UserRole {
 export type StaffPosition = string;
 
 @Entity("users")
+@Index("IDX_user_role_active", ["role", "isActive"]) // Performans: Rol bazlı aktif kullanıcı sorguları
 export class User {
   @PrimaryGeneratedColumn("uuid")
   id: string;

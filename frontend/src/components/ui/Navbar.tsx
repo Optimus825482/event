@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   UserCog,
   ChevronRight,
+  Bell,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,14 @@ const moduleMenus: Record<
   admin: [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/users", label: "Kullanıcılar", icon: UserCog },
+    { href: "/admin/notifications", label: "Bildirimler", icon: Bell },
     { href: "/admin/settings", label: "Sistem Ayarları", icon: Settings },
+  ],
+  leader: [
+    { href: "/leader", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/leader/events", label: "Etkinlikler", icon: Calendar },
+    { href: "/leader/team", label: "Ekip", icon: Users },
+    { href: "/leader/reviews", label: "Değerlendirmeler", icon: Settings },
   ],
 };
 
@@ -129,6 +137,11 @@ const moduleColors: Record<
     text: "text-amber-400",
     bg: "bg-amber-600",
     border: "border-amber-500",
+  },
+  leader: {
+    text: "text-cyan-400",
+    bg: "bg-cyan-600",
+    border: "border-cyan-500",
   },
 };
 

@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { StaffService } from "./staff.service";
 import { StaffController } from "./staff.controller";
@@ -14,6 +14,7 @@ import {
   EventStaffAssignment,
   OrganizationTemplate,
 } from "../../entities";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import {
       EventStaffAssignment,
       OrganizationTemplate,
     ]),
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [StaffController],
   providers: [StaffService],

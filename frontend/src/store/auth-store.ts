@@ -3,7 +3,12 @@ import { persist } from "zustand/middleware";
 import { authApi } from "@/lib/api";
 
 // Modül tipleri - admin modülü eklendi
-export type ModuleType = "events" | "reservations" | "checkin" | "admin";
+export type ModuleType =
+  | "events"
+  | "reservations"
+  | "checkin"
+  | "admin"
+  | "leader";
 
 export interface ModuleInfo {
   id: ModuleType;
@@ -11,7 +16,7 @@ export interface ModuleInfo {
   description: string;
   icon: string;
   path: string;
-  adminOnly?: boolean;
+  roles?: string[]; // İzin verilen roller
 }
 
 export const MODULES: Record<ModuleType, ModuleInfo> = {
@@ -21,6 +26,7 @@ export const MODULES: Record<ModuleType, ModuleInfo> = {
     description: "Etkinlik oluşturma, masa yerleşimi ve personel yönetimi",
     icon: "Calendar",
     path: "/dashboard",
+    roles: ["admin", "organizer"],
   },
   reservations: {
     id: "reservations",
@@ -28,6 +34,7 @@ export const MODULES: Record<ModuleType, ModuleInfo> = {
     description: "Misafir rezervasyonları ve QR bilet yönetimi",
     icon: "Ticket",
     path: "/reservations",
+    roles: ["admin", "organizer", "staff"],
   },
   checkin: {
     id: "checkin",
@@ -35,6 +42,7 @@ export const MODULES: Record<ModuleType, ModuleInfo> = {
     description: "QR kod okutma ve giriş kontrolü",
     icon: "QrCode",
     path: "/check-in",
+    roles: ["admin", "organizer", "staff", "leader"],
   },
   admin: {
     id: "admin",
@@ -42,7 +50,15 @@ export const MODULES: Record<ModuleType, ModuleInfo> = {
     description: "Kullanıcı yönetimi, sistem ayarları ve raporlar",
     icon: "Shield",
     path: "/admin",
-    adminOnly: true,
+    roles: ["admin"],
+  },
+  leader: {
+    id: "leader",
+    name: "Ekip Lideri",
+    description: "Ekip yönetimi ve performans değerlendirme",
+    icon: "Users",
+    path: "/leader",
+    roles: ["admin", "leader"],
   },
 };
 
@@ -50,8 +66,12 @@ export interface User {
   id: string;
   username: string;
   fullName: string;
-  role: "admin" | "organizer" | "leader" | "staff" | "supervizor";
+  role: "admin" | "organizer" | "leader" | "staff" | "venue_owner";
   allowedModules: ModuleType[];
+  avatar?: string;
+  email?: string;
+  phone?: string;
+  position?: string;
 }
 
 interface AuthState {
@@ -65,45 +85,27 @@ interface AuthState {
   logout: () => void;
   setActiveModule: (module: ModuleType) => void;
   clearActiveModule: () => void;
+  getAllowedModules: () => ModuleInfo[];
 }
 
-// Mock kullanıcılar - admin artık admin modülüne de erişebilir
-const MOCK_USERS: Record<string, { password: string; user: User }> = {
-  admin: {
-    password: "admin123",
-    user: {
-      id: "1",
-      username: "admin",
-      fullName: "Admin Kullanıcı",
-      role: "admin",
-      allowedModules: ["events", "reservations", "checkin", "admin"],
-    },
-  },
-  organizer: {
-    password: "org123",
-    user: {
-      id: "2",
-      username: "organizer",
-      fullName: "Organizatör",
-      role: "organizer",
-      allowedModules: ["events", "reservations"],
-    },
-  },
-  staff: {
-    password: "staff123",
-    user: {
-      id: "3",
-      username: "staff",
-      fullName: "Personel",
-      role: "staff",
-      allowedModules: ["checkin"],
-    },
-  },
-};
+/**
+ * Kullanıcı rolüne göre izin verilen modülleri hesapla
+ */
+function calculateAllowedModules(role: string): ModuleType[] {
+  const allowed: ModuleType[] = [];
+
+  for (const [moduleId, moduleInfo] of Object.entries(MODULES)) {
+    if (moduleInfo.roles?.includes(role)) {
+      allowed.push(moduleId as ModuleType);
+    }
+  }
+
+  return allowed;
+}
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       activeModule: null,
@@ -111,22 +113,12 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (username: string, password: string) => {
         try {
-          // Gerçek API login
+          // API login
           const response = await authApi.login(username, password);
           const { token, user } = response.data;
 
-          console.log("Login response user:", user);
-          console.log("User role:", user.role);
-
-          // Admin kullanıcıları için admin modülünü de ekle
-          const allowedModules: ModuleType[] = [
-            "events",
-            "reservations",
-            "checkin",
-          ];
-          if (user.role === "admin") {
-            allowedModules.push("admin");
-          }
+          // Rol bazlı modül erişimi hesapla
+          const allowedModules = calculateAllowedModules(user.role);
 
           const userData: User = {
             id: user.id,
@@ -134,6 +126,10 @@ export const useAuthStore = create<AuthState>()(
             fullName: user.fullName,
             role: user.role || "staff",
             allowedModules,
+            avatar: user.avatar,
+            email: user.email,
+            phone: user.phone,
+            position: user.position,
           };
 
           set({
@@ -143,23 +139,9 @@ export const useAuthStore = create<AuthState>()(
             activeModule: null,
           });
 
-          // Role'ü döndür ki login sayfası yönlendirme yapabilsin
-          const returnRole = user.role || "staff";
-          console.log("Returning role:", returnRole);
-          return returnRole;
+          return user.role || "staff";
         } catch (error) {
           console.error("Login error:", error);
-          // API başarısız olursa mock login dene (geliştirme için)
-          const mockUser = MOCK_USERS[username.toLowerCase()];
-          if (mockUser && mockUser.password === password) {
-            set({
-              user: mockUser.user,
-              token: `mock-token-${Date.now()}`,
-              isAuthenticated: true,
-              activeModule: null,
-            });
-            return mockUser.user.role;
-          }
           return false;
         }
       },
@@ -174,11 +156,26 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setActiveModule: (module: ModuleType) => {
-        set({ activeModule: module });
+        const { user } = get();
+        // Modül erişim kontrolü
+        if (user && user.allowedModules.includes(module)) {
+          set({ activeModule: module });
+        } else {
+          console.warn(`Unauthorized module access attempt: ${module}`);
+        }
       },
 
       clearActiveModule: () => {
         set({ activeModule: null });
+      },
+
+      getAllowedModules: () => {
+        const { user } = get();
+        if (!user) return [];
+
+        return user.allowedModules
+          .map((moduleId) => MODULES[moduleId])
+          .filter(Boolean);
       },
     }),
     {

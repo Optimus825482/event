@@ -13,7 +13,6 @@ import {
   UserCheck,
   AlertCircle,
   RefreshCw,
-  LogOut,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer, PageHeader } from "@/components/ui/PageContainer";
 import { leaderApi, API_BASE } from "@/lib/api";
-import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast-notification";
 
 interface Team {
@@ -110,85 +108,25 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
 export default function LeaderDashboardPage() {
   const router = useRouter();
   const toast = useToast();
-  const { user, logout } = useAuthStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  // Zustand hydration kontrolü
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
 
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       const res = await leaderApi.getDashboard();
       setData(res.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Dashboard yüklenemedi:", error);
-      if (error.response?.status === 403) {
-        toast.error("Bu sayfaya erişim yetkiniz yok");
-        router.push("/");
-      } else {
-        toast.error("Dashboard yüklenemedi");
-      }
+      toast.error("Dashboard yüklenemedi");
     } finally {
       setLoading(false);
     }
-  }, [router, toast]);
+  }, [toast]);
 
   useEffect(() => {
-    // Hydration tamamlanmadan kontrol yapma
-    if (!isHydrated) return;
-
-    // localStorage'dan direkt kontrol et (zustand persist bazen geç yükleniyor)
-    const authStorage = localStorage.getItem("auth-storage");
-    if (authStorage) {
-      try {
-        const parsed = JSON.parse(authStorage);
-        const storedUser = parsed?.state?.user;
-
-        if (!storedUser) {
-          router.push("/login");
-          return;
-        }
-
-        if (storedUser.role !== "leader") {
-          router.push("/select-module");
-          return;
-        }
-
-        // User doğru, dashboard'u yükle
-        loadDashboard();
-      } catch (e) {
-        console.error("Auth storage parse error:", e);
-        router.push("/login");
-      }
-    } else if (!user) {
-      router.push("/login");
-    } else if (user.role !== "leader") {
-      router.push("/select-module");
-    } else {
-      loadDashboard();
-    }
-  }, [isHydrated, user, loadDashboard, router]);
-
-  // Hydration bekle
-  if (!isHydrated) {
-    return (
-      <PageContainer>
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-64 bg-slate-700" />
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-24 bg-slate-700 rounded-lg" />
-            ))}
-          </div>
-        </div>
-      </PageContainer>
-    );
-  }
+    loadDashboard();
+  }, [loadDashboard]);
 
   if (loading) {
     return (
@@ -232,28 +170,15 @@ export default function LeaderDashboardPage() {
           description="Lider Paneli"
           icon={<Award className="w-6 h-6 text-cyan-400" />}
           actions={
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadDashboard}
-                className="border-slate-600"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  logout();
-                  router.push("/login");
-                }}
-                className="border-red-600 text-red-400 hover:bg-red-600/20"
-              >
-                <LogOut className="w-4 h-4 mr-1" />
-                Çıkış
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadDashboard}
+              className="border-slate-600"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Yenile
+            </Button>
           }
         />
 
