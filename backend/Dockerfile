@@ -22,6 +22,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Install postgresql-client for database seeding
+RUN apk add --no-cache postgresql-client
+
 # Create uploads directory
 RUN mkdir -p /app/uploads/avatars /app/uploads/logos /app/uploads/event-images /app/uploads/invitation-images
 
@@ -29,6 +32,9 @@ RUN mkdir -p /app/uploads/avatars /app/uploads/logos /app/uploads/event-images /
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
+
+# Copy seed data for database initialization
+COPY --from=builder /app/seed-data.sql ./seed-data.sql
 
 # Set permissions for uploads
 RUN chown -R node:node /app/uploads
