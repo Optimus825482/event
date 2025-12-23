@@ -7,6 +7,7 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const isProduction = configService.get("NODE_ENV") === "production";
 
   // CORS ayarları - Coolify reverse proxy arkasında tüm origin'lere izin ver
   app.enableCors({
@@ -28,12 +29,11 @@ async function bootstrap() {
   // API prefix
   app.setGlobalPrefix("api");
 
-  // Swagger API Documentation
-  if (!isProduction) {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle("EventFlow PRO API")
-      .setDescription(
-        `
+  // Swagger API Documentation - her zaman aktif
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle("EventFlow PRO API")
+    .setDescription(
+      `
 ## EventFlow PRO - Etkinlik Yönetim Sistemi API
 
 ### Modüller:
@@ -49,55 +49,46 @@ async function bootstrap() {
 ### Authentication:
 Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı gereklidir.
       `
-      )
-      .setVersion("1.0.0")
-      .addBearerAuth(
-        {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT",
-          name: "JWT",
-          description: "JWT token giriniz",
-          in: "header",
-        },
-        "JWT-auth"
-      )
-      .addTag("Auth", "Kimlik doğrulama işlemleri")
-      .addTag("Events", "Etkinlik yönetimi")
-      .addTag("Reservations", "Rezervasyon işlemleri")
-      .addTag("Customers", "Müşteri yönetimi")
-      .addTag("Staff", "Personel yönetimi")
-      .addTag("Venues", "Mekan şablonları")
-      .addTag("Health", "Sistem sağlık kontrolleri")
-      .build();
-
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup("api/docs", app, document, {
-      swaggerOptions: {
-        persistAuthorization: true,
-        docExpansion: "none",
-        filter: true,
-        showRequestDuration: true,
+    )
+    .setVersion("1.0.0")
+    .addBearerAuth(
+      {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        name: "JWT",
+        description: "JWT token giriniz",
+        in: "header",
       },
-      customSiteTitle: "EventFlow PRO API Docs",
-    });
-  }
+      "JWT-auth"
+    )
+    .addTag("Auth", "Kimlik doğrulama işlemleri")
+    .addTag("Events", "Etkinlik yönetimi")
+    .addTag("Reservations", "Rezervasyon işlemleri")
+    .addTag("Customers", "Müşteri yönetimi")
+    .addTag("Staff", "Personel yönetimi")
+    .addTag("Venues", "Mekan şablonları")
+    .addTag("Health", "Sistem sağlık kontrolleri")
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup("api/docs", app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: "none",
+      filter: true,
+      showRequestDuration: true,
+    },
+    customSiteTitle: "EventFlow PRO API Docs",
+  });
 
   const port = configService.get("PORT") || 4000;
   await app.listen(port);
 
   const nodeEnv = configService.get("NODE_ENV") || "development";
   console.log(`🚀 EventFlow PRO Backend running on http://localhost:${port}`);
-  console.log(`📌 Environment: ${nodeEnv}`);
-
-  if (!isProduction) {
-    console.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
-  }
-
-  if (isProduction) {
-    console.log(`🔒 CORS: Restricted to ${allowedOrigins.join(", ")}`);
-  } else {
-    console.log(`⚠️  CORS: Open (development mode)`);
-  }
+  console.log(`� Envnironment: ${nodeEnv}`);
+  console.log(`� Snwagger Docs: http://localhost:${port}/api/docs`);
+  console.log(`🌐 CORS: Open (all origins allowed)`);
 }
 bootstrap();
