@@ -8,15 +8,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // CORS ayarları - environment'a göre konfigüre et
-  const allowedOrigins = configService
-    .get<string>("CORS_ORIGINS")
-    ?.split(",") || ["http://localhost:3000", "http://localhost:3001"];
-
-  const isProduction = configService.get("NODE_ENV") === "production";
-
+  // CORS ayarları - Coolify reverse proxy arkasında tüm origin'lere izin ver
   app.enableCors({
-    origin: isProduction ? allowedOrigins : true, // Development'ta tüm origin'lere izin ver
+    origin: true, // Tüm origin'lere izin ver (Coolify proxy arkasında güvenli)
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization", "Accept"],
