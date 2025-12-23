@@ -93,7 +93,8 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
           NotificationRead,
         ],
         // UYARI: Production'da synchronize: false olmalı ve migration kullanılmalı!
-        synchronize: configService.get("NODE_ENV") !== "production",
+        // Geçici olarak true - ilk kurulum için
+        synchronize: true,
         logging:
           configService.get("NODE_ENV") === "development"
             ? ["error", "warn"]
