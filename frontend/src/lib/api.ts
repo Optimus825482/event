@@ -572,9 +572,6 @@ export const staffApi = {
 
   // ==================== TEAMS (EKİPLER) API - YENİ ====================
 
-  // Tüm ekipleri getir (yeni teams tablosu)
-  getTeams: () => api.get("/staff/teams"),
-
   // Yeni ekip oluştur
   createNewTeam: (data: {
     name: string;
