@@ -61,7 +61,6 @@ export default function GuestsPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [editingNote, setEditingNote] = useState<GuestNote | null>(null);
 
-  // Misafirleri yükle
   const loadCustomers = async (search?: string) => {
     setLoading(true);
     try {
@@ -78,7 +77,6 @@ export default function GuestsPage() {
     loadCustomers();
   }, []);
 
-  // Arama
   useEffect(() => {
     const timer = setTimeout(() => {
       loadCustomers(searchQuery || undefined);
@@ -86,7 +84,6 @@ export default function GuestsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Misafir detayını aç
   const openCustomerDetail = async (customer: Customer) => {
     setSelectedCustomer(customer);
     setShowDetailModal(true);
@@ -98,7 +95,6 @@ export default function GuestsPage() {
     }
   };
 
-  // Not ekle
   const handleAddNote = async () => {
     if (!selectedCustomer || !newNote.content.trim()) return;
     setSavingNote(true);
@@ -107,7 +103,6 @@ export default function GuestsPage() {
         content: newNote.content,
         noteType: newNote.noteType,
       });
-      // Notları yeniden yükle
       const response = await customersApi.getWithNotes(selectedCustomer.id);
       setCustomerNotes(response.data.notes || []);
       setNewNote({ content: "", noteType: "general" });
@@ -120,7 +115,6 @@ export default function GuestsPage() {
     }
   };
 
-  // Not güncelle
   const handleUpdateNote = async () => {
     if (!editingNote) return;
     setSavingNote(true);
@@ -136,7 +130,6 @@ export default function GuestsPage() {
     }
   };
 
-  // Not sil
   const handleDeleteNote = async (noteId: string) => {
     if (!confirm("Bu notu silmek istediğinize emin misiniz?")) return;
     try {
@@ -154,10 +147,9 @@ export default function GuestsPage() {
         <PageHeader
           title="Misafirler"
           description="Tüm misafirlerinizi görüntüleyin ve yönetin"
-          icon={<Users className="w-6 h-6 text-blue-400" />}
+          icon={<Users className="w-6 h-6 text-purple-400" />}
         />
 
-        {/* Arama */}
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
@@ -165,14 +157,13 @@ export default function GuestsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Misafir adı, telefon veya e-posta ara..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-purple-500"
           />
         </div>
 
-        {/* Liste */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
           </div>
         ) : customers.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
@@ -185,12 +176,12 @@ export default function GuestsPage() {
               <button
                 key={customer.id}
                 onClick={() => openCustomerDetail(customer)}
-                className="w-full bg-slate-800 rounded-xl p-4 border border-slate-700 text-left"
+                className="w-full bg-slate-800 rounded-xl p-4 border border-slate-700 hover:border-purple-500/50 transition-colors text-left"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-600/20 rounded-full flex items-center justify-center">
-                      <Users className="w-6 h-6 text-blue-400" />
+                    <div className="w-12 h-12 bg-purple-600/20 rounded-full flex items-center justify-center">
+                      <Users className="w-6 h-6 text-purple-400" />
                     </div>
                     <div>
                       <h3 className="font-medium">{customer.fullName}</h3>
@@ -234,14 +225,13 @@ export default function GuestsPage() {
         <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-400" />
+              <Users className="w-5 h-5 text-purple-400" />
               {selectedCustomer?.fullName}
             </DialogTitle>
           </DialogHeader>
 
           {selectedCustomer && (
             <div className="space-y-6 py-4">
-              {/* Bilgiler */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-700/50 rounded-lg p-3">
                   <p className="text-xs text-slate-400 mb-1">Telefon</p>
@@ -269,7 +259,6 @@ export default function GuestsPage() {
                 </div>
               </div>
 
-              {/* Notlar */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-medium flex items-center gap-2">
@@ -279,7 +268,7 @@ export default function GuestsPage() {
                   <Button
                     size="sm"
                     onClick={() => setShowAddNoteModal(true)}
-                    className="bg-blue-600"
+                    className="bg-purple-600"
                   >
                     <Plus className="w-4 h-4 mr-1" /> Yeni Not
                   </Button>
@@ -348,13 +337,13 @@ export default function GuestsPage() {
                                 </span>
                                 <button
                                   onClick={() => setEditingNote(note)}
-                                  className="p-1 text-slate-400"
+                                  className="p-1 text-slate-400 hover:text-white"
                                 >
                                   <Edit2 className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteNote(note.id)}
-                                  className="p-1 text-red-400"
+                                  className="p-1 text-red-400 hover:text-red-300"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
@@ -384,7 +373,6 @@ export default function GuestsPage() {
           <DialogHeader>
             <DialogTitle className="text-white">Yeni Not Ekle</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-4 py-4">
             <div>
               <label className="block text-sm text-slate-400 mb-2">
@@ -406,7 +394,6 @@ export default function GuestsPage() {
                 <option value="post_event">Etkinlik Sonrası</option>
               </select>
             </div>
-
             <div>
               <label className="block text-sm text-slate-400 mb-2">
                 Not İçeriği
@@ -421,7 +408,6 @@ export default function GuestsPage() {
                 placeholder="Not içeriğini yazın..."
               />
             </div>
-
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
@@ -433,7 +419,7 @@ export default function GuestsPage() {
               <Button
                 onClick={handleAddNote}
                 disabled={savingNote || !newNote.content.trim()}
-                className="bg-blue-600"
+                className="bg-purple-600"
               >
                 {savingNote ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />

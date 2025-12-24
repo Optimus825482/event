@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -33,7 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// Canvas bileşenini client-side only olarak yükle (SSR sorunlarını önlemek için)
+// Canvas bileşenini client-side only olarak yükle
 const TableSelectionCanvas = dynamic(
   () =>
     import("@/components/reservations/TableSelectionCanvas").then(
@@ -47,21 +47,19 @@ const TableSelectionCanvas = dynamic(
   }
 );
 
-// Adım tipleri
 type Step = "guest" | "table" | "preview" | "complete";
 
-// Misafir bilgileri
 interface GuestInfo {
   fullName: string;
   phone: string;
   email: string;
-  customerId?: string; // Seçilen müşteri ID
+  customerId?: string;
 }
 
 export default function NewReservationPage() {
+  const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const eventId = searchParams.get("eventId");
+  const eventId = params.eventId as string;
 
   const [currentStep, setCurrentStep] = useState<Step>("guest");
   const [event, setEvent] = useState<Event | null>(null);
@@ -92,7 +90,6 @@ export default function NewReservationPage() {
   const [customerNotes, setCustomerNotes] = useState<GuestNote[]>([]);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
 
   // Etkinlik ve rezervasyonları yükle
   useEffect(() => {
@@ -103,11 +100,9 @@ export default function NewReservationPage() {
 
     const loadData = async () => {
       try {
-        // Etkinlik bilgisi
         const eventRes = await eventsApi.getOne(eventId);
         setEvent(eventRes.data);
 
-        // Mevcut rezervasyonlar (rezerve edilmiş masaları bulmak için)
         const reservationsRes = await reservationsApi.getAll({ eventId });
         const reserved = reservationsRes.data
           .filter((r: any) => r.status !== "cancelled")
@@ -166,7 +161,6 @@ export default function NewReservationPage() {
     setShowSuggestions(false);
     setSuggestions([]);
 
-    // Müşteri notlarını yükle
     try {
       const response = await customersApi.getWithNotes(customer.id);
       setCustomerNotes(response.data.notes || []);
@@ -178,22 +172,17 @@ export default function NewReservationPage() {
   // Müşteri seçimini temizle
   const clearCustomerSelection = () => {
     setSelectedCustomer(null);
-    setGuestInfo({
-      fullName: "",
-      phone: "",
-      email: "",
-      customerId: undefined,
-    });
+    setGuestInfo({ fullName: "", phone: "", email: "", customerId: undefined });
     setCustomerNotes([]);
   };
 
   // Seçili masa bilgisi
   const selectedTable = useMemo(() => {
     if (!event?.venueLayout?.tables || !selectedTableId) return null;
-    return event.venueLayout.tables.find((t) => t.id === selectedTableId);
+    return event.venueLayout.tables.find((t: any) => t.id === selectedTableId);
   }, [event, selectedTableId]);
 
-  // Adım 1: Misafir bilgileri validasyonu
+  // Validasyonlar
   const validateGuestInfo = (): boolean => {
     if (!guestInfo.fullName.trim()) {
       setError("Ad soyad zorunludur");
@@ -207,7 +196,6 @@ export default function NewReservationPage() {
     return true;
   };
 
-  // Adım 2: Masa seçimi validasyonu
   const validateTableSelection = (): boolean => {
     if (!selectedTableId) {
       setError("Lütfen bir masa seçin");
@@ -217,7 +205,7 @@ export default function NewReservationPage() {
     return true;
   };
 
-  // İleri git
+  // Navigasyon
   const handleNext = () => {
     if (currentStep === "guest" && validateGuestInfo()) {
       setCurrentStep("table");
@@ -226,7 +214,6 @@ export default function NewReservationPage() {
     }
   };
 
-  // Geri git
   const handleBack = () => {
     if (currentStep === "table") setCurrentStep("guest");
     else if (currentStep === "preview") setCurrentStep("table");
@@ -240,11 +227,10 @@ export default function NewReservationPage() {
     setError("");
 
     try {
-      // Rezervasyon oluştur
       const response = await reservationsApi.create({
         eventId,
         tableId: selectedTableId,
-        customerId: "", // Misafir kaydı yapmıyoruz
+        customerId: guestInfo.customerId || "",
         guestCount,
         guestName: guestInfo.fullName,
         guestPhone: guestInfo.phone,
@@ -253,7 +239,6 @@ export default function NewReservationPage() {
 
       setCreatedReservation(response.data);
 
-      // QR kod al
       try {
         const qrRes = await reservationsApi.generateQRCode(response.data.id);
         setQrCodeUrl(qrRes.data.qrCodeDataUrl);
@@ -296,15 +281,11 @@ export default function NewReservationPage() {
 
   // E-posta ile bilet gönder
   const handleSendEmail = async () => {
-    if (!createdReservation?.id) return;
+    if (!createdReservation?.id || !guestInfo.email) return;
     setSendingEmail(true);
     try {
-      await reservationsApi.generateQRCode(createdReservation.id);
-      // Backend zaten rezervasyon oluştururken mail gönderiyor
-      // Tekrar göndermek için invitations API kullanabiliriz
       const { invitationsApi } = await import("@/lib/api");
       await invitationsApi.sendInvitationEmail(createdReservation.id);
-      setEmailSent(true);
       alert("E-posta başarıyla gönderildi!");
     } catch (err: any) {
       console.error("Mail gönderme hatası:", err);
@@ -314,10 +295,22 @@ export default function NewReservationPage() {
     }
   };
 
+  // Yeni rezervasyon başlat
+  const resetForm = () => {
+    setCurrentStep("guest");
+    setGuestInfo({ fullName: "", phone: "", email: "", customerId: undefined });
+    setSelectedTableId("");
+    setGuestCount(1);
+    setCreatedReservation(null);
+    setQrCodeUrl("");
+    setSelectedCustomer(null);
+    setCustomerNotes([]);
+  };
+
   if (eventLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
       </div>
     );
   }
@@ -325,19 +318,19 @@ export default function NewReservationPage() {
   if (!event) return null;
 
   return (
-    <div className="min-h-screen bg-slate-900 p-6">
+    <div className="min-h-screen bg-slate-900 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Link
-            href={`/reservations/dashboard?eventId=${eventId}`}
+            href={`/reservations/${eventId}`}
             className="p-2 bg-slate-800 rounded-lg"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Yeni Rezervasyon</h1>
-            <p className="text-slate-400">
+            <h1 className="text-xl sm:text-2xl font-bold">Yeni Rezervasyon</h1>
+            <p className="text-slate-400 text-sm">
               {event.name} - {formatDate(event.eventDate)}
             </p>
           </div>
@@ -345,17 +338,17 @@ export default function NewReservationPage() {
 
         {/* Progress Steps */}
         {currentStep !== "complete" && (
-          <div className="flex items-center justify-center gap-2 mb-8">
+          <div className="flex items-center justify-center gap-2 mb-8 overflow-x-auto">
             {[
-              { key: "guest", label: "Misafir Bilgileri" },
-              { key: "table", label: "Masa Seçimi" },
+              { key: "guest", label: "Misafir" },
+              { key: "table", label: "Masa" },
               { key: "preview", label: "Onay" },
             ].map((step, index) => (
               <div key={step.key} className="flex items-center">
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                     currentStep === step.key
-                      ? "bg-blue-600 text-white"
+                      ? "bg-purple-600 text-white"
                       : ["guest"].includes(currentStep) && index > 0
                       ? "bg-slate-700 text-slate-400"
                       : ["table"].includes(currentStep) && index > 1
@@ -366,13 +359,15 @@ export default function NewReservationPage() {
                   {index + 1}
                 </div>
                 <span
-                  className={`ml-2 text-sm ${
+                  className={`ml-2 text-sm hidden sm:inline ${
                     currentStep === step.key ? "text-white" : "text-slate-400"
                   }`}
                 >
                   {step.label}
                 </span>
-                {index < 2 && <div className="w-8 h-px bg-slate-700 mx-4" />}
+                {index < 2 && (
+                  <div className="w-4 sm:w-8 h-px bg-slate-700 mx-2 sm:mx-4" />
+                )}
               </div>
             ))}
           </div>
@@ -391,31 +386,25 @@ export default function NewReservationPage() {
 
         {/* Step 1: Misafir Bilgileri */}
         {currentStep === "guest" && (
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+          <div className="bg-slate-800 rounded-xl p-4 sm:p-6 border border-slate-700">
             <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <User className="w-5 h-5 text-blue-400" />
+              <User className="w-5 h-5 text-purple-400" />
               Misafir Bilgileri
             </h2>
 
-            {/* Seçili müşteri bilgisi */}
+            {/* Seçili müşteri */}
             {selectedCustomer && (
-              <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+              <div className="mb-4 p-3 bg-purple-900/30 border border-purple-700 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-600/30 rounded-full flex items-center justify-center">
-                      <User className="w-5 h-5 text-blue-400" />
+                    <div className="w-10 h-10 bg-purple-600/30 rounded-full flex items-center justify-center">
+                      <User className="w-5 h-5 text-purple-400" />
                     </div>
                     <div>
                       <p className="font-medium">{selectedCustomer.fullName}</p>
                       <p className="text-xs text-slate-400">
                         {selectedCustomer.totalAttendedEvents || 0} etkinliğe
                         katıldı
-                        {selectedCustomer.lastEventDate && (
-                          <span>
-                            {" "}
-                            • Son: {formatDate(selectedCustomer.lastEventDate)}
-                          </span>
-                        )}
                       </p>
                     </div>
                   </div>
@@ -427,7 +416,6 @@ export default function NewReservationPage() {
                         title="Notları Görüntüle"
                       >
                         <FileText className="w-4 h-4" />
-                        <span className="sr-only">Notlar</span>
                       </button>
                     )}
                     <button
@@ -455,28 +443,28 @@ export default function NewReservationPage() {
                       if (selectedCustomer) clearCustomerSelection();
                       setGuestInfo({ ...guestInfo, fullName: e.target.value });
                     }}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-blue-500"
-                    placeholder="Misafirin adı soyadı (4+ karakter yazın)"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-purple-500"
+                    placeholder="Misafirin adı soyadı"
                   />
                   {searchingCustomers && (
                     <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-slate-400" />
                   )}
                 </div>
 
-                {/* Autocomplete önerileri */}
+                {/* Autocomplete */}
                 {showSuggestions && suggestions.length > 0 && (
                   <div className="absolute z-50 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                     <div className="p-2 text-xs text-slate-400 border-b border-slate-600">
                       <History className="w-3 h-3 inline mr-1" />
-                      Önceki etkinliklere katılan misafirler
+                      Önceki misafirler
                     </div>
                     {suggestions.map((customer) => (
                       <button
                         key={customer.id}
                         onClick={() => handleSelectCustomer(customer)}
-                        className="w-full p-3 text-left flex items-center gap-3 border-b border-slate-600/50 last:border-0"
+                        className="w-full p-3 text-left flex items-center gap-3 hover:bg-slate-600 border-b border-slate-600/50 last:border-0"
                       >
-                        <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center">
                           <User className="w-4 h-4 text-slate-300" />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -485,16 +473,11 @@ export default function NewReservationPage() {
                           </p>
                           <p className="text-xs text-slate-400">
                             {customer.phone || "Telefon yok"}
-                            {customer.totalAttendedEvents > 0 && (
-                              <span className="ml-2 text-purple-400">
-                                • {customer.totalAttendedEvents} etkinlik
-                              </span>
-                            )}
                           </p>
                         </div>
                         {customer.totalAttendedEvents > 0 && (
                           <span className="text-xs bg-purple-600/20 text-purple-400 px-2 py-1 rounded">
-                            Geri Dönen
+                            {customer.totalAttendedEvents}x
                           </span>
                         )}
                       </button>
@@ -515,7 +498,7 @@ export default function NewReservationPage() {
                     onChange={(e) =>
                       setGuestInfo({ ...guestInfo, phone: e.target.value })
                     }
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-purple-500"
                     placeholder="05XX XXX XX XX"
                     disabled={!!selectedCustomer}
                   />
@@ -534,7 +517,7 @@ export default function NewReservationPage() {
                     onChange={(e) =>
                       setGuestInfo({ ...guestInfo, email: e.target.value })
                     }
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-purple-500"
                     placeholder="ornek@email.com"
                     disabled={!!selectedCustomer}
                   />
@@ -551,25 +534,28 @@ export default function NewReservationPage() {
                   max={20}
                   value={guestCount}
                   onChange={(e) => setGuestCount(parseInt(e.target.value) || 1)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500"
                 />
               </div>
             </div>
 
             <div className="flex justify-end mt-6">
-              <Button onClick={handleNext} className="bg-blue-600">
+              <Button
+                onClick={handleNext}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
                 Devam Et <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 2: Masa Seçimi - Yerleşim Planı */}
+        {/* Step 2: Masa Seçimi */}
         {currentStep === "table" && (
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+          <div className="bg-slate-800 rounded-xl p-4 sm:p-6 border border-slate-700">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-blue-400" />
-              Masa Seçimi - Yerleşim Planı
+              <MapPin className="w-5 h-5 text-purple-400" />
+              Masa Seçimi
             </h2>
 
             {/* Lejant */}
@@ -585,16 +571,12 @@ export default function NewReservationPage() {
                 <span className="text-slate-400">Rezerveli</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full border-2 border-blue-500 bg-blue-500" />
+                <div className="w-6 h-6 rounded-full border-2 border-purple-500 bg-purple-500" />
                 <span className="text-slate-400">Seçili</span>
               </div>
             </div>
 
-            <p className="text-xs text-slate-500 mb-4">
-              💡 Zoom için fare tekerleğini kullanabilirsiniz
-            </p>
-
-            {/* Yerleşim Planı Canvas */}
+            {/* Canvas */}
             {event.venueLayout?.tables ? (
               <TableSelectionCanvas
                 event={event}
@@ -602,10 +584,7 @@ export default function NewReservationPage() {
                 selectedTableId={selectedTableId}
                 onSelectTable={(tableId, capacity) => {
                   setSelectedTableId(tableId);
-                  // Kapasite bilgisini de güncelleyebiliriz
-                  if (guestCount > capacity) {
-                    setGuestCount(capacity);
-                  }
+                  if (guestCount > capacity) setGuestCount(capacity);
                 }}
                 guestInfo={{
                   fullName: guestInfo.fullName,
@@ -615,25 +594,24 @@ export default function NewReservationPage() {
                 }}
               />
             ) : (
-              <div className="w-full h-[500px] bg-slate-900 rounded-lg flex items-center justify-center text-slate-400">
+              <div className="w-full h-[400px] bg-slate-900 rounded-lg flex items-center justify-center text-slate-400">
                 Bu etkinlik için yerleşim planı bulunamadı
               </div>
             )}
 
-            {/* Seçili masa bilgisi */}
+            {/* Seçili masa */}
             {selectedTable && (
-              <div className="mt-4 p-4 bg-blue-600/20 rounded-lg border border-blue-600">
+              <div className="mt-4 p-4 bg-purple-600/20 rounded-lg border border-purple-600">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-lg">
                       Seçilen Masa: {selectedTable.label || selectedTable.id}
                     </p>
                     <p className="text-sm text-slate-400">
-                      Kapasite: {selectedTable.capacity} kişi | Tip:{" "}
-                      {selectedTable.typeName || "Standart"}
+                      Kapasite: {selectedTable.capacity} kişi
                     </p>
                   </div>
-                  <CheckCircle className="w-6 h-6 text-blue-400" />
+                  <CheckCircle className="w-6 h-6 text-purple-400" />
                 </div>
               </div>
             )}
@@ -648,7 +626,7 @@ export default function NewReservationPage() {
               </Button>
               <Button
                 onClick={handleNext}
-                className="bg-blue-600"
+                className="bg-purple-600 hover:bg-purple-700"
                 disabled={!selectedTableId}
               >
                 Devam Et <ArrowRight className="w-4 h-4 ml-2" />
@@ -657,16 +635,15 @@ export default function NewReservationPage() {
           </div>
         )}
 
-        {/* Step 3: Önizleme ve Onay */}
+        {/* Step 3: Önizleme */}
         {currentStep === "preview" && (
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+          <div className="bg-slate-800 rounded-xl p-4 sm:p-6 border border-slate-700">
             <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-400" />
               Rezervasyon Özeti
             </h2>
 
             <div className="space-y-4">
-              {/* Etkinlik */}
               <div className="bg-slate-700/50 rounded-lg p-4">
                 <h3 className="text-sm text-slate-400 mb-2">Etkinlik</h3>
                 <p className="font-medium">{event.name}</p>
@@ -675,7 +652,6 @@ export default function NewReservationPage() {
                 </p>
               </div>
 
-              {/* Misafir */}
               <div className="bg-slate-700/50 rounded-lg p-4">
                 <h3 className="text-sm text-slate-400 mb-2">
                   Misafir Bilgileri
@@ -688,7 +664,6 @@ export default function NewReservationPage() {
                 <p className="text-sm text-slate-400">{guestCount} kişi</p>
               </div>
 
-              {/* Masa */}
               <div className="bg-slate-700/50 rounded-lg p-4">
                 <h3 className="text-sm text-slate-400 mb-2">Masa</h3>
                 <p className="font-medium text-xl">
@@ -711,7 +686,7 @@ export default function NewReservationPage() {
               <Button
                 onClick={handleConfirm}
                 disabled={submitting}
-                className="bg-green-600"
+                className="bg-green-600 hover:bg-green-700"
               >
                 {submitting ? (
                   <>
@@ -730,7 +705,7 @@ export default function NewReservationPage() {
 
         {/* Step 4: Tamamlandı */}
         {currentStep === "complete" && (
-          <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 text-center">
+          <div className="bg-slate-800 rounded-xl p-6 sm:p-8 border border-slate-700 text-center">
             <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-green-400" />
             </div>
@@ -745,7 +720,8 @@ export default function NewReservationPage() {
             {qrCodeUrl && (
               <div className="bg-slate-700/50 rounded-xl p-6 mb-6">
                 <h3 className="font-medium mb-4 flex items-center justify-center gap-2">
-                  <Ticket className="w-5 h-5" /> Elektronik Bilet
+                  <Ticket className="w-5 h-5 text-purple-400" /> Elektronik
+                  Bilet
                 </h3>
                 <div className="bg-white p-4 rounded-lg inline-block mb-4">
                   <img src={qrCodeUrl} alt="QR Kod" className="w-48 h-48" />
@@ -763,7 +739,7 @@ export default function NewReservationPage() {
                       variant="outline"
                       onClick={handleSendEmail}
                       disabled={sendingEmail}
-                      className="border-blue-600 text-blue-400"
+                      className="border-purple-600 text-purple-400"
                     >
                       {sendingEmail ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -787,28 +763,14 @@ export default function NewReservationPage() {
             )}
 
             <div className="flex justify-center gap-4">
-              <Link href={`/reservations/dashboard?eventId=${eventId}`}>
+              <Link href={`/reservations/${eventId}`}>
                 <Button variant="outline" className="border-slate-600">
                   Dashboard'a Dön
                 </Button>
               </Link>
               <Button
-                onClick={() => {
-                  setCurrentStep("guest");
-                  setGuestInfo({
-                    fullName: "",
-                    phone: "",
-                    email: "",
-                    customerId: undefined,
-                  });
-                  setSelectedTableId("");
-                  setGuestCount(1);
-                  setCreatedReservation(null);
-                  setQrCodeUrl("");
-                  setSelectedCustomer(null);
-                  setCustomerNotes([]);
-                }}
-                className="bg-blue-600"
+                onClick={resetForm}
+                className="bg-purple-600 hover:bg-purple-700"
               >
                 Yeni Rezervasyon
               </Button>

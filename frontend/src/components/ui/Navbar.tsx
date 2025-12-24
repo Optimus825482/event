@@ -76,7 +76,7 @@ const moduleMenus: Record<
     { href: "/templates", label: "Şablonlar", icon: LayoutGrid },
   ],
   reservations: [
-    { href: "/reservations", label: "Etkinlik Seç", icon: Calendar },
+    { href: "/reservations", label: "Dashboard", icon: LayoutDashboard },
     { href: "/guests", label: "Misafirler", icon: Users },
   ],
   checkin: [{ href: "/check-in", label: "QR Okuyucu", icon: QrCode }],

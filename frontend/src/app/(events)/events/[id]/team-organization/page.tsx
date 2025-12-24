@@ -30,7 +30,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PageContainer } from "@/components/ui/PageContainer";
-import * as XLSX from "xlsx";
 import {
   EventAssignmentTab,
   EventAssignmentTabRef,
@@ -391,7 +390,10 @@ function TeamAssignmentList({ eventId }: { eventId: string }) {
   });
 
   // Excel Export Fonksiyonu
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    // Dynamic import - xlsx sadece export yapılırken yüklenir
+    const XLSX = await import("xlsx");
+
     const exportData = rows.map((row) => ({
       Ekip: row.teamName,
       Masalar: row.tableNumbers,

@@ -26,7 +26,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { staffApi, eventsApi, API_BASE, leaderApi } from "@/lib/api";
-import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -3712,6 +3711,9 @@ function BulkUploadModal({
   };
 
   const parseExcelFile = async (f: File): Promise<any[]> => {
+    // Dynamic import - xlsx sadece bu fonksiyon çağrıldığında yüklenir
+    const XLSX = await import("xlsx");
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
