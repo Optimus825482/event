@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { Event } from "./event.entity";
 
@@ -20,6 +21,7 @@ export interface TeamMember {
 }
 
 @Entity("service_teams")
+@Index("IDX_service_team_event", ["eventId"]) // Performans: Event bazlı sorgular
 export class ServiceTeam {
   @PrimaryGeneratedColumn("uuid")
   id: string;

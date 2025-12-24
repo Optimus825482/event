@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { User } from "./user.entity";
 import { Event } from "./event.entity";
@@ -13,6 +14,9 @@ import { WorkShift } from "./work-shift.entity";
 import { Team } from "./team.entity";
 
 @Entity("event_staff_assignments")
+@Index("IDX_event_staff_assignment_event", ["eventId"]) // Performans: Event bazlı sorgular
+@Index("IDX_event_staff_assignment_staff", ["staffId"]) // Performans: Staff bazlı sorgular
+@Index("IDX_event_staff_assignment_event_active", ["eventId", "isActive"]) // Performans: Aktif atamalar
 export class EventStaffAssignment {
   @PrimaryGeneratedColumn("uuid")
   id: string;

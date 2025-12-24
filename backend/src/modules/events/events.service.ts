@@ -45,35 +45,87 @@ export class EventsService {
     return savedEvent;
   }
 
+  /**
+   * Tüm etkinlikleri getir - OPTIMIZE EDİLDİ
+   * - Sadece gerekli alanlar SELECT ediliyor (SELECT * yerine)
+   * - COUNT subquery ile relation sayıları tek sorguda alınıyor
+   * - N+1 query problemi çözüldü
+   */
   async findAll(organizerId?: string) {
     const query = this.eventRepository
       .createQueryBuilder("event")
-      .leftJoinAndSelect("event.organizer", "organizer")
-      .leftJoinAndSelect("event.reservations", "reservations")
-      .leftJoinAndSelect("event.staffAssignments", "staffAssignments")
-      .leftJoinAndSelect("event.serviceTeams", "serviceTeams")
-      .leftJoinAndSelect("event.eventStaffAssignments", "eventStaffAssignments")
+      .leftJoin("event.organizer", "organizer")
+      .select([
+        "event.id",
+        "event.name",
+        "event.eventDate",
+        "event.eventEndDate",
+        "event.eventType",
+        "event.status",
+        "event.totalCapacity",
+        "event.venueLayout",
+        "event.createdAt",
+        "event.updatedAt",
+        "organizer.id",
+        "organizer.fullName",
+      ])
+      // COUNT subqueries - tek sorguda tüm sayıları al
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select("COUNT(*)")
+            .from("reservation", "r")
+            .where("r.eventId = event.id"),
+        "reservationCount"
+      )
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select("COUNT(*)")
+            .from("service_team", "st")
+            .where("st.eventId = event.id"),
+        "serviceTeamCount"
+      )
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select("COUNT(*)")
+            .from("staff_assignment", "sa")
+            .where("sa.eventId = event.id"),
+        "staffAssignmentCount"
+      )
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select("COUNT(*)")
+            .from("event_staff_assignment", "esa")
+            .where("esa.eventId = event.id"),
+        "eventStaffAssignmentCount"
+      )
       .orderBy("event.eventDate", "DESC");
 
     if (organizerId) {
       query.where("event.organizerId = :organizerId", { organizerId });
     }
 
-    const events = await query.getMany();
+    const rawResults = await query.getRawAndEntities();
 
-    // hasVenueLayout ve hasTeamAssignment hesapla
-    return events.map((event) => ({
-      ...event,
-      hasVenueLayout: !!(
-        event.venueLayout && (event.venueLayout as any).placedTables?.length > 0
-      ),
-      // ServiceTeam, StaffAssignment veya EventStaffAssignment varsa hasTeamAssignment true
-      hasTeamAssignment:
-        event.serviceTeams?.length > 0 ||
-        event.staffAssignments?.length > 0 ||
-        event.eventStaffAssignments?.length > 0,
-      reservedCount: event.reservations?.length || 0,
-    }));
+    // Raw sonuçları entity'lerle birleştir
+    return rawResults.entities.map((event, index) => {
+      const raw = rawResults.raw[index];
+      return {
+        ...event,
+        hasVenueLayout: !!(
+          event.venueLayout &&
+          (event.venueLayout as any).placedTables?.length > 0
+        ),
+        hasTeamAssignment:
+          parseInt(raw.serviceTeamCount || "0") > 0 ||
+          parseInt(raw.staffAssignmentCount || "0") > 0 ||
+          parseInt(raw.eventStaffAssignmentCount || "0") > 0,
+        reservedCount: parseInt(raw.reservationCount || "0"),
+      };
+    });
   }
 
   async findOne(id: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -41,17 +41,81 @@ interface UpcomingEvent {
   hasTeamAssignment: boolean;
 }
 
-export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [upcomingEvent, setUpcomingEvent] = useState<UpcomingEvent | null>(
-    null
-  );
+// Countdown Component - Memo ile optimize edildi (sadece countdown değiştiğinde re-render)
+const CountdownDisplay = memo(function CountdownDisplay({
+  eventDate,
+}: {
+  eventDate: string;
+}) {
   const [countdown, setCountdown] = useState({
     days: 0,
     hours: 0,
     minutes: 0,
     seconds: 0,
   });
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const eventTime = new Date(eventDate).getTime();
+      const diff = eventTime - now;
+
+      if (diff <= 0) {
+        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      setCountdown({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      });
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [eventDate]);
+
+  return (
+    <div className="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5">
+      <div className="text-center">
+        <span className="text-lg font-bold text-emerald-400 tabular-nums">
+          {String(countdown.days).padStart(2, "0")}
+        </span>
+        <span className="text-[9px] text-slate-500 block">GÜN</span>
+      </div>
+      <span className="text-emerald-500 font-bold">:</span>
+      <div className="text-center">
+        <span className="text-lg font-bold text-emerald-400 tabular-nums">
+          {String(countdown.hours).padStart(2, "0")}
+        </span>
+        <span className="text-[9px] text-slate-500 block">SAAT</span>
+      </div>
+      <span className="text-emerald-500 font-bold">:</span>
+      <div className="text-center">
+        <span className="text-lg font-bold text-emerald-400 tabular-nums">
+          {String(countdown.minutes).padStart(2, "0")}
+        </span>
+        <span className="text-[9px] text-slate-500 block">DK</span>
+      </div>
+      <span className="text-emerald-500 font-bold">:</span>
+      <div className="text-center">
+        <span className="text-lg font-bold text-emerald-400 tabular-nums">
+          {String(countdown.seconds).padStart(2, "0")}
+        </span>
+        <span className="text-[9px] text-slate-500 block">SN</span>
+      </div>
+    </div>
+  );
+});
+
+export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [upcomingEvent, setUpcomingEvent] = useState<UpcomingEvent | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -126,33 +190,6 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
-  // Geri sayım timer
-  useEffect(() => {
-    if (!upcomingEvent) return;
-
-    const updateCountdown = () => {
-      const now = new Date().getTime();
-      const eventTime = new Date(upcomingEvent.eventDate).getTime();
-      const diff = eventTime - now;
-
-      if (diff <= 0) {
-        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-
-      setCountdown({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((diff % (1000 * 60)) / 1000),
-      });
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [upcomingEvent]);
-
   if (loading) {
     return <DashboardSkeleton />;
   }
@@ -199,38 +236,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Orta - Geri Sayım (Kompakt) */}
-                <div className="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5">
-                  <div className="text-center">
-                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
-                      {String(countdown.days).padStart(2, "0")}
-                    </span>
-                    <span className="text-[9px] text-slate-500 block">GÜN</span>
-                  </div>
-                  <span className="text-emerald-500 font-bold">:</span>
-                  <div className="text-center">
-                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
-                      {String(countdown.hours).padStart(2, "0")}
-                    </span>
-                    <span className="text-[9px] text-slate-500 block">
-                      SAAT
-                    </span>
-                  </div>
-                  <span className="text-emerald-500 font-bold">:</span>
-                  <div className="text-center">
-                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
-                      {String(countdown.minutes).padStart(2, "0")}
-                    </span>
-                    <span className="text-[9px] text-slate-500 block">DK</span>
-                  </div>
-                  <span className="text-emerald-500 font-bold">:</span>
-                  <div className="text-center">
-                    <span className="text-lg font-bold text-emerald-400 tabular-nums">
-                      {String(countdown.seconds).padStart(2, "0")}
-                    </span>
-                    <span className="text-[9px] text-slate-500 block">SN</span>
-                  </div>
-                </div>
+                {/* Orta - Geri Sayım (Kompakt) - Memo Component */}
+                <CountdownDisplay eventDate={upcomingEvent.eventDate} />
 
                 {/* Sağ - Badge'ler ve Buton */}
                 <div className="flex items-center gap-2">
@@ -410,7 +417,7 @@ export default function DashboardPage() {
   );
 }
 
-// İstatistik Kartı
+// İstatistik Kartı - Memo ile optimize edildi
 interface StatCardProps {
   icon: React.ReactNode;
   label: string;
@@ -453,7 +460,7 @@ const statColors = {
   },
 };
 
-function StatCard({
+const StatCard = memo(function StatCard({
   icon,
   label,
   value,
@@ -491,7 +498,7 @@ function StatCard({
       </Card>
     </Link>
   );
-}
+});
 
 // Skeleton
 function DashboardSkeleton() {

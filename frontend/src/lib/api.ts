@@ -4,6 +4,34 @@ export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 export const API_BASE = API_URL.replace("/api", ""); // http://localhost:4000
 
+// Simple in-memory cache for API responses
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 saniye cache süresi
+
+// Cache helper functions
+const getCached = <T>(key: string): T | null => {
+  const cached = apiCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data as T;
+  }
+  apiCache.delete(key);
+  return null;
+};
+
+const setCache = (key: string, data: any) => {
+  apiCache.set(key, { data, timestamp: Date.now() });
+};
+
+export const clearApiCache = (pattern?: string) => {
+  if (pattern) {
+    for (const key of apiCache.keys()) {
+      if (key.includes(pattern)) apiCache.delete(key);
+    }
+  } else {
+    apiCache.clear();
+  }
+};
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -65,15 +93,35 @@ export const authApi = {
     api.post("/auth/change-password", { currentPassword, newPassword }),
 };
 
-// Events API
+// Events API - Cache destekli
 export const eventsApi = {
-  getAll: () => api.get("/events?all=true"),
+  getAll: async (useCache = true) => {
+    const cacheKey = "events:all";
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get("/events?all=true");
+    setCache(cacheKey, response.data);
+    return response;
+  },
   getOne: (id: string) => api.get(`/events/${id}`),
-  create: (data: any) => api.post("/events", data),
-  update: (id: string, data: any) => api.put(`/events/${id}`, data),
-  delete: (id: string) => api.delete(`/events/${id}`),
-  updateLayout: (id: string, data: { venueLayout: any }) =>
-    api.patch(`/events/${id}/layout`, data),
+  create: async (data: any) => {
+    clearApiCache("events"); // Cache'i temizle
+    return api.post("/events", data);
+  },
+  update: async (id: string, data: any) => {
+    clearApiCache("events");
+    return api.put(`/events/${id}`, data);
+  },
+  delete: async (id: string) => {
+    clearApiCache("events");
+    return api.delete(`/events/${id}`);
+  },
+  updateLayout: async (id: string, data: { venueLayout: any }) => {
+    clearApiCache("events");
+    return api.patch(`/events/${id}/layout`, data);
+  },
 };
 
 // Tables API
@@ -210,14 +258,32 @@ export const reservationsApi = {
     api.get(`/reservations/customer/${customerId}/info`),
 };
 
-// Venues API
+// Venues API - Cache destekli
 export const venuesApi = {
-  getAll: () => api.get("/venues"),
+  getAll: async (useCache = true) => {
+    const cacheKey = "venues:all";
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get("/venues");
+    setCache(cacheKey, response.data);
+    return response;
+  },
   getMarketplace: () => api.get("/venues/marketplace"),
   getOne: (id: string) => api.get(`/venues/${id}`),
-  create: (data: any) => api.post("/venues", data),
-  update: (id: string, data: any) => api.put(`/venues/${id}`, data),
-  delete: (id: string) => api.delete(`/venues/${id}`),
+  create: async (data: any) => {
+    clearApiCache("venues");
+    return api.post("/venues", data);
+  },
+  update: async (id: string, data: any) => {
+    clearApiCache("venues");
+    return api.put(`/venues/${id}`, data);
+  },
+  delete: async (id: string) => {
+    clearApiCache("venues");
+    return api.delete(`/venues/${id}`);
+  },
 };
 
 // Staff pozisyon tipleri
@@ -228,13 +294,21 @@ export type StaffPosition =
   | "komi"
   | "debarasor";
 
-// Staff API
+// Staff API - Cache destekli
 export const staffApi = {
-  // Personel CRUD
-  getAll: (activeOnly?: boolean) =>
-    api.get(`/staff${activeOnly ? "?active=true" : ""}`),
+  // Personel CRUD - Cache destekli
+  getAll: async (activeOnly?: boolean, useCache = true) => {
+    const cacheKey = `staff:all:${activeOnly || "all"}`;
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get(`/staff${activeOnly ? "?active=true" : ""}`);
+    setCache(cacheKey, response.data);
+    return response;
+  },
   getOne: (id: string) => api.get(`/staff/${id}`),
-  create: (data: {
+  create: async (data: {
     email: string;
     fullName: string;
     password: string;
@@ -242,8 +316,11 @@ export const staffApi = {
     color?: string;
     position?: StaffPosition;
     avatar?: string;
-  }) => api.post("/staff", data),
-  update: (
+  }) => {
+    clearApiCache("staff");
+    return api.post("/staff", data);
+  },
+  update: async (
     id: string,
     data: {
       fullName?: string;
@@ -253,8 +330,26 @@ export const staffApi = {
       avatar?: string;
       isActive?: boolean;
     }
-  ) => api.put(`/staff/${id}`, data),
-  delete: (id: string) => api.delete(`/staff/${id}`),
+  ) => {
+    clearApiCache("staff");
+    return api.put(`/staff/${id}`, data);
+  },
+  delete: async (id: string) => {
+    clearApiCache("staff");
+    return api.delete(`/staff/${id}`);
+  },
+
+  // Ekipleri getir - Cache destekli
+  getTeams: async (useCache = true) => {
+    const cacheKey = "staff:teams";
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get("/staff/teams");
+    setCache(cacheKey, response.data);
+    return response;
+  },
 
   // Atama işlemleri
   getEventAssignments: (eventId: string) => api.get(`/staff/event/${eventId}`),

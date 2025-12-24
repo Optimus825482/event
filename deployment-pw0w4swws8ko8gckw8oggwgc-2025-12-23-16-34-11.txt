@@ -1,0 +1,350 @@
+2025-Dec-23 16:29:42.626587 Starting deployment of optimus825482/event:main-n0sgcksccoo4w4ksk8wkgog8 to localhost.
+2025-Dec-23 16:29:43.098126 Preparing container with helper image: ghcr.io/coollabsio/coolify-helper:1.0.12
+2025-Dec-23 16:29:43.327243 [CMD]: docker stop -t 30 pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:29:43.327243 Error response from daemon: No such container: pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:29:43.554909 [CMD]: docker rm -f pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:29:43.554909 Error response from daemon: No such container: pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:29:43.841018 [CMD]: docker run -d --network coolify --name pw0w4swws8ko8gckw8oggwgc --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/coollabsio/coolify-helper:1.0.12
+2025-Dec-23 16:29:43.841018 c0c6d240d091f8d89343c5fd78cdad10a50bf4452652c772905bb22541b4a8c0
+2025-Dec-23 16:29:45.714462 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'GIT_SSH_COMMAND="ssh -o ConnectTimeout=30 -p 22 -o Port=22 -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git ls-remote https://github.com/Optimus825482/event refs/heads/main'
+2025-Dec-23 16:29:45.714462 ffc92bdc8f9f9efba9c9595794e0b002f9045a5c refs/heads/main
+2025-Dec-23 16:29:45.736825 ----------------------------------------
+2025-Dec-23 16:29:45.748008 Importing Optimus825482/event:main (commit sha ffc92bdc8f9f9efba9c9595794e0b002f9045a5c) to /artifacts/pw0w4swws8ko8gckw8oggwgc.
+2025-Dec-23 16:29:46.036873 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'git clone --depth=1 --recurse-submodules --shallow-submodules -b 'main' 'https://github.com/Optimus825482/event' '/artifacts/pw0w4swws8ko8gckw8oggwgc' && cd '/artifacts/pw0w4swws8ko8gckw8oggwgc' && if [ -f .gitmodules ]; then sed -i "s#git@\(.*\):#https://\1/#g" '/artifacts/pw0w4swws8ko8gckw8oggwgc'/.gitmodules || true && git submodule sync && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git submodule update --init --recursive --depth=1; fi && cd '/artifacts/pw0w4swws8ko8gckw8oggwgc' && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git lfs pull'
+2025-Dec-23 16:29:46.036873 Cloning into '/artifacts/pw0w4swws8ko8gckw8oggwgc'...
+2025-Dec-23 16:29:48.374838 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'cd /artifacts/pw0w4swws8ko8gckw8oggwgc && git log -1 ffc92bdc8f9f9efba9c9595794e0b002f9045a5c --pretty=%B'
+2025-Dec-23 16:29:48.374838 fix: Dockerfile - seed-data.sql ve postgresql-client eklendi
+2025-Dec-23 16:29:48.757919 ----------------------------------------
+2025-Dec-23 16:29:48.771322 ⚠️ Build-time environment variable warning: NODE_ENV=production
+2025-Dec-23 16:29:48.786537 Affects: Node.js/npm/yarn/bun/pnpm
+2025-Dec-23 16:29:48.803323 Issue: Skips devDependencies installation which are often required for building (webpack, typescript, etc.)
+2025-Dec-23 16:29:48.820083 Recommendation: Uncheck "Available at Buildtime" or use "development" during build
+2025-Dec-23 16:29:48.832969
+2025-Dec-23 16:29:48.844740 💡 Tips to resolve build issues:
+2025-Dec-23 16:29:48.856538 1. Set these variables as "Runtime only" in the environment variables settings
+2025-Dec-23 16:29:48.868597 2. Use different values for build-time (e.g., NODE_ENV=development for build)
+2025-Dec-23 16:29:48.880662 3. Consider using multi-stage Docker builds to separate build and runtime environments
+2025-Dec-23 16:29:52.573302 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'test -f /artifacts/pw0w4swws8ko8gckw8oggwgc/backend/Dockerfile && echo 'exists' || echo 'not found''
+2025-Dec-23 16:29:52.573302 exists
+2025-Dec-23 16:29:52.935925 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'cat /artifacts/pw0w4swws8ko8gckw8oggwgc/backend/Dockerfile'
+2025-Dec-23 16:29:52.935925 # Backend Dockerfile - Production
+2025-Dec-23 16:29:52.935925 FROM node:20-alpine AS builder
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 WORKDIR /app
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Package files
+2025-Dec-23 16:29:52.935925 COPY package*.json ./
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Install dependencies
+2025-Dec-23 16:29:52.935925 RUN npm ci
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Copy source
+2025-Dec-23 16:29:52.935925 COPY . .
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Build
+2025-Dec-23 16:29:52.935925 RUN npm run build
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Production stage
+2025-Dec-23 16:29:52.935925 FROM node:20-alpine AS runner
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 WORKDIR /app
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 ENV NODE_ENV=production
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Install postgresql-client for database seeding
+2025-Dec-23 16:29:52.935925 RUN apk add --no-cache postgresql-client
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Create uploads directory
+2025-Dec-23 16:29:52.935925 RUN mkdir -p /app/uploads/avatars /app/uploads/logos /app/uploads/event-images /app/uploads/invitation-images
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Copy built files
+2025-Dec-23 16:29:52.935925 COPY --from=builder /app/dist ./dist
+2025-Dec-23 16:29:52.935925 COPY --from=builder /app/node_modules ./node_modules
+2025-Dec-23 16:29:52.935925 COPY --from=builder /app/package*.json ./
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Copy seed data for database initialization
+2025-Dec-23 16:29:52.935925 COPY --from=builder /app/seed-data.sql ./seed-data.sql
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 # Set permissions for uploads
+2025-Dec-23 16:29:52.935925 RUN chown -R node:node /app/uploads
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 USER node
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 EXPOSE 4000
+2025-Dec-23 16:29:52.935925
+2025-Dec-23 16:29:52.935925 CMD ["node", "dist/main.js"]
+2025-Dec-23 16:29:53.274427 Added 34 ARG declarations to Dockerfile for service backend (multi-stage build, added to 2 stages).
+2025-Dec-23 16:29:53.588330 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'test -f /artifacts/pw0w4swws8ko8gckw8oggwgc/frontend/Dockerfile && echo 'exists' || echo 'not found''
+2025-Dec-23 16:29:53.588330 exists
+2025-Dec-23 16:29:53.951191 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'cat /artifacts/pw0w4swws8ko8gckw8oggwgc/frontend/Dockerfile'
+2025-Dec-23 16:29:53.951191 # Frontend Dockerfile - Production
+2025-Dec-23 16:29:53.951191 FROM node:20-alpine AS builder
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 WORKDIR /app
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Build arguments for API URLs
+2025-Dec-23 16:29:53.951191 ARG NEXT_PUBLIC_API_URL
+2025-Dec-23 16:29:53.951191 ARG NEXT_PUBLIC_SOCKET_URL
+2025-Dec-23 16:29:53.951191 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+2025-Dec-23 16:29:53.951191 ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Package files
+2025-Dec-23 16:29:53.951191 COPY package*.json ./
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Install ALL dependencies (including devDependencies for build)
+2025-Dec-23 16:29:53.951191 RUN npm ci --include=dev
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Copy source
+2025-Dec-23 16:29:53.951191 COPY . .
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Remove .env.local if exists (use environment variables instead)
+2025-Dec-23 16:29:53.951191 RUN rm -f .env.local
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Build
+2025-Dec-23 16:29:53.951191 RUN npm run build
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Production stage
+2025-Dec-23 16:29:53.951191 FROM node:20-alpine AS runner
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 WORKDIR /app
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 ENV NODE_ENV=production
+2025-Dec-23 16:29:53.951191 ENV HOSTNAME="0.0.0.0"
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Don't run as root
+2025-Dec-23 16:29:53.951191 RUN addgroup --system --gid 1001 nodejs
+2025-Dec-23 16:29:53.951191 RUN adduser --system --uid 1001 nextjs
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 # Copy necessary files
+2025-Dec-23 16:29:53.951191 COPY --from=builder /app/.next/standalone ./
+2025-Dec-23 16:29:53.951191 COPY --from=builder /app/.next/static ./.next/static
+2025-Dec-23 16:29:53.951191 COPY --from=builder /app/public ./public
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 USER nextjs
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 EXPOSE 3000
+2025-Dec-23 16:29:53.951191
+2025-Dec-23 16:29:53.951191 CMD ["node", "server.js"]
+2025-Dec-23 16:29:54.414755 Added 34 ARG declarations to Dockerfile for service frontend (multi-stage build, added to 2 stages).
+2025-Dec-23 16:29:54.446406 Pulling & building required images.
+2025-Dec-23 16:29:54.597382 Creating build-time .env file in /artifacts (outside Docker context).
+2025-Dec-23 16:29:55.609357 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'cat /artifacts/build-time.env'
+2025-Dec-23 16:29:55.609357 COOLIFY_URL=''
+2025-Dec-23 16:29:55.609357 COOLIFY_FQDN=''
+2025-Dec-23 16:29:55.609357 SERVICE_NAME_POSTGRES='postgres'
+2025-Dec-23 16:29:55.609357 SERVICE_NAME_BACKEND='backend'
+2025-Dec-23 16:29:55.609357 SERVICE_NAME_FRONTEND='frontend'
+2025-Dec-23 16:29:55.609357 SERVICE_URL_BACKEND='https://api.eventflow.optimistdemo.cloud'
+2025-Dec-23 16:29:55.609357 SERVICE_FQDN_BACKEND='api.eventflow.optimistdemo.cloud'
+2025-Dec-23 16:29:55.609357 SERVICE_URL_FRONTEND='https://eventflow.optimistdemo.cloud'
+2025-Dec-23 16:29:55.609357 SERVICE_FQDN_FRONTEND='eventflow.optimistdemo.cloud'
+2025-Dec-23 16:29:55.609357 DB_HOST="postgres"
+2025-Dec-23 16:29:55.609357 DB_NAME="eventflow"
+2025-Dec-23 16:29:55.609357 DB_PASSWORD="518518Erkan"
+2025-Dec-23 16:29:55.609357 DB_PORT="5432"
+2025-Dec-23 16:29:55.609357 DB_USERNAME="postgres"
+2025-Dec-23 16:29:55.609357 FRONTEND_URL="https://eventflow.optimistdemo.cloud"
+2025-Dec-23 16:29:55.609357 JWT_EXPIRES_IN="7d"
+2025-Dec-23 16:29:55.609357 JWT_SECRET="EventFlowSuperSecretKey2024ProductionReady!"
+2025-Dec-23 16:29:55.609357 NEXT_PUBLIC_API_URL="https://api.eventflow.optimistdemo.cloud/api"
+2025-Dec-23 16:29:55.609357 NEXT_PUBLIC_SOCKET_URL="https://api.eventflow.optimistdemo.cloud"
+2025-Dec-23 16:29:55.609357 NODE_ENV="production"
+2025-Dec-23 16:29:55.619765 Adding build arguments to Docker Compose build command.
+2025-Dec-23 16:29:56.783701 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'COOLIFY_BRANCH=main COOLIFY_RESOURCE_UUID=k48c4o4404g4wwwggg08gco4 docker compose --env-file /artifacts/build-time.env --project-name k48c4o4404g4wwwggg08gco4 --project-directory /artifacts/pw0w4swws8ko8gckw8oggwgc -f /artifacts/pw0w4swws8ko8gckw8oggwgc/docker-compose.coolify.yml build --pull --build-arg COOLIFY_URL --build-arg COOLIFY_FQDN --build-arg SERVICE_FQDN_BACKEND --build-arg SERVICE_FQDN_FRONTEND --build-arg SERVICE_URL_BACKEND --build-arg SERVICE_URL_FRONTEND --build-arg DB_HOST --build-arg DB_NAME --build-arg DB_PASSWORD --build-arg DB_PORT --build-arg DB_USERNAME --build-arg FRONTEND_URL --build-arg JWT_EXPIRES_IN --build-arg JWT_SECRET --build-arg NEXT_PUBLIC_API_URL --build-arg NEXT_PUBLIC_SOCKET_URL --build-arg NODE_ENV --build-arg COOLIFY_BUILD_SECRETS_HASH=353a6c43235f7b01eac1b6a9015ce8db66229c7707f1d6206cb9cd4c96e3b0ed'
+2025-Dec-23 16:29:56.783701 #1 [internal] load local bake definitions
+2025-Dec-23 16:29:56.932361 #1 reading from stdin 2.83kB done
+2025-Dec-23 16:29:56.932361 #1 DONE 0.0s
+2025-Dec-23 16:29:56.932361
+2025-Dec-23 16:29:56.932361 #2 [frontend internal] load build definition from Dockerfile
+2025-Dec-23 16:29:57.146521 #2 transferring dockerfile: 1.63kB done
+2025-Dec-23 16:29:57.146521 #2 DONE 0.0s
+2025-Dec-23 16:29:57.146521
+2025-Dec-23 16:29:57.146521 #3 [backend internal] load build definition from Dockerfile
+2025-Dec-23 16:29:57.146521 #3 transferring dockerfile: 1.57kB done
+2025-Dec-23 16:29:57.146521 #3 DONE 0.0s
+2025-Dec-23 16:29:57.146521
+2025-Dec-23 16:29:57.146521 #4 [backend internal] load metadata for docker.io/library/node:20-alpine
+2025-Dec-23 16:29:58.056834 #4 DONE 1.0s
+2025-Dec-23 16:29:58.056834
+2025-Dec-23 16:29:58.056834 #5 [frontend internal] load .dockerignore
+2025-Dec-23 16:29:58.056834 #5 transferring context: 2B done
+2025-Dec-23 16:29:58.056834 #5 DONE 0.0s
+2025-Dec-23 16:29:58.056834
+2025-Dec-23 16:29:58.056834 #6 [backend internal] load .dockerignore
+2025-Dec-23 16:29:58.056834 #6 transferring context: 2B done
+2025-Dec-23 16:29:58.056834 #6 DONE 0.0s
+2025-Dec-23 16:29:58.056834
+2025-Dec-23 16:29:58.056834 #7 [frontend builder 1/7] FROM docker.io/library/node:20-alpine@sha256:658d0f63e501824d6c23e06d4bb95c71e7d704537c9d9272f488ac03a370d448
+2025-Dec-23 16:29:58.056834 #7 DONE 0.0s
+2025-Dec-23 16:29:58.056834
+2025-Dec-23 16:29:58.056834 #8 [backend builder 2/7] WORKDIR /app
+2025-Dec-23 16:29:58.056834 #8 CACHED
+2025-Dec-23 16:29:58.056834
+2025-Dec-23 16:29:58.056834 #9 [frontend internal] load build context
+2025-Dec-23 16:29:58.363668 #9 transferring context: 2.69MB 0.3s done
+2025-Dec-23 16:29:58.363668 #9 DONE 0.3s
+2025-Dec-23 16:29:58.363668
+2025-Dec-23 16:29:58.363668 #10 [backend internal] load build context
+2025-Dec-23 16:29:58.363668 #10 transferring context: 1.30MB 0.2s done
+2025-Dec-23 16:29:58.363668 #10 DONE 0.3s
+2025-Dec-23 16:29:58.363668
+2025-Dec-23 16:29:58.363668 #11 [backend builder 3/6] COPY package*.json ./
+2025-Dec-23 16:29:58.363668 #11 CACHED
+2025-Dec-23 16:29:58.363668
+2025-Dec-23 16:29:58.363668 #12 [backend builder 4/6] RUN npm ci
+2025-Dec-23 16:29:58.363668 #12 CACHED
+2025-Dec-23 16:29:58.363668
+2025-Dec-23 16:29:58.363668 #13 [backend builder 5/6] COPY . .
+2025-Dec-23 16:29:58.491505 #13 DONE 0.1s
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #14 [frontend builder 5/7] COPY . .
+2025-Dec-23 16:29:58.491505 #14 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #15 [frontend builder 6/7] RUN rm -f .env.local
+2025-Dec-23 16:29:58.491505 #15 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #16 [frontend builder 7/7] RUN npm run build
+2025-Dec-23 16:29:58.491505 #16 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #17 [frontend runner 6/7] COPY --from=builder /app/.next/static ./.next/static
+2025-Dec-23 16:29:58.491505 #17 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #18 [frontend runner 4/7] RUN adduser --system --uid 1001 nextjs
+2025-Dec-23 16:29:58.491505 #18 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #19 [frontend builder 3/7] COPY package*.json ./
+2025-Dec-23 16:29:58.491505 #19 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #20 [frontend runner 5/7] COPY --from=builder /app/.next/standalone ./
+2025-Dec-23 16:29:58.491505 #20 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #21 [frontend runner 3/7] RUN addgroup --system --gid 1001 nodejs
+2025-Dec-23 16:29:58.491505 #21 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #22 [frontend builder 4/7] RUN npm ci --include=dev
+2025-Dec-23 16:29:58.491505 #22 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #23 [frontend runner 7/7] COPY --from=builder /app/public ./public
+2025-Dec-23 16:29:58.491505 #23 CACHED
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #24 [frontend] exporting to image
+2025-Dec-23 16:29:58.491505 #24 exporting layers done
+2025-Dec-23 16:29:58.491505 #24 writing image sha256:3bbc7a1bfd835295f47814906796d1de3e3e34a319fb6ff195fdec326050c33c 0.0s done
+2025-Dec-23 16:29:58.491505 #24 naming to docker.io/library/k48c4o4404g4wwwggg08gco4_frontend:ffc92bdc8f9f9efba9c9595794e0b002f9045a5c 0.0s done
+2025-Dec-23 16:29:58.491505 #24 DONE 0.0s
+2025-Dec-23 16:29:58.491505
+2025-Dec-23 16:29:58.491505 #25 [frontend] resolving provenance for metadata file
+2025-Dec-23 16:29:58.659737 #25 DONE 0.0s
+2025-Dec-23 16:29:58.659737
+2025-Dec-23 16:29:58.659737 #26 [backend builder 6/6] RUN npm run build
+2025-Dec-23 16:29:59.337505 #26 0.896
+2025-Dec-23 16:29:59.337505 #26 0.896 > backend@1.0.0 build
+2025-Dec-23 16:29:59.337505 #26 0.896 > tsc
+2025-Dec-23 16:29:59.337505 #26 0.896
+2025-Dec-23 16:30:01.252874 #26 ...
+2025-Dec-23 16:30:01.252874
+2025-Dec-23 16:30:01.252874 #27 [backend runner 3/9] RUN apk add --no-cache postgresql-client
+2025-Dec-23 16:30:01.252874 #27 2.129 (1/8) Installing postgresql-common (1.2-r2)
+2025-Dec-23 16:30:01.252874 #27 2.173 Executing postgresql-common-1.2-r2.pre-install
+2025-Dec-23 16:30:01.252874 #27 2.214 (2/8) Installing lz4-libs (1.10.0-r0)
+2025-Dec-23 16:30:01.252874 #27 2.268 (3/8) Installing libpq (18.1-r0)
+2025-Dec-23 16:30:01.252874 #27 2.329 (4/8) Installing ncurses-terminfo-base (6.5_p20251123-r0)
+2025-Dec-23 16:30:01.252874 #27 2.394 (5/8) Installing libncursesw (6.5_p20251123-r0)
+2025-Dec-23 16:30:01.252874 #27 2.456 (6/8) Installing readline (8.3.1-r0)
+2025-Dec-23 16:30:01.252874 #27 2.518 (7/8) Installing zstd-libs (1.5.7-r2)
+2025-Dec-23 16:30:01.252874 #27 2.607 (8/8) Installing postgresql18-client (18.1-r0)
+2025-Dec-23 16:30:01.252874 #27 2.783 Executing busybox-1.37.0-r30.trigger
+2025-Dec-23 16:30:01.252874 #27 2.797 Executing postgresql-common-1.2-r2.trigger
+2025-Dec-23 16:30:01.252874 #27 2.820 * Setting postgresql18 as the default version
+2025-Dec-23 16:30:01.252874 #27 3.058 * WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86_64/APKINDEX.tar.gz: No such file or directory
+2025-Dec-23 16:30:01.252874 #27 3.058 * WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.23/community/x86_64/APKINDEX.tar.gz: No such file or directory
+2025-Dec-23 16:30:01.252874 #27 3.075 OK: 16.0 MiB in 26 packages
+2025-Dec-23 16:30:01.252874 #27 DONE 3.2s
+2025-Dec-23 16:30:01.410190 #28 [backend runner 4/9] RUN mkdir -p /app/uploads/avatars /app/uploads/logos /app/uploads/event-images /app/uploads/invitation-images
+2025-Dec-23 16:30:01.931887 #28 DONE 0.7s
+2025-Dec-23 16:30:01.931887
+2025-Dec-23 16:30:01.931887 #26 [backend builder 6/6] RUN npm run build
+2025-Dec-23 16:30:21.177856 #26 DONE 22.7s
+2025-Dec-23 16:30:25.767537 #29 [backend runner 5/9] COPY --from=builder /app/dist ./dist
+2025-Dec-23 16:30:26.102415 #29 DONE 0.3s
+2025-Dec-23 16:30:26.256773 #30 [backend runner 6/9] COPY --from=builder /app/node_modules ./node_modules
+2025-Dec-23 16:30:34.127074 #30 DONE 8.0s
+2025-Dec-23 16:30:34.309757 #31 [backend runner 7/9] COPY --from=builder /app/package*.json ./
+2025-Dec-23 16:30:34.919620 #31 DONE 0.8s
+2025-Dec-23 16:30:35.168298 #32 [backend runner 8/9] COPY --from=builder /app/seed-data.sql ./seed-data.sql
+2025-Dec-23 16:30:35.168298 #32 DONE 0.1s
+2025-Dec-23 16:30:35.168298
+2025-Dec-23 16:30:35.168298 #33 [backend runner 9/9] RUN chown -R node:node /app/uploads
+2025-Dec-23 16:30:35.532523 #33 DONE 0.5s
+2025-Dec-23 16:30:35.697226 #34 [backend] exporting to image
+2025-Dec-23 16:30:35.697226 #34 exporting layers
+2025-Dec-23 16:30:40.674674 #34 exporting layers 5.1s done
+2025-Dec-23 16:30:40.776530 #34 writing image sha256:78d22472a79fd21c5fea3cf9be5bbd292eb2c8fb035b8446435cc34f5e4ad3fe done
+2025-Dec-23 16:30:40.776530 #34 naming to docker.io/library/k48c4o4404g4wwwggg08gco4_backend:ffc92bdc8f9f9efba9c9595794e0b002f9045a5c done
+2025-Dec-23 16:30:40.776530 #34 DONE 5.2s
+2025-Dec-23 16:30:40.776530
+2025-Dec-23 16:30:40.776530 #35 [backend] resolving provenance for metadata file
+2025-Dec-23 16:30:40.801003 #35 DONE 0.0s
+2025-Dec-23 16:30:40.807745 backend Built
+2025-Dec-23 16:30:40.807745 frontend Built
+2025-Dec-23 16:30:40.903397 Creating .env file with runtime variables for container.
+2025-Dec-23 16:30:41.604047 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'cat /artifacts/pw0w4swws8ko8gckw8oggwgc/.env'
+2025-Dec-23 16:30:41.604047 SOURCE_COMMIT=ffc92bdc8f9f9efba9c9595794e0b002f9045a5c
+2025-Dec-23 16:30:41.604047 COOLIFY_URL=
+2025-Dec-23 16:30:41.604047 COOLIFY_FQDN=
+2025-Dec-23 16:30:41.604047 SERVICE_URL_BACKEND=https://api.eventflow.optimistdemo.cloud
+2025-Dec-23 16:30:41.604047 SERVICE_FQDN_BACKEND=api.eventflow.optimistdemo.cloud
+2025-Dec-23 16:30:41.604047 SERVICE_URL_FRONTEND=https://eventflow.optimistdemo.cloud
+2025-Dec-23 16:30:41.604047 SERVICE_FQDN_FRONTEND=eventflow.optimistdemo.cloud
+2025-Dec-23 16:30:41.604047 SERVICE_NAME_POSTGRES=postgres
+2025-Dec-23 16:30:41.604047 SERVICE_NAME_BACKEND=backend
+2025-Dec-23 16:30:41.604047 SERVICE_NAME_FRONTEND=frontend
+2025-Dec-23 16:30:41.604047 DB_HOST=postgres
+2025-Dec-23 16:30:41.604047 DB_PORT=5432
+2025-Dec-23 16:30:41.604047 DB_USERNAME=postgres
+2025-Dec-23 16:30:41.604047 DB_PASSWORD=518518Erkan
+2025-Dec-23 16:30:41.604047 DB_NAME=eventflow
+2025-Dec-23 16:30:41.604047 NODE_ENV=production
+2025-Dec-23 16:30:41.604047 JWT_SECRET=EventFlowSuperSecretKey2024ProductionReady!
+2025-Dec-23 16:30:41.604047 NEXT_PUBLIC_API_URL=https://api.eventflow.optimistdemo.cloud/api
+2025-Dec-23 16:30:41.604047 JWT_EXPIRES_IN=7d
+2025-Dec-23 16:30:41.604047 NEXT_PUBLIC_SOCKET_URL=https://api.eventflow.optimistdemo.cloud
+2025-Dec-23 16:30:41.604047 FRONTEND_URL=https://eventflow.optimistdemo.cloud
+2025-Dec-23 16:30:41.604047 HOST=0.0.0.0
+2025-Dec-23 16:30:41.816943 Removing old containers.
+2025-Dec-23 16:30:42.948788 [CMD]: docker stop -t 30 frontend-k48c4o4404g4wwwggg08gco4-162347868910
+2025-Dec-23 16:30:42.948788 frontend-k48c4o4404g4wwwggg08gco4-162347868910
+2025-Dec-23 16:30:43.219881 [CMD]: docker rm -f frontend-k48c4o4404g4wwwggg08gco4-162347868910
+2025-Dec-23 16:30:43.219881 frontend-k48c4o4404g4wwwggg08gco4-162347868910
+2025-Dec-23 16:31:14.017979 [CMD]: docker stop -t 30 backend-k48c4o4404g4wwwggg08gco4-162347840552
+2025-Dec-23 16:31:14.017979 backend-k48c4o4404g4wwwggg08gco4-162347840552
+2025-Dec-23 16:31:14.355068 [CMD]: docker rm -f backend-k48c4o4404g4wwwggg08gco4-162347840552
+2025-Dec-23 16:31:14.355068 backend-k48c4o4404g4wwwggg08gco4-162347840552
+2025-Dec-23 16:31:15.150424 [CMD]: docker stop -t 30 postgres-k48c4o4404g4wwwggg08gco4-162347816599
+2025-Dec-23 16:31:15.150424 postgres-k48c4o4404g4wwwggg08gco4-162347816599
+2025-Dec-23 16:31:15.430353 [CMD]: docker rm -f postgres-k48c4o4404g4wwwggg08gco4-162347816599
+2025-Dec-23 16:31:15.430353 postgres-k48c4o4404g4wwwggg08gco4-162347816599
+2025-Dec-23 16:31:15.445544 Starting new application.
+2025-Dec-23 16:31:16.520066 [CMD]: docker exec pw0w4swws8ko8gckw8oggwgc bash -c 'COOLIFY_BRANCH=main COOLIFY_RESOURCE_UUID=k48c4o4404g4wwwggg08gco4 docker compose --env-file /artifacts/pw0w4swws8ko8gckw8oggwgc/.env --project-name k48c4o4404g4wwwggg08gco4 --project-directory /artifacts/pw0w4swws8ko8gckw8oggwgc -f /artifacts/pw0w4swws8ko8gckw8oggwgc/docker-compose.coolify.yml up -d'
+2025-Dec-23 16:31:16.520066 Container postgres-k48c4o4404g4wwwggg08gco4-162951761967 Creating
+2025-Dec-23 16:31:16.612074 Container postgres-k48c4o4404g4wwwggg08gco4-162951761967 Created
+2025-Dec-23 16:31:16.612074 Container backend-k48c4o4404g4wwwggg08gco4-162951787610 Creating
+2025-Dec-23 16:31:16.662588 Container backend-k48c4o4404g4wwwggg08gco4-162951787610 Created
+2025-Dec-23 16:31:16.662588 Container frontend-k48c4o4404g4wwwggg08gco4-162951815021 Creating
+2025-Dec-23 16:31:16.719547 Container frontend-k48c4o4404g4wwwggg08gco4-162951815021 Created
+2025-Dec-23 16:31:16.726506 Container postgres-k48c4o4404g4wwwggg08gco4-162951761967 Starting
+2025-Dec-23 16:31:17.402929 Container postgres-k48c4o4404g4wwwggg08gco4-162951761967 Started
+2025-Dec-23 16:31:17.402929 Container postgres-k48c4o4404g4wwwggg08gco4-162951761967 Waiting
+2025-Dec-23 16:31:22.917871 Container postgres-k48c4o4404g4wwwggg08gco4-162951761967 Healthy
+2025-Dec-23 16:31:22.917871 Container backend-k48c4o4404g4wwwggg08gco4-162951787610 Starting
+2025-Dec-23 16:31:23.859181 Container backend-k48c4o4404g4wwwggg08gco4-162951787610 Started
+2025-Dec-23 16:31:23.859181 Container backend-k48c4o4404g4wwwggg08gco4-162951787610 Waiting
+2025-Dec-23 16:31:29.367926 Container backend-k48c4o4404g4wwwggg08gco4-162951787610 Healthy
+2025-Dec-23 16:31:29.367926 Container frontend-k48c4o4404g4wwwggg08gco4-162951815021 Starting
+2025-Dec-23 16:31:29.930418 Container frontend-k48c4o4404g4wwwggg08gco4-162951815021 Started
+2025-Dec-23 16:31:30.583967 New container started.
+2025-Dec-23 16:31:31.328531 Gracefully shutting down build container: pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:31:31.891946 [CMD]: docker stop -t 30 pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:31:31.891946 pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:31:32.130550 [CMD]: docker rm -f pw0w4swws8ko8gckw8oggwgc
+2025-Dec-23 16:31:32.130550 Error response from daemon: No such container: pw0w4swws8ko8gckw8oggwgc

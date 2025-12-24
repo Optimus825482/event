@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { Customer } from "./customer.entity";
 import { Event } from "./event.entity";
@@ -20,6 +21,9 @@ export enum GuestNoteType {
 }
 
 @Entity("guest_notes")
+@Index("IDX_guest_note_customer", ["customerId"]) // Performans: Customer bazlı sorgular
+@Index("IDX_guest_note_event", ["eventId"]) // Performans: Event bazlı sorgular
+@Index("IDX_guest_note_customer_event", ["customerId", "eventId"]) // Performans: Customer+Event lookup
 export class GuestNote {
   @PrimaryGeneratedColumn("uuid")
   id: string;

@@ -1,0 +1,98 @@
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/users/:id, DELETE} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RoutesResolver] LeaderController {/api/leader}:;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/dashboard, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId, GET} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId/review-permissions, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId/team-members, GET} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId/reviews, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId/performance-summary, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/reviews/auto-save, POST} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/reviews, POST} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId/reviews/bulk, POST} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId/reviews/:staffId/complete, PATCH} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/events/:eventId/reviews/complete-all, PATCH} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/staff/:staffId/reviews, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/staff/:staffId/performance-analysis, GET} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/staff-reviews-summary, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/leader/staff/:staffId/event-reviews, GET} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RoutesResolver] HealthController {/api/health}:;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/health, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/health/detailed, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/health/ready, GET} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/health/live, GET} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/health/metrics, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RoutesResolver] AdminController {/api/admin}:;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/admin/stats, GET} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/admin/events/review-settings, GET} route;5;3m +0ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/admin/events/:eventId/review-settings, GET} route;5;3m +11ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/admin/events/:eventId/review-settings, PATCH} route;5;3m +1ms
+[Nest] 1 - 12/23/2025, 5:36:21 PM LOG ;5;3m[RouterExplorer] Mapped {/api/admin/events/review-settings/bulk, POST} route;5;3m +1ms
+query failed: SELECT "User"."id" AS "User_id", "User"."username" AS "User_username", "User"."email" AS "User_email", "User"."password" AS "User_password", "User"."fullName" AS "User_fullName", "User"."phone" AS "User_phone", "User"."role" AS "User_role", "User"."avatar" AS "User_avatar", "User"."position" AS "User_position", "User"."color" AS "User_color", "User"."isActive" AS "User_isActive", "User"."createdAt" AS "User_createdAt", "User"."updatedAt" AS "User_updatedAt" FROM "users" "User" WHERE (("User"."username" = $1)) LIMIT 1 -- PARAMETERS: ["admin"]
+error: error: relation "users" does not exist
+query failed: SELECT COUNT(1) AS "cnt" FROM "system_settings" "SystemSettings"
+error: error: relation "system_settings" does not exist
+Admin kullanıcısı oluşturulurken hata: relation "users" does not exist
+/app/node_modules/typeorm/driver/postgres/PostgresQueryRunner.js:216
+throw new QueryFailedError_1.QueryFailedError(query, parameters, err);
+^
+QueryFailedError: relation "system_settings" does not exist
+at PostgresQueryRunner.query (/app/node_modules/typeorm/driver/postgres/PostgresQueryRunner.js:216:19)
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+at async SelectQueryBuilder.loadRawResults (/app/node_modules/typeorm/query-builder/SelectQueryBuilder.js:2231:25)
+at async SelectQueryBuilder.executeCountQuery (/app/node_modules/typeorm/query-builder/SelectQueryBuilder.js:1751:25)
+at async SelectQueryBuilder.getCount (/app/node_modules/typeorm/query-builder/SelectQueryBuilder.js:770:29)
+at async SettingsService.ensureDefaultSettings (/app/dist/modules/settings/settings.service.js:48:23)
+at async SettingsService.onModuleInit (/app/dist/modules/settings/settings.service.js:28:9)
+at async Promise.all (index 0)
+at async callModuleInitHook (/app/node_modules/@nestjs/core/hooks/on-module-init.hook.js:43:5)
+at async NestApplication.callInitHook (/app/node_modules/@nestjs/core/nest-application-context.js:242:13) {
+query: 'SELECT COUNT(1) AS "cnt" FROM "system_settings" "SystemSettings"',
+parameters: [],
+driverError: error: relation "system_settings" does not exist
+at /app/node_modules/pg/lib/client.js:545:17
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+at async PostgresQueryRunner.query (/app/node_modules/typeorm/driver/postgres/PostgresQueryRunner.js:181:25)
+at async SelectQueryBuilder.loadRawResults (/app/node_modules/typeorm/query-builder/SelectQueryBuilder.js:2231:25)
+at async SelectQueryBuilder.executeCountQuery (/app/node_modules/typeorm/query-builder/SelectQueryBuilder.js:1751:25)
+at async SelectQueryBuilder.getCount (/app/node_modules/typeorm/query-builder/SelectQueryBuilder.js:770:29)
+at async SettingsService.ensureDefaultSettings (/app/dist/modules/settings/settings.service.js:48:23)
+at async SettingsService.onModuleInit (/app/dist/modules/settings/settings.service.js:28:9)
+at async Promise.all (index 0)
+at async callModuleInitHook (/app/node_modules/@nestjs/core/hooks/on-module-init.hook.js:43:5) {
+length: 114,
+severity: 'ERROR',
+code: '42P01',
+detail: undefined,
+hint: undefined,
+position: '31',
+internalPosition: undefined,
+internalQuery: undefined,
+where: undefined,
+schema: undefined,
+table: undefined,
+column: undefined,
+dataType: undefined,
+constraint: undefined,
+file: 'parse_relation.c',
+line: '1392',
+routine: 'parserOpenTable'
+},
+length: 114,
+severity: 'ERROR',
+code: '42P01',
+detail: undefined,
+hint: undefined,
+position: '31',
+internalPosition: undefined,
+internalQuery: undefined,
+where: undefined,
+schema: undefined,
+table: undefined,
+column: undefined,
+dataType: undefined,
+constraint: undefined,
+file: 'parse_relation.c',
+line: '1392',
+routine: 'parserOpenTable'
+}
+Node.js v20.19.6
