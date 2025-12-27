@@ -4,16 +4,19 @@ import {
   Inject,
   forwardRef,
 } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, MoreThanOrEqual } from "typeorm";
+import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
+import { Repository, MoreThanOrEqual, DataSource } from "typeorm";
 import { User, UserRole } from "../../entities/user.entity";
 import { Event } from "../../entities/event.entity";
 import { Team } from "../../entities/team.entity";
 import { StaffPerformanceReview } from "../../entities/staff-performance-review.entity";
+import { Reservation } from "../../entities/reservation.entity";
 import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
 export class AdminService {
+  private readonly startTime = Date.now();
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -23,8 +26,12 @@ export class AdminService {
     private teamRepository: Repository<Team>,
     @InjectRepository(StaffPerformanceReview)
     private reviewRepository: Repository<StaffPerformanceReview>,
+    @InjectRepository(Reservation)
+    private reservationRepository: Repository<Reservation>,
     @Inject(forwardRef(() => NotificationsService))
-    private notificationsService: NotificationsService
+    private notificationsService: NotificationsService,
+    @InjectDataSource()
+    private dataSource: DataSource
   ) {}
 
   async getStats() {
@@ -50,6 +57,9 @@ export class AdminService {
     const staffCount = await this.userRepository.count({
       where: { role: UserRole.STAFF },
     });
+    const organizerCount = await this.userRepository.count({
+      where: { role: UserRole.ORGANIZER },
+    });
 
     const newUsersThisMonth = await this.userRepository.count({
       where: { createdAt: MoreThanOrEqual(startOfMonth) },
@@ -73,6 +83,19 @@ export class AdminService {
       where: { isActive: true },
     });
 
+    // Rezervasyon istatistikleri
+    const totalReservations = await this.reservationRepository.count();
+    const reservationsToday = await this.reservationRepository.count({
+      where: { createdAt: MoreThanOrEqual(startOfDay) },
+    });
+    const reservationsThisMonth = await this.reservationRepository.count({
+      where: { createdAt: MoreThanOrEqual(startOfMonth) },
+    });
+
+    // Uptime hesapla
+    const uptimeMs = Date.now() - this.startTime;
+    const uptimeHuman = this.formatUptime(uptimeMs);
+
     return {
       users: {
         total: totalUsers,
@@ -80,6 +103,7 @@ export class AdminService {
         admins: adminCount,
         leaders: leaderCount,
         staff: staffCount,
+        organizers: organizerCount,
         newThisMonth: newUsersThisMonth,
       },
       events: {
@@ -92,12 +116,30 @@ export class AdminService {
         total: totalTeams,
         active: activeTeams,
       },
+      reservations: {
+        total: totalReservations,
+        today: reservationsToday,
+        thisMonth: reservationsThisMonth,
+      },
       system: {
-        uptime: "99.9%",
-        version: "1.0.0",
+        uptime: uptimeHuman,
+        version: process.env.npm_package_version || "1.0.0",
         lastBackup: new Date().toISOString(),
+        environment: process.env.NODE_ENV || "development",
       },
     };
+  }
+
+  private formatUptime(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
   }
 
   // Etkinlik review ayarlarını getir

@@ -1,0 +1,65 @@
+graph TB
+    subgraph Frontend["Frontend - UI Layer"]
+        1a["1a: EventAssignmentTab<br/>Drag-drop interface"]
+        2c["2c: TeamsTab<br/>Team creation UI"]
+        3e["3e: Performance UI<br/>Review form"]
+    end
+
+    subgraph Controllers["Controllers - API Layer"]
+        1c["1c: POST assign<br/>Table assignment endpoint"]
+        2a["2a: POST service-teams<br/>Team creation endpoint"]
+        3f["3f: POST reviews<br/>Performance review endpoint"]
+    end
+
+    subgraph Services["Services - Business Logic"]
+        1b["1b: assignTables()<br/>Create assignment record"]
+        2b["2b: createServiceTeam()<br/>Create team entity"]
+        3a["3a: calculateOverallScore()<br/>Weighted scoring"]
+        3b["3b: getRatingFromScore()<br/>Rating classification"]
+        3c["3c: createReview()<br/>Save performance review"]
+    end
+
+    subgraph Entities["Data Layer - Entities"]
+        SA["StaffAssignment<br/>staff + tables + color"]
+        ST["ServiceTeam<br/>members + tables + leader"]
+        PR["StaffPerformanceReview<br/>scores + ratings + feedback"]
+        EV["Event<br/>venue layout + tables"]
+        US["User/Staff<br/>position + color"]
+    end
+
+    subgraph Integration["Cross-System Links"]
+        TG["TableGroup<br/>team assignments"]
+        ESA["EventStaffAssignment<br/>shift + team context"]
+    end
+
+    1a -->|submits assignment| 1c
+    1c -->|calls service| 1b
+    1b -->|persists| SA
+    SA -->|references| US
+    SA -->|references| EV
+
+    2c -->|submits team| 2a
+    2a -->|calls service| 2b
+    2b -->|persists| ST
+    ST -->|contains| US
+    ST -->|manages| TG
+    TG -->|groups| EV
+
+    3e -->|submits review| 3f
+    3f -->|calculates score| 3a
+    3a -->|determines rating| 3b
+    3b -->|creates review| 3c
+    3c -->|persists| PR
+    PR -->|evaluates| US
+    PR -->|references| EV
+
+    SA -.->|informs team composition| ST
+    ST -.->|assigns staff to groups| TG
+    ESA -.->|enriches assignment context| PR
+    TG -.->|syncs staff team IDs| ESA
+
+    style Frontend fill:#fcc2d7
+    style Controllers fill:#a5d8ff
+    style Services fill:#d0bfff
+    style Entities fill:#b2f2bb
+    style Integration fill:#ffec99

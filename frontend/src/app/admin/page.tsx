@@ -1,27 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Shield,
   Users,
   Settings,
-  Activity,
-  Database,
-  Server,
-  HardDrive,
   Clock,
   CheckCircle2,
-  AlertTriangle,
-  TrendingUp,
   UserCog,
-  FileText,
-  BarChart3,
+  Bell,
+  RefreshCw,
+  Calendar,
+  Loader2,
+  Ticket,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   PageContainer,
@@ -29,62 +25,73 @@ import {
   StatsGrid,
 } from "@/components/ui/PageContainer";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { adminApi, settingsApi } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-notification";
 
 interface SystemStats {
   users: {
     total: number;
     active: number;
     admins: number;
+    leaders: number;
+    staff: number;
     newThisMonth: number;
   };
-  system: {
-    uptime: string;
-    version: string;
-    lastBackup: string;
-    dbSize: string;
+  events: {
+    total: number;
+    thisMonth: number;
+    today: number;
+    upcoming: number;
   };
-  activity: {
-    todayLogins: number;
-    activeNow: number;
-    eventsCreated: number;
-    reservationsToday: number;
+  teams: {
+    total: number;
+    active: number;
+  };
+  reservations: {
+    total: number;
+    today: number;
+    thisMonth: number;
   };
 }
 
+interface SettingsData {
+  smtpHost: string | null;
+  emailNotifications: boolean;
+}
+
 export default function AdminDashboard() {
+  const toast = useToast();
   const [stats, setStats] = useState<SystemStats | null>(null);
+  const [settings, setSettings] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(
+    async (showRefresh = false) => {
+      try {
+        if (showRefresh) setRefreshing(true);
+
+        const [statsRes, settingsRes] = await Promise.all([
+          adminApi.getStats(),
+          settingsApi.get(),
+        ]);
+
+        setStats(statsRes.data);
+        setSettings(settingsRes.data);
+      } catch (error) {
+        console.error("Dashboard verileri yüklenemedi:", error);
+        toast.error("Dashboard verileri yüklenemedi");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [toast]
+  );
 
   useEffect(() => {
-    // Simüle edilmiş veri yükleme
-    const loadStats = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      setStats({
-        users: {
-          total: 24,
-          active: 18,
-          admins: 3,
-          newThisMonth: 5,
-        },
-        system: {
-          uptime: "99.9%",
-          version: "1.0.0",
-          lastBackup: "2 saat önce",
-          dbSize: "256 MB",
-        },
-        activity: {
-          todayLogins: 12,
-          activeNow: 4,
-          eventsCreated: 8,
-          reservationsToday: 45,
-        },
-      });
-      setLoading(false);
-    };
-
-    loadStats();
-  }, []);
+    loadData();
+  }, [loadData]);
 
   if (loading) {
     return (
@@ -110,6 +117,21 @@ export default function AdminDashboard() {
           title="Sistem Yönetimi"
           description="Kullanıcı yönetimi, sistem ayarları ve raporlar"
           icon={<Shield className="w-6 h-6 text-amber-400" />}
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+              className="border-slate-600"
+            >
+              {refreshing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+            </Button>
+          }
         />
 
         {/* Ana İstatistikler */}
@@ -120,25 +142,25 @@ export default function AdminDashboard() {
                 <div>
                   <p className="text-sm text-slate-400">Toplam Kullanıcı</p>
                   <p className="text-3xl font-bold text-white">
-                    {stats?.users.total}
+                    {stats?.users.total ?? 0}
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-blue-600/20 flex items-center justify-center">
                   <Users className="h-6 w-6 text-blue-400" />
                 </div>
               </div>
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-4 flex items-center gap-2 flex-wrap">
                 <Badge
                   variant="outline"
                   className="bg-green-500/10 text-green-400 border-green-500/30"
                 >
-                  {stats?.users.active} aktif
+                  {stats?.users.active ?? 0} aktif
                 </Badge>
                 <Badge
                   variant="outline"
                   className="bg-amber-500/10 text-amber-400 border-amber-500/30"
                 >
-                  {stats?.users.admins} admin
+                  {stats?.users.admins ?? 0} admin
                 </Badge>
               </div>
             </CardContent>
@@ -148,40 +170,18 @@ export default function AdminDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Sistem Uptime</p>
+                  <p className="text-sm text-slate-400">Toplam Etkinlik</p>
                   <p className="text-3xl font-bold text-white">
-                    {stats?.system.uptime}
-                  </p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-green-600/20 flex items-center justify-center">
-                  <Activity className="h-6 w-6 text-green-400" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <p className="text-sm text-slate-400">
-                  Versiyon:{" "}
-                  <span className="text-white">{stats?.system.version}</span>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">Bugünkü Giriş</p>
-                  <p className="text-3xl font-bold text-white">
-                    {stats?.activity.todayLogins}
+                    {stats?.events.total ?? 0}
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-purple-600/20 flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-purple-400" />
+                  <Calendar className="h-6 w-6 text-purple-400" />
                 </div>
               </div>
               <div className="mt-4">
                 <p className="text-sm text-green-400">
-                  {stats?.activity.activeNow} kullanıcı şu an aktif
+                  {stats?.events.upcoming ?? 0} yaklaşan etkinlik
                 </p>
               </div>
             </CardContent>
@@ -191,19 +191,43 @@ export default function AdminDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Veritabanı</p>
+                  <p className="text-sm text-slate-400">Toplam Rezervasyon</p>
                   <p className="text-3xl font-bold text-white">
-                    {stats?.system.dbSize}
+                    {stats?.reservations?.total ?? 0}
                   </p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-amber-600/20 flex items-center justify-center">
-                  <Database className="h-6 w-6 text-amber-400" />
+                <div className="h-12 w-12 rounded-full bg-emerald-600/20 flex items-center justify-center">
+                  <Ticket className="h-6 w-6 text-emerald-400" />
                 </div>
               </div>
               <div className="mt-4">
                 <p className="text-sm text-slate-400">
-                  Son yedek:{" "}
-                  <span className="text-white">{stats?.system.lastBackup}</span>
+                  Bugün:{" "}
+                  <span className="text-white">
+                    {stats?.reservations?.today ?? 0}
+                  </span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-400">Aktif Takım</p>
+                  <p className="text-3xl font-bold text-white">
+                    {stats?.teams?.active ?? 0}
+                  </p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-cyan-600/20 flex items-center justify-center">
+                  <Users className="h-6 w-6 text-cyan-400" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <p className="text-sm text-slate-400">
+                  Toplam:{" "}
+                  <span className="text-white">{stats?.teams?.total ?? 0}</span>
                 </p>
               </div>
             </CardContent>
@@ -230,7 +254,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm text-slate-400">Bu ay yeni kayıt</span>
                 <Badge className="bg-blue-500/20 text-blue-400">
-                  +{stats?.users.newThisMonth}
+                  +{stats?.users.newThisMonth ?? 0}
                 </Badge>
               </div>
               <Button asChild className="w-full bg-blue-600 hover:bg-blue-700">
@@ -258,12 +282,26 @@ export default function AdminDashboard() {
               </p>
               <div className="space-y-2 mb-4">
                 <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-green-400" />
-                  <span className="text-slate-300">SMTP yapılandırıldı</span>
+                  {settings?.smtpHost ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <Clock className="w-4 h-4 text-amber-400" />
+                  )}
+                  <span className="text-slate-300">
+                    SMTP{" "}
+                    {settings?.smtpHost ? "yapılandırıldı" : "yapılandırılmadı"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-green-400" />
-                  <span className="text-slate-300">SSL aktif</span>
+                  {settings?.emailNotifications ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <Clock className="w-4 h-4 text-slate-400" />
+                  )}
+                  <span className="text-slate-300">
+                    E-posta bildirimleri{" "}
+                    {settings?.emailNotifications ? "aktif" : "kapalı"}
+                  </span>
                 </div>
               </div>
               <Button
@@ -278,83 +316,47 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Raporlar */}
+          {/* Bildirimler */}
           <Card className="bg-slate-800 border-slate-700 hover:border-purple-500/50 transition-colors">
             <CardHeader>
               <CardTitle className="flex items-center gap-3 text-white">
                 <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                  <BarChart3 className="w-5 h-5 text-purple-400" />
+                  <Bell className="w-5 h-5 text-purple-400" />
                 </div>
-                Raporlar
+                Bildirimler
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-slate-400 text-sm mb-4">
-                Sistem kullanım raporları, aktivite logları ve istatistikler.
+                Sistem bildirimlerini görüntüle, takip et ve yönet.
               </p>
               <div className="space-y-2 mb-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">
-                    Bugün oluşturulan etkinlik
-                  </span>
+                  <span className="text-slate-400">Bu ay etkinlik</span>
                   <span className="text-white font-medium">
-                    {stats?.activity.eventsCreated}
+                    {stats?.events.thisMonth ?? 0}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Bugünkü rezervasyon</span>
+                  <span className="text-slate-400">Bugün oluşturulan</span>
                   <span className="text-white font-medium">
-                    {stats?.activity.reservationsToday}
+                    {stats?.events.today ?? 0}
                   </span>
                 </div>
               </div>
               <Button
+                asChild
                 variant="outline"
                 className="w-full border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
               >
-                <FileText className="w-4 h-4 mr-2" />
-                Raporları Görüntüle
+                <Link href="/admin/notifications">
+                  <Bell className="w-4 h-4 mr-2" />
+                  Bildirimleri Görüntüle
+                </Link>
               </Button>
             </CardContent>
           </Card>
         </div>
-
-        {/* Sistem Durumu */}
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <Server className="w-5 h-5 text-green-400" />
-              Sistem Durumu
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-slate-400">CPU Kullanımı</span>
-                  <span className="text-sm text-white">23%</span>
-                </div>
-                <Progress value={23} className="h-2" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-slate-400">
-                    Bellek Kullanımı
-                  </span>
-                  <span className="text-sm text-white">45%</span>
-                </div>
-                <Progress value={45} className="h-2" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-slate-400">Disk Kullanımı</span>
-                  <span className="text-sm text-white">62%</span>
-                </div>
-                <Progress value={62} className="h-2" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </PageContainer>
   );

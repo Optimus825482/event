@@ -1342,108 +1342,159 @@ export class StaffService {
 
   // ==================== TEAM (EKİP) METODLARI ====================
 
-  // Tüm ekipleri getir
+  /**
+   * Tüm ekipleri getir - OPTİMİZE EDİLDİ
+   * N+1 query problemi çözüldü - 4 sorguya indirildi
+   * Önceki: 3N+1 sorgu (N = ekip sayısı)
+   * Şimdi: 4 sabit sorgu
+   */
   async getAllTeams(): Promise<any[]> {
+    // 1. Tüm ekipleri tek sorguda getir (leader relation ile)
     const teams = await this.teamRepository.find({
       where: { isActive: true },
       relations: ["leader"],
       order: { sortOrder: "ASC", name: "ASC" },
     });
 
-    // Her ekip için üye bilgilerini getir
-    // Üyeler = ekibe atanmış grupların masalarına atanmış personeller
-    const teamsWithMembers = await Promise.all(
-      teams.map(async (team) => {
-        let members: any[] = [];
-        const memberStaffIds = new Set<string>();
-        const staffTableMap = new Map<string, string[]>(); // staffId -> tableIds
+    if (teams.length === 0) return [];
 
-        // 1. Önce lider varsa ekle
-        if (team.leaderId) {
-          memberStaffIds.add(team.leaderId);
-        }
+    // Team ID'lerini topla
+    const teamIds = teams.map((t) => t.id);
 
-        // 2. Ekibe atanmış grupları bul
-        const assignedGroups = await this.tableGroupRepository.find({
-          where: { assignedTeamId: team.id },
+    // 2. Tüm ekiplere atanmış grupları tek sorguda getir
+    const allGroups = await this.tableGroupRepository
+      .createQueryBuilder("tg")
+      .where("tg.assignedTeamId IN (:...teamIds)", { teamIds })
+      .getMany();
+
+    // Team ID -> Groups lookup map oluştur
+    const teamGroupsMap = new Map<string, TableGroup[]>();
+    const allTableIds = new Set<string>();
+
+    allGroups.forEach((group) => {
+      if (group.assignedTeamId) {
+        const existing = teamGroupsMap.get(group.assignedTeamId) || [];
+        existing.push(group);
+        teamGroupsMap.set(group.assignedTeamId, existing);
+
+        // Tüm masa ID'lerini topla
+        group.tableIds?.forEach((tid) => allTableIds.add(tid));
+      }
+    });
+
+    // 3. Tüm masalara atanmış personelleri tek sorguda getir
+    let staffAssignments: EventStaffAssignment[] = [];
+    if (allTableIds.size > 0) {
+      staffAssignments = await this.eventStaffAssignmentRepository
+        .createQueryBuilder("esa")
+        .where("esa.tableIds && ARRAY[:...tableIds]::text[]", {
+          tableIds: Array.from(allTableIds),
+        })
+        .andWhere("esa.isActive = :isActive", { isActive: true })
+        .getMany();
+    }
+
+    // Staff ID -> Assignment lookup map oluştur
+    const staffAssignmentMap = new Map<
+      string,
+      { staffId: string; tableIds: string[] }[]
+    >();
+    const allStaffIds = new Set<string>();
+
+    staffAssignments.forEach((assignment) => {
+      if (assignment.staffId) {
+        allStaffIds.add(assignment.staffId);
+        const existing = staffAssignmentMap.get(assignment.staffId) || [];
+        existing.push({
+          staffId: assignment.staffId,
+          tableIds: assignment.tableIds || [],
         });
+        staffAssignmentMap.set(assignment.staffId, existing);
+      }
+    });
 
-        if (assignedGroups.length > 0) {
-          // 3. Bu grupların tüm masalarını topla
-          const allTableIds: string[] = [];
-          assignedGroups.forEach((group) => {
-            if (group.tableIds && group.tableIds.length > 0) {
-              allTableIds.push(...group.tableIds);
-            }
-          });
+    // Lider ID'lerini de ekle
+    teams.forEach((team) => {
+      if (team.leaderId) allStaffIds.add(team.leaderId);
+      team.memberIds?.forEach((id) => allStaffIds.add(id));
+    });
 
-          if (allTableIds.length > 0) {
-            // 4. Bu masalara atanmış personelleri bul (event_staff_assignments)
-            const staffAssignments = await this.eventStaffAssignmentRepository
-              .createQueryBuilder("esa")
-              .where("esa.tableIds && ARRAY[:...tableIds]::text[]", {
-                tableIds: allTableIds,
-              })
-              .getMany();
+    // 4. Tüm personel bilgilerini tek sorguda getir
+    let allUsers: User[] = [];
+    if (allStaffIds.size > 0) {
+      allUsers = await this.userRepository
+        .createQueryBuilder("user")
+        .where("user.id IN (:...ids)", { ids: Array.from(allStaffIds) })
+        .select([
+          "user.id",
+          "user.fullName",
+          "user.email",
+          "user.color",
+          "user.position",
+          "user.avatar",
+        ])
+        .getMany();
+    }
 
-            // Unique staff ID'lerini topla ve her personelin masalarını kaydet
-            staffAssignments.forEach((assignment) => {
-              if (assignment.staffId) {
-                memberStaffIds.add(assignment.staffId);
-                // Bu personelin bu ekibe ait masalarını filtrele
-                const relevantTables = (assignment.tableIds || []).filter((t) =>
-                  allTableIds.includes(t)
-                );
-                const existing = staffTableMap.get(assignment.staffId) || [];
-                staffTableMap.set(assignment.staffId, [
-                  ...new Set([...existing, ...relevantTables]),
-                ]);
-              }
-            });
-          }
+    // User ID -> User lookup map oluştur
+    const userMap = new Map<string, User>();
+    allUsers.forEach((user) => userMap.set(user.id, user));
+
+    // Memory'de join işlemi yap
+    return teams.map((team) => {
+      const teamGroups = teamGroupsMap.get(team.id) || [];
+      const teamTableIds = new Set<string>();
+      teamGroups.forEach((g) =>
+        g.tableIds?.forEach((tid) => teamTableIds.add(tid))
+      );
+
+      // Bu ekibin üyelerini bul
+      const memberStaffIds = new Set<string>();
+      const staffTableMap = new Map<string, string[]>();
+
+      // Lider varsa ekle
+      if (team.leaderId) memberStaffIds.add(team.leaderId);
+
+      // Manuel eklenen üyeler
+      team.memberIds?.forEach((id) => memberStaffIds.add(id));
+
+      // Masalara atanmış personeller
+      staffAssignments.forEach((assignment) => {
+        if (!assignment.staffId || !assignment.tableIds) return;
+
+        // Bu personelin masalarından herhangi biri bu ekibin masalarından mı?
+        const relevantTables = assignment.tableIds.filter((tid) =>
+          teamTableIds.has(tid)
+        );
+
+        if (relevantTables.length > 0) {
+          memberStaffIds.add(assignment.staffId);
+          const existing = staffTableMap.get(assignment.staffId) || [];
+          staffTableMap.set(assignment.staffId, [
+            ...new Set([...existing, ...relevantTables]),
+          ]);
         }
+      });
 
-        // 5. memberIds'den de ekle (manuel eklenenler)
-        if (team.memberIds && team.memberIds.length > 0) {
-          team.memberIds.forEach((id) => memberStaffIds.add(id));
-        }
-
-        // 6. Tüm üyelerin bilgilerini getir
-        if (memberStaffIds.size > 0) {
-          const memberUsers = await this.userRepository
-            .createQueryBuilder("user")
-            .where("user.id IN (:...ids)", { ids: Array.from(memberStaffIds) })
-            .select([
-              "user.id",
-              "user.fullName",
-              "user.email",
-              "user.color",
-              "user.position",
-              "user.avatar",
-            ])
-            .getMany();
-
-          // Her üyeye atanan masaları ekle
-          members = memberUsers.map((user) => ({
+      // Üye bilgilerini lookup map'ten al
+      const members = Array.from(memberStaffIds)
+        .map((staffId) => {
+          const user = userMap.get(staffId);
+          if (!user) return null;
+          return {
             ...user,
-            assignedTables: staffTableMap.get(user.id) || [],
-          }));
-        }
+            assignedTables: staffTableMap.get(staffId) || [],
+          };
+        })
+        .filter(Boolean);
 
-        return {
-          ...team,
-          members,
-          // Ekibe atanmış grup sayısı ve masa sayısı bilgisi
-          assignedGroupCount: assignedGroups.length,
-          assignedTableCount: assignedGroups.reduce(
-            (sum, g) => sum + (g.tableIds?.length || 0),
-            0
-          ),
-        };
-      })
-    );
-
-    return teamsWithMembers;
+      return {
+        ...team,
+        members,
+        assignedGroupCount: teamGroups.length,
+        assignedTableCount: teamTableIds.size,
+      };
+    });
   }
 
   // ID ile ekip getir

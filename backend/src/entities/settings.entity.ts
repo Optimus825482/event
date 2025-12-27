@@ -4,23 +4,23 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-} from 'typeorm';
+} from "typeorm";
 
-@Entity('system_settings')
+@Entity("system_settings")
 export class SystemSettings {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ default: 'Test Firması' })
+  @Column({ default: "Test Firması" })
   companyName: string;
 
   @Column({ nullable: true })
   logo: string;
 
-  @Column({ default: 'Europe/Istanbul' })
+  @Column({ default: "Europe/Nicosia" })
   timezone: string;
 
-  @Column({ default: 'tr' })
+  @Column({ default: "tr" })
   language: string;
 
   // Canvas Ayarları
@@ -92,9 +92,9 @@ export class SystemSettings {
   updatedAt: Date;
 }
 
-@Entity('staff_colors')
+@Entity("staff_colors")
 export class StaffColor {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column()

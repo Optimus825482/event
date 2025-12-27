@@ -17,6 +17,7 @@ import { Team } from "./team.entity";
 @Index("IDX_event_staff_assignment_event", ["eventId"]) // Performans: Event bazlı sorgular
 @Index("IDX_event_staff_assignment_staff", ["staffId"]) // Performans: Staff bazlı sorgular
 @Index("IDX_event_staff_assignment_event_active", ["eventId", "isActive"]) // Performans: Aktif atamalar
+@Index("IDX_event_staff_assignment_staff_active", ["staffId", "isActive"]) // Performans: Staff aktif atamaları
 export class EventStaffAssignment {
   @PrimaryGeneratedColumn("uuid")
   id: string;

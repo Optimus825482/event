@@ -6,11 +6,18 @@ import { User } from "../../entities/user.entity";
 import { Event } from "../../entities/event.entity";
 import { Team } from "../../entities/team.entity";
 import { StaffPerformanceReview } from "../../entities/staff-performance-review.entity";
+import { Reservation } from "../../entities/reservation.entity";
 import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Event, Team, StaffPerformanceReview]),
+    TypeOrmModule.forFeature([
+      User,
+      Event,
+      Team,
+      StaffPerformanceReview,
+      Reservation,
+    ]),
     forwardRef(() => NotificationsModule),
   ],
   controllers: [AdminController],

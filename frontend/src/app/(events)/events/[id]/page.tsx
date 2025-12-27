@@ -208,30 +208,17 @@ export default function EventSummaryPage() {
     return stats;
   };
 
-  // Ekip istatistikleri hesaplama
+  // Ekip istatistikleri hesaplama - SADECE BU ETKİNLİĞE AİT tableGroups'a göre
   const getTeamStats = () => {
     const tables =
       event?.venueLayout?.placedTables || event?.venueLayout?.tables || [];
     const groups = tableGroups || [];
 
-    // Backend'den gelen assignedTableCount varsa onu kullan
-    // Yoksa tableGroups'tan hesapla
+    // SADECE bu etkinliğe ait tableGroups'tan hesapla
+    // Backend'den gelen assignedTableCount TÜM etkinlikleri içerdiği için kullanmıyoruz
     return teams
       .map((team) => {
-        // Backend zaten assignedTableCount dönüyorsa onu kullan
-        if (
-          team.assignedTableCount !== undefined &&
-          team.assignedTableCount > 0
-        ) {
-          return {
-            ...team,
-            tableCount: team.assignedTableCount,
-            capacity: 0, // Kapasite hesaplaması için masaları bulmamız gerekiyor
-            memberCount: team.members?.length || team.memberIds?.length || 0,
-          };
-        }
-
-        // Yoksa tableGroups'tan hesapla
+        // Bu etkinliğe ait ve bu ekibe atanmış grupları bul
         const assignedGroups = groups.filter(
           (g) => g.assignedTeamId === team.id
         );

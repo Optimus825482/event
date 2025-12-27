@@ -22,6 +22,7 @@ export interface TeamMember {
 
 @Entity("service_teams")
 @Index("IDX_service_team_event", ["eventId"]) // Performans: Event bazlı sorgular
+// GIN indeksler (tableIds, members) migration'da oluşturulur - TypeORM dekoratörü desteklemez
 export class ServiceTeam {
   @PrimaryGeneratedColumn("uuid")
   id: string;

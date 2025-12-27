@@ -10,6 +10,12 @@ import {
   UseGuards,
   SetMetadata,
 } from "@nestjs/common";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from "@nestjs/swagger";
 import { ReservationsService } from "./reservations.service";
 import {
   CreateReservationDto,
@@ -18,17 +24,21 @@ import {
 } from "./dto/reservation.dto";
 import { ReservationStatus } from "../../entities/reservation.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 // Public decorator - check-in endpoint'leri için auth bypass
 const IS_PUBLIC_KEY = "isPublic";
 const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
+@ApiTags("Reservations")
+@ApiBearerAuth("JWT-auth")
 @Controller("reservations")
 @UseGuards(JwtAuthGuard)
 export class ReservationsController {
   constructor(private reservationsService: ReservationsService) {}
 
   @Post()
+  @ApiOperation({ summary: "Yeni rezervasyon oluştur" })
   create(@Body() dto: CreateReservationDto) {
     return this.reservationsService.create(dto);
   }
@@ -38,6 +48,12 @@ export class ReservationsController {
    * Requirements: 7.1, 7.2, 7.3, 7.4
    */
   @Get()
+  @ApiOperation({ summary: "Tüm rezervasyonları listele" })
+  @ApiQuery({ name: "eventId", required: false })
+  @ApiQuery({ name: "customerId", required: false })
+  @ApiQuery({ name: "status", required: false, enum: ReservationStatus })
+  @ApiQuery({ name: "searchQuery", required: false })
+  @ApiQuery({ name: "tableId", required: false })
   findAll(
     @Query("eventId") eventId?: string,
     @Query("customerId") customerId?: string,
@@ -60,6 +76,7 @@ export class ReservationsController {
    * Requirements: 7.1, 7.2 - Partial match, case-insensitive
    */
   @Get("search")
+  @ApiOperation({ summary: "Rezervasyon ara" })
   search(@Query("q") searchQuery: string, @Query("eventId") eventId?: string) {
     return this.reservationsService.search(searchQuery, eventId);
   }
@@ -69,6 +86,7 @@ export class ReservationsController {
    * Requirements: 7.3, 7.4 - Birden fazla filtre kombinasyonu
    */
   @Get("filter")
+  @ApiOperation({ summary: "Rezervasyonları filtrele" })
   filter(
     @Query("status") status?: ReservationStatus,
     @Query("eventId") eventId?: string,
@@ -78,16 +96,19 @@ export class ReservationsController {
   }
 
   @Get(":id")
+  @ApiOperation({ summary: "Rezervasyon detayı" })
   findOne(@Param("id") id: string) {
     return this.reservationsService.findOne(id);
   }
 
   @Get(":id/qrcode")
+  @ApiOperation({ summary: "Rezervasyon QR kodu oluştur" })
   generateQRCode(@Param("id") id: string) {
     return this.reservationsService.generateQRCode(id);
   }
 
   @Put(":id")
+  @ApiOperation({ summary: "Rezervasyon güncelle" })
   update(@Param("id") id: string, @Body() dto: UpdateReservationDto) {
     return this.reservationsService.update(id, dto);
   }
@@ -99,6 +120,7 @@ export class ReservationsController {
    */
   @Public()
   @Get("qr/:qrCodeHash")
+  @ApiOperation({ summary: "QR kod ile rezervasyon getir (Public)" })
   getByQRCode(@Param("qrCodeHash") qrCodeHash: string) {
     return this.reservationsService.getReservationByQRCode(qrCodeHash);
   }
@@ -110,11 +132,13 @@ export class ReservationsController {
    */
   @Public()
   @Post("check-in/:qrCodeHash")
+  @ApiOperation({ summary: "QR kod ile check-in (Public)" })
   checkIn(@Param("qrCodeHash") qrCodeHash: string) {
     return this.reservationsService.checkIn(qrCodeHash);
   }
 
   @Post(":id/cancel")
+  @ApiOperation({ summary: "Rezervasyon iptal et" })
   cancel(@Param("id") id: string) {
     return this.reservationsService.cancel(id);
   }
@@ -124,11 +148,13 @@ export class ReservationsController {
    * Requirement: 5.1 - totalExpected, checkedIn, remaining, cancelled, noShow
    */
   @Get("event/:eventId/stats")
+  @ApiOperation({ summary: "Etkinlik rezervasyon istatistikleri" })
   getEventStats(@Param("eventId") eventId: string) {
     return this.reservationsService.getEventStats(eventId);
   }
 
   @Get("event/:eventId/table/:tableId")
+  @ApiOperation({ summary: "Masa rezervasyonları" })
   getByTable(
     @Param("eventId") eventId: string,
     @Param("tableId") tableId: string
@@ -137,6 +163,7 @@ export class ReservationsController {
   }
 
   @Get("event/:eventId/table/:tableId/available")
+  @ApiOperation({ summary: "Masa müsaitlik kontrolü" })
   isTableAvailable(
     @Param("eventId") eventId: string,
     @Param("tableId") tableId: string
@@ -149,6 +176,7 @@ export class ReservationsController {
    * Requirement: 6.1 - VIP score ve event geçmişi
    */
   @Get("customer/:customerId/history")
+  @ApiOperation({ summary: "Müşteri rezervasyon geçmişi" })
   getCustomerHistory(@Param("customerId") customerId: string) {
     return this.reservationsService.getCustomerHistory(customerId);
   }
@@ -158,6 +186,7 @@ export class ReservationsController {
    * Requirement: 6.2 - Kara liste uyarısı
    */
   @Get("customer/:customerId/blacklist-status")
+  @ApiOperation({ summary: "Müşteri kara liste durumu" })
   checkBlacklistStatus(@Param("customerId") customerId: string) {
     return this.reservationsService.checkBlacklistStatus(customerId);
   }
@@ -167,11 +196,13 @@ export class ReservationsController {
    * Requirements: 6.1, 6.2, 6.3 - Tüm müşteri bilgileri tek seferde
    */
   @Get("customer/:customerId/info")
+  @ApiOperation({ summary: "Müşteri rezervasyon bilgileri" })
   getCustomerInfoForReservation(@Param("customerId") customerId: string) {
     return this.reservationsService.getCustomerInfoForReservation(customerId);
   }
 
   @Delete(":id")
+  @ApiOperation({ summary: "Rezervasyon sil" })
   delete(@Param("id") id: string) {
     return this.reservationsService.delete(id);
   }

@@ -21,9 +21,10 @@ export enum GuestNoteType {
 }
 
 @Entity("guest_notes")
-@Index("IDX_guest_note_customer", ["customerId"]) // Performans: Customer bazlı sorgular
-@Index("IDX_guest_note_event", ["eventId"]) // Performans: Event bazlı sorgular
-@Index("IDX_guest_note_customer_event", ["customerId", "eventId"]) // Performans: Customer+Event lookup
+@Index("IDX_guest_note_customer", ["customerId"])
+@Index("IDX_guest_note_event", ["eventId"])
+@Index("IDX_guest_note_customer_event", ["customerId", "eventId"])
+// Descending indeks migration'da: IDX_guest_note_created_desc (createdAt DESC)
 export class GuestNote {
   @PrimaryGeneratedColumn("uuid")
   id: string;

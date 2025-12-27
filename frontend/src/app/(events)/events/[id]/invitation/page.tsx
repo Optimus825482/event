@@ -3,10 +3,26 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { eventsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { InvitationEditor } from "@/components/invitations/InvitationEditor";
+
+// Heavy component - dynamic import ile lazy load
+const InvitationEditor = dynamic(
+  () =>
+    import("@/components/invitations/InvitationEditor").then(
+      (mod) => mod.InvitationEditor
+    ),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    ),
+    ssr: false,
+  }
+);
 
 export default function EventInvitationPage() {
   const params = useParams();

@@ -58,7 +58,7 @@ export const MODULES: Record<ModuleType, ModuleInfo> = {
     description: "Ekip yönetimi ve performans değerlendirme",
     icon: "Users",
     path: "/leader",
-    roles: ["admin", "leader"],
+    roles: ["leader"], // Sadece leader rolü - admin select-module'de görmez
   },
 };
 

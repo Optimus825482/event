@@ -387,6 +387,49 @@ export const EventAssignmentTab = forwardRef<
     );
   }, [allStaff, staffSearchQuery]);
 
+  // Selection summary - seçili masaların tip ve kapasite özeti
+  const selectionSummary = useMemo(() => {
+    if (selectedTableIds.length === 0) return null;
+
+    const selectedTables = tables.filter((t) =>
+      selectedTableIds.includes(t.id)
+    );
+
+    // Tip ve kapasiteye göre grupla
+    const groups: Record<
+      string,
+      { count: number; capacity: number; typeName: string }
+    > = {};
+
+    for (const table of selectedTables) {
+      const typeName = table.typeName || table.type || "Standart";
+      const key = `${typeName}-${table.capacity}`;
+      if (!groups[key]) {
+        groups[key] = { count: 0, capacity: table.capacity || 12, typeName };
+      }
+      groups[key].count++;
+    }
+
+    // Özet dizisi oluştur
+    const summaryItems = Object.entries(groups).map(([key, value]) => ({
+      typeName: value.typeName,
+      capacity: value.capacity,
+      count: value.count,
+    }));
+
+    // Toplam kapasite
+    const totalCapacity = selectedTables.reduce(
+      (sum, t) => sum + (t.capacity || 12),
+      0
+    );
+
+    return {
+      items: summaryItems,
+      totalCapacity,
+      totalCount: selectedTables.length,
+    };
+  }, [selectedTableIds, tables]);
+
   // ==================== CANVAS MOUSE HANDLERS - Venue ile aynı ====================
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -765,24 +808,16 @@ export const EventAssignmentTab = forwardRef<
         const staff = allStaff.find((s) => s.id === staffId);
         if (!staff) continue;
 
-        // API'ye kaydet
-        await staffApi.assignStaffToTables(eventId, {
+        // API'ye kaydet ve dönen gerçek ID'yi al
+        const response = await staffApi.assignStaffToTables(eventId, {
           staffId,
           tableIds: selectedTableIds,
           shiftId: shiftId && shiftId !== "none" ? shiftId : undefined,
           color: staff.color,
         });
 
-        // Local state güncelle
-        const newAssignment = {
-          id: `temp-${Date.now()}-${staffId}`,
-          eventId,
-          staffId,
-          staffName: staff.fullName,
-          staffColor: staff.color,
-          tableIds: selectedTableIds,
-          shiftId: shiftId && shiftId !== "none" ? shiftId : undefined,
-        };
+        // Backend'den dönen gerçek assignment'ı kullan
+        const savedAssignment = response.data;
 
         setStaffAssignments((prev) => {
           // Aynı personelin önceki atamasını güncelle veya yeni ekle
@@ -793,6 +828,7 @@ export const EventAssignmentTab = forwardRef<
             const updated = [...prev];
             updated[existingIndex] = {
               ...updated[existingIndex],
+              id: savedAssignment.id, // Gerçek ID'yi kullan
               tableIds: [
                 ...new Set([
                   ...(updated[existingIndex].tableIds || []),
@@ -802,7 +838,19 @@ export const EventAssignmentTab = forwardRef<
             };
             return updated;
           }
-          return [...prev, newAssignment];
+          // Yeni atama - backend'den dönen veriyi kullan
+          return [
+            ...prev,
+            {
+              id: savedAssignment.id,
+              eventId,
+              staffId,
+              staffName: staff.fullName,
+              staffColor: staff.color,
+              tableIds: savedAssignment.tableIds || selectedTableIds,
+              shiftId: savedAssignment.shiftId,
+            },
+          ];
         });
       }
 
@@ -838,17 +886,25 @@ export const EventAssignmentTab = forwardRef<
           (id: string) => id !== tableId
         );
 
+        // Geçici ID kontrolü - temp- ile başlıyorsa sadece local state güncelle
+        const isTemporaryId =
+          assignment.id && assignment.id.toString().startsWith("temp-");
+
         if (newTableIds.length === 0) {
           // Tüm masalar çıkarıldıysa atamayı sil
-          await staffApi.removeStaffAssignment(assignment.id);
+          if (!isTemporaryId) {
+            await staffApi.removeStaffAssignment(assignment.id);
+          }
           setStaffAssignments((prev) =>
             prev.filter((a: any) => a.id !== assignment.id)
           );
         } else {
           // Güncelle
-          await staffApi.updateStaffAssignment(assignment.id, {
-            tableIds: newTableIds,
-          });
+          if (!isTemporaryId) {
+            await staffApi.updateStaffAssignment(assignment.id, {
+              tableIds: newTableIds,
+            });
+          }
           setStaffAssignments((prev) =>
             prev.map((a: any) =>
               a.id === assignment.id ? { ...a, tableIds: newTableIds } : a
@@ -1360,6 +1416,30 @@ export const EventAssignmentTab = forwardRef<
           <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
             {tableGroups.length} Grup
           </Badge>
+
+          {/* Selection Summary */}
+          {selectionSummary && (
+            <>
+              <div className="w-px h-6 bg-slate-700 mx-2" />
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400">Seçili:</span>
+                <div className="flex flex-wrap gap-1 max-w-[350px]">
+                  {selectionSummary.items.map((item, idx) => (
+                    <Badge
+                      key={idx}
+                      variant="outline"
+                      className="bg-slate-700/50 text-slate-200 border-slate-600 text-[10px] px-1.5 py-0"
+                    >
+                      {item.count}x {item.typeName} {item.capacity}K
+                    </Badge>
+                  ))}
+                </div>
+                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+                  Σ {selectionSummary.totalCapacity} Kişi
+                </Badge>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-1">

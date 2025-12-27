@@ -1,0 +1,70 @@
+graph TD
+    subgraph Frontend["Frontend - Event Creation"]
+        1a["1a: Create Event API Call"]
+    end
+    
+    subgraph Backend["Backend - Event Storage"]
+        1b["1b: Save Event to Database"]
+        1c["1c: Update Table Layout"]
+        1d["1d: Store Tables in JSONB"]
+    end
+    
+    subgraph Canvas["Canvas & Table Management"]
+        2a["2a: Select Tables on Canvas"]
+        2b["2b: Generate Group Name"]
+        2c["2c: Create Table Group"]
+        2d["2d: Save Groups to Backend"]
+    end
+    
+    subgraph Staff["Staff Assignment"]
+        3a["3a: Assign Staff to Tables"]
+        3b["3b: Create Assignment Record"]
+        3c["3c: Assign Supervisor to Group"]
+        3d["3d: Update Group Supervisor"]
+    end
+    
+    subgraph Teams["Team Organization"]
+        4a["4a: Create New Team"]
+        4b["4b: Save Team to Database"]
+        4c["4c: Add Members to Team"]
+        4d["4d: Save Team Members"]
+    end
+    
+    subgraph Integration["Team-Table Integration"]
+        5a["5a: Initiate Team Assignment"]
+        5b["5b: Assign Team to Groups"]
+        5c["5c: Sync Staff Team IDs"]
+        5d["5d: Finalize Staff Assignment"]
+    end
+    
+    1a -->|creates| 1b
+    1b -->|persists| 1c
+    1c -->|stores| 1d
+    
+    1d -->|provides table data| 2a
+    2a -->|generates| 2b
+    2b -->|creates| 2c
+    2c -->|persists| 2d
+    
+    2d -->|groups ready for assignment| 3a
+    3a -->|creates| 3b
+    3b -->|enables| 3c
+    3c -->|updates| 3d
+    
+    2d -->|groups ready for teams| 4a
+    4a -->|persists| 4b
+    4b -->|enables| 4c
+    4c -->|persists| 4d
+    
+    4d -->|team members exist| 5a
+    3d -->|supervisor assigned| 5a
+    5a -->|assigns teams| 5b
+    5b -->|triggers sync| 5c
+    5c -->|completes| 5d
+
+    style Frontend fill:#fcc2d7
+    style Backend fill:#a5d8ff
+    style Canvas fill:#ffec99
+    style Staff fill:#b2f2bb
+    style Teams fill:#d0bfff
+    style Integration fill:#ffd8a8

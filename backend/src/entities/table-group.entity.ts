@@ -13,6 +13,7 @@ import { Event } from "./event.entity";
 @Entity("table_groups")
 @Index("IDX_table_group_event", ["eventId"]) // Performans: Event bazlı sorgular
 @Index("IDX_table_group_team", ["assignedTeamId"]) // Performans: Team bazlı sorgular
+@Index("IDX_table_group_event_order", ["eventId", "sortOrder"]) // Performans: Sıralı listeleme
 export class TableGroup {
   @PrimaryGeneratedColumn("uuid")
   id: string;

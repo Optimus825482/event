@@ -2,7 +2,12 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ServeStaticModule } from "@nestjs/serve-static";
+import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { APP_GUARD } from "@nestjs/core";
 import { join } from "path";
+
+// Config
+import { validateEnv } from "./config/env.validation";
 
 // Entities
 import {
@@ -49,15 +54,40 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
 
 @Module({
   imports: [
+    // ==================== CONFIG ====================
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env",
+      validate: validateEnv,
     }),
-    // Static dosyalar için (uploads klasörü)
+
+    // ==================== RATE LIMITING ====================
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            name: "default",
+            ttl: parseInt(configService.get("THROTTLE_TTL") || "60000", 10), // 60 saniye
+            limit: parseInt(configService.get("THROTTLE_LIMIT") || "100", 10), // 100 istek
+          },
+          {
+            name: "auth",
+            ttl: 60000, // 60 saniye
+            limit: 10, // Auth için daha sıkı limit
+          },
+        ],
+      }),
+    }),
+
+    // ==================== STATIC FILES ====================
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, "..", "uploads"),
       serveRoot: "/uploads",
     }),
+
+    // ==================== DATABASE ====================
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -92,22 +122,25 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
           Notification,
           NotificationRead,
         ],
-        // UYARI: Production'da synchronize: false olmalı ve migration kullanılmalı!
-        // Geçici olarak true - ilk kurulum için
-        synchronize: true,
+        // UYARI: Production'da synchronize: false olmalı!
+        synchronize: configService.get("NODE_ENV") === "development",
         logging:
           configService.get("NODE_ENV") === "development"
-            ? ["error", "warn"]
+            ? ["query", "error", "warn", "schema"]
             : ["error"],
-        maxQueryExecutionTime: 1000, // 1 saniyeden uzun sorguları logla
+        // Slow query logging - threshold üzeri sorguları logla
+        maxQueryExecutionTime: parseInt(
+          configService.get("SLOW_QUERY_THRESHOLD") || "500",
+          10
+        ),
         // Connection pool ayarları - Optimize edilmiş
         extra: {
-          max: parseInt(process.env.DB_POOL_MAX || "50", 10), // Maksimum bağlantı sayısı
-          min: parseInt(process.env.DB_POOL_MIN || "10", 10), // Minimum bağlantı sayısı
-          idleTimeoutMillis: 30000, // Boşta kalma süresi
-          connectionTimeoutMillis: 10000, // Bağlantı zaman aşımı (artırıldı)
-          query_timeout: 30000, // Query timeout
-          statement_timeout: 60000, // Statement timeout
+          max: parseInt(configService.get("DB_POOL_MAX") || "50", 10),
+          min: parseInt(configService.get("DB_POOL_MIN") || "10", 10),
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 10000,
+          query_timeout: 30000,
+          statement_timeout: 60000,
           keepAlive: true,
           keepAliveInitialDelayMillis: 10000,
           application_name: `eventflow_${
@@ -116,6 +149,8 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
         },
       }),
     }),
+
+    // ==================== FEATURE MODULES ====================
     AuthModule,
     CustomersModule,
     EventsModule,
@@ -132,6 +167,13 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
     HealthModule,
     AdminModule,
     NotificationsModule,
+  ],
+  providers: [
+    // Global Rate Limiting Guard
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

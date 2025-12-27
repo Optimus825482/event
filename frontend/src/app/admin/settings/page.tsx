@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Settings,
   Mail,
   Shield,
-  Database,
   Bell,
   Globe,
   Save,
@@ -13,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   Card,
@@ -35,54 +35,231 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { settingsApi } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-notification";
+
+interface SystemSettings {
+  id: string;
+  companyName: string;
+  logo: string | null;
+  timezone: string;
+  language: string;
+  defaultGridSize: number;
+  snapToGrid: boolean;
+  showGridByDefault: boolean;
+  defaultGuestCount: number;
+  allowOverbooking: boolean;
+  requirePhoneNumber: boolean;
+  requireEmail: boolean;
+  autoCheckInEnabled: boolean;
+  checkInSoundEnabled: boolean;
+  showTableDirections: boolean;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  smtpHost: string | null;
+  smtpPort: number;
+  smtpUser: string | null;
+  smtpPassword: string | null;
+  smtpFromEmail: string | null;
+  smtpFromName: string | null;
+  smtpSecure: boolean;
+}
 
 export default function AdminSettingsPage() {
+  const toast = useToast();
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
   const [smtpTestResult, setSmtpTestResult] = useState<
     "success" | "error" | null
   >(null);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
 
   // Form states
   const [generalSettings, setGeneralSettings] = useState({
-    siteName: "EventFlow PRO",
-    siteUrl: "https://eventflow.pro",
-    timezone: "Europe/Istanbul",
+    companyName: "",
+    timezone: "Europe/Nicosia",
     language: "tr",
-    maintenanceMode: false,
   });
 
   const [smtpSettings, setSmtpSettings] = useState({
-    host: "smtp.gmail.com",
-    port: "587",
-    username: "",
-    password: "",
-    fromEmail: "noreply@eventflow.pro",
-    fromName: "EventFlow PRO",
-    encryption: "tls",
+    smtpHost: "",
+    smtpPort: "587",
+    smtpUser: "",
+    smtpPassword: "",
+    smtpFromEmail: "",
+    smtpFromName: "",
+    smtpSecure: false,
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
-    reservationAlerts: true,
-    checkInAlerts: true,
-    systemAlerts: true,
-    dailyReports: false,
+    smsNotifications: false,
   });
 
-  const handleSave = async () => {
+  const [reservationSettings, setReservationSettings] = useState({
+    defaultGuestCount: 2,
+    allowOverbooking: false,
+    requirePhoneNumber: true,
+    requireEmail: false,
+  });
+
+  const [checkInSettings, setCheckInSettings] = useState({
+    autoCheckInEnabled: false,
+    checkInSoundEnabled: true,
+    showTableDirections: true,
+  });
+
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await settingsApi.get();
+      const data = res.data as SystemSettings;
+      setSettings(data);
+
+      // Form state'lerini güncelle
+      setGeneralSettings({
+        companyName: data.companyName || "",
+        timezone: data.timezone || "Europe/Nicosia",
+        language: data.language || "tr",
+      });
+
+      setSmtpSettings({
+        smtpHost: data.smtpHost || "",
+        smtpPort: String(data.smtpPort || 587),
+        smtpUser: data.smtpUser || "",
+        smtpPassword: "", // Şifre gösterilmez
+        smtpFromEmail: data.smtpFromEmail || "",
+        smtpFromName: data.smtpFromName || "",
+        smtpSecure: data.smtpSecure || false,
+      });
+
+      setNotificationSettings({
+        emailNotifications: data.emailNotifications ?? true,
+        smsNotifications: data.smsNotifications ?? false,
+      });
+
+      setReservationSettings({
+        defaultGuestCount: data.defaultGuestCount || 2,
+        allowOverbooking: data.allowOverbooking ?? false,
+        requirePhoneNumber: data.requirePhoneNumber ?? true,
+        requireEmail: data.requireEmail ?? false,
+      });
+
+      setCheckInSettings({
+        autoCheckInEnabled: data.autoCheckInEnabled ?? false,
+        checkInSoundEnabled: data.checkInSoundEnabled ?? true,
+        showTableDirections: data.showTableDirections ?? true,
+      });
+    } catch (error) {
+      console.error("Ayarlar yüklenemedi:", error);
+      toast.error("Ayarlar yüklenemedi");
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const handleSaveGeneral = async () => {
     setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setSaving(false);
+    try {
+      await settingsApi.update(generalSettings);
+      toast.success("Genel ayarlar kaydedildi");
+    } catch (error) {
+      console.error("Kaydetme hatası:", error);
+      toast.error("Ayarlar kaydedilemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSmtp = async () => {
+    setSaving(true);
+    try {
+      const updateData: Record<string, unknown> = {
+        smtpHost: smtpSettings.smtpHost || null,
+        smtpPort: parseInt(smtpSettings.smtpPort) || 587,
+        smtpUser: smtpSettings.smtpUser || null,
+        smtpFromEmail: smtpSettings.smtpFromEmail || null,
+        smtpFromName: smtpSettings.smtpFromName || null,
+        smtpSecure: smtpSettings.smtpSecure,
+      };
+
+      // Şifre sadece girilmişse güncelle
+      if (smtpSettings.smtpPassword) {
+        updateData.smtpPassword = smtpSettings.smtpPassword;
+      }
+
+      await settingsApi.update(updateData);
+      toast.success("SMTP ayarları kaydedildi");
+      setSmtpSettings((prev) => ({ ...prev, smtpPassword: "" }));
+    } catch (error) {
+      console.error("Kaydetme hatası:", error);
+      toast.error("SMTP ayarları kaydedilemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    setSaving(true);
+    try {
+      await settingsApi.update(notificationSettings);
+      toast.success("Bildirim ayarları kaydedildi");
+    } catch (error) {
+      console.error("Kaydetme hatası:", error);
+      toast.error("Bildirim ayarları kaydedilemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSecurity = async () => {
+    setSaving(true);
+    try {
+      await settingsApi.update({
+        ...reservationSettings,
+        ...checkInSettings,
+      });
+      toast.success("Güvenlik ayarları kaydedildi");
+    } catch (error) {
+      console.error("Kaydetme hatası:", error);
+      toast.error("Güvenlik ayarları kaydedilemedi");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTestSmtp = async () => {
     setTestingSmtp(true);
     setSmtpTestResult(null);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setSmtpTestResult(Math.random() > 0.3 ? "success" : "error");
-    setTestingSmtp(false);
+    try {
+      await settingsApi.testSmtpConnection();
+      setSmtpTestResult("success");
+      toast.success("SMTP bağlantısı başarılı");
+    } catch (error) {
+      console.error("SMTP test hatası:", error);
+      setSmtpTestResult("error");
+      toast.error("SMTP bağlantısı başarısız");
+    } finally {
+      setTestingSmtp(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <PageContainer>
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-48 bg-slate-700" />
+          <Skeleton className="h-[400px] bg-slate-700 rounded-xl" />
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
@@ -93,6 +270,16 @@ export default function AdminSettingsPage() {
           title="Sistem Ayarları"
           description="Genel sistem yapılandırması ve entegrasyonlar"
           icon={<Settings className="w-6 h-6 text-amber-400" />}
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadSettings}
+              className="border-slate-600"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          }
         />
 
         <Tabs defaultValue="general" className="w-full">
@@ -139,26 +326,13 @@ export default function AdminSettingsPage() {
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label>Site Adı</Label>
+                    <Label>Şirket Adı</Label>
                     <Input
-                      value={generalSettings.siteName}
+                      value={generalSettings.companyName}
                       onChange={(e) =>
                         setGeneralSettings({
                           ...generalSettings,
-                          siteName: e.target.value,
-                        })
-                      }
-                      className="bg-slate-700 border-slate-600"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Site URL</Label>
-                    <Input
-                      value={generalSettings.siteUrl}
-                      onChange={(e) =>
-                        setGeneralSettings({
-                          ...generalSettings,
-                          siteUrl: e.target.value,
+                          companyName: e.target.value,
                         })
                       }
                       className="bg-slate-700 border-slate-600"
@@ -176,6 +350,9 @@ export default function AdminSettingsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="Europe/Nicosia">
+                          Kıbrıs (UTC+2)
+                        </SelectItem>
                         <SelectItem value="Europe/Istanbul">
                           İstanbul (UTC+3)
                         </SelectItem>
@@ -207,27 +384,9 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
-                  <div>
-                    <p className="font-medium text-white">Bakım Modu</p>
-                    <p className="text-sm text-slate-400">
-                      Aktif edildiğinde sadece adminler erişebilir
-                    </p>
-                  </div>
-                  <Switch
-                    checked={generalSettings.maintenanceMode}
-                    onCheckedChange={(checked) =>
-                      setGeneralSettings({
-                        ...generalSettings,
-                        maintenanceMode: checked,
-                      })
-                    }
-                  />
-                </div>
-
                 <div className="flex justify-end">
                   <Button
-                    onClick={handleSave}
+                    onClick={handleSaveGeneral}
                     disabled={saving}
                     className="bg-amber-600 hover:bg-amber-700"
                   >
@@ -257,11 +416,12 @@ export default function AdminSettingsPage() {
                   <div className="space-y-2">
                     <Label>SMTP Sunucu</Label>
                     <Input
-                      value={smtpSettings.host}
+                      placeholder="smtp.gmail.com"
+                      value={smtpSettings.smtpHost}
                       onChange={(e) =>
                         setSmtpSettings({
                           ...smtpSettings,
-                          host: e.target.value,
+                          smtpHost: e.target.value,
                         })
                       }
                       className="bg-slate-700 border-slate-600"
@@ -270,11 +430,11 @@ export default function AdminSettingsPage() {
                   <div className="space-y-2">
                     <Label>Port</Label>
                     <Input
-                      value={smtpSettings.port}
+                      value={smtpSettings.smtpPort}
                       onChange={(e) =>
                         setSmtpSettings({
                           ...smtpSettings,
-                          port: e.target.value,
+                          smtpPort: e.target.value,
                         })
                       }
                       className="bg-slate-700 border-slate-600"
@@ -283,11 +443,11 @@ export default function AdminSettingsPage() {
                   <div className="space-y-2">
                     <Label>Kullanıcı Adı</Label>
                     <Input
-                      value={smtpSettings.username}
+                      value={smtpSettings.smtpUser}
                       onChange={(e) =>
                         setSmtpSettings({
                           ...smtpSettings,
-                          username: e.target.value,
+                          smtpUser: e.target.value,
                         })
                       }
                       className="bg-slate-700 border-slate-600"
@@ -297,11 +457,12 @@ export default function AdminSettingsPage() {
                     <Label>Şifre</Label>
                     <Input
                       type="password"
-                      value={smtpSettings.password}
+                      placeholder="Değiştirmek için yeni şifre girin"
+                      value={smtpSettings.smtpPassword}
                       onChange={(e) =>
                         setSmtpSettings({
                           ...smtpSettings,
-                          password: e.target.value,
+                          smtpPassword: e.target.value,
                         })
                       }
                       className="bg-slate-700 border-slate-600"
@@ -310,11 +471,12 @@ export default function AdminSettingsPage() {
                   <div className="space-y-2">
                     <Label>Gönderen E-posta</Label>
                     <Input
-                      value={smtpSettings.fromEmail}
+                      placeholder="noreply@example.com"
+                      value={smtpSettings.smtpFromEmail}
                       onChange={(e) =>
                         setSmtpSettings({
                           ...smtpSettings,
-                          fromEmail: e.target.value,
+                          smtpFromEmail: e.target.value,
                         })
                       }
                       className="bg-slate-700 border-slate-600"
@@ -323,16 +485,32 @@ export default function AdminSettingsPage() {
                   <div className="space-y-2">
                     <Label>Gönderen Adı</Label>
                     <Input
-                      value={smtpSettings.fromName}
+                      placeholder="EventFlow PRO"
+                      value={smtpSettings.smtpFromName}
                       onChange={(e) =>
                         setSmtpSettings({
                           ...smtpSettings,
-                          fromName: e.target.value,
+                          smtpFromName: e.target.value,
                         })
                       }
                       className="bg-slate-700 border-slate-600"
                     />
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                  <div>
+                    <p className="font-medium text-white">SSL/TLS Kullan</p>
+                    <p className="text-sm text-slate-400">
+                      Güvenli bağlantı için SSL/TLS etkinleştir
+                    </p>
+                  </div>
+                  <Switch
+                    checked={smtpSettings.smtpSecure}
+                    onCheckedChange={(checked) =>
+                      setSmtpSettings({ ...smtpSettings, smtpSecure: checked })
+                    }
+                  />
                 </div>
 
                 {smtpTestResult && (
@@ -367,7 +545,7 @@ export default function AdminSettingsPage() {
                   <Button
                     variant="outline"
                     onClick={handleTestSmtp}
-                    disabled={testingSmtp}
+                    disabled={testingSmtp || !smtpSettings.smtpHost}
                     className="border-slate-600"
                   >
                     {testingSmtp ? (
@@ -378,7 +556,7 @@ export default function AdminSettingsPage() {
                     Bağlantıyı Test Et
                   </Button>
                   <Button
-                    onClick={handleSave}
+                    onClick={handleSaveSmtp}
                     disabled={saving}
                     className="bg-amber-600 hover:bg-amber-700"
                   >
@@ -404,60 +582,47 @@ export default function AdminSettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {[
-                  {
-                    key: "emailNotifications",
-                    label: "E-posta Bildirimleri",
-                    desc: "Genel e-posta bildirimlerini aç/kapat",
-                  },
-                  {
-                    key: "reservationAlerts",
-                    label: "Rezervasyon Uyarıları",
-                    desc: "Yeni rezervasyonlarda bildirim al",
-                  },
-                  {
-                    key: "checkInAlerts",
-                    label: "Check-in Uyarıları",
-                    desc: "Misafir girişlerinde bildirim al",
-                  },
-                  {
-                    key: "systemAlerts",
-                    label: "Sistem Uyarıları",
-                    desc: "Kritik sistem olaylarında bildirim al",
-                  },
-                  {
-                    key: "dailyReports",
-                    label: "Günlük Raporlar",
-                    desc: "Her gün özet rapor e-postası al",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600"
-                  >
-                    <div>
-                      <p className="font-medium text-white">{item.label}</p>
-                      <p className="text-sm text-slate-400">{item.desc}</p>
-                    </div>
-                    <Switch
-                      checked={
-                        notificationSettings[
-                          item.key as keyof typeof notificationSettings
-                        ]
-                      }
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings({
-                          ...notificationSettings,
-                          [item.key]: checked,
-                        })
-                      }
-                    />
+                <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                  <div>
+                    <p className="font-medium text-white">
+                      E-posta Bildirimleri
+                    </p>
+                    <p className="text-sm text-slate-400">
+                      Genel e-posta bildirimlerini aç/kapat
+                    </p>
                   </div>
-                ))}
+                  <Switch
+                    checked={notificationSettings.emailNotifications}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        emailNotifications: checked,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                  <div>
+                    <p className="font-medium text-white">SMS Bildirimleri</p>
+                    <p className="text-sm text-slate-400">
+                      SMS bildirimlerini aç/kapat (yakında)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={notificationSettings.smsNotifications}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        smsNotifications: checked,
+                      })
+                    }
+                  />
+                </div>
 
                 <div className="flex justify-end pt-4">
                   <Button
-                    onClick={handleSave}
+                    onClick={handleSaveNotifications}
                     disabled={saving}
                     className="bg-amber-600 hover:bg-amber-700"
                   >
@@ -475,81 +640,187 @@ export default function AdminSettingsPage() {
 
           {/* Güvenlik Ayarları */}
           <TabsContent value="security" className="mt-6">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white">Güvenlik Ayarları</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Sistem güvenlik yapılandırması
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label>Oturum Süresi (dakika)</Label>
-                    <Input
-                      type="number"
-                      defaultValue="60"
-                      className="bg-slate-700 border-slate-600"
-                    />
+            <div className="space-y-6">
+              {/* Rezervasyon Ayarları */}
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">
+                    Rezervasyon Ayarları
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Rezervasyon sistemi yapılandırması
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label>Varsayılan Misafir Sayısı</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={reservationSettings.defaultGuestCount}
+                        onChange={(e) =>
+                          setReservationSettings({
+                            ...reservationSettings,
+                            defaultGuestCount: parseInt(e.target.value) || 2,
+                          })
+                        }
+                        className="bg-slate-700 border-slate-600"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Maksimum Giriş Denemesi</Label>
-                    <Input
-                      type="number"
-                      defaultValue="5"
-                      className="bg-slate-700 border-slate-600"
-                    />
-                  </div>
-                </div>
 
-                <div className="space-y-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                      <div>
+                        <p className="font-medium text-white">
+                          Telefon Zorunlu
+                        </p>
+                        <p className="text-sm text-slate-400">
+                          Rezervasyonlarda telefon numarası zorunlu olsun
+                        </p>
+                      </div>
+                      <Switch
+                        checked={reservationSettings.requirePhoneNumber}
+                        onCheckedChange={(checked) =>
+                          setReservationSettings({
+                            ...reservationSettings,
+                            requirePhoneNumber: checked,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                      <div>
+                        <p className="font-medium text-white">
+                          E-posta Zorunlu
+                        </p>
+                        <p className="text-sm text-slate-400">
+                          Rezervasyonlarda e-posta adresi zorunlu olsun
+                        </p>
+                      </div>
+                      <Switch
+                        checked={reservationSettings.requireEmail}
+                        onCheckedChange={(checked) =>
+                          setReservationSettings({
+                            ...reservationSettings,
+                            requireEmail: checked,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                      <div>
+                        <p className="font-medium text-white">
+                          Overbooking İzni
+                        </p>
+                        <p className="text-sm text-slate-400">
+                          Kapasite üzeri rezervasyona izin ver
+                        </p>
+                      </div>
+                      <Switch
+                        checked={reservationSettings.allowOverbooking}
+                        onCheckedChange={(checked) =>
+                          setReservationSettings({
+                            ...reservationSettings,
+                            allowOverbooking: checked,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Check-in Ayarları */}
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">
+                    Check-in Ayarları
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Giriş kontrol sistemi yapılandırması
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
                     <div>
                       <p className="font-medium text-white">
-                        İki Faktörlü Doğrulama
+                        Otomatik Check-in
                       </p>
                       <p className="text-sm text-slate-400">
-                        Admin kullanıcılar için 2FA zorunlu
+                        QR kod okutulduğunda otomatik giriş yap
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={checkInSettings.autoCheckInEnabled}
+                      onCheckedChange={(checked) =>
+                        setCheckInSettings({
+                          ...checkInSettings,
+                          autoCheckInEnabled: checked,
+                        })
+                      }
+                    />
                   </div>
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
-                    <div>
-                      <p className="font-medium text-white">IP Kısıtlaması</p>
-                      <p className="text-sm text-slate-400">
-                        Sadece belirli IP'lerden erişime izin ver
-                      </p>
-                    </div>
-                    <Switch />
-                  </div>
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
-                    <div>
-                      <p className="font-medium text-white">Aktivite Logları</p>
-                      <p className="text-sm text-slate-400">
-                        Tüm kullanıcı aktivitelerini kaydet
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                </div>
 
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="bg-amber-600 hover:bg-amber-700"
-                  >
-                    {saving ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4 mr-2" />
-                    )}
-                    Kaydet
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                    <div>
+                      <p className="font-medium text-white">Ses Efekti</p>
+                      <p className="text-sm text-slate-400">
+                        Check-in işlemlerinde ses çal
+                      </p>
+                    </div>
+                    <Switch
+                      checked={checkInSettings.checkInSoundEnabled}
+                      onCheckedChange={(checked) =>
+                        setCheckInSettings({
+                          ...checkInSettings,
+                          checkInSoundEnabled: checked,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+                    <div>
+                      <p className="font-medium text-white">
+                        Masa Yönlendirmesi
+                      </p>
+                      <p className="text-sm text-slate-400">
+                        Check-in sonrası masa konumunu göster
+                      </p>
+                    </div>
+                    <Switch
+                      checked={checkInSettings.showTableDirections}
+                      onCheckedChange={(checked) =>
+                        setCheckInSettings({
+                          ...checkInSettings,
+                          showTableDirections: checked,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <Button
+                      onClick={handleSaveSecurity}
+                      disabled={saving}
+                      className="bg-amber-600 hover:bg-amber-700"
+                    >
+                      {saving ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4 mr-2" />
+                      )}
+                      Tüm Ayarları Kaydet
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

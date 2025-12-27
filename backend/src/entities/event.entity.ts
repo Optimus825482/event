@@ -25,8 +25,10 @@ export enum EventStatus {
 }
 
 @Entity("events")
-@Index("IDX_event_organizer_date", ["organizerId", "eventDate"]) // Performans: Organizatör bazlı listeleme
-@Index("IDX_event_status_date", ["status", "eventDate"]) // Performans: Status ve tarih filtreleme
+@Index("IDX_event_organizer_date", ["organizerId", "eventDate"])
+@Index("IDX_event_status_date", ["status", "eventDate"])
+// GIN indeksler migration'da: IDX_event_venue_layout (JSONB jsonb_path_ops)
+// Partial indeksler migration'da: IDX_event_has_layout (venueLayout IS NOT NULL)
 export class Event {
   @PrimaryGeneratedColumn("uuid")
   id: string;

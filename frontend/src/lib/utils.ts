@@ -33,16 +33,20 @@ export function formatPhone(phone: string): string {
   return phone;
 }
 
-// Tarih formatla
+// Tarih formatla - Timezone destekli (default: Kıbrıs)
 export function formatDate(
   date: string | Date,
-  format: string = "short"
+  format: string = "short",
+  timezone: string = "Europe/Nicosia"
 ): string {
   if (!date) return "";
   const d = new Date(date);
 
+  const options: Intl.DateTimeFormatOptions = { timeZone: timezone };
+
   if (format === "short") {
     return d.toLocaleDateString("tr-TR", {
+      ...options,
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -51,6 +55,7 @@ export function formatDate(
 
   if (format === "long") {
     return d.toLocaleDateString("tr-TR", {
+      ...options,
       day: "numeric",
       month: "long",
       year: "numeric",
@@ -59,6 +64,7 @@ export function formatDate(
 
   if (format === "datetime") {
     return d.toLocaleString("tr-TR", {
+      ...options,
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -67,7 +73,36 @@ export function formatDate(
     });
   }
 
-  return d.toLocaleDateString("tr-TR");
+  if (format === "time") {
+    return d.toLocaleTimeString("tr-TR", {
+      ...options,
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  if (format === "full") {
+    return d.toLocaleDateString("tr-TR", {
+      ...options,
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  return d.toLocaleDateString("tr-TR", options);
+}
+
+// Tarih ve saat formatla (ayrı ayrı)
+export function formatDateTime(
+  date: string | Date,
+  timezone: string = "Europe/Nicosia"
+): { date: string; time: string } {
+  return {
+    date: formatDate(date, "long", timezone),
+    time: formatDate(date, "time", timezone),
+  };
 }
 
 // Grid'e snap et

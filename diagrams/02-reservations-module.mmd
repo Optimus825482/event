@@ -1,0 +1,86 @@
+graph TB
+    subgraph Frontend["Frontend - React Components"]
+        direction TB
+        Dashboard["3a: Load Events Dashboard"]
+        EventDetail["3b: Event Detail Page"]
+        NewRes["1a: New Reservation Page"]
+        TableCanvas["2a: Table Selection Canvas"]
+        QRModal["4a: QR Code Modal"]
+    end
+
+    subgraph FrontendAPI["Frontend - API Layer"]
+        direction TB
+        EventsAPI["3a: eventsApi.getAll"]
+        ResAPI["3b: reservationsApi.getAll"]
+        CreateAPI["1b: reservationsApi.create"]
+        QRCodeAPI["4b: generateQRCode endpoint"]
+        CustomerAPI["5a: customersApi.searchAutocomplete"]
+    end
+
+    subgraph BackendController["Backend - Controllers"]
+        direction TB
+        ResController["3e: GET reservations endpoint"]
+        CreateController["1d: POST create reservation"]
+        QRController["4c: QR code generation endpoint"]
+    end
+
+    subgraph BackendService["Backend - Services"]
+        direction TB
+        ResFindAll["3d: findAll with filters"]
+        ResCreate["1e: create reservation"]
+        TableValidate["2e: isTableAvailable"]
+        QREngine["4c: QREngineService.generateQRCode"]
+        CheckIn["4d: checkIn process"]
+        CustomerValidate["5c: validateAndGetCustomer"]
+        CustomerHistory["5e: getCustomerHistory"]
+    end
+
+    subgraph Database["Backend - Data Layer"]
+        direction TB
+        ResEntity["Reservation Entity"]
+        CustomerEntity["Customer Entity"]
+    end
+
+    Dashboard -->|navigates to| EventDetail
+    Dashboard -->|navigates to| NewRes
+    EventDetail -->|shows stats| QRModal
+    
+    Dashboard -->|fetches| EventsAPI
+    EventDetail -->|fetches| ResAPI
+    NewRes -->|searches| CustomerAPI
+    NewRes -->|selects table| TableCanvas
+    NewRes -->|submits| CreateAPI
+    EventDetail -->|requests| QRCodeAPI
+    QRModal -->|displays| QRCodeAPI
+
+    EventsAPI -->|calls| ResController
+    ResAPI -->|calls| ResController
+    CreateAPI -->|calls| CreateController
+    QRCodeAPI -->|calls| QRController
+    CustomerAPI -->|searches| CustomerValidate
+
+    ResController -->|queries| ResFindAll
+    CreateController -->|validates| TableValidate
+    CreateController -->|calls| ResCreate
+    CreateController -->|generates| QREngine
+    QRController -->|generates| QREngine
+
+    ResCreate -->|validates customer| CustomerValidate
+    ResCreate -->|checks availability| TableValidate
+    ResCreate -->|generates hash| QREngine
+    ResCreate -->|saves| ResEntity
+    CustomerValidate -->|loads| CustomerEntity
+
+    CheckIn -->|updates status| ResEntity
+    CheckIn -->|broadcasts real-time| Dashboard
+
+    CustomerHistory -->|retrieves| ResEntity
+    CustomerHistory -->|loads| CustomerEntity
+
+    QREngine -->|caches| ResEntity
+
+    style Frontend fill:#fcc2d7
+    style FrontendAPI fill:#ffec99
+    style BackendController fill:#a5d8ff
+    style BackendService fill:#b2f2bb
+    style Database fill:#d0bfff

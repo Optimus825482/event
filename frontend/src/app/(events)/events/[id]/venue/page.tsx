@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -48,6 +48,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/ui/PageContainer";
+import {
+  CanvasTutorialModal,
+  CanvasHelpButton,
+} from "@/components/canvas/CanvasTutorialModal";
+import { TableElement, LocaElement } from "@/components/canvas/TableElement";
 import { useToast } from "@/components/ui/toast-notification";
 import { Input } from "@/components/ui/input";
 import {
@@ -598,6 +603,7 @@ export default function VenuePlannerPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState<PlanStep>("tables");
+  const [showCanvasTutorial, setShowCanvasTutorial] = useState(false);
 
   // Step 1: Table Planning
   const [tablePlans, setTablePlans] = useState<TablePlan[]>([]);
@@ -684,6 +690,11 @@ export default function VenuePlannerPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
 
+  // Unassigned Tables Warning Modal
+  const [showUnassignedWarning, setShowUnassignedWarning] = useState(false);
+  const [unassignedCount, setUnassignedCount] = useState(0);
+  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false);
+
   // Custom Table Types Modal
   const [tableTypeModalOpen, setTableTypeModalOpen] = useState(false);
   const [newTableTypeName, setNewTableTypeName] = useState("");
@@ -695,19 +706,36 @@ export default function VenuePlannerPage() {
   // Lasso ref
   const lassoJustFinishedRef = useRef(false);
 
+  // Layout step'e ilk geçişte tutorial modal'ı göster
+  useEffect(() => {
+    if (currentStep === "layout") {
+      // localStorage'dan daha önce gösterilip gösterilmediğini kontrol et
+      const tutorialShown = localStorage.getItem(
+        "eventflow_canvas_tutorial_shown"
+      );
+      if (!tutorialShown) {
+        setShowCanvasTutorial(true);
+      }
+    }
+  }, [currentStep]);
+
   // ==================== HISTORY MANAGEMENT ====================
   const saveToHistory = useCallback(() => {
+    // Shallow copy ile hızlı klonlama (deep clone yerine)
     const newState: HistoryState = {
-      placedTables: JSON.parse(JSON.stringify(placedTables)),
-      stageElements: JSON.parse(JSON.stringify(stageElements)),
-      drawnLines: JSON.parse(JSON.stringify(drawnLines)),
+      placedTables: placedTables.map((t) => ({ ...t })),
+      stageElements: stageElements.map((s) => ({ ...s })),
+      drawnLines: drawnLines.map((l) => ({ ...l, points: [...l.points] })),
     };
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(newState);
-    if (newHistory.length > 50) newHistory.shift();
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-  }, [placedTables, stageElements, drawnLines, history, historyIndex]);
+
+    setHistory((prev) => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(newState);
+      if (newHistory.length > 30) newHistory.shift(); // 50'den 30'a düşür
+      return newHistory;
+    });
+    setHistoryIndex((prev) => Math.min(prev + 1, 29));
+  }, [placedTables, stageElements, drawnLines, historyIndex]);
 
   const undo = () => {
     if (historyIndex > 0) {
@@ -770,43 +798,165 @@ export default function VenuePlannerPage() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "z") {
+      // Input, textarea veya contenteditable içindeyse kısayolları devre dışı bırak
+      const target = e.target as HTMLElement;
+      const isInputFocused =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+
+      // Layout step'te değilsek kısayolları devre dışı bırak
+      if (currentStep !== "layout") return;
+
+      // Ok tuşları: Seçili elementleri hareket ettir (masalar + sahne elementleri)
+      if (
+        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) &&
+        selectedItems.length > 0 &&
+        !isInputFocused
+      ) {
+        e.preventDefault();
+
+        // Shift basılıysa büyük adım (grid boyutu), değilse küçük adım
+        const step = e.shiftKey ? GRID_SIZE : 5;
+
+        let deltaX = 0;
+        let deltaY = 0;
+
+        switch (e.key) {
+          case "ArrowUp":
+            deltaY = -step;
+            break;
+          case "ArrowDown":
+            deltaY = step;
+            break;
+          case "ArrowLeft":
+            deltaX = -step;
+            break;
+          case "ArrowRight":
+            deltaX = step;
+            break;
+        }
+
+        // Masaları hareket ettir
+        setPlacedTables((prev) =>
+          prev.map((t) =>
+            selectedItems.includes(t.id) && !t.isLocked
+              ? { ...t, x: t.x + deltaX, y: t.y + deltaY }
+              : t
+          )
+        );
+
+        // Stage elementlerini hareket ettir (sahne, catwalk, system control)
+        setStageElements((prev) =>
+          prev.map((el) =>
+            selectedItems.includes(el.id) && !el.isLocked
+              ? { ...el, x: el.x + deltaX, y: el.y + deltaY }
+              : el
+          )
+        );
+        return;
+      }
+
+      // Ctrl+A: Tüm masaları seç (sadece canvas'ta)
+      if (e.ctrlKey && e.key === "a" && !isInputFocused) {
+        e.preventDefault();
+        const allTableIds = placedTables.map((t) => t.id);
+        setSelectedItems(allTableIds);
+        return;
+      }
+
+      // Ctrl+Z: Geri al
+      if (e.ctrlKey && e.key === "z" && !isInputFocused) {
         e.preventDefault();
         undo();
+        return;
       }
-      if (e.ctrlKey && e.key === "y") {
+
+      // Ctrl+Y: Yinele
+      if (e.ctrlKey && e.key === "y" && !isInputFocused) {
         e.preventDefault();
         redo();
+        return;
       }
-      if (e.key === "Delete" && selectedItems.length > 0) {
+
+      // Delete: Seçili masaları sil
+      if (e.key === "Delete" && selectedItems.length > 0 && !isInputFocused) {
+        e.preventDefault();
         deleteSelectedItems();
+        return;
       }
-      if (e.key === " ") {
+
+      // Escape: Seçimi temizle
+      if (e.key === "Escape") {
+        setSelectedItems([]);
+        return;
+      }
+
+      // Space: Pan aracı (geçici)
+      if (e.key === " " && !isInputFocused) {
         e.preventDefault();
         setActiveTool("pan");
+        return;
       }
-      // 1, 2, 3 tuşları ile hızlı tip seçimi
-      if (e.key === "1") setSelectedAssignType("vip");
-      if (e.key === "2") setSelectedAssignType("premium");
-      if (e.key === "3") setSelectedAssignType("standard");
+
+      // V: Seçim aracı
+      if (e.key === "v" && !isInputFocused) {
+        setActiveTool("select");
+        return;
+      }
+
+      // H: El aracı (pan)
+      if (e.key === "h" && !isInputFocused) {
+        setActiveTool("pan");
+        return;
+      }
+
+      // 1, 2, 3, 4 tuşları ile hızlı tip seçimi
+      if (!isInputFocused) {
+        if (e.key === "1") setSelectedAssignType("vip");
+        if (e.key === "2") setSelectedAssignType("premium");
+        if (e.key === "3") setSelectedAssignType("standard");
+        if (e.key === "4") setSelectedAssignType("loca");
+      }
     };
+
+    // Ok tuşu bırakıldığında history'ye kaydet
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === " ") {
         setActiveTool("select");
       }
+      // Ok tuşu bırakıldığında history kaydet
+      if (
+        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) &&
+        selectedItems.length > 0
+      ) {
+        saveToHistory();
+      }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedItems, historyIndex, history]);
+  }, [
+    selectedItems,
+    historyIndex,
+    history,
+    currentStep,
+    placedTables,
+    saveToHistory,
+  ]);
 
   // ==================== HELPER FUNCTIONS ====================
+  // Grid karesinin ortasına snap (köşe değil merkez)
   const snapToGrid = (value: number) => {
     if (!gridSnap) return value;
-    return Math.round(value / GRID_SIZE) * GRID_SIZE;
+    // Değeri grid boyutuna böl, yuvarla, sonra grid boyutuyla çarp
+    // GRID_SIZE/2 ekleyerek merkeze hizala
+    const gridIndex = Math.round(value / GRID_SIZE);
+    return gridIndex * GRID_SIZE + GRID_SIZE / 2 - 16; // 16 = masa yarıçapı (32/2)
   };
 
   // ==================== STEP 1: TABLE PLANNING ====================
@@ -861,36 +1011,41 @@ export default function VenuePlannerPage() {
   };
 
   // ==================== TABLE ASSIGNMENT ====================
-  const assignTableType = (tableId: string, type: TableType) => {
-    setPlacedTables(
-      placedTables.map((t) => (t.id === tableId ? { ...t, type } : t))
+  const assignTableType = useCallback((tableId: string, type: TableType) => {
+    setPlacedTables((prev) =>
+      prev.map((t) => (t.id === tableId ? { ...t, type } : t))
     );
-    saveToHistory();
-  };
+    // History'yi debounce ile kaydet - her tıklamada değil
+  }, []);
 
-  const assignSelectedTablesType = (type: TableType | string) => {
-    if (selectedItems.length === 0) return;
-    setPlacedTables(
-      placedTables.map((t) =>
-        selectedItems.includes(t.id) ? { ...t, type: type as TableType } : t
-      )
-    );
-    saveToHistory();
+  const assignSelectedTablesType = useCallback(
+    (type: TableType | string) => {
+      if (selectedItems.length === 0) return;
+      setPlacedTables((prev) =>
+        prev.map((t) =>
+          selectedItems.includes(t.id) ? { ...t, type: type as TableType } : t
+        )
+      );
+      saveToHistory();
 
-    // Label'ı bul - varsayılan veya custom type olabilir
-    const config = TABLE_TYPE_CONFIG[type as TableType];
-    const customType = customTableTypes.find((ct) => ct.id === type);
-    const label = config?.label || customType?.label || type;
+      // Label'ı bul - varsayılan veya custom type olabilir
+      const config = TABLE_TYPE_CONFIG[type as TableType];
+      const customType = customTableTypes.find((ct) => ct.id === type);
+      const label = config?.label || customType?.label || type;
 
-    toast.success(`${selectedItems.length} masa ${label} olarak atandı`);
-  };
+      toast.success(`${selectedItems.length} masa ${label} olarak atandı`);
+    },
+    [selectedItems, customTableTypes, saveToHistory, toast]
+  );
 
   // ==================== TABLE OPERATIONS ====================
-  const deleteSelectedItems = () => {
-    setPlacedTables(placedTables.filter((t) => !selectedItems.includes(t.id)));
+  const deleteSelectedItems = useCallback(() => {
+    setPlacedTables((prev) =>
+      prev.filter((t) => !selectedItems.includes(t.id))
+    );
     setSelectedItems([]);
     saveToHistory();
-  };
+  }, [selectedItems, saveToHistory]);
 
   const addNewTable = (x: number, y: number) => {
     const maxNumber = Math.max(
@@ -925,76 +1080,207 @@ export default function VenuePlannerPage() {
     );
   };
 
-  // ==================== STATISTICS ====================
-  const getAssignedCount = (type: TableType) => {
-    return placedTables.filter((t) => t.type === type && !t.isLoca).length;
-  };
+  // ==================== STATISTICS (Memoized) ====================
+  const tableStats = useMemo(() => {
+    const stats: Record<TableType, { count: number; capacity: number }> = {
+      unassigned: { count: 0, capacity: 0 },
+      standard: { count: 0, capacity: 0 },
+      premium: { count: 0, capacity: 0 },
+      vip: { count: 0, capacity: 0 },
+      loca: { count: 0, capacity: 0 },
+    };
 
-  const getAssignedCapacity = (type: TableType) => {
-    return placedTables
-      .filter((t) => t.type === type)
-      .reduce((sum, t) => sum + t.capacity, 0);
-  };
+    let totalAssigned = 0;
+    let totalLoca = 0;
 
-  const getPlanRemaining = (planType: TableType) => {
-    const planned = tablePlans
-      .filter((p) => p.type === planType)
-      .reduce((sum, p) => sum + p.count, 0);
-    const assigned = getAssignedCount(planType);
-    return planned - assigned;
-  };
-
-  const totalAssignedCapacity = placedTables
-    .filter((t) => t.type !== "unassigned")
-    .reduce((sum, t) => sum + t.capacity, 0);
-  const totalLocaCapacity = placedTables
-    .filter((t) => t.isLoca && t.type !== "unassigned")
-    .reduce((sum, t) => sum + t.capacity, 0);
-
-  // ==================== DRAG HANDLERS ====================
-  const handleTableMouseDown = (e: React.MouseEvent, tableId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const table = placedTables.find((t) => t.id === tableId);
-    if (!table || table.isLocked) return;
-
-    // Assign tool aktifse, tıklanan masaya tip ata
-    if (activeTool === "assign") {
-      assignTableType(tableId, selectedAssignType);
-      return;
+    for (const table of placedTables) {
+      if (stats[table.type]) {
+        if (!table.isLoca) {
+          stats[table.type].count++;
+        }
+        stats[table.type].capacity += table.capacity;
+      }
+      if (table.type !== "unassigned") {
+        totalAssigned += table.capacity;
+        if (table.isLoca) {
+          totalLoca += table.capacity;
+        }
+      }
     }
 
-    // Multi-drag
-    if (
-      selectedItems.length > 1 &&
-      selectedItems.includes(tableId) &&
-      canvasRef.current
-    ) {
-      setIsMultiDragging(true);
-      const canvasRect = canvasRef.current.getBoundingClientRect();
-      setMultiDragStart({
-        x: (e.clientX - canvasRect.left - canvasOffset.x) / zoom,
-        y: (e.clientY - canvasRect.top - canvasOffset.y) / zoom,
-      });
-      return;
+    return { stats, totalAssigned, totalLoca };
+  }, [placedTables]);
+
+  const getAssignedCount = useCallback(
+    (type: TableType) => {
+      return tableStats.stats[type]?.count || 0;
+    },
+    [tableStats]
+  );
+
+  const getAssignedCapacity = useCallback(
+    (type: TableType) => {
+      return tableStats.stats[type]?.capacity || 0;
+    },
+    [tableStats]
+  );
+
+  const getPlanRemaining = useCallback(
+    (planType: TableType) => {
+      const planned = tablePlans
+        .filter((p) => p.type === planType)
+        .reduce((sum, p) => sum + p.count, 0);
+      return planned - getAssignedCount(planType);
+    },
+    [tablePlans, getAssignedCount]
+  );
+
+  const totalAssignedCapacity = tableStats.totalAssigned;
+  const totalLocaCapacity = tableStats.totalLoca;
+
+  // Selected items as Set for O(1) lookup
+  const selectedItemsSet = useMemo(
+    () => new Set(selectedItems),
+    [selectedItems]
+  );
+
+  // Selection summary - seçili masaların tip ve kapasite özeti
+  const selectionSummary = useMemo(() => {
+    if (selectedItems.length === 0) return null;
+
+    const selectedTables = placedTables.filter((t) =>
+      selectedItems.includes(t.id)
+    );
+
+    // Tip ve kapasiteye göre grupla
+    const groups: Record<string, { count: number; capacity: number }> = {};
+
+    for (const table of selectedTables) {
+      // Tip label'ını bul
+      const config = TABLE_TYPE_CONFIG[table.type as TableType];
+      const customType = customTableTypes.find((ct) => ct.id === table.type);
+      const typeLabel = config?.label || customType?.label || table.type;
+
+      const key = `${typeLabel}-${table.capacity}`;
+      if (!groups[key]) {
+        groups[key] = { count: 0, capacity: table.capacity };
+      }
+      groups[key].count++;
     }
 
-    // Single drag
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDraggedItem({
-      id: tableId,
-      type: "table",
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
+    // Özet dizisi oluştur
+    const summaryItems = Object.entries(groups).map(([key, value]) => {
+      const [typeLabel] = key.split("-");
+      return {
+        typeLabel,
+        capacity: value.capacity,
+        count: value.count,
+      };
     });
 
-    if (!e.shiftKey) {
+    // Toplam kapasite
+    const totalCapacity = selectedTables.reduce(
+      (sum, t) => sum + t.capacity,
+      0
+    );
+
+    return {
+      items: summaryItems,
+      totalCapacity,
+      totalCount: selectedTables.length,
+    };
+  }, [selectedItems, placedTables, customTableTypes]);
+
+  // ==================== DRAG HANDLERS ====================
+  const handleTableMouseDown = useCallback(
+    (e: React.MouseEvent, tableId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const table = placedTables.find((t) => t.id === tableId);
+      if (!table || table.isLocked) return;
+
+      // Assign tool aktifse, tıklanan masaya tip ata
+      if (activeTool === "assign") {
+        assignTableType(tableId, selectedAssignType);
+        return;
+      }
+
+      // Ctrl+Click: Seçime ekle/çıkar
+      if (e.ctrlKey) {
+        setSelectedItems((prev) =>
+          prev.includes(tableId)
+            ? prev.filter((id) => id !== tableId)
+            : [...prev, tableId]
+        );
+        return;
+      }
+
+      // Shift+Click: Mevcut seçime ekle
+      if (e.shiftKey) {
+        setSelectedItems((prev) =>
+          prev.includes(tableId) ? prev : [...prev, tableId]
+        );
+        return;
+      }
+
+      // Multi-drag: Zaten seçili birden fazla masa varsa ve birine tıklandıysa
+      if (
+        selectedItems.length > 1 &&
+        selectedItems.includes(tableId) &&
+        canvasRef.current
+      ) {
+        setIsMultiDragging(true);
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        setMultiDragStart({
+          x: (e.clientX - canvasRect.left - canvasOffset.x) / zoom,
+          y: (e.clientY - canvasRect.top - canvasOffset.y) / zoom,
+        });
+        return;
+      }
+
+      // Tek tıklama: Masayı seç ve drag için hazırla
       setSelectedItems([tableId]);
-    } else if (!selectedItems.includes(tableId)) {
-      setSelectedItems([...selectedItems, tableId]);
-    }
-  };
+
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setDraggedItem({
+        id: tableId,
+        type: "table",
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+      });
+    },
+    [
+      placedTables,
+      activeTool,
+      selectedAssignType,
+      selectedItems,
+      canvasOffset,
+      zoom,
+      assignTableType,
+    ]
+  );
+
+  // Masa tıklama handler'ı (onClick için - seçim toggle)
+  const handleTableClick = useCallback(
+    (e: React.MouseEvent, tableId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Drag yapıldıysa click'i ignore et
+      if (draggedItem) return;
+
+      const table = placedTables.find((t) => t.id === tableId);
+      if (!table || table.isLocked) return;
+
+      // Assign tool aktifse tip ata
+      if (activeTool === "assign") {
+        assignTableType(tableId, selectedAssignType);
+        return;
+      }
+    },
+    [draggedItem, placedTables, activeTool, selectedAssignType]
+  );
 
   // ==================== CANVAS MOUSE HANDLERS ====================
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
@@ -1268,36 +1554,47 @@ export default function VenuePlannerPage() {
   ]);
 
   // ==================== CONTEXT MENU ====================
-  const handleContextMenu = (
-    e: React.MouseEvent,
-    targetId: string | null,
-    targetType: "table" | "stage" | "canvas"
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleContextMenu = useCallback(
+    (
+      e: React.MouseEvent,
+      targetId: string | null,
+      targetType: "table" | "stage" | "canvas"
+    ) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    // Canvas'a sağ tık için koordinatları kaydet
-    let canvasX = 0,
-      canvasY = 0;
-    if (targetType === "canvas" && canvasRef.current) {
-      const canvasRect = canvasRef.current.getBoundingClientRect();
-      canvasX = (e.clientX - canvasRect.left - canvasOffset.x) / zoom;
-      canvasY = (e.clientY - canvasRect.top - canvasOffset.y) / zoom;
-    }
+      // Canvas'a sağ tık için koordinatları kaydet
+      let canvasX = 0,
+        canvasY = 0;
+      if (targetType === "canvas" && canvasRef.current) {
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        canvasX = (e.clientX - canvasRect.left - canvasOffset.x) / zoom;
+        canvasY = (e.clientY - canvasRect.top - canvasOffset.y) / zoom;
+      }
 
-    setContextMenu({
-      visible: true,
-      x: e.clientX,
-      y: e.clientY,
-      targetId: targetType === "canvas" ? `${canvasX},${canvasY}` : targetId,
-      targetType,
-    });
-  };
+      setContextMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        targetId: targetType === "canvas" ? `${canvasX},${canvasY}` : targetId,
+        targetType,
+      });
+    },
+    [canvasOffset, zoom]
+  );
+
+  // Table context menu handler - memoized for TableElement
+  const handleTableContextMenu = useCallback(
+    (e: React.MouseEvent, tableId: string) => {
+      handleContextMenu(e, tableId, "table");
+    },
+    [handleContextMenu]
+  );
 
   // ==================== FULLSCREEN & CLEAR ====================
   const toggleFullscreen = () => setIsFullscreen(!isFullscreen);
 
-  // Otomatik hizalama - seçili masaları en yakın grid noktasına snap eder (sahne/catwalk'a dokunmaz)
+  // Otomatik hizalama - seçili masaları grid karesinin merkezine snap eder (sahne/catwalk'a dokunmaz)
   const autoAlignTables = () => {
     const hasSelection = selectedItems.length > 0;
 
@@ -1306,10 +1603,13 @@ export default function VenuePlannerPage() {
       if (hasSelection && !selectedItems.includes(table.id)) {
         return table;
       }
+      // Grid karesinin merkezine hizala (köşe değil)
+      const gridIndex_x = Math.round(table.x / GRID_SIZE);
+      const gridIndex_y = Math.round(table.y / GRID_SIZE);
       return {
         ...table,
-        x: Math.round(table.x / GRID_SIZE) * GRID_SIZE,
-        y: Math.round(table.y / GRID_SIZE) * GRID_SIZE,
+        x: gridIndex_x * GRID_SIZE + GRID_SIZE / 2 - 16, // 16 = masa yarıçapı
+        y: gridIndex_y * GRID_SIZE + GRID_SIZE / 2 - 16,
       };
     });
 
@@ -1319,8 +1619,8 @@ export default function VenuePlannerPage() {
     saveToHistory();
     toast.success(
       hasSelection
-        ? `${selectedItems.length} masa grid'e hizalandı`
-        : "Tüm masalar grid'e hizalandı"
+        ? `${selectedItems.length} masa grid merkezine hizalandı`
+        : "Tüm masalar grid merkezine hizalandı"
     );
   };
 
@@ -1331,7 +1631,8 @@ export default function VenuePlannerPage() {
   };
 
   // ==================== SAVE ====================
-  const saveLayout = async () => {
+  // Kaydetme işlemini gerçekleştir
+  const performSave = async () => {
     setSaving(true);
     try {
       const layout = {
@@ -1343,12 +1644,47 @@ export default function VenuePlannerPage() {
         dimensions: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
       };
       await eventsApi.updateLayout(eventId, { venueLayout: layout });
-      toast.success("Alan düzeni kaydedildi");
+      setShowSaveSuccessModal(true);
     } catch (error) {
       toast.error("Kaydetme başarısız");
     } finally {
       setSaving(false);
     }
+  };
+
+  // Kaydet butonuna basıldığında - önce kontrol et
+  const saveLayout = async () => {
+    // Atanmamış masaları kontrol et (localar hariç)
+    const unassignedTables = placedTables.filter(
+      (t) => t.type === "unassigned" && !t.isLoca
+    );
+
+    if (unassignedTables.length > 0) {
+      setUnassignedCount(unassignedTables.length);
+      setShowUnassignedWarning(true);
+      return;
+    }
+
+    // Atanmamış masa yoksa direkt kaydet
+    await performSave();
+  };
+
+  // Uyarıyı kabul edip kaydet
+  const confirmSaveWithDefaults = async () => {
+    // Atanmamış masaları standart ve 12 kişilik olarak güncelle
+    setPlacedTables((prev) =>
+      prev.map((t) =>
+        t.type === "unassigned" && !t.isLoca
+          ? { ...t, type: "standard" as TableType, capacity: 12 }
+          : t
+      )
+    );
+    setShowUnassignedWarning(false);
+
+    // State güncellemesi sonrası kaydet
+    setTimeout(async () => {
+      await performSave();
+    }, 100);
   };
 
   // ==================== TEMPLATE FUNCTIONS ====================
@@ -2044,6 +2380,30 @@ export default function VenuePlannerPage() {
                     </span>
                   )}
                 </Button>
+
+                {/* Selection Summary */}
+                {selectionSummary && (
+                  <>
+                    <div className="w-px h-6 bg-slate-700 mx-2" />
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-slate-400">Seçili:</span>
+                      <div className="flex flex-wrap gap-1 max-w-[400px]">
+                        {selectionSummary.items.map((item, idx) => (
+                          <Badge
+                            key={idx}
+                            variant="outline"
+                            className="bg-slate-700/50 text-slate-200 border-slate-600 text-[10px] px-1.5 py-0"
+                          >
+                            {item.count}x {item.typeLabel} {item.capacity}K
+                          </Badge>
+                        ))}
+                      </div>
+                      <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+                        Σ {selectionSummary.totalCapacity} Kişi
+                      </Badge>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center gap-1">
@@ -2125,6 +2485,11 @@ export default function VenuePlannerPage() {
                     <Maximize2 className="w-4 h-4" />
                   )}
                 </Button>
+
+                <div className="w-px h-6 bg-slate-700 mx-2" />
+
+                {/* Yardım Butonu */}
+                <CanvasHelpButton />
               </div>
             </div>
 
@@ -2371,9 +2736,22 @@ export default function VenuePlannerPage() {
                                 GRID_SIZE * zoom
                               }`}
                               fill="none"
-                              stroke="rgba(100,116,139,0.1)"
+                              stroke={
+                                gridSnap
+                                  ? "rgba(139,92,246,0.25)"
+                                  : "rgba(100,116,139,0.1)"
+                              }
                               strokeWidth="1"
                             />
+                            {/* Grid Snap aktifken kare merkezinde nokta */}
+                            {gridSnap && (
+                              <circle
+                                cx={(GRID_SIZE * zoom) / 2}
+                                cy={(GRID_SIZE * zoom) / 2}
+                                r={3 * zoom}
+                                fill="rgba(139,92,246,0.6)"
+                              />
+                            )}
                           </pattern>
                         </defs>
                         <rect width="100%" height="100%" fill="url(#grid)" />
@@ -2432,20 +2810,26 @@ export default function VenuePlannerPage() {
                             top: element.y,
                             width: element.width,
                             height: element.height,
-                            cursor:
-                              element.type !== "system_control" &&
-                              !element.isLocked
-                                ? "move"
-                                : "default",
+                            cursor: !element.isLocked ? "move" : "default",
                           }}
                           onMouseDown={(e) => {
-                            // System control ve kilitli elementler hariç sürüklenebilir
-                            if (
-                              element.type === "system_control" ||
-                              element.isLocked
-                            )
-                              return;
+                            // Kilitli elementler hariç sürüklenebilir
+                            if (element.isLocked) return;
                             e.stopPropagation();
+
+                            // Ctrl+Click: Seçime ekle/çıkar
+                            if (e.ctrlKey) {
+                              setSelectedItems((prev) =>
+                                prev.includes(element.id)
+                                  ? prev.filter((id) => id !== element.id)
+                                  : [...prev, element.id]
+                              );
+                              return;
+                            }
+
+                            // Tek tıklama: Elementi seç
+                            setSelectedItems([element.id]);
+
                             const rect = (
                               e.currentTarget as HTMLElement
                             ).getBoundingClientRect();
@@ -2469,6 +2853,11 @@ export default function VenuePlannerPage() {
                                 : "bg-purple-500"
                             } ${
                               element.isLocked ? "ring-2 ring-amber-400" : ""
+                            } ${
+                              selectedItems.includes(element.id) &&
+                              !element.isLocked
+                                ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900"
+                                : ""
                             }`}
                           >
                             <div className="text-center text-white">
@@ -2477,207 +2866,121 @@ export default function VenuePlannerPage() {
                               </span>
                             </div>
                           </div>
-                          {/* Resize Handles - sahne ve catwalk'lar için (kilitli değilse) */}
-                          {(element.type === "stage" ||
-                            element.type === "catwalk1" ||
-                            element.type === "catwalk2") &&
-                            !element.isLocked && (
-                              <>
-                                {/* Sağ kenar */}
-                                <div
-                                  className="absolute top-0 right-0 w-2 h-full cursor-ew-resize opacity-0 group-hover:opacity-100 bg-white/30"
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    if (!canvasRef.current) return;
-                                    const canvasRect =
-                                      canvasRef.current.getBoundingClientRect();
-                                    setResizingStage({
-                                      id: element.id,
-                                      edge: "right",
-                                      startX:
-                                        (e.clientX -
-                                          canvasRect.left -
-                                          canvasOffset.x) /
-                                        zoom,
-                                      startY:
-                                        (e.clientY -
-                                          canvasRect.top -
-                                          canvasOffset.y) /
-                                        zoom,
-                                      startWidth: element.width,
-                                      startHeight: element.height,
-                                    });
-                                  }}
-                                />
-                                {/* Alt kenar */}
-                                <div
-                                  className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-white/30"
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    if (!canvasRef.current) return;
-                                    const canvasRect =
-                                      canvasRef.current.getBoundingClientRect();
-                                    setResizingStage({
-                                      id: element.id,
-                                      edge: "bottom",
-                                      startX:
-                                        (e.clientX -
-                                          canvasRect.left -
-                                          canvasOffset.x) /
-                                        zoom,
-                                      startY:
-                                        (e.clientY -
-                                          canvasRect.top -
-                                          canvasOffset.y) /
-                                        zoom,
-                                      startWidth: element.width,
-                                      startHeight: element.height,
-                                    });
-                                  }}
-                                />
-                                {/* Köşe */}
-                                <div
-                                  className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-0 group-hover:opacity-100 bg-white/50 rounded-tl"
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    if (!canvasRef.current) return;
-                                    const canvasRect =
-                                      canvasRef.current.getBoundingClientRect();
-                                    setResizingStage({
-                                      id: element.id,
-                                      edge: "corner",
-                                      startX:
-                                        (e.clientX -
-                                          canvasRect.left -
-                                          canvasOffset.x) /
-                                        zoom,
-                                      startY:
-                                        (e.clientY -
-                                          canvasRect.top -
-                                          canvasOffset.y) /
-                                        zoom,
-                                      startWidth: element.width,
-                                      startHeight: element.height,
-                                    });
-                                  }}
-                                />
-                              </>
-                            )}
+                          {/* Resize Handles - tüm stage elementleri için (kilitli değilse) */}
+                          {!element.isLocked && (
+                            <>
+                              {/* Sağ kenar */}
+                              <div
+                                className="absolute top-0 right-0 w-2 h-full cursor-ew-resize opacity-0 group-hover:opacity-100 bg-white/30"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  if (!canvasRef.current) return;
+                                  const canvasRect =
+                                    canvasRef.current.getBoundingClientRect();
+                                  setResizingStage({
+                                    id: element.id,
+                                    edge: "right",
+                                    startX:
+                                      (e.clientX -
+                                        canvasRect.left -
+                                        canvasOffset.x) /
+                                      zoom,
+                                    startY:
+                                      (e.clientY -
+                                        canvasRect.top -
+                                        canvasOffset.y) /
+                                      zoom,
+                                    startWidth: element.width,
+                                    startHeight: element.height,
+                                  });
+                                }}
+                              />
+                              {/* Alt kenar */}
+                              <div
+                                className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-white/30"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  if (!canvasRef.current) return;
+                                  const canvasRect =
+                                    canvasRef.current.getBoundingClientRect();
+                                  setResizingStage({
+                                    id: element.id,
+                                    edge: "bottom",
+                                    startX:
+                                      (e.clientX -
+                                        canvasRect.left -
+                                        canvasOffset.x) /
+                                      zoom,
+                                    startY:
+                                      (e.clientY -
+                                        canvasRect.top -
+                                        canvasOffset.y) /
+                                      zoom,
+                                    startWidth: element.width,
+                                    startHeight: element.height,
+                                  });
+                                }}
+                              />
+                              {/* Köşe */}
+                              <div
+                                className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-0 group-hover:opacity-100 bg-white/50 rounded-tl"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  if (!canvasRef.current) return;
+                                  const canvasRect =
+                                    canvasRef.current.getBoundingClientRect();
+                                  setResizingStage({
+                                    id: element.id,
+                                    edge: "corner",
+                                    startX:
+                                      (e.clientX -
+                                        canvasRect.left -
+                                        canvasOffset.x) /
+                                      zoom,
+                                    startY:
+                                      (e.clientY -
+                                        canvasRect.top -
+                                        canvasOffset.y) /
+                                      zoom,
+                                    startWidth: element.width,
+                                    startHeight: element.height,
+                                  });
+                                }}
+                              />
+                            </>
+                          )}
                         </div>
                       ))}
 
-                      {/* Tables */}
+                      {/* Tables - Memoized Components */}
                       {placedTables
                         .filter((t) => !t.isLoca)
-                        .map((table) => {
-                          // Varsayılan veya custom type rengi
-                          const defaultConfig =
-                            TABLE_TYPE_CONFIG[table.type as TableType];
-                          const customType = customTableTypes.find(
-                            (ct) => ct.id === table.type
-                          );
-                          const color =
-                            defaultConfig?.color ||
-                            customType?.color ||
-                            "#6b7280";
-                          const borderColor =
-                            defaultConfig?.borderColor ||
-                            (customType ? `${customType.color}80` : "#9ca3af");
-                          const isSelected = selectedItems.includes(table.id);
+                        .map((table) => (
+                          <TableElement
+                            key={table.id}
+                            table={table}
+                            isSelected={selectedItemsSet.has(table.id)}
+                            activeTool={activeTool}
+                            customTableTypes={customTableTypes}
+                            onMouseDown={handleTableMouseDown}
+                            onContextMenu={handleTableContextMenu}
+                          />
+                        ))}
 
-                          return (
-                            <div
-                              key={table.id}
-                              className={`absolute select-none transition-transform ${
-                                isSelected
-                                  ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 z-10"
-                                  : ""
-                              }`}
-                              style={{
-                                left: table.x,
-                                top: table.y,
-                                cursor:
-                                  activeTool === "assign"
-                                    ? "pointer"
-                                    : activeTool === "select"
-                                    ? "move"
-                                    : "default",
-                              }}
-                              onMouseDown={(e) =>
-                                handleTableMouseDown(e, table.id)
-                              }
-                              onContextMenu={(e) =>
-                                handleContextMenu(e, table.id, "table")
-                              }
-                            >
-                              <div
-                                className="w-8 h-8 rounded-full flex flex-col items-center justify-center text-white shadow-lg border-2"
-                                style={{
-                                  backgroundColor: color,
-                                  borderColor: borderColor,
-                                }}
-                              >
-                                <span className="text-[8px] font-bold">
-                                  {table.tableNumber}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                      {/* Locas */}
+                      {/* Locas - Memoized Components */}
                       {placedTables
                         .filter((t) => t.isLoca)
-                        .map((loca) => {
-                          // Varsayılan veya custom type rengi
-                          const defaultConfig =
-                            TABLE_TYPE_CONFIG[loca.type as TableType];
-                          const customType = customTableTypes.find(
-                            (ct) => ct.id === loca.type
-                          );
-                          const color =
-                            defaultConfig?.color ||
-                            customType?.color ||
-                            "#6b7280";
-                          const borderColor =
-                            defaultConfig?.borderColor ||
-                            (customType ? `${customType.color}80` : "#9ca3af");
-                          const isSelected = selectedItems.includes(loca.id);
-
-                          return (
-                            <div
-                              key={loca.id}
-                              className={`absolute select-none ${
-                                isSelected ? "ring-2 ring-white z-10" : ""
-                              }`}
-                              style={{
-                                left: loca.x,
-                                top: loca.y,
-                                cursor:
-                                  activeTool === "assign" ? "pointer" : "move",
-                              }}
-                              onMouseDown={(e) =>
-                                handleTableMouseDown(e, loca.id)
-                              }
-                              onContextMenu={(e) =>
-                                handleContextMenu(e, loca.id, "table")
-                              }
-                            >
-                              <div
-                                className="w-13 h-8 rounded-lg flex flex-col items-center justify-center text-white shadow-lg border"
-                                style={{
-                                  backgroundColor: color,
-                                  borderColor: borderColor,
-                                }}
-                              >
-                                <Sofa className="w-3 h-3" />
-                                <span className="text-[8px] font-bold">
-                                  {loca.locaName}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        .map((loca) => (
+                          <LocaElement
+                            key={loca.id}
+                            loca={loca}
+                            isSelected={selectedItemsSet.has(loca.id)}
+                            activeTool={activeTool}
+                            customTableTypes={customTableTypes}
+                            onMouseDown={handleTableMouseDown}
+                            onContextMenu={handleTableContextMenu}
+                          />
+                        ))}
 
                       {/* Lasso Selection */}
                       {isLassoSelecting && (
@@ -2699,11 +3002,17 @@ export default function VenuePlannerPage() {
           </div>
         )}
 
-        {/* Context Menu */}
+        {/* Context Menu - Smart positioning (dropup when near bottom) */}
         {contextMenu.visible && (
           <div
             className="fixed bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-50 min-w-[180px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            style={{
+              left: Math.min(contextMenu.x, window.innerWidth - 200),
+              // Ekranın alt yarısındaysa yukarı doğru aç
+              ...(contextMenu.y > window.innerHeight - 350
+                ? { bottom: window.innerHeight - contextMenu.y }
+                : { top: contextMenu.y }),
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {contextMenu.targetType === "canvas" && (
@@ -2803,8 +3112,16 @@ export default function VenuePlannerPage() {
                     </span>
                     <ChevronRight className="w-4 h-4 text-slate-500" />
                   </button>
-                  {/* Submenu - sağa veya sola açılır */}
-                  <div className="absolute left-full top-0 ml-1 hidden group-hover:block bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[120px]">
+                  {/* Submenu - sağa veya sola açılır (ekran kenarına göre) */}
+                  <div
+                    className="absolute top-0 hidden group-hover:block bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[120px]"
+                    style={{
+                      // Sağda yeterli alan yoksa sola aç
+                      ...(contextMenu.x > window.innerWidth - 350
+                        ? { right: "100%", marginRight: "4px" }
+                        : { left: "100%", marginLeft: "4px" }),
+                    }}
+                  >
                     {[6, 8, 10, 12, 14, 16].map((cap) => (
                       <button
                         key={cap}
@@ -3265,6 +3582,125 @@ export default function VenuePlannerPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Atanmamış Masalar Uyarı Modal */}
+        <Dialog
+          open={showUnassignedWarning}
+          onOpenChange={setShowUnassignedWarning}
+        >
+          <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-amber-400 flex items-center gap-2">
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                Masa Tipi Belirlenmemiş
+              </DialogTitle>
+            </DialogHeader>
+            <div className="text-slate-300 space-y-3 pt-2">
+              <p>
+                Alana yerleştirdiğiniz{" "}
+                <span className="font-bold text-amber-400">
+                  {unassignedCount}
+                </span>{" "}
+                masada masa tipi belirlenmemiş. Bu masalar{" "}
+                <span className="font-semibold text-blue-400">Standart</span> ve
+                <span className="font-semibold text-blue-400">
+                  {" "}
+                  12 kişilik
+                </span>{" "}
+                masa tipi olarak kaydedilecektir.
+              </p>
+              <div className="bg-slate-900/50 rounded-lg p-3 text-sm border border-slate-700">
+                <p className="text-slate-400">
+                  <span className="text-amber-400 font-medium">Önemli:</span>{" "}
+                  Masa tipleri, masalarda uygulanacak servis hizmetleri
+                  açısından; kişi sayısı ise rezerve edilecek kişi sayısı
+                  açısından temel oluşturmaktadır.
+                </p>
+                <p className="text-slate-400 mt-2">
+                  Eğer bunlarda farklılık olmasını istiyorsanız, lütfen alanda
+                  masa tiplerini ve masalardaki kişi sayılarını kontrol ederek
+                  kaydediniz.
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="flex gap-2 mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowUnassignedWarning(false)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                İptal - Düzenleyeceğim
+              </Button>
+              <Button
+                onClick={confirmSaveWithDefaults}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                Varsayılan ile Kaydet
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Kayıt Başarılı Modal */}
+        <Dialog
+          open={showSaveSuccessModal}
+          onOpenChange={setShowSaveSuccessModal}
+        >
+          <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-green-400 flex items-center gap-2">
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                İşlem Tamamlandı
+              </DialogTitle>
+            </DialogHeader>
+            <div className="text-slate-300 py-4">
+              <p>Etkinlik alanı düzeni başarıyla kaydedildi.</p>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setShowSaveSuccessModal(false);
+                  router.push("/events");
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white w-full"
+              >
+                Tamam
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Canvas Tutorial Modal - Layout step'e ilk geçişte otomatik açılır */}
+        {currentStep === "layout" && (
+          <CanvasTutorialModal
+            forceOpen={showCanvasTutorial}
+            onClose={() => setShowCanvasTutorial(false)}
+          />
+        )}
       </div>
     </PageContainer>
   );

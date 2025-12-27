@@ -17,32 +17,37 @@ const iconMap = {
 // Modül renk konfigürasyonu
 const moduleColors: Record<
   ModuleType,
-  { gradient: string; iconBg: string; border: string }
+  { gradient: string; iconBg: string; border: string; glow: string }
 > = {
   events: {
-    gradient: "from-blue-500/20 to-blue-600/10",
+    gradient: "from-blue-500/20 via-blue-600/10 to-transparent",
     iconBg: "bg-blue-600/20",
-    border: "border-blue-500/30 hover:border-blue-500/50",
+    border: "border-blue-500/30 hover:border-blue-400/60",
+    glow: "hover:shadow-blue-500/20",
   },
   reservations: {
-    gradient: "from-purple-500/20 to-purple-600/10",
+    gradient: "from-purple-500/20 via-purple-600/10 to-transparent",
     iconBg: "bg-purple-600/20",
-    border: "border-purple-500/30 hover:border-purple-500/50",
+    border: "border-purple-500/30 hover:border-purple-400/60",
+    glow: "hover:shadow-purple-500/20",
   },
   checkin: {
-    gradient: "from-emerald-500/20 to-emerald-600/10",
+    gradient: "from-emerald-500/20 via-emerald-600/10 to-transparent",
     iconBg: "bg-emerald-600/20",
-    border: "border-emerald-500/30 hover:border-emerald-500/50",
+    border: "border-emerald-500/30 hover:border-emerald-400/60",
+    glow: "hover:shadow-emerald-500/20",
   },
   admin: {
-    gradient: "from-amber-500/20 to-amber-600/10",
+    gradient: "from-amber-500/20 via-amber-600/10 to-transparent",
     iconBg: "bg-amber-600/20",
-    border: "border-amber-500/30 hover:border-amber-500/50",
+    border: "border-amber-500/30 hover:border-amber-400/60",
+    glow: "hover:shadow-amber-500/20",
   },
   leader: {
-    gradient: "from-cyan-500/20 to-cyan-600/10",
+    gradient: "from-cyan-500/20 via-cyan-600/10 to-transparent",
     iconBg: "bg-cyan-600/20",
-    border: "border-cyan-500/30 hover:border-cyan-500/50",
+    border: "border-cyan-500/30 hover:border-cyan-400/60",
+    glow: "hover:shadow-cyan-500/20",
   },
 };
 
@@ -83,76 +88,73 @@ export default function SelectModulePage() {
     router.push("/login");
   };
 
-  // Kullanıcının erişebildiği modüller - admin modülü en sona
+  // Kullanıcının erişebildiği modüller
   const allowedModules = user.allowedModules
     .map((id) => MODULES[id])
-    .filter(Boolean)
-    .sort((a, b) => {
-      // Admin modülünü en sona koy
-      if (a.id === "admin") return 1;
-      if (b.id === "admin") return -1;
-      return 0;
-    });
-
-  // Normal modüller ve admin modülü ayrımı
-  const regularModules = allowedModules.filter((m) => m.id !== "admin");
-  const adminModules = allowedModules.filter((m) => m.id === "admin");
+    .filter(Boolean);
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col">
       {/* Header */}
-      <header className="border-b border-slate-800 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+      <header className="border-b border-slate-800 px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <Image
             src="/eventflowprologo.png"
             alt="EventFlow PRO"
             width={160}
             height={42}
-            className="h-10 w-auto"
+            className="h-8 sm:h-10 w-auto"
             priority
           />
-          <div className="flex items-center gap-4">
-            <span className="text-slate-400">
-              Hoş geldin,{" "}
-              <span className="text-white font-medium">{user.fullName}</span>
-            </span>
-            {user.role === "admin" && (
-              <span className="px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                Admin
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-slate-400 text-sm sm:text-base">
+                Hoş geldin,{" "}
+                <span className="text-white font-medium">{user.fullName}</span>
               </span>
-            )}
+              {user.role === "admin" && (
+                <span className="px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  Admin
+                </span>
+              )}
+            </div>
+            {/* Mobile: Sadece isim ve badge */}
+            <div className="flex sm:hidden items-center gap-2">
+              <span className="text-white font-medium text-sm truncate max-w-[100px]">
+                {user.fullName.split(" ")[0]}
+              </span>
+              {user.role === "admin" && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  Admin
+                </span>
+              )}
+            </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors text-sm"
             >
               <LogOut className="w-4 h-4" />
-              Çıkış
+              <span className="hidden sm:inline">Çıkış</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center p-8">
-        <div className="max-w-5xl w-full">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-2 text-white">Modül Seçin</h2>
-            <p className="text-slate-400">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl w-full">
+          <div className="text-center mb-8 sm:mb-10 lg:mb-12">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-white">
+              Modül Seçin
+            </h2>
+            <p className="text-slate-400 text-sm sm:text-base">
               Çalışmak istediğiniz modülü seçerek devam edin
             </p>
           </div>
 
-          {/* Ana Modüller */}
-          <div
-            className={`grid gap-6 mb-8 ${
-              regularModules.length === 3
-                ? "md:grid-cols-3"
-                : regularModules.length === 2
-                ? "md:grid-cols-2 max-w-2xl mx-auto"
-                : "max-w-md mx-auto"
-            }`}
-          >
-            {regularModules.map((module) => {
+          {/* Tüm Modüller - Responsive Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
+            {allowedModules.map((module) => {
               const Icon = iconMap[module.icon as keyof typeof iconMap];
               const colors = moduleColors[module.id];
               const iconColor = iconColors[module.id];
@@ -161,80 +163,71 @@ export default function SelectModulePage() {
                 <button
                   key={module.id}
                   onClick={() => handleSelectModule(module.id)}
-                  className={`bg-gradient-to-br ${colors.gradient} p-8 rounded-2xl border ${colors.border} text-left transition-all group hover:scale-[1.02] active:scale-[0.98]`}
+                  className={`
+                    relative overflow-hidden
+                    bg-gradient-to-br ${colors.gradient} 
+                    p-5 sm:p-6 lg:p-7
+                    rounded-xl sm:rounded-2xl 
+                    border ${colors.border} 
+                    text-left 
+                    transition-all duration-300 ease-out
+                    group 
+                    hover:scale-[1.02] active:scale-[0.98]
+                    hover:shadow-xl ${colors.glow}
+                    backdrop-blur-sm
+                  `}
                 >
-                  <div
-                    className={`w-16 h-16 ${colors.iconBg} rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}
-                  >
-                    <Icon className={`w-8 h-8 ${iconColor}`} />
+                  {/* Subtle glow effect */}
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                    <div
+                      className={`absolute -inset-1 bg-gradient-to-br ${colors.gradient} blur-xl`}
+                    />
                   </div>
-                  <h3 className="text-xl font-semibold mb-2 text-white">
-                    {module.name}
-                  </h3>
-                  <p className="text-slate-400 text-sm">{module.description}</p>
+
+                  <div className="relative z-10">
+                    <div
+                      className={`
+                        w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 
+                        ${colors.iconBg} 
+                        rounded-lg sm:rounded-xl 
+                        flex items-center justify-center 
+                        mb-4 sm:mb-5 lg:mb-6 
+                        group-hover:scale-110 
+                        transition-transform duration-300
+                      `}
+                    >
+                      <Icon
+                        className={`w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 ${iconColor}`}
+                      />
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-semibold mb-1.5 sm:mb-2 text-white">
+                      {module.name}
+                    </h3>
+                    <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                      {module.description}
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </div>
 
-          {/* Admin Modülleri - Ayrı bölüm */}
-          {adminModules.length > 0 && (
-            <>
-              <div className="relative my-8">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-700"></div>
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="px-4 bg-slate-900 text-slate-500 text-sm">
-                    Yönetim Araçları
-                  </span>
-                </div>
-              </div>
-
-              <div className="max-w-md mx-auto">
-                {adminModules.map((module) => {
-                  const Icon = iconMap[module.icon as keyof typeof iconMap];
-                  const colors = moduleColors[module.id];
-                  const iconColor = iconColors[module.id];
-
-                  return (
-                    <button
-                      key={module.id}
-                      onClick={() => handleSelectModule(module.id)}
-                      className={`w-full bg-gradient-to-br ${colors.gradient} p-6 rounded-2xl border ${colors.border} text-left transition-all group hover:scale-[1.02] active:scale-[0.98] flex items-center gap-6`}
-                    >
-                      <div
-                        className={`w-14 h-14 ${colors.iconBg} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0`}
-                      >
-                        <Icon className={`w-7 h-7 ${iconColor}`} />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold mb-1 text-white">
-                          {module.name}
-                        </h3>
-                        <p className="text-slate-400 text-sm">
-                          {module.description}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
           {allowedModules.length === 0 && (
             <div className="text-center py-12 text-slate-400">
-              Erişim izniniz olan modül bulunmuyor.
-              <br />
-              Lütfen yöneticinizle iletişime geçin.
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
+                <Shield className="w-8 h-8 text-slate-600" />
+              </div>
+              <p className="text-lg mb-2">
+                Erişim izniniz olan modül bulunmuyor.
+              </p>
+              <p className="text-sm">Lütfen yöneticinizle iletişime geçin.</p>
             </div>
           )}
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800 py-4 text-center text-slate-500 text-sm">
+      <footer className="border-t border-slate-800 py-3 sm:py-4 text-center text-slate-500 text-xs sm:text-sm">
         EventFlow PRO © 2025 - Tüm hakları saklıdır
       </footer>
     </div>
