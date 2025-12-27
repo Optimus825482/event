@@ -94,6 +94,7 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 4000
       FRONTEND_URL: ${FRONTEND_URL:-https://eventflow.optimistdemo.cloud}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://eventflow.optimistdemo.cloud}
     volumes:
       - uploads_data:/app/uploads
     expose:
