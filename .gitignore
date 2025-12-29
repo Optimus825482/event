@@ -55,3 +55,8 @@ backend/uploads/invitation-images/*
 !backend/uploads/logos/.gitkeep
 !backend/uploads/event-images/.gitkeep
 !backend/uploads/invitation-images/.gitkeep
+
+# Demo/Showcase projects (ayrı repo'da)
+optimist-projects/
+eventflowproject/
+minibarproject/
