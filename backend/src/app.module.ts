@@ -141,7 +141,8 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
           EventExtraStaff,
         ],
         // UYARI: Production'da synchronize: false olmalı!
-        synchronize: configService.get("NODE_ENV") === "development",
+        // Geçici olarak true - yeni tablolar oluşturulsun
+        synchronize: true,
         logging:
           configService.get("NODE_ENV") === "development"
             ? ["query", "error", "warn", "schema"]
