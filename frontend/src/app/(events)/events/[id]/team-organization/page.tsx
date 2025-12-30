@@ -328,7 +328,6 @@ export default function TeamOrganizationPage() {
             onDeleteTeam={wizard.deleteTeam}
             onAssignGroupToTeam={wizard.assignGroupToTeam}
             onUnassignGroupFromTeam={wizard.unassignGroupFromTeam}
-            onMergeGroupsToTeam={wizard.mergeGroupsToTeam}
             onCanvasStateChange={setCanvasToolbar}
           />
         );
