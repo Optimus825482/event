@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Filter,
   RefreshCw,
+  type LucideIcon,
 } from "lucide-react";
 import { notificationsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -48,7 +49,7 @@ interface Notification {
   event?: { id: string; name: string } | null;
 }
 
-const typeIcons: Record<string, React.ElementType> = {
+const typeIcons: Record<string, LucideIcon> = {
   event_created: Calendar,
   event_updated: Calendar,
   venue_layout_completed: CheckCircle,

@@ -16,6 +16,7 @@ import {
   User,
   Award,
   BarChart3,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -36,7 +37,7 @@ import { NotificationCenter } from "@/components/ui/NotificationCenter";
 interface NavItem {
   label: string;
   href: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   badge?: number;
 }
 

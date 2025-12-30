@@ -162,7 +162,7 @@ export function validateAllSteps(
 ): Record<WizardStep, ValidationResult> {
   return {
     "table-grouping": validateStep1(tableGroups),
-    "staff-assignment": validateStep4(teams),
+    "team-assignment": validateStep4(teams),
     summary: { isValid: true, errors: [], warnings: [] },
   };
 }
@@ -178,7 +178,7 @@ export function isStepComplete(
   switch (step) {
     case "table-grouping":
       return tableGroups.length > 0 && teams.length > 0;
-    case "staff-assignment":
+    case "team-assignment":
       return teams.some((t) =>
         t.requiredStaff.some((r) => r.assignedStaffIds.length > 0)
       );
@@ -196,7 +196,7 @@ export function getCompletedSteps(
   tableGroups: TableGroup[],
   teams: TeamDefinition[]
 ): WizardStep[] {
-  const steps: WizardStep[] = ["table-grouping", "staff-assignment", "summary"];
+  const steps: WizardStep[] = ["table-grouping", "team-assignment", "summary"];
 
   return steps.filter((step) => isStepComplete(step, tableGroups, teams));
 }

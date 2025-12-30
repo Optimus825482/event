@@ -22,6 +22,7 @@ import {
   Clock,
   Loader2,
   ExternalLink,
+  type LucideIcon,
 } from "lucide-react";
 import {
   useNotificationStore,
@@ -37,7 +38,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast-notification";
 
 // İkon mapping
-const iconMap: Record<string, React.ElementType> = {
+const iconMap: Record<string, LucideIcon> = {
   Calendar,
   CalendarX,
   MapPin,
