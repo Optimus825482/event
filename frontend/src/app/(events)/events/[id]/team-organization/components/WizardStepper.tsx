@@ -7,6 +7,7 @@ import {
   Link,
   UserPlus,
   CheckCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { WizardStep, WIZARD_STEPS } from "../types";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,7 @@ interface WizardStepperProps {
   completedSteps?: WizardStep[];
 }
 
-const STEP_ICONS: Record<string, React.ElementType> = {
+const STEP_ICONS: Record<string, LucideIcon> = {
   Grid3X3,
   Users,
   Link,
