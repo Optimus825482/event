@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, memo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   Plus,
@@ -25,15 +26,15 @@ import {
   RefreshCw,
   X,
   Phone,
-  QrCode,
+  LayoutGrid,
+  Box,
 } from "lucide-react";
 import { eventsApi, reservationsApi } from "@/lib/api";
 import { formatDate, formatPhone } from "@/lib/utils";
 import type { Event, Reservation, ReservationStatus } from "@/types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageContainer, StatsGrid } from "@/components/ui/PageContainer";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { InvitationActionsModal } from "@/components/invitations/InvitationActionsModal";
+import { PageContainer } from "@/components/ui/PageContainer";
+
+// Canvas bileşenini client-side only olarak yükle
+const ReservationViewCanvas = dynamic(
+  () =>
+    import("@/components/reservations/ReservationViewCanvas").then(
+      (mod) => mod.ReservationViewCanvas
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full bg-slate-800 rounded-lg animate-pulse" />
+    ),
+  }
+);
 
 const statusLabels: Record<
   ReservationStatus,
@@ -112,41 +128,27 @@ const CountdownDisplay = memo(function CountdownDisplay({
 
   if (countdown.isExpired) {
     return (
-      <div className="text-center text-yellow-400">
-        <span className="text-sm font-medium">Etkinlik başladı!</span>
-      </div>
+      <span className="text-yellow-400 font-medium">Etkinlik başladı!</span>
     );
   }
 
   return (
-    <div className="flex items-center gap-1.5">
-      <div className="text-center">
-        <span className="text-xl font-bold text-purple-400 tabular-nums">
-          {String(countdown.days).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">GÜN</span>
-      </div>
-      <span className="text-purple-500 font-bold">:</span>
-      <div className="text-center">
-        <span className="text-xl font-bold text-purple-400 tabular-nums">
-          {String(countdown.hours).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">SAAT</span>
-      </div>
-      <span className="text-purple-500 font-bold">:</span>
-      <div className="text-center">
-        <span className="text-xl font-bold text-purple-400 tabular-nums">
-          {String(countdown.minutes).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">DK</span>
-      </div>
-      <span className="text-purple-500 font-bold">:</span>
-      <div className="text-center">
-        <span className="text-xl font-bold text-purple-400 tabular-nums">
-          {String(countdown.seconds).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">SN</span>
-      </div>
+    <div className="flex items-center gap-1 text-sm">
+      <span className="font-bold text-purple-400">
+        {String(countdown.days).padStart(2, "0")}
+      </span>
+      <span className="text-slate-500">g</span>
+      <span className="font-bold text-purple-400">
+        {String(countdown.hours).padStart(2, "0")}
+      </span>
+      <span className="text-slate-500">:</span>
+      <span className="font-bold text-purple-400">
+        {String(countdown.minutes).padStart(2, "0")}
+      </span>
+      <span className="text-slate-500">:</span>
+      <span className="font-bold text-purple-400">
+        {String(countdown.seconds).padStart(2, "0")}
+      </span>
     </div>
   );
 });
@@ -167,6 +169,7 @@ export default function EventReservationsPage() {
     useState<Reservation | null>(null);
   const [invitationReservation, setInvitationReservation] =
     useState<Reservation | null>(null);
+  const [canvasViewMode, setCanvasViewMode] = useState<"2d" | "3d">("2d");
 
   // Veri yükleme
   useEffect(() => {
@@ -188,6 +191,13 @@ export default function EventReservationsPage() {
 
     if (eventId) loadData();
   }, [eventId, router]);
+
+  // Rezerveli masa ID'leri
+  const reservedTableIds = useMemo(() => {
+    return reservations
+      .filter((r) => r.status !== "cancelled" && r.status !== "no_show")
+      .map((r) => r.tableId);
+  }, [reservations]);
 
   // Filtrelenmiş rezervasyonlar
   const filteredReservations = useMemo(() => {
@@ -217,7 +227,11 @@ export default function EventReservationsPage() {
       (r) => r.status === "cancelled"
     ).length;
 
-    const tableCount = event?.venueLayout?.tables?.length || 0;
+    const tables =
+      (event?.venueLayout as any)?.tables ||
+      (event?.venueLayout as any)?.placedTables ||
+      [];
+    const tableCount = tables.length;
     const reservedTables = reservations.filter(
       (r) => r.status !== "cancelled" && r.status !== "no_show"
     ).length;
@@ -240,7 +254,6 @@ export default function EventReservationsPage() {
   const guestStats = useMemo(() => {
     let newGuests = 0;
     let returningGuests = 0;
-
     reservations.forEach((r) => {
       if (r.status === "cancelled") return;
       if (
@@ -252,14 +265,23 @@ export default function EventReservationsPage() {
         newGuests++;
       }
     });
-
     return { newGuests, returningGuests };
   }, [reservations]);
 
+  // Masa tıklama - rezervasyon detayını göster
+  const handleTableClick = (tableId: string) => {
+    const reservation = reservations.find(
+      (r) => r.tableId === tableId && r.status !== "cancelled"
+    );
+    if (reservation) {
+      setSelectedReservation(reservation);
+    }
+  };
+
   if (loading) {
     return (
-      <PageContainer>
-        <div className="flex items-center justify-center min-h-[50vh]">
+      <PageContainer maxWidth="full">
+        <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
         </div>
       </PageContainer>
@@ -273,305 +295,305 @@ export default function EventReservationsPage() {
   const isPast = eventDate < now;
 
   return (
-    <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Link
-              href="/reservations"
-              className="p-2 bg-slate-800 rounded-lg flex-shrink-0"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-2xl font-bold truncate">
-                {event.name}
-              </h1>
-              <p className="text-slate-400 flex items-center gap-2 text-xs sm:text-sm">
-                <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>{formatDate(event.eventDate)}</span>
-              </p>
+    <PageContainer maxWidth="full">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/reservations"
+            className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold">{event.name}</h1>
+            <div className="flex items-center gap-3 text-sm text-slate-400">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-4 h-4" />
+                {formatDate(event.eventDate)}
+              </span>
+              {!isPast && <CountdownDisplay eventDate={event.eventDate} />}
             </div>
           </div>
-          <Link
-            href={`/reservations/${eventId}/new`}
-            className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm transition-colors w-full sm:w-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Yeni Rezervasyon</span>
-          </Link>
+        </div>
+        <Link
+          href={`/reservations/${eventId}/new`}
+          className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 px-4 py-2.5 rounded-lg text-sm transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Yeni Rezervasyon</span>
+        </Link>
+      </div>
+
+      {/* Ana Layout: Sol Canvas, Sağ 3 Card */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Sol Taraf - Canvas (2/3 genişlik) */}
+        <div className="xl:col-span-2">
+          <Card className="bg-slate-800 border-slate-700 h-full">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-purple-400" />
+                  Etkinlik Alanı
+                </span>
+                {/* 3D Toggle Button - Ortada */}
+                <Button
+                  size="sm"
+                  variant={canvasViewMode === "3d" ? "secondary" : "outline"}
+                  onClick={() =>
+                    setCanvasViewMode(canvasViewMode === "2d" ? "3d" : "2d")
+                  }
+                  className={
+                    canvasViewMode === "3d"
+                      ? "bg-cyan-600 text-white hover:bg-cyan-700 px-4"
+                      : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 px-4"
+                  }
+                >
+                  <Box className="w-4 h-4 mr-1.5" />
+                  {canvasViewMode === "2d" ? "3D Görünüm" : "2D Görünüm"}
+                </Button>
+                <div className="flex items-center gap-4 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full border-2 border-green-500 bg-green-500/20" />
+                    <span className="text-slate-400">Boş</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-red-500" />
+                    <span className="text-slate-400">Dolu</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                    <span className="text-slate-400">Beklemede</span>
+                  </div>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3">
+              <div className="h-[450px] sm:h-[500px] lg:h-[550px] xl:h-[600px]">
+                <ReservationViewCanvas
+                  event={event}
+                  reservations={reservations}
+                  onTableClick={handleTableClick}
+                  viewMode={canvasViewMode}
+                />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Geri Sayım ve Doluluk */}
-        {!isPast && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-purple-700/50">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-slate-300 mb-3">
-                  <Timer className="w-4 h-4" />
-                  <span className="text-sm font-medium">Kalan Süre</span>
-                </div>
-                <CountdownDisplay eventDate={event.eventDate} />
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border-emerald-700/50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <Percent className="w-4 h-4" />
-                    <span className="text-sm font-medium">Doluluk Oranı</span>
-                  </div>
-                  <span className="text-2xl font-bold text-emerald-400">
+        {/* Sağ Taraf - 3 Card Alt Alta */}
+        <div className="space-y-4">
+          {/* Card 1: İstatistikler */}
+          <Card className="bg-slate-800 border-slate-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Percent className="w-4 h-4 text-emerald-400" />
+                İstatistikler
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Doluluk */}
+              <div>
+                <div className="flex items-center justify-between text-sm mb-1.5">
+                  <span className="text-slate-400">Doluluk</span>
+                  <span className="font-bold text-emerald-400">
                     %{stats.occupancyRate}
                   </span>
                 </div>
-                <div className="w-full bg-slate-700 rounded-full h-3">
+                <div className="w-full bg-slate-700 rounded-full h-2.5">
                   <div
-                    className="bg-gradient-to-r from-emerald-500 to-teal-500 h-3 rounded-full transition-all duration-500"
+                    className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2.5 rounded-full transition-all"
                     style={{ width: `${stats.occupancyRate}%` }}
                   />
                 </div>
-                <p className="text-xs text-slate-400 mt-2">
-                  {stats.reservedTables} / {stats.tableCount} masa dolu
+                <p className="text-xs text-slate-500 mt-1.5">
+                  {stats.reservedTables} / {stats.tableCount} masa
                 </p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              </div>
 
-        {/* İstatistikler */}
-        <StatsGrid columns={5}>
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1 sm:gap-2 text-slate-400 mb-1">
-                <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-xs sm:text-sm">Toplam</span>
+              {/* Durum Dağılımı */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-green-400">
+                    {stats.confirmed}
+                  </p>
+                  <p className="text-xs text-slate-400">Onaylı</p>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-yellow-400">
+                    {stats.pending}
+                  </p>
+                  <p className="text-xs text-slate-400">Beklemede</p>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-blue-400">
+                    {stats.checkedIn}
+                  </p>
+                  <p className="text-xs text-slate-400">Giriş</p>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-red-400">
+                    {stats.cancelled}
+                  </p>
+                  <p className="text-xs text-slate-400">İptal</p>
+                </div>
               </div>
-              <p className="text-xl sm:text-2xl font-bold">{stats.total}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1 sm:gap-2 text-green-400 mb-1">
-                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-xs sm:text-sm">Onaylı</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-green-400">
-                {stats.confirmed}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1 sm:gap-2 text-blue-400 mb-1">
-                <UserCheck className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-xs sm:text-sm">Giriş</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-blue-400">
-                {stats.checkedIn}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1 sm:gap-2 text-yellow-400 mb-1">
-                <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-xs sm:text-sm">Bekleyen</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-yellow-400">
-                {stats.pending}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1 sm:gap-2 text-red-400 mb-1">
-                <XCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-xs sm:text-sm">İptal</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-red-400">
-                {stats.cancelled}
-              </p>
-            </CardContent>
-          </Card>
-        </StatsGrid>
 
-        {/* Yeni ve Geri Dönen Misafirler */}
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                <UserPlus className="w-4 h-4" />
-                <span className="text-sm">Yeni Misafir</span>
+              {/* Misafir Tipleri */}
+              <div className="flex gap-3">
+                <div className="flex-1 bg-cyan-600/10 border border-cyan-600/30 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-cyan-400">
+                    {guestStats.newGuests}
+                  </p>
+                  <p className="text-xs text-slate-400">Yeni</p>
+                </div>
+                <div className="flex-1 bg-purple-600/10 border border-purple-600/30 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-purple-400">
+                    {guestStats.returningGuests}
+                  </p>
+                  <p className="text-xs text-slate-400">Geri Dönen</p>
+                </div>
               </div>
-              <p className="text-2xl font-bold text-cyan-400">
-                {guestStats.newGuests}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">İlk kez katılıyor</p>
             </CardContent>
           </Card>
+
+          {/* Card 2: Arama ve Filtre */}
           <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-purple-400 mb-2">
-                <RefreshCw className="w-4 h-4" />
-                <span className="text-sm">Geri Dönen</span>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Search className="w-4 h-4 text-blue-400" />
+                Ara & Filtrele
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="İsim veya telefon..."
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                />
               </div>
-              <p className="text-2xl font-bold text-purple-400">
-                {guestStats.returningGuests}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">Daha önce katılmış</p>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    "all",
+                    "confirmed",
+                    "pending",
+                    "checked_in",
+                    "cancelled",
+                  ] as const
+                ).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      statusFilter === status
+                        ? "bg-purple-600 text-white"
+                        : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    }`}
+                  >
+                    {status === "all" ? "Tümü" : statusLabels[status]?.label}
+                  </button>
+                ))}
+              </div>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Filtreler */}
-        <div className="flex flex-col gap-3 sm:gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Misafir adı veya telefon ara..."
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 text-sm sm:text-base focus:outline-none focus:border-purple-500"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
-            <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 flex-shrink-0" />
-            {(
-              [
-                "all",
-                "confirmed",
-                "pending",
-                "checked_in",
-                "cancelled",
-              ] as const
-            ).map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors whitespace-nowrap flex-shrink-0 ${
-                  statusFilter === status ? "bg-purple-600" : "bg-slate-800"
-                }`}
-              >
-                {status === "all" ? "Tümü" : statusLabels[status]?.label}
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* Card 3: Rezervasyon Listesi */}
+          <Card className="bg-slate-800 border-slate-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-pink-400" />
+                  Rezervasyonlar
+                </span>
+                <Badge variant="secondary" className="text-xs">
+                  {filteredReservations.length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3">
+              <div className="max-h-[280px] sm:max-h-[320px] overflow-y-auto space-y-2">
+                {filteredReservations.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <Users className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">Rezervasyon bulunamadı</p>
+                  </div>
+                ) : (
+                  filteredReservations.map((reservation) => {
+                    const tables =
+                      (event?.venueLayout as any)?.tables ||
+                      (event?.venueLayout as any)?.placedTables ||
+                      [];
+                    const table = tables.find(
+                      (t: any) => t.id === reservation.tableId
+                    );
+                    let tableLabel = "Masa";
+                    if (table?.label) {
+                      tableLabel = table.label;
+                    } else if (table?.tableNumber) {
+                      tableLabel = `Masa ${table.tableNumber}`;
+                    } else {
+                      const idParts = reservation.tableId.split("-");
+                      tableLabel = `Masa ${idParts[idParts.length - 1]}`;
+                    }
 
-        {/* Rezervasyon Listesi */}
-        {filteredReservations.length === 0 ? (
-          <div className="text-center py-8 sm:py-12 text-slate-400">
-            <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-sm sm:text-base">Rezervasyon bulunamadı</p>
-          </div>
-        ) : (
-          <div className="space-y-2 sm:space-y-3">
-            {filteredReservations.map((reservation) => {
-              const tableLabel =
-                event?.venueLayout?.tables?.find(
-                  (t: any) => t.id === reservation.tableId
-                )?.label || reservation.tableId;
-
-              return (
-                <Card
-                  key={reservation.id}
-                  className="bg-slate-800 border-slate-700 hover:border-purple-500/50 transition-colors"
-                >
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <button
+                    return (
+                      <div
+                        key={reservation.id}
                         onClick={() => setSelectedReservation(reservation)}
-                        className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 text-left"
+                        className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors"
                       >
-                        <div
-                          className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            reservation.customer?.totalAttendedEvents &&
-                            reservation.customer.totalAttendedEvents > 0
-                              ? "bg-purple-600/20"
-                              : "bg-cyan-600/20"
-                          }`}
-                        >
-                          {reservation.customer?.totalAttendedEvents &&
-                          reservation.customer.totalAttendedEvents > 0 ? (
-                            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-                          ) : (
-                            <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-sm sm:text-base truncate">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                              reservation.status === "confirmed"
+                                ? "bg-green-500"
+                                : reservation.status === "pending"
+                                ? "bg-yellow-500"
+                                : reservation.status === "checked_in"
+                                ? "bg-blue-500"
+                                : reservation.status === "cancelled"
+                                ? "bg-red-500"
+                                : "bg-slate-500"
+                            }`}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
                               {reservation.customer?.fullName ||
                                 reservation.guestName ||
                                 "Misafir"}
-                            </h3>
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Masa {tableLabel} • {reservation.guestCount}k
+                            </p>
                           </div>
-                          <p className="text-xs sm:text-sm text-slate-400 truncate">
-                            {reservation.customer?.phone ||
-                            reservation.guestPhone
-                              ? formatPhone(
-                                  reservation.customer?.phone ||
-                                    reservation.guestPhone ||
-                                    ""
-                                )
-                              : "-"}
-                          </p>
                         </div>
-                      </button>
-                      <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-                        <div className="text-right hidden sm:block">
-                          <p className="font-medium text-sm">
-                            Masa {tableLabel}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {reservation.guestCount} kişi
-                          </p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {reservation.status !== "cancelled" && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInvitationReservation(reservation);
+                              }}
+                              className="p-2 bg-pink-600/20 rounded-lg text-pink-400 hover:bg-pink-600/30 transition-colors"
+                              title="E-Davetiye"
+                            >
+                              <Mail className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        <div className="text-right sm:hidden">
-                          <p className="font-medium text-xs">{tableLabel}</p>
-                          <p className="text-xs text-slate-400">
-                            {reservation.guestCount}
-                          </p>
-                        </div>
-                        <span
-                          className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs ${
-                            statusLabels[reservation.status]?.bg
-                          } ${statusLabels[reservation.status]?.color}`}
-                        >
-                          <span className="hidden sm:inline">
-                            {statusLabels[reservation.status]?.label}
-                          </span>
-                          <span className="sm:hidden">
-                            {statusLabels[reservation.status]?.label.slice(
-                              0,
-                              3
-                            )}
-                          </span>
-                        </span>
-                        {reservation.status !== "cancelled" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setInvitationReservation(reservation);
-                            }}
-                            className="p-2 bg-pink-600/20 rounded-lg text-pink-400 transition-colors"
-                            title="E-Davetiye"
-                          >
-                            <Mail className="w-4 h-4" />
-                          </button>
-                        )}
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Detay Modal */}
@@ -622,13 +644,26 @@ function ReservationDetailModal({
   if (!reservation) return null;
 
   const getTableLabel = (): string => {
-    if (event?.venueLayout?.tables) {
-      const table = event.venueLayout.tables.find(
-        (t: any) => t.id === reservation.tableId
-      );
-      if (table?.label) return table.label;
+    const tables =
+      (event?.venueLayout as any)?.tables ||
+      (event?.venueLayout as any)?.placedTables;
+    if (tables) {
+      const table = tables.find((t: any) => t.id === reservation.tableId);
+      if (table) {
+        // Label varsa kullan
+        if (table.label) return table.label;
+        // tableNumber varsa kullan
+        if (table.tableNumber) return `Masa ${table.tableNumber}`;
+        // ID'den çıkar
+        const idParts = table.id.split("-");
+        const lastPart = idParts[idParts.length - 1];
+        return `Masa ${lastPart}`;
+      }
     }
-    return reservation.tableId;
+    // Fallback: ID'den çıkar
+    const idParts = reservation.tableId.split("-");
+    const lastPart = idParts[idParts.length - 1];
+    return `Masa ${lastPart}`;
   };
 
   const handleDownloadQR = () => {
@@ -657,7 +692,7 @@ function ReservationDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <Ticket className="w-5 h-5 text-purple-400" />
@@ -665,12 +700,12 @@ function ReservationDetailModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-2">
           {/* Durum */}
           <div className="flex items-center justify-between">
-            <span className="text-slate-400">Durum</span>
+            <span className="text-slate-400 text-sm">Durum</span>
             <span
-              className={`px-3 py-1 rounded-full text-sm ${
+              className={`px-3 py-1 rounded-full text-xs ${
                 statusLabels[reservation.status]?.bg
               } ${statusLabels[reservation.status]?.color}`}
             >
@@ -679,8 +714,8 @@ function ReservationDetailModal({
           </div>
 
           {/* Misafir Bilgileri */}
-          <div className="bg-slate-700/50 rounded-lg p-4">
-            <h4 className="font-medium mb-2 flex items-center gap-2">
+          <div className="bg-slate-700/50 rounded-lg p-3">
+            <h4 className="font-medium mb-2 flex items-center gap-2 text-sm">
               <Users className="w-4 h-4 text-purple-400" />
               Misafir Bilgileri
             </h4>
@@ -707,46 +742,34 @@ function ReservationDetailModal({
           </div>
 
           {/* Rezervasyon Bilgileri */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-slate-700/50 rounded-lg p-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-700/50 rounded-lg p-3 text-center">
               <span className="text-slate-400 text-xs">Masa</span>
-              <p className="font-medium text-lg">{getTableLabel()}</p>
+              <p className="font-bold text-lg">{getTableLabel()}</p>
             </div>
-            <div className="bg-slate-700/50 rounded-lg p-3">
-              <span className="text-slate-400 text-xs">Kişi Sayısı</span>
-              <p className="font-medium text-lg">
-                {reservation.guestCount} kişi
-              </p>
+            <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+              <span className="text-slate-400 text-xs">Kişi</span>
+              <p className="font-bold text-lg">{reservation.guestCount}</p>
             </div>
           </div>
 
-          {/* Özel İstekler */}
-          {reservation.specialRequests && (
-            <div>
-              <span className="text-slate-400 text-sm">Özel İstekler</span>
-              <p className="bg-slate-700/50 rounded p-2 mt-1 text-sm">
-                {reservation.specialRequests}
-              </p>
-            </div>
-          )}
-
           {/* QR Kod */}
           {reservation.status !== "cancelled" && (
-            <div className="flex flex-col items-center gap-3 pt-4 border-t border-slate-700">
+            <div className="flex flex-col items-center gap-2 pt-3 border-t border-slate-700">
               {qrLoading ? (
-                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
               ) : qrCodeUrl ? (
                 <>
-                  <div className="bg-white p-3 rounded-lg">
-                    <img src={qrCodeUrl} alt="QR Kod" className="w-32 h-32" />
+                  <div className="bg-white p-2 rounded-lg">
+                    <img src={qrCodeUrl} alt="QR Kod" className="w-24 h-24" />
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleDownloadQR}
-                    className="border-slate-600"
+                    className="border-slate-600 text-xs"
                   >
-                    <Download className="w-4 h-4 mr-1" /> QR Kod İndir
+                    <Download className="w-3 h-3 mr-1" /> QR İndir
                   </Button>
                 </>
               ) : null}
@@ -756,22 +779,20 @@ function ReservationDetailModal({
           {/* Aksiyonlar */}
           {reservation.status !== "cancelled" &&
             reservation.status !== "checked_in" && (
-              <div className="pt-4 border-t border-slate-700">
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={cancelling}
-                  className="w-full"
-                >
-                  {cancelling ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <X className="w-4 h-4 mr-2" />
-                  )}
-                  Rezervasyonu İptal Et
-                </Button>
-              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="w-full"
+              >
+                {cancelling ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <X className="w-4 h-4 mr-2" />
+                )}
+                Rezervasyonu İptal Et
+              </Button>
             )}
         </div>
       </DialogContent>

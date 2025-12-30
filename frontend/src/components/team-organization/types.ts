@@ -7,6 +7,31 @@ export type StaffPosition =
   | "komi"
   | "debarasor";
 
+// API'den gelen ham masa verisi
+export interface RawTableData {
+  id: string;
+  tableNumber?: number | string;
+  x?: number;
+  y?: number;
+  typeName?: string;
+  type?: string;
+  color?: string;
+  capacity?: number;
+  isLoca?: boolean;
+  locaName?: string;
+}
+
+// Staff Assignment tipi
+export interface StaffAssignment {
+  id: string;
+  staffId: string;
+  eventId: string;
+  tableIds: string[];
+  teamId?: string;
+  color?: string;
+  isActive?: boolean;
+}
+
 export interface Staff {
   id: string;
   fullName: string;
@@ -143,3 +168,13 @@ export const DEFAULT_COLORS = [
   "#d946ef",
   "#ec4899",
 ];
+
+// Masa tipi renkleri (venue ile aynı)
+export const TABLE_TYPE_COLORS: Record<string, { bg: string; border: string }> =
+  {
+    unassigned: { bg: "#6b7280", border: "#9ca3af" },
+    standard: { bg: "#3b82f6", border: "#60a5fa" },
+    premium: { bg: "#8b5cf6", border: "#a78bfa" },
+    vip: { bg: "#f59e0b", border: "#fbbf24" },
+    loca: { bg: "#ec4899", border: "#f472b6" },
+  };

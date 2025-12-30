@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, IsNull, DataSource } from "typeorm";
 import {
   StaffAssignment,
   User,
@@ -18,7 +18,14 @@ import {
   Team,
   EventStaffAssignment,
   OrganizationTemplate,
+  Staff,
 } from "../../entities";
+import { Position } from "../../entities/position.entity";
+import { Department } from "../../entities/department.entity";
+import { WorkLocation } from "../../entities/work-location.entity";
+import { DepartmentPosition } from "../../entities/department-position.entity";
+import { DepartmentLocation } from "../../entities/department-location.entity";
+import { Gender, StaffStatus } from "../../entities/staff.entity";
 import { TeamMember } from "../../entities/service-team.entity";
 import { UserRole } from "../../entities/user.entity";
 import * as bcrypt from "bcrypt";
@@ -61,8 +68,21 @@ export class StaffService {
     private eventStaffAssignmentRepository: Repository<EventStaffAssignment>,
     @InjectRepository(OrganizationTemplate)
     private organizationTemplateRepository: Repository<OrganizationTemplate>,
+    @InjectRepository(Staff)
+    private staffRepository: Repository<Staff>,
+    @InjectRepository(Position)
+    private positionRepository: Repository<Position>,
+    @InjectRepository(Department)
+    private departmentRepository: Repository<Department>,
+    @InjectRepository(WorkLocation)
+    private workLocationRepository: Repository<WorkLocation>,
+    @InjectRepository(DepartmentPosition)
+    private departmentPositionRepository: Repository<DepartmentPosition>,
+    @InjectRepository(DepartmentLocation)
+    private departmentLocationRepository: Repository<DepartmentLocation>,
     @Inject(forwardRef(() => NotificationsService))
-    private notificationsService: NotificationsService
+    private notificationsService: NotificationsService,
+    private dataSource: DataSource
   ) {}
 
   // Personel listesi (role = 'staff' veya 'leader')
@@ -277,23 +297,54 @@ export class StaffService {
     return this.assignmentRepository.save(assignment);
   }
 
-  // Toplu atama
+  // Toplu atama - OPTİMİZE EDİLDİ
   async bulkAssignTables(
     eventId: string,
     assignments: Array<{ staffId: string; tableIds: string[] }>
   ): Promise<StaffAssignment[]> {
-    const results: StaffAssignment[] = [];
-
-    for (const item of assignments) {
-      const result = await this.assignTables(
-        eventId,
-        item.staffId,
-        item.tableIds
-      );
-      results.push(result);
+    if (assignments.length === 0) {
+      return [];
     }
 
-    return results;
+    // Tüm staffId'leri topla
+    const staffIds = assignments.map((a) => a.staffId);
+
+    // Mevcut atamaları ve personelleri tek sorguda al
+    const [existingAssignments, staffMembers] = await Promise.all([
+      this.assignmentRepository.find({
+        where: staffIds.map((staffId) => ({ eventId, staffId })),
+      }),
+      this.userRepository.find({
+        where: staffIds.map((id) => ({ id })),
+        select: ["id", "color"],
+      }),
+    ]);
+
+    // Map'ler oluştur
+    const existingMap = new Map(existingAssignments.map((a) => [a.staffId, a]));
+    const colorMap = new Map(staffMembers.map((s) => [s.id, s.color]));
+
+    // Güncellenecek ve yeni eklenecek entity'leri hazırla
+    const toSave: StaffAssignment[] = [];
+
+    for (const item of assignments) {
+      const existing = existingMap.get(item.staffId);
+      if (existing) {
+        existing.assignedTableIds = item.tableIds;
+        toSave.push(existing);
+      } else {
+        const newAssignment = this.assignmentRepository.create({
+          eventId,
+          staffId: item.staffId,
+          assignedTableIds: item.tableIds,
+          color: colorMap.get(item.staffId) || "#3b82f6",
+        });
+        toSave.push(newAssignment);
+      }
+    }
+
+    // Tek sorguda kaydet
+    return this.assignmentRepository.save(toSave);
   }
 
   // Atama kaldır
@@ -465,7 +516,7 @@ export class StaffService {
     return result;
   }
 
-  // Tüm atamaları kaydet
+  // Tüm atamaları kaydet - N+1 QUERY DÜZELTİLDİ
   async saveEventAssignments(
     eventId: string,
     assignments: Array<{ staffId: string; tableIds: string[]; color?: string }>
@@ -473,24 +524,35 @@ export class StaffService {
     // Önce mevcut atamaları sil
     await this.assignmentRepository.delete({ eventId });
 
-    // Yeni atamaları kaydet (tableIds boş olsa bile kaydet - ekip ataması için)
-    let savedCount = 0;
-    for (const item of assignments) {
-      const staff = await this.userRepository.findOne({
-        where: { id: item.staffId },
-      });
+    if (assignments.length === 0) {
+      return { success: true, savedCount: 0 };
+    }
 
-      const assignment = this.assignmentRepository.create({
+    // TÜM personelleri tek sorguda al (N+1 önleme)
+    const staffIds = assignments.map((a) => a.staffId);
+    const staffMembers = await this.userRepository.find({
+      where: staffIds.map((id) => ({ id })),
+      select: ["id", "color"],
+    });
+
+    // ID -> color map oluştur
+    const staffColorMap = new Map<string, string>();
+    staffMembers.forEach((s) => staffColorMap.set(s.id, s.color));
+
+    // Bulk insert için entity'leri hazırla
+    const assignmentEntities = assignments.map((item) =>
+      this.assignmentRepository.create({
         eventId,
         staffId: item.staffId,
         assignedTableIds: item.tableIds || [],
-        color: item.color || staff?.color,
-      });
-      await this.assignmentRepository.save(assignment);
-      savedCount++;
-    }
+        color: item.color || staffColorMap.get(item.staffId) || "#3b82f6",
+      })
+    );
 
-    return { success: true, savedCount };
+    // Tek sorguda tüm atamaları kaydet
+    await this.assignmentRepository.save(assignmentEntities);
+
+    return { success: true, savedCount: assignmentEntities.length };
   }
 
   // ==================== TEAM METODLARI ====================
@@ -633,6 +695,7 @@ export class StaffService {
   }
 
   // Tüm servis ekiplerini toplu kaydet (frontend'den gelen tam liste)
+  // Transaction ile atomik işlem - veri kaybı önlenir
   async saveEventTeams(
     eventId: string,
     teams: Array<{
@@ -643,26 +706,50 @@ export class StaffService {
       leaderId?: string;
       tableIds: string[];
     }>
-  ): Promise<{ success: boolean; savedCount: number }> {
-    // Önce mevcut ekipleri sil
-    await this.serviceTeamRepository.delete({ eventId });
+  ): Promise<{
+    success: boolean;
+    savedCount: number;
+    teams: Array<{ id: string; name: string; originalId?: string }>;
+  }> {
+    return this.dataSource.transaction(async (manager) => {
+      const teamRepo = manager.getRepository(ServiceTeam);
 
-    // Yeni ekipleri kaydet
-    let savedCount = 0;
-    for (const teamData of teams) {
-      const team = this.serviceTeamRepository.create({
-        eventId,
-        name: teamData.name,
-        color: teamData.color,
-        members: teamData.members,
-        leaderId: teamData.leaderId,
-        tableIds: teamData.tableIds,
-      });
-      await this.serviceTeamRepository.save(team);
-      savedCount++;
-    }
+      // Mevcut ekipleri sil
+      await teamRepo.delete({ eventId });
 
-    return { success: true, savedCount };
+      if (teams.length === 0) {
+        return { success: true, savedCount: 0, teams: [] };
+      }
+
+      // Bulk insert için entity'leri hazırla
+      // originalId'yi metadata olarak sakla (frontend ID eşleştirmesi için)
+      const teamEntities = teams.map((teamData) =>
+        teamRepo.create({
+          eventId,
+          name: teamData.name,
+          color: teamData.color,
+          members: teamData.members,
+          leaderId: teamData.leaderId,
+          tableIds: teamData.tableIds,
+        })
+      );
+
+      // Tek seferde kaydet
+      const savedTeams = await teamRepo.save(teamEntities);
+
+      // Frontend ID -> Backend ID eşleştirmesi için döndür
+      const teamMapping = savedTeams.map((saved, index) => ({
+        id: saved.id,
+        name: saved.name,
+        originalId: teams[index].id, // Frontend'den gelen orijinal ID
+      }));
+
+      return {
+        success: true,
+        savedCount: teamEntities.length,
+        teams: teamMapping,
+      };
+    });
   }
 
   // ==================== TABLE GROUP METODLARI ====================
@@ -886,11 +973,16 @@ export class StaffService {
     group.color = team.color;
 
     // Bu masa grubundaki masalara atanmış personellerin teamId'sini güncelle
-    await this.syncStaffTeamIdByTableGroup(
-      group.eventId,
-      group.tableIds,
-      teamId
-    );
+    // NOT: Sadece geçerli UUID formatındaki teamId'ler için sync yap
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(teamId)) {
+      await this.syncStaffTeamIdByTableGroup(
+        group.eventId,
+        group.tableIds,
+        teamId
+      );
+    }
 
     return this.tableGroupRepository.save(group);
   }
@@ -902,6 +994,14 @@ export class StaffService {
     teamId: string
   ): Promise<void> {
     if (!tableIds || tableIds.length === 0) return;
+
+    // UUID validasyonu - sadece geçerli UUID'ler kabul edilir
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(teamId)) {
+      // Geçersiz UUID - sync yapma, sessizce çık
+      return;
+    }
 
     // Bu etkinlikteki tüm staff assignment'ları al
     const assignments = await this.eventStaffAssignmentRepository.find({
@@ -925,6 +1025,7 @@ export class StaffService {
   }
 
   // Tüm masa gruplarını toplu kaydet
+  // Transaction ile atomik işlem - veri kaybı önlenir
   async saveEventTableGroups(
     eventId: string,
     groups: Array<{
@@ -939,39 +1040,79 @@ export class StaffService {
       sortOrder?: number;
     }>
   ): Promise<{ success: boolean; savedCount: number }> {
-    // Önce mevcut grupları sil
-    await this.tableGroupRepository.delete({ eventId });
+    return this.dataSource.transaction(async (manager) => {
+      const tableGroupRepo = manager.getRepository(TableGroup);
+      const eventStaffRepo = manager.getRepository(EventStaffAssignment);
 
-    // Yeni grupları kaydet
-    let savedCount = 0;
-    for (let i = 0; i < groups.length; i++) {
-      const groupData = groups[i];
-      const tableGroup = this.tableGroupRepository.create({
-        eventId,
-        name: groupData.name,
-        color: groupData.color,
-        tableIds: groupData.tableIds,
-        groupType: groupData.groupType || "standard",
-        assignedTeamId: groupData.assignedTeamId,
-        assignedSupervisorId: groupData.assignedSupervisorId,
-        notes: groupData.notes,
-        sortOrder: groupData.sortOrder ?? i,
-      });
-      await this.tableGroupRepository.save(tableGroup);
+      // Mevcut grupları sil
+      await tableGroupRepo.delete({ eventId });
 
-      // Eğer takım atanmışsa, personellerin teamId'sini güncelle
-      if (groupData.assignedTeamId && groupData.tableIds.length > 0) {
-        await this.syncStaffTeamIdByTableGroup(
-          eventId,
-          groupData.tableIds,
-          groupData.assignedTeamId
-        );
+      if (groups.length === 0) {
+        return { success: true, savedCount: 0 };
       }
 
-      savedCount++;
-    }
+      // Bulk insert için entity'leri hazırla
+      const groupEntities = groups.map((groupData, i) =>
+        tableGroupRepo.create({
+          eventId,
+          name: groupData.name,
+          color: groupData.color,
+          tableIds: groupData.tableIds,
+          groupType: groupData.groupType || "standard",
+          assignedTeamId: groupData.assignedTeamId,
+          assignedSupervisorId: groupData.assignedSupervisorId,
+          notes: groupData.notes,
+          sortOrder: groupData.sortOrder ?? i,
+        })
+      );
 
-    return { success: true, savedCount };
+      // Tek seferde kaydet
+      await tableGroupRepo.save(groupEntities);
+
+      // Takım atamalarını senkronize et (batch işlem)
+      const groupsWithTeam = groups.filter(
+        (g) => g.assignedTeamId && g.tableIds.length > 0
+      );
+
+      if (groupsWithTeam.length > 0) {
+        // Tüm assignment'ları tek sorguda al
+        const assignments = await eventStaffRepo.find({
+          where: { eventId, isActive: true },
+        });
+
+        // Her grup için güncelleme yap
+        const updatedAssignments: EventStaffAssignment[] = [];
+        for (const groupData of groupsWithTeam) {
+          const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (!uuidRegex.test(groupData.assignedTeamId!)) continue;
+
+          for (const assignment of assignments) {
+            if (!assignment.tableIds || assignment.tableIds.length === 0)
+              continue;
+
+            const hasMatchingTable = assignment.tableIds.some((tid) =>
+              groupData.tableIds.includes(tid)
+            );
+
+            if (
+              hasMatchingTable &&
+              assignment.teamId !== groupData.assignedTeamId
+            ) {
+              assignment.teamId = groupData.assignedTeamId!;
+              updatedAssignments.push(assignment);
+            }
+          }
+        }
+
+        // Güncellenmiş assignment'ları tek seferde kaydet
+        if (updatedAssignments.length > 0) {
+          await eventStaffRepo.save(updatedAssignments);
+        }
+      }
+
+      return { success: true, savedCount: groupEntities.length };
+    });
   }
 
   // Süpervizörleri getir (pozisyon = supervizor veya sef)
@@ -1253,10 +1394,30 @@ export class StaffService {
 
   // ==================== WORK SHIFT (ÇALIŞMA SAATLERİ) METODLARI ====================
 
-  // Tüm çalışma saatlerini getir
-  async getAllShifts(): Promise<WorkShift[]> {
+  // Tüm çalışma saatlerini getir (global + etkinliğe özel)
+  async getAllShifts(eventId?: string): Promise<WorkShift[]> {
+    if (eventId) {
+      // Etkinlik varsa: global (eventId null) + bu etkinliğe özel olanları getir
+      return this.workShiftRepository.find({
+        where: [
+          { isActive: true, eventId: IsNull() },
+          { isActive: true, eventId },
+        ],
+        order: { sortOrder: "ASC", startTime: "ASC" },
+      });
+    }
+
+    // Etkinlik yoksa sadece global olanları getir
     return this.workShiftRepository.find({
-      where: { isActive: true },
+      where: { isActive: true, eventId: IsNull() },
+      order: { sortOrder: "ASC", startTime: "ASC" },
+    });
+  }
+
+  // Sadece etkinliğe özel vardiyaları getir
+  async getEventShifts(eventId: string): Promise<WorkShift[]> {
+    return this.workShiftRepository.find({
+      where: { isActive: true, eventId },
       order: { sortOrder: "ASC", startTime: "ASC" },
     });
   }
@@ -1270,16 +1431,21 @@ export class StaffService {
     return shift;
   }
 
-  // Yeni çalışma saati oluştur
+  // Yeni çalışma saati oluştur (global veya etkinliğe özel)
   async createShift(dto: {
     name: string;
     startTime: string;
     endTime: string;
     color?: string;
+    eventId?: string;
   }): Promise<WorkShift> {
-    // Aynı isimde var mı kontrol et
+    // Aynı isimde var mı kontrol et (aynı scope içinde)
     const existing = await this.workShiftRepository.findOne({
-      where: { name: dto.name, isActive: true },
+      where: {
+        name: dto.name,
+        isActive: true,
+        eventId: dto.eventId ? dto.eventId : IsNull(),
+      },
     });
 
     if (existing) {
@@ -1298,9 +1464,38 @@ export class StaffService {
       endTime: dto.endTime,
       color: dto.color || "#3b82f6",
       sortOrder: (maxSort?.max || 0) + 1,
+      eventId: dto.eventId ?? null,
     });
 
     return this.workShiftRepository.save(shift);
+  }
+
+  // Toplu vardiya oluştur (etkinlik için)
+  async createBulkShifts(
+    eventId: string,
+    shifts: Array<{
+      name: string;
+      startTime: string;
+      endTime: string;
+      color?: string;
+    }>
+  ): Promise<WorkShift[]> {
+    const createdShifts: WorkShift[] = [];
+
+    for (let i = 0; i < shifts.length; i++) {
+      const dto = shifts[i];
+      const shift = this.workShiftRepository.create({
+        name: dto.name,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        color: dto.color || "#3b82f6",
+        sortOrder: i + 1,
+        eventId,
+      });
+      createdShifts.push(shift);
+    }
+
+    return this.workShiftRepository.save(createdShifts);
   }
 
   // Çalışma saati güncelle
@@ -1319,7 +1514,11 @@ export class StaffService {
     // İsim değişiyorsa, aynı isimde başka var mı kontrol et
     if (dto.name && dto.name !== shift.name) {
       const existing = await this.workShiftRepository.findOne({
-        where: { name: dto.name, isActive: true },
+        where: {
+          name: dto.name,
+          isActive: true,
+          eventId: shift.eventId ? shift.eventId : IsNull(),
+        },
       });
       if (existing) {
         throw new BadRequestException("Bu isimde bir çalışma saati zaten var");
@@ -1343,165 +1542,64 @@ export class StaffService {
   // ==================== TEAM (EKİP) METODLARI ====================
 
   /**
-   * Tüm ekipleri getir - OPTİMİZE EDİLDİ
-   * N+1 query problemi çözüldü - 4 sorguya indirildi
-   * Önceki: 3N+1 sorgu (N = ekip sayısı)
-   * Şimdi: 4 sabit sorgu
+   * Tüm ekipleri getir - HIZLI VERSİYON
+   * Sadece temel bilgiler + memberIds'den üyeler
    */
   async getAllTeams(): Promise<any[]> {
-    // 1. Tüm ekipleri tek sorguda getir (leader relation ile)
+    // 1. Tüm ekipleri getir (relation yok - hızlı)
     const teams = await this.teamRepository.find({
       where: { isActive: true },
-      relations: ["leader"],
       order: { sortOrder: "ASC", name: "ASC" },
     });
 
     if (teams.length === 0) return [];
 
-    // Team ID'lerini topla
-    const teamIds = teams.map((t) => t.id);
-
-    // 2. Tüm ekiplere atanmış grupları tek sorguda getir
-    const allGroups = await this.tableGroupRepository
-      .createQueryBuilder("tg")
-      .where("tg.assignedTeamId IN (:...teamIds)", { teamIds })
-      .getMany();
-
-    // Team ID -> Groups lookup map oluştur
-    const teamGroupsMap = new Map<string, TableGroup[]>();
-    const allTableIds = new Set<string>();
-
-    allGroups.forEach((group) => {
-      if (group.assignedTeamId) {
-        const existing = teamGroupsMap.get(group.assignedTeamId) || [];
-        existing.push(group);
-        teamGroupsMap.set(group.assignedTeamId, existing);
-
-        // Tüm masa ID'lerini topla
-        group.tableIds?.forEach((tid) => allTableIds.add(tid));
-      }
-    });
-
-    // 3. Tüm masalara atanmış personelleri tek sorguda getir
-    let staffAssignments: EventStaffAssignment[] = [];
-    if (allTableIds.size > 0) {
-      staffAssignments = await this.eventStaffAssignmentRepository
-        .createQueryBuilder("esa")
-        .where("esa.tableIds && ARRAY[:...tableIds]::text[]", {
-          tableIds: Array.from(allTableIds),
-        })
-        .andWhere("esa.isActive = :isActive", { isActive: true })
-        .getMany();
-    }
-
-    // Staff ID -> Assignment lookup map oluştur
-    const staffAssignmentMap = new Map<
-      string,
-      { staffId: string; tableIds: string[] }[]
-    >();
-    const allStaffIds = new Set<string>();
-
-    staffAssignments.forEach((assignment) => {
-      if (assignment.staffId) {
-        allStaffIds.add(assignment.staffId);
-        const existing = staffAssignmentMap.get(assignment.staffId) || [];
-        existing.push({
-          staffId: assignment.staffId,
-          tableIds: assignment.tableIds || [],
-        });
-        staffAssignmentMap.set(assignment.staffId, existing);
-      }
-    });
-
-    // Lider ID'lerini de ekle
+    // 2. Tüm memberIds'leri topla
+    const allMemberIds = new Set<string>();
     teams.forEach((team) => {
-      if (team.leaderId) allStaffIds.add(team.leaderId);
-      team.memberIds?.forEach((id) => allStaffIds.add(id));
+      if (team.leaderId) allMemberIds.add(team.leaderId);
+      team.memberIds?.forEach((id) => allMemberIds.add(id));
     });
 
-    // 4. Tüm personel bilgilerini tek sorguda getir
-    let allUsers: User[] = [];
-    if (allStaffIds.size > 0) {
-      allUsers = await this.userRepository
-        .createQueryBuilder("user")
-        .where("user.id IN (:...ids)", { ids: Array.from(allStaffIds) })
+    // 3. Tüm personeli tek sorguda getir (Staff tablosundan)
+    let staffMap = new Map<string, Staff>();
+    if (allMemberIds.size > 0) {
+      const allStaff = await this.staffRepository
+        .createQueryBuilder("staff")
+        .where("staff.id IN (:...ids)", { ids: Array.from(allMemberIds) })
         .select([
-          "user.id",
-          "user.fullName",
-          "user.email",
-          "user.color",
-          "user.position",
-          "user.avatar",
+          "staff.id",
+          "staff.fullName",
+          "staff.email",
+          "staff.color",
+          "staff.position",
+          "staff.avatar",
         ])
         .getMany();
+
+      allStaff.forEach((s) => staffMap.set(s.id, s));
     }
 
-    // User ID -> User lookup map oluştur
-    const userMap = new Map<string, User>();
-    allUsers.forEach((user) => userMap.set(user.id, user));
-
-    // Memory'de join işlemi yap
+    // 4. Memory'de join yap
     return teams.map((team) => {
-      const teamGroups = teamGroupsMap.get(team.id) || [];
-      const teamTableIds = new Set<string>();
-      teamGroups.forEach((g) =>
-        g.tableIds?.forEach((tid) => teamTableIds.add(tid))
-      );
-
-      // Bu ekibin üyelerini bul
-      const memberStaffIds = new Set<string>();
-      const staffTableMap = new Map<string, string[]>();
-
-      // Lider varsa ekle
-      if (team.leaderId) memberStaffIds.add(team.leaderId);
-
-      // Manuel eklenen üyeler
-      team.memberIds?.forEach((id) => memberStaffIds.add(id));
-
-      // Masalara atanmış personeller
-      staffAssignments.forEach((assignment) => {
-        if (!assignment.staffId || !assignment.tableIds) return;
-
-        // Bu personelin masalarından herhangi biri bu ekibin masalarından mı?
-        const relevantTables = assignment.tableIds.filter((tid) =>
-          teamTableIds.has(tid)
-        );
-
-        if (relevantTables.length > 0) {
-          memberStaffIds.add(assignment.staffId);
-          const existing = staffTableMap.get(assignment.staffId) || [];
-          staffTableMap.set(assignment.staffId, [
-            ...new Set([...existing, ...relevantTables]),
-          ]);
-        }
-      });
-
-      // Üye bilgilerini lookup map'ten al
-      const members = Array.from(memberStaffIds)
-        .map((staffId) => {
-          const user = userMap.get(staffId);
-          if (!user) return null;
-          return {
-            ...user,
-            assignedTables: staffTableMap.get(staffId) || [],
-          };
-        })
+      const members = (team.memberIds || [])
+        .map((id) => staffMap.get(id))
         .filter(Boolean);
+
+      const leader = team.leaderId ? staffMap.get(team.leaderId) : null;
 
       return {
         ...team,
         members,
-        assignedGroupCount: teamGroups.length,
-        assignedTableCount: teamTableIds.size,
+        leader,
       };
     });
   }
 
-  // ID ile ekip getir
+  // ID ile ekip getir - OPTİMİZE: Relation kaldırıldı (leader bilgisi memberIds'den alınıyor)
   async getTeamById(id: string): Promise<Team> {
     const team = await this.teamRepository.findOne({
       where: { id },
-      relations: ["leader"],
     });
     if (!team) {
       throw new NotFoundException("Ekip bulunamadı");
@@ -1583,12 +1681,61 @@ export class StaffService {
     return this.teamRepository.save(team);
   }
 
+  // Ekip liderini ata/değiştir - HIZLI VERSİYON (tek query)
+  async setTeamLeader(teamId: string, leaderId: string | null): Promise<Team> {
+    // leaderId null ise, raw query ile NULL set et
+    if (!leaderId) {
+      await this.teamRepository
+        .createQueryBuilder()
+        .update()
+        .set({ leaderId: () => "NULL" })
+        .where("id = :id", { id: teamId })
+        .execute();
+    } else {
+      await this.teamRepository
+        .createQueryBuilder()
+        .update()
+        .set({ leaderId })
+        .where("id = :id", { id: teamId })
+        .execute();
+    }
+
+    // Güncel ekibi döndür
+    return this.getTeamById(teamId);
+  }
+
   // Ekip sil (soft delete)
   async deleteTeam(id: string): Promise<{ success: boolean; message: string }> {
     const team = await this.getTeamById(id);
     team.isActive = false;
     await this.teamRepository.save(team);
     return { success: true, message: "Ekip silindi" };
+  }
+
+  // Toplu ekip sil (soft delete) - OPTİMİZE: Tek query ile
+  async bulkDeleteTeams(
+    teamIds: string[]
+  ): Promise<{ success: boolean; deletedCount: number; message: string }> {
+    if (!teamIds || teamIds.length === 0) {
+      throw new BadRequestException("Silinecek ekip seçilmedi");
+    }
+
+    // Tek query ile tüm ekipleri soft delete yap
+    const result = await this.teamRepository
+      .createQueryBuilder()
+      .update()
+      .set({ isActive: false })
+      .where("id IN (:...ids)", { ids: teamIds })
+      .andWhere("isActive = :active", { active: true })
+      .execute();
+
+    const deletedCount = result.affected || 0;
+
+    return {
+      success: true,
+      deletedCount,
+      message: `${deletedCount} ekip silindi`,
+    };
   }
 
   // Ekibe üye ekle
@@ -1599,6 +1746,20 @@ export class StaffService {
       await this.teamRepository.save(team);
     }
     return team;
+  }
+
+  // Ekibe toplu üye ekle
+  async addMembersToTeamBulk(
+    teamId: string,
+    memberIds: string[]
+  ): Promise<Team> {
+    const team = await this.getTeamById(teamId);
+    const newMemberIds = memberIds.filter((id) => !team.memberIds.includes(id));
+    if (newMemberIds.length > 0) {
+      team.memberIds = [...team.memberIds, ...newMemberIds];
+      await this.teamRepository.save(team);
+    }
+    return this.getTeamById(teamId); // Güncel veriyi döndür
   }
 
   // Ekipten üye çıkar
@@ -1646,12 +1807,18 @@ export class StaffService {
     specialTaskStartTime?: string;
     specialTaskEndTime?: string;
   }): Promise<EventStaffAssignment> {
-    // Personel kontrolü
-    const staff = await this.userRepository.findOne({
-      where: { id: dto.staffId, role: UserRole.STAFF },
+    // Personel kontrolü - Staff tablosundan ara
+    const staff = await this.staffRepository.findOne({
+      where: { id: dto.staffId },
     });
     if (!staff) {
-      throw new NotFoundException("Personel bulunamadı");
+      // User tablosundan da dene (eski veriler için)
+      const user = await this.userRepository.findOne({
+        where: { id: dto.staffId, role: UserRole.STAFF },
+      });
+      if (!user) {
+        throw new NotFoundException("Personel bulunamadı");
+      }
     }
 
     // Özel görev ise her zaman yeni atama oluştur
@@ -1662,7 +1829,7 @@ export class StaffService {
         tableIds: [],
         shiftId: dto.shiftId,
         teamId: dto.teamId,
-        color: dto.color || staff.color,
+        color: dto.color || staff?.color,
         assignmentType: "special_task",
         specialTaskLocation: dto.specialTaskLocation,
         specialTaskStartTime: dto.specialTaskStartTime,
@@ -1697,7 +1864,7 @@ export class StaffService {
         tableIds: dto.tableIds,
         shiftId: dto.shiftId,
         teamId: dto.teamId,
-        color: dto.color || staff.color,
+        color: dto.color || staff?.color,
         assignmentType: "table",
       });
     }
@@ -1781,52 +1948,71 @@ export class StaffService {
     }>,
     createdById?: string
   ): Promise<{ success: boolean; savedCount: number }> {
-    // Önce mevcut atamaları deaktif et
-    await this.eventStaffAssignmentRepository.update(
-      { eventId, isActive: true },
-      { isActive: false }
-    );
+    try {
+      // Önce mevcut atamaları deaktif et
+      await this.eventStaffAssignmentRepository.update(
+        { eventId, isActive: true },
+        { isActive: false }
+      );
 
-    // Yeni atamaları kaydet
-    let savedCount = 0;
-    for (const item of assignments) {
-      if (item.tableIds.length === 0) continue;
+      // UUID regex pattern - sadece geçerli UUID'leri kabul et
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-      const staff = await this.userRepository.findOne({
-        where: { id: item.staffId },
-      });
+      // Yeni atamaları kaydet
+      let savedCount = 0;
+      for (const item of assignments) {
+        if (item.tableIds.length === 0) continue;
 
-      const assignment = this.eventStaffAssignmentRepository.create({
-        eventId,
-        staffId: item.staffId,
-        tableIds: item.tableIds,
-        shiftId: item.shiftId,
-        teamId: item.teamId,
-        color: item.color || staff?.color,
-        isActive: true,
-      });
-      await this.eventStaffAssignmentRepository.save(assignment);
-      savedCount++;
-    }
-
-    // Bildirim gönder: Ekip organizasyonu tamamlandı
-    if (savedCount > 0 && createdById) {
-      try {
-        const event = await this.eventRepository.findOne({
-          where: { id: eventId },
-        });
-        if (event) {
-          await this.notificationsService.notifyTeamOrganizationCompleted(
-            event,
-            createdById
-          );
+        // Staff tablosundan personel bilgisini al
+        let staffColor = item.color;
+        if (!staffColor) {
+          const staff = await this.staffRepository.findOne({
+            where: { id: item.staffId },
+            select: ["id", "color"],
+          });
+          staffColor = staff?.color;
         }
-      } catch {
-        // Bildirim hatası ana işlemi etkilemesin
-      }
-    }
 
-    return { success: true, savedCount };
+        // teamId sadece geçerli UUID ise kullan, değilse null
+        const validTeamId =
+          item.teamId && uuidRegex.test(item.teamId) ? item.teamId : undefined;
+
+        const assignment = this.eventStaffAssignmentRepository.create({
+          eventId,
+          staffId: item.staffId,
+          tableIds: item.tableIds,
+          shiftId: item.shiftId,
+          teamId: validTeamId,
+          color: staffColor,
+          isActive: true,
+        });
+        await this.eventStaffAssignmentRepository.save(assignment);
+        savedCount++;
+      }
+
+      // Bildirim gönder: Ekip organizasyonu tamamlandı
+      if (savedCount > 0 && createdById) {
+        try {
+          const event = await this.eventRepository.findOne({
+            where: { id: eventId },
+          });
+          if (event) {
+            await this.notificationsService.notifyTeamOrganizationCompleted(
+              event,
+              createdById
+            );
+          }
+        } catch {
+          // Bildirim hatası ana işlemi etkilemesin
+        }
+      }
+
+      return { success: true, savedCount };
+    } catch (error) {
+      console.error("❌ saveEventStaffAssignments error:", error);
+      throw error;
+    }
   }
 
   // ==================== ORGANIZATION TEMPLATE METODLARI ====================
@@ -1860,31 +2046,63 @@ export class StaffService {
     // Etkinliğin mevcut organizasyonunu al
     const staffAssignments = await this.eventStaffAssignmentRepository.find({
       where: { eventId: dto.eventId, isActive: true },
+      relations: ["staff"],
     });
 
     const tableGroups = await this.tableGroupRepository.find({
       where: { eventId: dto.eventId },
     });
 
+    // Service teams'i al (takım adlarını almak için)
+    const serviceTeams = await this.serviceTeamRepository.find({
+      where: { eventId: dto.eventId },
+    });
+    const teamMap = new Map(serviceTeams.map((t) => [t.id, t]));
+
+    // Süpervizörleri al (adlarını almak için)
+    const supervisorIds = tableGroups
+      .map((g) => g.assignedSupervisorId)
+      .filter((id): id is string => !!id);
+    const supervisors =
+      supervisorIds.length > 0
+        ? await this.userRepository.find({
+            where: supervisorIds.map((id) => ({ id })),
+            select: ["id", "fullName"],
+          })
+        : [];
+    const supervisorMap = new Map(supervisors.map((s) => [s.id, s.fullName]));
+
     const template = this.organizationTemplateRepository.create({
       name: dto.name,
       description: dto.description,
       createdById: dto.createdById,
-      staffAssignments: staffAssignments.map((a) => ({
-        staffId: a.staffId,
-        tableIds: a.tableIds,
-        shiftId: a.shiftId,
-        teamId: a.teamId,
-        color: a.color,
-      })),
-      tableGroups: tableGroups.map((g) => ({
-        name: g.name,
-        color: g.color,
-        tableIds: g.tableIds,
-        groupType: g.groupType,
-        assignedTeamId: g.assignedTeamId,
-        assignedSupervisorId: g.assignedSupervisorId,
-      })),
+      staffAssignments: staffAssignments.map((a) => {
+        const team = a.teamId ? teamMap.get(a.teamId) : null;
+        return {
+          staffId: a.staffId,
+          staffName: a.staff?.fullName, // Personel adını kaydet
+          tableIds: a.tableIds,
+          shiftId: a.shiftId,
+          teamId: a.teamId,
+          teamName: team?.name, // Takım adını kaydet
+          color: a.color,
+        };
+      }),
+      tableGroups: tableGroups.map((g) => {
+        const team = g.assignedTeamId ? teamMap.get(g.assignedTeamId) : null;
+        return {
+          name: g.name,
+          color: g.color,
+          tableIds: g.tableIds,
+          groupType: g.groupType,
+          assignedTeamId: g.assignedTeamId,
+          assignedTeamName: team?.name, // Takım adını kaydet
+          assignedSupervisorId: g.assignedSupervisorId,
+          assignedSupervisorName: g.assignedSupervisorId
+            ? supervisorMap.get(g.assignedSupervisorId)
+            : undefined, // Süpervizör adını kaydet
+        };
+      }),
     });
 
     return this.organizationTemplateRepository.save(template);
@@ -1903,21 +2121,83 @@ export class StaffService {
       { isActive: false }
     );
     await this.tableGroupRepository.delete({ eventId });
+    await this.serviceTeamRepository.delete({ eventId });
+
+    // Takım adı -> yeni takım ID eşleştirmesi için map
+    const teamNameToIdMap = new Map<string, string>();
+
+    // Önce şablondaki takımları oluştur (masa gruplarından unique takım adlarını çıkar)
+    const uniqueTeamNames = new Set<string>();
+    const teamColorMap = new Map<string, string>();
+
+    for (const group of template.tableGroups) {
+      if (group.assignedTeamName) {
+        uniqueTeamNames.add(group.assignedTeamName);
+        teamColorMap.set(group.assignedTeamName, group.color);
+      }
+    }
+
+    // Her unique takım için yeni service_team oluştur
+    for (const teamName of uniqueTeamNames) {
+      const newTeam = this.serviceTeamRepository.create({
+        eventId,
+        name: teamName,
+        color: teamColorMap.get(teamName) || "#3b82f6",
+        members: [],
+        tableIds: [],
+      });
+      const savedTeam = await this.serviceTeamRepository.save(newTeam);
+      teamNameToIdMap.set(teamName, savedTeam.id);
+    }
+
+    // Personel adı -> ID eşleştirmesi için tüm aktif personeli al
+    const allActiveStaff = await this.userRepository.find({
+      where: { isActive: true },
+      select: ["id", "fullName", "color"],
+    });
+    const staffNameToIdMap = new Map<string, { id: string; color: string }>();
+    allActiveStaff.forEach((s) => {
+      if (s.fullName) {
+        staffNameToIdMap.set(s.fullName.toLowerCase(), {
+          id: s.id,
+          color: s.color,
+        });
+      }
+    });
 
     // Personel atamalarını uygula
     for (const assignment of template.staffAssignments) {
-      // Personel hala aktif mi kontrol et
-      const staff = await this.userRepository.findOne({
+      // Önce staffId ile dene, yoksa staffName ile eşleştir
+      let staff = await this.userRepository.findOne({
         where: { id: assignment.staffId, isActive: true },
       });
+
+      // staffId ile bulunamadıysa, staffName ile eşleştir
+      if (!staff && assignment.staffName) {
+        const matchedStaff = staffNameToIdMap.get(
+          assignment.staffName.toLowerCase()
+        );
+        if (matchedStaff) {
+          staff = await this.userRepository.findOne({
+            where: { id: matchedStaff.id, isActive: true },
+          });
+        }
+      }
+
       if (!staff) continue;
+
+      // teamId'yi teamName'e göre eşleştir
+      let newTeamId: string | undefined;
+      if (assignment.teamName) {
+        newTeamId = teamNameToIdMap.get(assignment.teamName);
+      }
 
       const newAssignment = this.eventStaffAssignmentRepository.create({
         eventId,
-        staffId: assignment.staffId,
+        staffId: staff.id,
         tableIds: assignment.tableIds,
         shiftId: assignment.shiftId,
-        teamId: assignment.teamId,
+        teamId: newTeamId, // Yeni oluşturulan takımın ID'si
         color: assignment.color || staff.color,
         isActive: true,
       });
@@ -1926,16 +2206,46 @@ export class StaffService {
 
     // Masa gruplarını uygula
     for (const group of template.tableGroups) {
+      // assignedTeamId'yi teamName'e göre eşleştir
+      let newAssignedTeamId: string | undefined;
+      if (group.assignedTeamName) {
+        newAssignedTeamId = teamNameToIdMap.get(group.assignedTeamName);
+      }
+
+      // assignedSupervisorId'yi supervisorName'e göre eşleştir
+      let newSupervisorId: string | undefined;
+      if (group.assignedSupervisorName) {
+        const matchedSupervisor = staffNameToIdMap.get(
+          group.assignedSupervisorName.toLowerCase()
+        );
+        if (matchedSupervisor) {
+          newSupervisorId = matchedSupervisor.id;
+        }
+      }
+
       const newGroup = this.tableGroupRepository.create({
         eventId,
         name: group.name,
         color: group.color,
         tableIds: group.tableIds,
         groupType: group.groupType,
-        assignedTeamId: group.assignedTeamId,
-        assignedSupervisorId: group.assignedSupervisorId,
+        assignedTeamId: newAssignedTeamId, // Yeni oluşturulan takımın ID'si
+        assignedSupervisorId: newSupervisorId, // Eşleşen süpervizörün ID'si
       });
-      await this.tableGroupRepository.save(newGroup);
+      const savedGroup = await this.tableGroupRepository.save(newGroup);
+
+      // Service team'in tableIds'ini güncelle
+      if (newAssignedTeamId) {
+        const team = await this.serviceTeamRepository.findOne({
+          where: { id: newAssignedTeamId },
+        });
+        if (team) {
+          team.tableIds = [
+            ...new Set([...team.tableIds, ...savedGroup.tableIds]),
+          ];
+          await this.serviceTeamRepository.save(team);
+        }
+      }
     }
 
     return { success: true, message: "Şablon uygulandı" };
@@ -1961,5 +2271,1107 @@ export class StaffService {
     const template = await this.getOrganizationTemplateById(id);
     template.isDefault = true;
     return this.organizationTemplateRepository.save(template);
+  }
+
+  // ==================== YENİ STAFF ENTITY METODLARI ====================
+
+  // Tüm personeli getir (yeni Staff tablosundan) - OPTİMİZE EDİLDİ
+  async findAllPersonnel(filters?: {
+    department?: string;
+    workLocation?: string;
+    position?: string;
+    isActive?: boolean;
+    status?: string;
+  }): Promise<Staff[]> {
+    const query = this.staffRepository
+      .createQueryBuilder("staff")
+      .select([
+        "staff.id",
+        "staff.sicilNo",
+        "staff.fullName",
+        "staff.email",
+        "staff.phone",
+        "staff.avatar",
+        "staff.position",
+        "staff.department",
+        "staff.workLocation",
+        "staff.mentor",
+        "staff.color",
+        "staff.gender",
+        "staff.birthDate",
+        "staff.age",
+        "staff.bloodType",
+        "staff.shoeSize",
+        "staff.sockSize",
+        "staff.hireDate",
+        "staff.yearsAtCompany",
+        "staff.isActive",
+        "staff.status",
+      ]);
+
+    if (filters?.department) {
+      query.andWhere("staff.department = :department", {
+        department: filters.department,
+      });
+    }
+    if (filters?.workLocation) {
+      query.andWhere("staff.workLocation = :workLocation", {
+        workLocation: filters.workLocation,
+      });
+    }
+    if (filters?.position) {
+      query.andWhere("staff.position ILIKE :position", {
+        position: `%${filters.position}%`,
+      });
+    }
+    if (filters?.isActive !== undefined) {
+      query.andWhere("staff.isActive = :isActive", {
+        isActive: filters.isActive,
+      });
+    }
+    if (filters?.status) {
+      query.andWhere("staff.status = :status", { status: filters.status });
+    }
+
+    return query.orderBy("staff.fullName", "ASC").getMany();
+  }
+
+  // Tek personel getir (sicil no veya ID ile)
+  async getPersonnelById(id: string): Promise<Staff> {
+    const staff = await this.staffRepository.findOne({ where: { id } });
+    if (!staff) {
+      throw new NotFoundException("Personel bulunamadı");
+    }
+    return staff;
+  }
+
+  async getPersonnelBySicilNo(sicilNo: string): Promise<Staff | null> {
+    return this.staffRepository.findOne({ where: { sicilNo } });
+  }
+
+  // Yeni personel oluştur
+  async createPersonnel(dto: Partial<Staff>): Promise<Staff> {
+    // Sicil no kontrolü
+    if (dto.sicilNo) {
+      const existing = await this.staffRepository.findOne({
+        where: { sicilNo: dto.sicilNo },
+      });
+      if (existing) {
+        throw new BadRequestException("Bu sicil numarası zaten kullanılıyor");
+      }
+    }
+
+    // Renk atanmamışsa otomatik ata
+    if (!dto.color) {
+      const staffCount = await this.staffRepository.count();
+      dto.color =
+        DEFAULT_STAFF_COLORS[staffCount % DEFAULT_STAFF_COLORS.length];
+    }
+
+    const staff = this.staffRepository.create(dto);
+    return this.staffRepository.save(staff);
+  }
+
+  // Personel güncelle
+  async updatePersonnel(id: string, dto: Partial<Staff>): Promise<Staff> {
+    const staff = await this.getPersonnelById(id);
+
+    // Sicil no değişiyorsa kontrol et
+    if (dto.sicilNo && dto.sicilNo !== staff.sicilNo) {
+      const existing = await this.staffRepository.findOne({
+        where: { sicilNo: dto.sicilNo },
+      });
+      if (existing) {
+        throw new BadRequestException("Bu sicil numarası zaten kullanılıyor");
+      }
+    }
+
+    Object.assign(staff, dto);
+    return this.staffRepository.save(staff);
+  }
+
+  // Personel sil (soft delete)
+  async deletePersonnel(id: string): Promise<{ success: boolean }> {
+    const staff = await this.getPersonnelById(id);
+    staff.isActive = false;
+    staff.status = StaffStatus.INACTIVE;
+    await this.staffRepository.save(staff);
+    return { success: true };
+  }
+
+  // Avatar güncelle
+  async updatePersonnelAvatar(id: string, avatarPath: string): Promise<Staff> {
+    const staff = await this.getPersonnelById(id);
+    staff.avatar = avatarPath;
+    return this.staffRepository.save(staff);
+  }
+
+  // ==================== CSV IMPORT ====================
+
+  // CSV'den toplu personel import et
+  async importPersonnelFromCSV(
+    csvData: Array<Record<string, string>>
+  ): Promise<{
+    success: boolean;
+    imported: number;
+    updated: number;
+    errors: Array<{ row: number; error: string }>;
+  }> {
+    let imported = 0;
+    let updated = 0;
+    const errors: Array<{ row: number; error: string }> = [];
+
+    for (let i = 0; i < csvData.length; i++) {
+      const row = csvData[i];
+      try {
+        const sicilNo = row["Sicil No"]?.trim();
+        if (!sicilNo) {
+          errors.push({ row: i + 1, error: "Sicil No boş" });
+          continue;
+        }
+
+        // Mevcut personel var mı kontrol et
+        let staff = await this.staffRepository.findOne({ where: { sicilNo } });
+        const isNew = !staff;
+
+        if (!staff) {
+          staff = this.staffRepository.create({ sicilNo });
+        }
+
+        // Alanları map'le
+        staff.fullName = row["İsim Soyisim"]?.trim() || staff.fullName;
+        staff.position = row["Unvan"]?.trim() || staff.position;
+        staff.department = row["Çalıştığı Bölüm"]?.trim() || staff.department;
+        staff.mentor = row["Miçolar"]?.trim() || staff.mentor;
+        staff.workLocation =
+          row["Görev Yeri "]?.trim() ||
+          row["Görev Yeri"]?.trim() ||
+          staff.workLocation;
+        staff.bloodType = row["Kan Grubu"]?.trim() || staff.bloodType;
+
+        // Cinsiyet
+        const genderStr = row["Cinsiyet"]?.trim()?.toLowerCase();
+        if (genderStr === "erkek" || genderStr === "male") {
+          staff.gender = Gender.MALE;
+        } else if (genderStr === "kadın" || genderStr === "female") {
+          staff.gender = Gender.FEMALE;
+        }
+
+        // Ayakkabı numarası
+        const shoeSize = parseInt(
+          row["Ayakkabı \nNumarası"]?.trim() ||
+            row["Ayakkabı Numarası"]?.trim() ||
+            "0",
+          10
+        );
+        if (shoeSize > 0) staff.shoeSize = shoeSize;
+
+        // Çorap bedeni
+        staff.sockSize = row["Kadın Çorap Bedenleri"]?.trim() || staff.sockSize;
+
+        // Tarihler - Türkçe format parse
+        const birthDateStr =
+          row["Doğum Tarihi\n(Ay-Gün-Yıl)"]?.trim() ||
+          row["Doğum Tarihi"]?.trim();
+        if (birthDateStr) {
+          const parsedBirthDate = this.parseTurkishDate(birthDateStr);
+          if (parsedBirthDate) staff.birthDate = parsedBirthDate;
+        }
+
+        const hireDateStr =
+          row["İşe Giriş Tarihi\n(Ay-Gün-Yıl)"]?.trim() ||
+          row["İşe Giriş Tarihi"]?.trim();
+        if (hireDateStr) {
+          const parsedHireDate = this.parseTurkishDate(hireDateStr);
+          if (parsedHireDate) staff.hireDate = parsedHireDate;
+        }
+
+        const terminationDateStr = row["Ayrılma Tarihi"]?.trim();
+        if (terminationDateStr) {
+          const parsedTermDate = this.parseTurkishDate(terminationDateStr);
+          if (parsedTermDate) staff.terminationDate = parsedTermDate;
+        }
+
+        staff.terminationReason =
+          row["Ayrılma \nNedeni "]?.trim() ||
+          row["Ayrılma Nedeni"]?.trim() ||
+          staff.terminationReason;
+
+        // Yaş ve kıdem
+        const age = parseInt(row["Yaş"]?.trim() || "0", 10);
+        if (age > 0) staff.age = age;
+
+        const yearsAtCompany = parseInt(
+          row["Şirkette \nGeçirdiği Yıl"]?.trim() ||
+            row["Şirkette Geçirdiği Yıl"]?.trim() ||
+            "0",
+          10
+        );
+        if (yearsAtCompany >= 0) staff.yearsAtCompany = yearsAtCompany;
+
+        // Durum
+        const statusStr = row["Durum"]?.trim()?.toLowerCase();
+        if (statusStr === "çalışıyor" || statusStr === "active") {
+          staff.status = StaffStatus.ACTIVE;
+          staff.isActive = true;
+        } else if (statusStr === "ayrıldı" || statusStr === "terminated") {
+          staff.status = StaffStatus.TERMINATED;
+          staff.isActive = false;
+        } else {
+          staff.status = StaffStatus.INACTIVE;
+          staff.isActive = false;
+        }
+
+        // Renk ata (yoksa)
+        if (!staff.color) {
+          const count = await this.staffRepository.count();
+          staff.color =
+            DEFAULT_STAFF_COLORS[count % DEFAULT_STAFF_COLORS.length];
+        }
+
+        await this.staffRepository.save(staff);
+
+        if (isNew) {
+          imported++;
+        } else {
+          updated++;
+        }
+      } catch (error: any) {
+        errors.push({ row: i + 1, error: error.message || "Bilinmeyen hata" });
+      }
+    }
+
+    return { success: true, imported, updated, errors };
+  }
+
+  // Türkçe tarih parse (örn: "16 Haziran 2024", "02 Mart 84")
+  private parseTurkishDate(dateStr: string): Date | null {
+    if (!dateStr) return null;
+
+    const turkishMonths: Record<string, number> = {
+      ocak: 0,
+      şubat: 1,
+      mart: 2,
+      nisan: 3,
+      mayıs: 4,
+      haziran: 5,
+      temmuz: 6,
+      ağustos: 7,
+      eylül: 8,
+      ekim: 9,
+      kasım: 10,
+      aralık: 11,
+    };
+
+    try {
+      // "16 Haziran 2024" veya "02 Mart 84" formatı
+      const parts = dateStr.toLowerCase().split(/\s+/);
+      if (parts.length >= 3) {
+        const day = parseInt(parts[0], 10);
+        const month = turkishMonths[parts[1]];
+        let year = parseInt(parts[2], 10);
+
+        // 2 haneli yıl ise düzelt
+        if (year < 100) {
+          year = year > 50 ? 1900 + year : 2000 + year;
+        }
+
+        if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+          return new Date(year, month, day);
+        }
+      }
+    } catch {
+      // Parse hatası
+    }
+
+    return null;
+  }
+
+  // Users tablosundan Staff tablosuna migration
+  async migrateUsersToStaff(): Promise<{
+    success: boolean;
+    migrated: number;
+    skipped: number;
+  }> {
+    // Users tablosundan role=staff veya role=leader olanları al
+    const usersToMigrate = await this.userRepository.find({
+      where: [{ role: UserRole.STAFF }, { role: UserRole.LEADER }],
+    });
+
+    let migrated = 0;
+    let skipped = 0;
+
+    for (const user of usersToMigrate) {
+      // Zaten staff tablosunda var mı kontrol et (email ile)
+      const existingStaff = await this.staffRepository.findOne({
+        where: [
+          { email: user.email },
+          { sicilNo: user.id }, // Geçici olarak user.id'yi sicilNo olarak kullan
+        ],
+      });
+
+      if (existingStaff) {
+        skipped++;
+        continue;
+      }
+
+      // Yeni staff oluştur
+      const staff = this.staffRepository.create({
+        sicilNo: user.id, // Geçici sicil no olarak user.id kullan
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        position: user.position || "garson",
+        color: user.color,
+        isActive: user.isActive,
+        status: user.isActive ? StaffStatus.ACTIVE : StaffStatus.INACTIVE,
+      });
+
+      await this.staffRepository.save(staff);
+      migrated++;
+    }
+
+    return { success: true, migrated, skipped };
+  }
+
+  // Personel istatistikleri
+  async getPersonnelStats(): Promise<{
+    total: number;
+    active: number;
+    byDepartment: Record<string, number>;
+    byLocation: Record<string, number>;
+    byPosition: Record<string, number>;
+  }> {
+    const total = await this.staffRepository.count();
+    const active = await this.staffRepository.count({
+      where: { isActive: true },
+    });
+
+    // Bölüm bazlı
+    const byDepartmentRaw = await this.staffRepository
+      .createQueryBuilder("staff")
+      .select("staff.department", "department")
+      .addSelect("COUNT(*)", "count")
+      .where("staff.department IS NOT NULL")
+      .groupBy("staff.department")
+      .getRawMany();
+
+    const byDepartment: Record<string, number> = {};
+    byDepartmentRaw.forEach((r) => {
+      byDepartment[r.department] = parseInt(r.count, 10);
+    });
+
+    // Lokasyon bazlı
+    const byLocationRaw = await this.staffRepository
+      .createQueryBuilder("staff")
+      .select("staff.workLocation", "location")
+      .addSelect("COUNT(*)", "count")
+      .where("staff.workLocation IS NOT NULL")
+      .groupBy("staff.workLocation")
+      .getRawMany();
+
+    const byLocation: Record<string, number> = {};
+    byLocationRaw.forEach((r) => {
+      byLocation[r.location] = parseInt(r.count, 10);
+    });
+
+    // Pozisyon bazlı
+    const byPositionRaw = await this.staffRepository
+      .createQueryBuilder("staff")
+      .select("staff.position", "position")
+      .addSelect("COUNT(*)", "count")
+      .where("staff.position IS NOT NULL")
+      .groupBy("staff.position")
+      .getRawMany();
+
+    const byPosition: Record<string, number> = {};
+    byPositionRaw.forEach((r) => {
+      byPosition[r.position] = parseInt(r.count, 10);
+    });
+
+    return { total, active, byDepartment, byLocation, byPosition };
+  }
+
+  // ==================== LAZY LOADING API ====================
+
+  /**
+   * Pozisyon bazlı özet - sadece pozisyon adı ve sayısı
+   * GraphQL benzeri yaklaşım: İlk yüklemede sadece özet
+   */
+  async getPersonnelSummaryByPosition(): Promise<
+    Array<{
+      position: string;
+      count: number;
+      activeCount: number;
+    }>
+  > {
+    const result = await this.staffRepository
+      .createQueryBuilder("staff")
+      .select("staff.position", "position")
+      .addSelect("COUNT(*)", "count")
+      .addSelect(
+        "SUM(CASE WHEN staff.isActive = true THEN 1 ELSE 0 END)",
+        "activeCount"
+      )
+      .where("staff.position IS NOT NULL")
+      .groupBy("staff.position")
+      .orderBy("count", "DESC")
+      .getRawMany();
+
+    return result.map((r) => ({
+      position: r.position,
+      count: parseInt(r.count, 10),
+      activeCount: parseInt(r.activeCount, 10),
+    }));
+  }
+
+  /**
+   * Pozisyona göre personel listesi - lazy loading
+   * Sadece tıklandığında yüklenir
+   */
+  async getPersonnelByPosition(position: string): Promise<Staff[]> {
+    return this.staffRepository
+      .createQueryBuilder("staff")
+      .select([
+        "staff.id",
+        "staff.sicilNo",
+        "staff.fullName",
+        "staff.email",
+        "staff.phone",
+        "staff.avatar",
+        "staff.position",
+        "staff.department",
+        "staff.workLocation",
+        "staff.mentor",
+        "staff.color",
+        "staff.gender",
+        "staff.birthDate",
+        "staff.age",
+        "staff.bloodType",
+        "staff.shoeSize",
+        "staff.sockSize",
+        "staff.hireDate",
+        "staff.yearsAtCompany",
+        "staff.isActive",
+        "staff.status",
+      ])
+      .where("staff.position = :position", { position })
+      .orderBy("staff.fullName", "ASC")
+      .getMany();
+  }
+
+  /**
+   * Departman bazlı özet
+   */
+  async getPersonnelSummaryByDepartment(): Promise<
+    Array<{
+      department: string;
+      count: number;
+      activeCount: number;
+      sortOrder: number;
+    }>
+  > {
+    // Departman tablosundan sortOrder'ı da çekiyoruz
+    const result = await this.staffRepository
+      .createQueryBuilder("staff")
+      .select("staff.department", "department")
+      .addSelect("COUNT(*)", "count")
+      .addSelect(
+        "SUM(CASE WHEN staff.isActive = true THEN 1 ELSE 0 END)",
+        "activeCount"
+      )
+      .addSelect(
+        `COALESCE((SELECT d."sortOrder" FROM departments d WHERE d.name = staff.department), 999)`,
+        "sortOrder"
+      )
+      .where("staff.department IS NOT NULL")
+      .groupBy("staff.department")
+      .orderBy('"sortOrder"', "ASC")
+      .getRawMany();
+
+    return result.map((r) => ({
+      department: r.department,
+      count: parseInt(r.count, 10),
+      activeCount: parseInt(r.activeCount, 10),
+      sortOrder: parseInt(r.sortOrder, 10),
+    }));
+  }
+
+  /**
+   * Departmana göre personel listesi
+   */
+  async getPersonnelByDepartment(department: string): Promise<Staff[]> {
+    return this.staffRepository
+      .createQueryBuilder("staff")
+      .select([
+        "staff.id",
+        "staff.sicilNo",
+        "staff.fullName",
+        "staff.email",
+        "staff.phone",
+        "staff.avatar",
+        "staff.position",
+        "staff.department",
+        "staff.workLocation",
+        "staff.color",
+        "staff.isActive",
+        "staff.status",
+      ])
+      .where("staff.department = :department", { department })
+      .orderBy("staff.fullName", "ASC")
+      .getMany();
+  }
+
+  // ==================== POSITIONS ====================
+
+  /**
+   * Tüm unvanları getir
+   */
+  async getAllPositions(onlyActive = true): Promise<Position[]> {
+    const where = onlyActive ? { isActive: true } : {};
+    return this.positionRepository.find({
+      where,
+      order: { sortOrder: "ASC", name: "ASC" },
+    });
+  }
+
+  /**
+   * Yeni unvan ekle
+   */
+  async createPosition(data: {
+    name: string;
+    description?: string;
+  }): Promise<Position> {
+    const existing = await this.positionRepository.findOne({
+      where: { name: data.name },
+    });
+    if (existing) {
+      throw new BadRequestException("Bu unvan zaten mevcut");
+    }
+
+    const maxSort = await this.positionRepository
+      .createQueryBuilder("p")
+      .select("MAX(p.sortOrder)", "max")
+      .getRawOne();
+
+    const position = this.positionRepository.create({
+      ...data,
+      sortOrder: (maxSort?.max || 0) + 1,
+    });
+    return this.positionRepository.save(position);
+  }
+
+  /**
+   * Unvan güncelle
+   */
+  async updatePosition(
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ): Promise<Position> {
+    const position = await this.positionRepository.findOne({ where: { id } });
+    if (!position) {
+      throw new NotFoundException("Unvan bulunamadı");
+    }
+
+    if (data.name && data.name !== position.name) {
+      const existing = await this.positionRepository.findOne({
+        where: { name: data.name },
+      });
+      if (existing) {
+        throw new BadRequestException("Bu unvan zaten mevcut");
+      }
+    }
+
+    Object.assign(position, data);
+    return this.positionRepository.save(position);
+  }
+
+  /**
+   * Unvan sil
+   */
+  async deletePosition(id: string): Promise<void> {
+    const position = await this.positionRepository.findOne({ where: { id } });
+    if (!position) {
+      throw new NotFoundException("Unvan bulunamadı");
+    }
+
+    // Bu unvanı kullanan personel var mı kontrol et
+    const usageCount = await this.staffRepository.count({
+      where: { position: position.name },
+    });
+    if (usageCount > 0) {
+      throw new BadRequestException(
+        `Bu unvan ${usageCount} personel tarafından kullanılıyor. Önce personellerin unvanını değiştirin.`
+      );
+    }
+
+    await this.positionRepository.remove(position);
+  }
+
+  // ==================== DEPARTMENTS ====================
+
+  /**
+   * Tüm bölümleri getir
+   */
+  async getAllDepartments(onlyActive = true): Promise<Department[]> {
+    const where = onlyActive ? { isActive: true } : {};
+    return this.departmentRepository.find({
+      where,
+      order: { sortOrder: "ASC", name: "ASC" },
+    });
+  }
+
+  /**
+   * Yeni bölüm ekle
+   */
+  async createDepartment(data: {
+    name: string;
+    description?: string;
+    color?: string;
+  }): Promise<Department> {
+    const existing = await this.departmentRepository.findOne({
+      where: { name: data.name },
+    });
+    if (existing) {
+      throw new BadRequestException("Bu bölüm zaten mevcut");
+    }
+
+    const maxSort = await this.departmentRepository
+      .createQueryBuilder("d")
+      .select("MAX(d.sortOrder)", "max")
+      .getRawOne();
+
+    const department = this.departmentRepository.create({
+      ...data,
+      sortOrder: (maxSort?.max || 0) + 1,
+    });
+    return this.departmentRepository.save(department);
+  }
+
+  /**
+   * Bölüm güncelle
+   */
+  async updateDepartment(
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      color?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ): Promise<Department> {
+    const department = await this.departmentRepository.findOne({
+      where: { id },
+    });
+    if (!department) {
+      throw new NotFoundException("Bölüm bulunamadı");
+    }
+
+    if (data.name && data.name !== department.name) {
+      const existing = await this.departmentRepository.findOne({
+        where: { name: data.name },
+      });
+      if (existing) {
+        throw new BadRequestException("Bu bölüm zaten mevcut");
+      }
+    }
+
+    Object.assign(department, data);
+    return this.departmentRepository.save(department);
+  }
+
+  /**
+   * Bölüm sil
+   */
+  async deleteDepartment(id: string): Promise<void> {
+    const department = await this.departmentRepository.findOne({
+      where: { id },
+    });
+    if (!department) {
+      throw new NotFoundException("Bölüm bulunamadı");
+    }
+
+    // Bu bölümü kullanan personel var mı kontrol et
+    const usageCount = await this.staffRepository.count({
+      where: { department: department.name },
+    });
+    if (usageCount > 0) {
+      throw new BadRequestException(
+        `Bu bölüm ${usageCount} personel tarafından kullanılıyor. Önce personellerin bölümünü değiştirin.`
+      );
+    }
+
+    await this.departmentRepository.remove(department);
+  }
+
+  // ==================== WORK LOCATIONS (GÖREV YERLERİ) ====================
+
+  /**
+   * Tüm görev yerlerini getir
+   */
+  async getAllWorkLocations(onlyActive = true): Promise<WorkLocation[]> {
+    const where = onlyActive ? { isActive: true } : {};
+    return this.workLocationRepository.find({
+      where,
+      order: { sortOrder: "ASC", name: "ASC" },
+    });
+  }
+
+  /**
+   * Yeni görev yeri ekle
+   */
+  async createWorkLocation(data: {
+    name: string;
+    description?: string;
+    address?: string;
+  }): Promise<WorkLocation> {
+    const existing = await this.workLocationRepository.findOne({
+      where: { name: data.name },
+    });
+    if (existing) {
+      throw new BadRequestException("Bu görev yeri zaten mevcut");
+    }
+
+    const maxSort = await this.workLocationRepository
+      .createQueryBuilder("w")
+      .select("MAX(w.sortOrder)", "max")
+      .getRawOne();
+
+    const workLocation = this.workLocationRepository.create({
+      ...data,
+      sortOrder: (maxSort?.max || 0) + 1,
+    });
+    return this.workLocationRepository.save(workLocation);
+  }
+
+  /**
+   * Görev yeri güncelle
+   */
+  async updateWorkLocation(
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      address?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ): Promise<WorkLocation> {
+    const workLocation = await this.workLocationRepository.findOne({
+      where: { id },
+    });
+    if (!workLocation) {
+      throw new NotFoundException("Görev yeri bulunamadı");
+    }
+
+    if (data.name && data.name !== workLocation.name) {
+      const existing = await this.workLocationRepository.findOne({
+        where: { name: data.name },
+      });
+      if (existing) {
+        throw new BadRequestException("Bu görev yeri zaten mevcut");
+      }
+    }
+
+    Object.assign(workLocation, data);
+    return this.workLocationRepository.save(workLocation);
+  }
+
+  /**
+   * Görev yeri sil
+   */
+  async deleteWorkLocation(id: string): Promise<void> {
+    const workLocation = await this.workLocationRepository.findOne({
+      where: { id },
+    });
+    if (!workLocation) {
+      throw new NotFoundException("Görev yeri bulunamadı");
+    }
+
+    // Bu görev yerini kullanan personel var mı kontrol et
+    const usageCount = await this.staffRepository.count({
+      where: { workLocation: workLocation.name },
+    });
+    if (usageCount > 0) {
+      throw new BadRequestException(
+        `Bu görev yeri ${usageCount} personel tarafından kullanılıyor. Önce personellerin görev yerini değiştirin.`
+      );
+    }
+
+    await this.workLocationRepository.remove(workLocation);
+  }
+
+  // ==================== DEPARTMENT-POSITION İLİŞKİLERİ ====================
+
+  /**
+   * Departmana ait pozisyonları getir
+   */
+  async getPositionsByDepartment(departmentId: string): Promise<Position[]> {
+    const relations = await this.departmentPositionRepository.find({
+      where: { departmentId },
+      relations: ["position"],
+    });
+    return relations.map((r) => r.position).filter((p) => p.isActive);
+  }
+
+  /**
+   * Pozisyona ait departmanları getir
+   */
+  async getDepartmentsByPosition(positionId: string): Promise<Department[]> {
+    const relations = await this.departmentPositionRepository.find({
+      where: { positionId },
+      relations: ["department"],
+    });
+    return relations.map((r) => r.department).filter((d) => d.isActive);
+  }
+
+  /**
+   * Departman-Pozisyon ilişkisi ekle
+   */
+  async addPositionToDepartment(
+    departmentId: string,
+    positionId: string
+  ): Promise<DepartmentPosition> {
+    const existing = await this.departmentPositionRepository.findOne({
+      where: { departmentId, positionId },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    const relation = this.departmentPositionRepository.create({
+      departmentId,
+      positionId,
+    });
+    return this.departmentPositionRepository.save(relation);
+  }
+
+  /**
+   * Departman-Pozisyon ilişkisi kaldır
+   */
+  async removePositionFromDepartment(
+    departmentId: string,
+    positionId: string
+  ): Promise<void> {
+    await this.departmentPositionRepository.delete({
+      departmentId,
+      positionId,
+    });
+  }
+
+  /**
+   * Departmanın tüm pozisyon ilişkilerini güncelle
+   */
+  async updateDepartmentPositions(
+    departmentId: string,
+    positionIds: string[]
+  ): Promise<void> {
+    // Mevcut ilişkileri sil
+    await this.departmentPositionRepository.delete({ departmentId });
+
+    // Yeni ilişkileri ekle
+    const relations = positionIds.map((positionId) =>
+      this.departmentPositionRepository.create({ departmentId, positionId })
+    );
+    await this.departmentPositionRepository.save(relations);
+  }
+
+  // ==================== DEPARTMENT-LOCATION İLİŞKİLERİ ====================
+
+  /**
+   * Departmana ait görev yerlerini getir
+   */
+  async getLocationsByDepartment(
+    departmentId: string
+  ): Promise<WorkLocation[]> {
+    const relations = await this.departmentLocationRepository.find({
+      where: { departmentId },
+      relations: ["workLocation"],
+    });
+    return relations.map((r) => r.workLocation).filter((l) => l.isActive);
+  }
+
+  /**
+   * Görev yerine ait departmanları getir
+   */
+  async getDepartmentsByLocation(
+    workLocationId: string
+  ): Promise<Department[]> {
+    const relations = await this.departmentLocationRepository.find({
+      where: { workLocationId },
+      relations: ["department"],
+    });
+    return relations.map((r) => r.department).filter((d) => d.isActive);
+  }
+
+  /**
+   * Departman-Görev Yeri ilişkisi ekle
+   */
+  async addLocationToDepartment(
+    departmentId: string,
+    workLocationId: string
+  ): Promise<DepartmentLocation> {
+    const existing = await this.departmentLocationRepository.findOne({
+      where: { departmentId, workLocationId },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    const relation = this.departmentLocationRepository.create({
+      departmentId,
+      workLocationId,
+    });
+    return this.departmentLocationRepository.save(relation);
+  }
+
+  /**
+   * Departman-Görev Yeri ilişkisi kaldır
+   */
+  async removeLocationFromDepartment(
+    departmentId: string,
+    workLocationId: string
+  ): Promise<void> {
+    await this.departmentLocationRepository.delete({
+      departmentId,
+      workLocationId,
+    });
+  }
+
+  /**
+   * Departmanın tüm görev yeri ilişkilerini güncelle
+   */
+  async updateDepartmentLocations(
+    departmentId: string,
+    workLocationIds: string[]
+  ): Promise<void> {
+    // Mevcut ilişkileri sil
+    await this.departmentLocationRepository.delete({ departmentId });
+
+    // Yeni ilişkileri ekle
+    const relations = workLocationIds.map((workLocationId) =>
+      this.departmentLocationRepository.create({ departmentId, workLocationId })
+    );
+    await this.departmentLocationRepository.save(relations);
+  }
+
+  /**
+   * Tüm ilişkileri Excel verilerinden oluştur
+   */
+  async syncRelationsFromStaffData(): Promise<{
+    departmentPositions: number;
+    departmentLocations: number;
+  }> {
+    // Mevcut ilişkileri temizle
+    await this.departmentPositionRepository.clear();
+    await this.departmentLocationRepository.clear();
+
+    // Staff tablosundan unique ilişkileri çek
+    const dpRelations = await this.staffRepository
+      .createQueryBuilder("s")
+      .select("d.id", "departmentId")
+      .addSelect("p.id", "positionId")
+      .innerJoin("departments", "d", "d.name = s.department")
+      .innerJoin("positions", "p", "p.name = s.position")
+      .where("s.department IS NOT NULL AND s.position IS NOT NULL")
+      .distinct(true)
+      .getRawMany();
+
+    const dlRelations = await this.staffRepository
+      .createQueryBuilder("s")
+      .select("d.id", "departmentId")
+      .addSelect("w.id", "workLocationId")
+      .innerJoin("departments", "d", "d.name = s.department")
+      .innerJoin("work_locations", "w", 'w.name = s."workLocation"')
+      .where('s.department IS NOT NULL AND s."workLocation" IS NOT NULL')
+      .distinct(true)
+      .getRawMany();
+
+    // İlişkileri kaydet
+    if (dpRelations.length > 0) {
+      await this.departmentPositionRepository.save(
+        dpRelations.map((r) =>
+          this.departmentPositionRepository.create({
+            departmentId: r.departmentId,
+            positionId: r.positionId,
+          })
+        )
+      );
+    }
+
+    if (dlRelations.length > 0) {
+      await this.departmentLocationRepository.save(
+        dlRelations.map((r) =>
+          this.departmentLocationRepository.create({
+            departmentId: r.departmentId,
+            workLocationId: r.workLocationId,
+          })
+        )
+      );
+    }
+
+    return {
+      departmentPositions: dpRelations.length,
+      departmentLocations: dlRelations.length,
+    };
+  }
+
+  /**
+   * Departman detaylarını ilişkileriyle birlikte getir
+   */
+  async getDepartmentWithRelations(id: string): Promise<{
+    department: Department;
+    positions: Position[];
+    locations: WorkLocation[];
+  }> {
+    const department = await this.departmentRepository.findOne({
+      where: { id },
+    });
+    if (!department) {
+      throw new NotFoundException("Bölüm bulunamadı");
+    }
+
+    const positions = await this.getPositionsByDepartment(id);
+    const locations = await this.getLocationsByDepartment(id);
+
+    return { department, positions, locations };
+  }
+
+  /**
+   * Tüm departmanları ilişkileriyle birlikte getir
+   */
+  async getAllDepartmentsWithRelations(): Promise<
+    Array<{
+      department: Department;
+      positions: Position[];
+      locations: WorkLocation[];
+      staffCount: number;
+    }>
+  > {
+    const departments = await this.departmentRepository.find({
+      where: { isActive: true },
+      order: { sortOrder: "ASC", name: "ASC" },
+    });
+
+    const result = await Promise.all(
+      departments.map(async (department) => {
+        const positions = await this.getPositionsByDepartment(department.id);
+        const locations = await this.getLocationsByDepartment(department.id);
+        const staffCount = await this.staffRepository.count({
+          where: { department: department.name, isActive: true },
+        });
+
+        return { department, positions, locations, staffCount };
+      })
+    );
+
+    return result;
   }
 }

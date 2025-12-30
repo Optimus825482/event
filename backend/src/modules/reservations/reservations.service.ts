@@ -845,4 +845,294 @@ export class ReservationsService {
       totalReservations: history.totalReservations,
     };
   }
+
+  // ==================== CHECK-IN MODULE METHODS ====================
+
+  /**
+   * Check-in için etkinlik verilerini getir
+   * Event detayları, tüm rezervasyonlar ve istatistikler
+   * Requirement: Check-in Module 1.1, 1.2
+   */
+  async getEventForCheckIn(eventId: string): Promise<{
+    event: {
+      id: string;
+      name: string;
+      eventDate: Date;
+      totalCapacity: number;
+      checkedInCount: number;
+      venueLayout: any;
+    };
+    reservations: Reservation[];
+    stats: {
+      totalExpected: number;
+      checkedIn: number;
+      remaining: number;
+      cancelled: number;
+      noShow: number;
+      checkInPercentage: number;
+    };
+  }> {
+    // Event'i getir
+    const event = await this.eventRepository.findOne({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Etkinlik bulunamadı: ${eventId}`);
+    }
+
+    // Tüm rezervasyonları getir (customer ve table bilgileriyle)
+    const reservations = await this.reservationRepository.find({
+      where: { eventId },
+      relations: ["customer"],
+      order: { createdAt: "DESC" },
+    });
+
+    // Masa bilgilerini rezervasyonlara ekle
+    const reservationsWithTables = reservations.map((r) => {
+      const table = event.venueLayout?.tables?.find((t) => t.id === r.tableId);
+      return {
+        ...r,
+        table: table
+          ? {
+              id: table.id,
+              label: table.label,
+              x: table.x,
+              y: table.y,
+              capacity: table.capacity,
+              section: (table as any).section,
+            }
+          : null,
+      };
+    });
+
+    // İstatistikleri hesapla
+    const stats = await this.getEventStats(eventId);
+    const checkInPercentage =
+      stats.totalExpected > 0
+        ? Math.round((stats.checkedIn / stats.totalExpected) * 100)
+        : 0;
+
+    // Toplam kapasite hesapla
+    const totalCapacity =
+      event.venueLayout?.tables?.reduce(
+        (sum, t) => sum + (t.capacity || 0),
+        0
+      ) || 0;
+
+    return {
+      event: {
+        id: event.id,
+        name: event.name,
+        eventDate: event.eventDate,
+        totalCapacity,
+        checkedInCount: stats.checkedIn,
+        venueLayout: event.venueLayout,
+      },
+      reservations: reservationsWithTables as any,
+      stats: {
+        ...stats,
+        checkInPercentage,
+      },
+    };
+  }
+
+  /**
+   * Check-in geçmişi - Son check-in yapan misafirler
+   * Requirement: Check-in Module 6.1, 6.2, 6.3
+   */
+  async getCheckInHistory(
+    eventId: string,
+    limit = 20
+  ): Promise<
+    Array<{
+      reservationId: string;
+      guestName: string;
+      tableLabel: string;
+      guestCount: number;
+      checkInTime: string;
+      isVIP: boolean;
+    }>
+  > {
+    const event = await this.eventRepository.findOne({
+      where: { id: eventId },
+    });
+
+    const reservations = await this.reservationRepository.find({
+      where: {
+        eventId,
+        status: ReservationStatus.CHECKED_IN,
+      },
+      relations: ["customer"],
+      order: { checkInTime: "DESC" },
+      take: limit,
+    });
+
+    return reservations.map((r) => {
+      const table = event?.venueLayout?.tables?.find((t) => t.id === r.tableId);
+      return {
+        reservationId: r.id,
+        guestName: r.customer?.fullName || r.guestName || "Misafir",
+        tableLabel: table?.label || r.tableId,
+        guestCount: r.guestCount,
+        checkInTime: r.checkInTime?.toISOString() || "",
+        isVIP: (r.customer?.vipScore || 0) > 0,
+      };
+    });
+  }
+
+  /**
+   * Müsait masaları getir - Walk-in için
+   * Requirement: Check-in Module 11.3
+   */
+  async getAvailableTables(
+    eventId: string
+  ): Promise<Array<{ id: string; label: string; capacity: number }>> {
+    const event = await this.eventRepository.findOne({
+      where: { id: eventId },
+    });
+
+    if (!event?.venueLayout?.tables) {
+      return [];
+    }
+
+    // Aktif rezervasyonu olan masaları bul
+    const occupiedTables = await this.reservationRepository.find({
+      where: {
+        eventId,
+        status: Not(
+          In([ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW])
+        ),
+      },
+      select: ["tableId"],
+    });
+
+    const occupiedTableIds = new Set(occupiedTables.map((r) => r.tableId));
+
+    // Müsait masaları filtrele
+    return event.venueLayout.tables
+      .filter((table) => !occupiedTableIds.has(table.id))
+      .map((table) => ({
+        id: table.id,
+        label: table.label || table.id,
+        capacity: table.capacity || 4,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, "tr"));
+  }
+
+  /**
+   * Walk-in misafir kaydı - Kapıda gelen misafir
+   * Requirement: Check-in Module 11.1, 11.2, 11.4
+   */
+  async registerWalkIn(dto: {
+    eventId: string;
+    guestName: string;
+    guestCount: number;
+    tableId: string;
+    phone?: string;
+  }): Promise<{
+    reservation: Reservation;
+    tableLocation: { x: number; y: number; label: string } | null;
+  }> {
+    // Masa müsaitlik kontrolü
+    const isAvailable = await this.isTableAvailable(dto.eventId, dto.tableId);
+    if (!isAvailable) {
+      throw new TableNotAvailableException(dto.tableId);
+    }
+
+    // Kapasite kontrolü
+    await this.validateCapacity(dto.eventId, dto.tableId, dto.guestCount);
+
+    // QR kod hash oluştur
+    const qrCodeHash = await this.qrEngineService.generateHash(
+      dto.eventId,
+      dto.tableId,
+      `walkin-${Date.now()}`
+    );
+
+    // Rezervasyon oluştur ve direkt check-in yap
+    const reservation = this.reservationRepository.create({
+      eventId: dto.eventId,
+      tableId: dto.tableId,
+      guestName: dto.guestName,
+      guestPhone: dto.phone,
+      guestCount: dto.guestCount,
+      qrCodeHash,
+      status: ReservationStatus.CHECKED_IN,
+      checkInTime: new Date(),
+    });
+
+    const savedReservation = await this.reservationRepository.save(reservation);
+
+    // Masa lokasyonunu al
+    const event = await this.eventRepository.findOne({
+      where: { id: dto.eventId },
+    });
+
+    let tableLocation: { x: number; y: number; label: string } | null = null;
+    if (event?.venueLayout?.tables) {
+      const table = event.venueLayout.tables.find((t) => t.id === dto.tableId);
+      if (table) {
+        tableLocation = {
+          x: table.x,
+          y: table.y,
+          label: table.label || dto.tableId,
+        };
+      }
+    }
+
+    // Real-time güncelleme
+    try {
+      const stats = await this.getEventStats(dto.eventId);
+      const checkInRecord: CheckInRecord = {
+        reservationId: savedReservation.id,
+        tableId: dto.tableId,
+        tableLabel: tableLocation?.label,
+        customerName: dto.guestName,
+        guestCount: dto.guestCount,
+        checkInTime: savedReservation.checkInTime!.toISOString(),
+      };
+      this.realtimeGateway.broadcastCheckInWithStats(
+        dto.eventId,
+        stats,
+        checkInRecord
+      );
+    } catch (error) {
+      this.logger.warn("Walk-in real-time broadcast hatası:", error);
+    }
+
+    return {
+      reservation: savedReservation,
+      tableLocation,
+    };
+  }
+
+  /**
+   * Kişi sayısı güncelle
+   * Requirement: Check-in Module 12.1
+   */
+  async updateGuestCount(
+    reservationId: string,
+    guestCount: number
+  ): Promise<Reservation> {
+    const reservation = await this.findOne(reservationId);
+
+    // Kapasite kontrolü (uyarı ver ama engelleme)
+    const capacity = await this.getTableCapacity(
+      reservation.eventId,
+      reservation.tableId
+    );
+
+    reservation.guestCount = guestCount;
+    const updated = await this.reservationRepository.save(reservation);
+
+    // Kapasite aşımı uyarısı
+    if (capacity && guestCount > capacity) {
+      this.logger.warn(
+        `Kapasite aşımı: Rezervasyon ${reservationId}, ${guestCount}/${capacity}`
+      );
+    }
+
+    return updated;
+  }
 }

@@ -7,11 +7,17 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Event, EventStatus } from "../../entities/event.entity";
+import { EventStaffAssignment } from "../../entities/event-staff-assignment.entity";
+import { EventExtraStaff } from "../../entities/event-extra-staff.entity";
 import {
   CreateEventDto,
   UpdateEventDto,
   UpdateLayoutDto,
 } from "./dto/event.dto";
+import {
+  CreateEventExtraStaffDto,
+  UpdateEventExtraStaffDto,
+} from "./dto/event-extra-staff.dto";
 import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
@@ -19,6 +25,10 @@ export class EventsService {
   constructor(
     @InjectRepository(Event)
     private eventRepository: Repository<Event>,
+    @InjectRepository(EventStaffAssignment)
+    private eventStaffAssignmentRepository: Repository<EventStaffAssignment>,
+    @InjectRepository(EventExtraStaff)
+    private eventExtraStaffRepository: Repository<EventExtraStaff>,
     @Inject(forwardRef(() => NotificationsService))
     private notificationsService: NotificationsService
   ) {}
@@ -46,44 +56,85 @@ export class EventsService {
   }
 
   /**
-   * Tüm etkinlikleri getir - OPTIMIZE EDİLDİ
+   * Tüm etkinlikleri getir - OPTIMIZE EDİLDİ v4 + PAGINATION
    * - loadRelationCountAndMap ile relation sayıları tek sorguda
    * - N+1 query problemi çözüldü
+   * - Pagination eklendi (sayfa başına 50 kayıt)
+   * - tableGroups sadece count olarak alınıyor (full data değil)
+   * - eventStaffAssignments için isActive=true filtresi eklendi
+   *
+   * @param organizerId - Organizatör ID (opsiyonel)
+   * @param page - Sayfa numarası (default: 1)
+   * @param limit - Sayfa başına kayıt sayısı (default: 50)
+   * @returns Paginated event list with metadata
    */
-  async findAll(organizerId?: string) {
+  async findAll(organizerId?: string, page = 1, limit = 50) {
+    const skip = (page - 1) * limit;
+
     const query = this.eventRepository
       .createQueryBuilder("event")
-      .leftJoinAndSelect("event.organizer", "organizer")
+      .leftJoin("event.organizer", "organizer")
+      .addSelect(["organizer.id", "organizer.fullName", "organizer.email"])
       .loadRelationCountAndMap("event.reservationCount", "event.reservations")
       .loadRelationCountAndMap("event.serviceTeamCount", "event.serviceTeams")
       .loadRelationCountAndMap(
         "event.staffAssignmentCount",
         "event.staffAssignments"
       )
+      // eventStaffAssignments için isActive=true filtresi
       .loadRelationCountAndMap(
         "event.eventStaffAssignmentCount",
-        "event.eventStaffAssignments"
+        "event.eventStaffAssignments",
+        "activeStaffAssignments",
+        (qb) =>
+          qb.andWhere("activeStaffAssignments.isActive = :isActive", {
+            isActive: true,
+          })
       )
-      .orderBy("event.eventDate", "DESC");
+      .loadRelationCountAndMap("event.tableGroupCount", "event.tableGroups")
+      .orderBy("event.eventDate", "DESC")
+      .take(limit)
+      .skip(skip);
 
     if (organizerId) {
       query.where("event.organizerId = :organizerId", { organizerId });
     }
 
-    const events = await query.getMany();
+    const [events, total] = await query.getManyAndCount();
 
     // hasVenueLayout ve hasTeamAssignment hesapla
-    return events.map((event: any) => ({
-      ...event,
-      hasVenueLayout: !!(
-        event.venueLayout && (event.venueLayout as any).placedTables?.length > 0
-      ),
-      hasTeamAssignment:
-        (event.serviceTeamCount || 0) > 0 ||
-        (event.staffAssignmentCount || 0) > 0 ||
-        (event.eventStaffAssignmentCount || 0) > 0,
-      reservedCount: event.reservationCount || 0,
-    }));
+    const items = events.map((event: any) => {
+      const placedTables = (event.venueLayout as any)?.placedTables || [];
+      const hasVenueLayout = placedTables.length > 0;
+
+      // Basitleştirilmiş hasTeamAssignment kontrolü:
+      // - Yerleşim planı var mı?
+      // - En az bir masa grubu var mı?
+      // - En az bir aktif personel ataması var mı?
+      const hasTeamAssignment =
+        hasVenueLayout &&
+        (event.tableGroupCount || 0) > 0 &&
+        (event.eventStaffAssignmentCount || 0) > 0;
+
+      return {
+        ...event,
+        hasVenueLayout,
+        hasTeamAssignment,
+        reservedCount: event.reservationCount || 0,
+      };
+    });
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   async findOne(id: string) {
@@ -94,24 +145,42 @@ export class EventsService {
         "reservations",
         "staffAssignments",
         "serviceTeams",
-        "eventStaffAssignments",
+        "tableGroups",
       ],
     });
     if (!event) throw new NotFoundException("Etkinlik bulunamadı");
 
+    // Aktif personel atamalarını ayrı sorgula (isActive = true)
+    const activeStaffAssignments =
+      await this.eventStaffAssignmentRepository.find({
+        where: { eventId: id, isActive: true },
+      });
+
     // hasVenueLayout ve hasTeamAssignment hesapla
+    const placedTables = (event.venueLayout as any)?.placedTables || [];
+
+    // table_groups tablosundan gelen grupları kullan
+    const tableGroups = (event as any).tableGroups || [];
+
+    // Tüm masaların ID'lerini al
+    const allTableIds = placedTables.map((t: any) => t.id);
+
+    // Gruplara atanmış masa ID'lerini al
+    const groupedTableIds = tableGroups.flatMap((g: any) => g.tableIds || []);
+
+    // Tüm masalar gruplara atanmış mı kontrol et
+    const allTablesGrouped =
+      allTableIds.length > 0 &&
+      allTableIds.every((id: string) => groupedTableIds.includes(id));
+
+    // Aktif personel ataması var mı kontrol et
+    const hasStaffAssignments = activeStaffAssignments.length > 0;
+
     return {
       ...event,
-      hasVenueLayout: !!(
-        event.venueLayout && (event.venueLayout as any).placedTables?.length > 0
-      ),
-      hasTeamAssignment:
-        (event.serviceTeams?.length || 0) > 0 ||
-        (event.staffAssignments?.length || 0) > 0 ||
-        (event.eventStaffAssignments?.length || 0) > 0 ||
-        !!(event.venueLayout as any)?.tableGroups?.some(
-          (g: any) => g.assignedTeamId
-        ),
+      eventStaffAssignments: activeStaffAssignments,
+      hasVenueLayout: !!(placedTables.length > 0),
+      hasTeamAssignment: allTablesGrouped && hasStaffAssignments,
     };
   }
 
@@ -196,5 +265,149 @@ export class EventsService {
       occupancyRate:
         event.totalCapacity > 0 ? (totalGuests / event.totalCapacity) * 100 : 0,
     };
+  }
+
+  // ==================== EKSTRA PERSONEL METODLARI ====================
+
+  /**
+   * Etkinliğin ekstra personellerini getir
+   */
+  async getExtraStaff(eventId: string): Promise<EventExtraStaff[]> {
+    return this.eventExtraStaffRepository.find({
+      where: { eventId, isActive: true },
+      order: { sortOrder: "ASC", createdAt: "ASC" },
+    });
+  }
+
+  /**
+   * Ekstra personel ekle
+   */
+  async createExtraStaff(
+    eventId: string,
+    dto: CreateEventExtraStaffDto
+  ): Promise<EventExtraStaff> {
+    const extraStaff = this.eventExtraStaffRepository.create({
+      ...dto,
+      eventId,
+    });
+    return this.eventExtraStaffRepository.save(extraStaff);
+  }
+
+  /**
+   * Ekstra personel güncelle
+   */
+  async updateExtraStaff(
+    eventId: string,
+    extraStaffId: string,
+    dto: UpdateEventExtraStaffDto
+  ): Promise<EventExtraStaff> {
+    const extraStaff = await this.eventExtraStaffRepository.findOne({
+      where: { id: extraStaffId, eventId },
+    });
+
+    if (!extraStaff) {
+      throw new NotFoundException("Ekstra personel bulunamadı");
+    }
+
+    Object.assign(extraStaff, dto);
+    return this.eventExtraStaffRepository.save(extraStaff);
+  }
+
+  /**
+   * Ekstra personel sil
+   */
+  async deleteExtraStaff(eventId: string, extraStaffId: string): Promise<void> {
+    const extraStaff = await this.eventExtraStaffRepository.findOne({
+      where: { id: extraStaffId, eventId },
+    });
+
+    if (!extraStaff) {
+      throw new NotFoundException("Ekstra personel bulunamadı");
+    }
+
+    await this.eventExtraStaffRepository.remove(extraStaff);
+  }
+
+  /**
+   * Toplu ekstra personel kaydet (mevcut olanları sil, yenilerini ekle)
+   */
+  async saveExtraStaffBulk(
+    eventId: string,
+    extraStaffList: CreateEventExtraStaffDto[]
+  ): Promise<EventExtraStaff[]> {
+    // Mevcut ekstra personelleri sil
+    await this.eventExtraStaffRepository.delete({ eventId });
+
+    // Yenilerini ekle
+    if (extraStaffList.length === 0) {
+      return [];
+    }
+
+    const entities = extraStaffList.map((dto, index) =>
+      this.eventExtraStaffRepository.create({
+        ...dto,
+        eventId,
+        sortOrder: index,
+      })
+    );
+
+    return this.eventExtraStaffRepository.save(entities);
+  }
+
+  /**
+   * Bugünün aktif etkinliklerini getir - Check-in modülü için
+   * Bugün veya bugünden sonraki etkinlikleri döndürür
+   */
+  async getActiveEventsToday(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      eventDate: Date;
+      totalCapacity: number;
+      checkedInCount: number;
+      venueLayout: any;
+    }>
+  > {
+    // Bugünün başlangıcı
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Bugünün sonu
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Bugünkü etkinlikleri getir
+    const events = await this.eventRepository
+      .createQueryBuilder("event")
+      .leftJoinAndSelect("event.reservations", "reservation")
+      .where("event.eventDate >= :today", { today })
+      .andWhere("event.eventDate < :tomorrow", { tomorrow })
+      .andWhere("event.status IN (:...statuses)", {
+        statuses: [EventStatus.DRAFT, EventStatus.PUBLISHED],
+      })
+      .orderBy("event.eventDate", "ASC")
+      .getMany();
+
+    // Her etkinlik için istatistikleri hesapla
+    return events.map((event) => {
+      const reservations = event.reservations || [];
+      const checkedInCount = reservations.filter(
+        (r) => r.status === "checked_in"
+      ).length;
+      const totalCapacity =
+        event.venueLayout?.tables?.reduce(
+          (sum, t) => sum + (t.capacity || 0),
+          0
+        ) || 0;
+
+      return {
+        id: event.id,
+        name: event.name,
+        eventDate: event.eventDate,
+        totalCapacity,
+        checkedInCount,
+        venueLayout: event.venueLayout,
+      };
+    });
   }
 }

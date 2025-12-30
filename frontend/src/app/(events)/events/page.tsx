@@ -17,7 +17,8 @@ import {
   Users,
   Timer,
 } from "lucide-react";
-import { eventsApi } from "@/lib/api";
+import { eventsApi, staffApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -69,9 +70,26 @@ interface EventForm {
   eventType: string;
 }
 
+interface EventShift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  color: string;
+}
+
 type TabType = "planning" | "upcoming" | "completed";
 
 // ==================== CONSTANTS ====================
+const SHIFT_COLORS = [
+  "#3b82f6", // Mavi
+  "#10b981", // Yeşil
+  "#f59e0b", // Turuncu
+  "#8b5cf6", // Mor
+  "#ef4444", // Kırmızı
+  "#ec4899", // Pembe
+];
+
 const EVENT_TYPES = [
   {
     value: "concert",
@@ -125,6 +143,15 @@ export default function EventsPage() {
     eventType: "concert",
   });
 
+  // Vardiya state'leri
+  const [eventShifts, setEventShifts] = useState<EventShift[]>([]);
+  const [newShift, setNewShift] = useState({
+    name: "",
+    startTime: "",
+    endTime: "",
+    color: SHIFT_COLORS[0],
+  });
+
   // Edit Event Modal
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<Event | null>(null);
@@ -136,12 +163,25 @@ export default function EventsPage() {
   });
   const [updating, setUpdating] = useState(false);
 
+  // Edit modal vardiya state'leri
+  const [editShifts, setEditShifts] = useState<EventShift[]>([]);
+  const [editNewShift, setEditNewShift] = useState({
+    name: "",
+    startTime: "",
+    endTime: "",
+    color: SHIFT_COLORS[0],
+  });
+  const [loadingEditShifts, setLoadingEditShifts] = useState(false);
+
   // ==================== DATA FETCHING ====================
   const fetchEvents = async () => {
     try {
       setError(null);
       const response = await eventsApi.getAll();
-      setEvents(response.data || []);
+      // API response formatı: { items: [], meta: {} } veya doğrudan array
+      const data = response.data;
+      const eventsArray = Array.isArray(data) ? data : data?.items || [];
+      setEvents(eventsArray);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Etkinlikler yüklenemedi");
       setEvents([]);
@@ -188,18 +228,44 @@ export default function EventsPage() {
         totalCapacity: 100,
       });
 
+      const eventId = response.data?.id;
+
+      // Vardiyaları kaydet (varsa)
+      if (eventId && eventShifts.length > 0) {
+        try {
+          await staffApi.createBulkShifts(
+            eventId,
+            eventShifts.map((s) => ({
+              name: s.name,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              color: s.color,
+            }))
+          );
+        } catch (shiftError) {
+          console.error("Vardiya kaydetme hatası:", shiftError);
+        }
+      }
+
       toast.success("Etkinlik oluşturuldu");
       setNewEventModalOpen(false);
       setNewEvent({
         name: "",
         eventDate: "",
         eventTime: "",
-        eventType: "wedding",
+        eventType: "concert",
+      });
+      setEventShifts([]);
+      setNewShift({
+        name: "",
+        startTime: "",
+        endTime: "",
+        color: SHIFT_COLORS[0],
       });
       fetchEvents();
 
-      if (response.data?.id) {
-        router.push(`/events/${response.data.id}`);
+      if (eventId) {
+        router.push(`/events/${eventId}`);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Oluşturulamadı");
@@ -208,7 +274,36 @@ export default function EventsPage() {
     }
   };
 
-  const openEditModal = (event: Event) => {
+  // Vardiya ekleme
+  const addShift = () => {
+    if (!newShift.name || !newShift.startTime || !newShift.endTime) {
+      toast.error("Vardiya bilgilerini doldurun");
+      return;
+    }
+
+    const shift: EventShift = {
+      id: `temp-${Date.now()}`,
+      name: newShift.name,
+      startTime: newShift.startTime,
+      endTime: newShift.endTime,
+      color: newShift.color,
+    };
+
+    setEventShifts([...eventShifts, shift]);
+    setNewShift({
+      name: "",
+      startTime: "",
+      endTime: "",
+      color: SHIFT_COLORS[(eventShifts.length + 1) % SHIFT_COLORS.length],
+    });
+  };
+
+  // Vardiya silme
+  const removeShift = (id: string) => {
+    setEventShifts(eventShifts.filter((s) => s.id !== id));
+  };
+
+  const openEditModal = async (event: Event) => {
     const date = new Date(event.eventDate);
     setEditEvent(event);
     setEditForm({
@@ -218,6 +313,59 @@ export default function EventsPage() {
       eventType: event.eventType || "other",
     });
     setEditModalOpen(true);
+
+    // Vardiyaları yükle
+    setLoadingEditShifts(true);
+    try {
+      const response = await staffApi.getEventShifts(event.id);
+      setEditShifts(response.data || []);
+    } catch (error) {
+      console.error("Vardiyalar yüklenemedi:", error);
+      setEditShifts([]);
+    } finally {
+      setLoadingEditShifts(false);
+    }
+  };
+
+  // Edit modal vardiya ekleme
+  const addEditShift = () => {
+    if (
+      !editNewShift.name ||
+      !editNewShift.startTime ||
+      !editNewShift.endTime
+    ) {
+      toast.error("Vardiya bilgilerini doldurun");
+      return;
+    }
+
+    const shift: EventShift = {
+      id: `temp-${Date.now()}`,
+      name: editNewShift.name,
+      startTime: editNewShift.startTime,
+      endTime: editNewShift.endTime,
+      color: editNewShift.color,
+    };
+
+    setEditShifts([...editShifts, shift]);
+    setEditNewShift({
+      name: "",
+      startTime: "",
+      endTime: "",
+      color: SHIFT_COLORS[(editShifts.length + 1) % SHIFT_COLORS.length],
+    });
+  };
+
+  // Edit modal vardiya silme
+  const removeEditShift = async (id: string) => {
+    // Eğer gerçek bir ID ise (temp- ile başlamıyorsa) API'den sil
+    if (!id.startsWith("temp-")) {
+      try {
+        await staffApi.deleteShift(id);
+      } catch (error) {
+        console.error("Vardiya silinemedi:", error);
+      }
+    }
+    setEditShifts(editShifts.filter((s) => s.id !== id));
   };
 
   const handleUpdateEvent = async () => {
@@ -240,9 +388,24 @@ export default function EventsPage() {
         eventType: editForm.eventType,
       });
 
+      // Yeni eklenen vardiyaları kaydet (temp- ile başlayanlar)
+      const newShifts = editShifts.filter((s) => s.id.startsWith("temp-"));
+      if (newShifts.length > 0) {
+        await staffApi.createBulkShifts(
+          editEvent.id,
+          newShifts.map((s) => ({
+            name: s.name,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            color: s.color,
+          }))
+        );
+      }
+
       toast.success("Etkinlik güncellendi");
       setEditModalOpen(false);
       setEditEvent(null);
+      setEditShifts([]);
       fetchEvents();
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Güncellenemedi");
@@ -413,7 +576,7 @@ export default function EventsPage() {
 
       {/* New Event Modal */}
       <Dialog open={newEventModalOpen} onOpenChange={setNewEventModalOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 sm:max-w-md">
+        <DialogContent className="bg-slate-800 border-slate-700 sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-white">
               <Calendar className="w-5 h-5 text-blue-400" />
@@ -479,6 +642,106 @@ export default function EventsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Vardiyalar Bölümü */}
+            <div className="space-y-3 pt-2">
+              <label className="text-sm text-slate-400 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-400" />
+                Vardiyalar (Opsiyonel)
+              </label>
+
+              {/* Mevcut Vardiyalar */}
+              {eventShifts.length > 0 && (
+                <div className="space-y-2">
+                  {eventShifts.map((shift) => (
+                    <div
+                      key={shift.id}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/50 border border-slate-700"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: shift.color }}
+                        />
+                        <span className="text-sm font-medium text-white">
+                          {shift.name}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {shift.startTime} - {shift.endTime}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeShift(shift.id)}
+                        className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Yeni Vardiya Ekleme */}
+              <div className="p-3 rounded-lg bg-slate-900/30 border border-slate-700 space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <Input
+                    value={newShift.name}
+                    onChange={(e) =>
+                      setNewShift({ ...newShift, name: e.target.value })
+                    }
+                    placeholder="Vardiya adı"
+                    className="bg-slate-900 border-slate-700 text-sm"
+                  />
+                  <Input
+                    type="time"
+                    value={newShift.startTime}
+                    onChange={(e) =>
+                      setNewShift({ ...newShift, startTime: e.target.value })
+                    }
+                    className="bg-slate-900 border-slate-700 text-sm"
+                  />
+                  <Input
+                    type="time"
+                    value={newShift.endTime}
+                    onChange={(e) =>
+                      setNewShift({ ...newShift, endTime: e.target.value })
+                    }
+                    className="bg-slate-900 border-slate-700 text-sm"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-1.5">
+                    {SHIFT_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewShift({ ...newShift, color })}
+                        className={cn(
+                          "w-6 h-6 rounded-full transition-all",
+                          newShift.color === color
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-slate-800"
+                            : "hover:scale-110"
+                        )}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={addShift}
+                    disabled={
+                      !newShift.name || !newShift.startTime || !newShift.endTime
+                    }
+                    className="bg-blue-600 hover:bg-blue-700 h-8"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Ekle
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-3">
             <Button
@@ -505,7 +768,7 @@ export default function EventsPage() {
 
       {/* Edit Event Modal */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 sm:max-w-md">
+        <DialogContent className="bg-slate-800 border-slate-700 sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-white">
               <Edit className="w-5 h-5 text-blue-400" />
@@ -569,6 +832,131 @@ export default function EventsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Vardiyalar Bölümü */}
+            <div className="space-y-3 pt-2">
+              <label className="text-sm text-slate-400 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-400" />
+                Vardiyalar
+              </label>
+
+              {/* Yükleniyor */}
+              {loadingEditShifts ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                  <span className="ml-2 text-sm text-slate-400">
+                    Vardiyalar yükleniyor...
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {/* Mevcut Vardiyalar */}
+                  {editShifts.length > 0 && (
+                    <div className="space-y-2">
+                      {editShifts.map((shift) => (
+                        <div
+                          key={shift.id}
+                          className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/50 border border-slate-700"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: shift.color }}
+                            />
+                            <span className="text-sm font-medium text-white">
+                              {shift.name}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              {shift.startTime} - {shift.endTime}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeEditShift(shift.id)}
+                            className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Yeni Vardiya Ekleme */}
+                  <div className="p-3 rounded-lg bg-slate-900/30 border border-slate-700 space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        value={editNewShift.name}
+                        onChange={(e) =>
+                          setEditNewShift({
+                            ...editNewShift,
+                            name: e.target.value,
+                          })
+                        }
+                        placeholder="Vardiya adı"
+                        className="bg-slate-900 border-slate-700 text-sm"
+                      />
+                      <Input
+                        type="time"
+                        value={editNewShift.startTime}
+                        onChange={(e) =>
+                          setEditNewShift({
+                            ...editNewShift,
+                            startTime: e.target.value,
+                          })
+                        }
+                        className="bg-slate-900 border-slate-700 text-sm"
+                      />
+                      <Input
+                        type="time"
+                        value={editNewShift.endTime}
+                        onChange={(e) =>
+                          setEditNewShift({
+                            ...editNewShift,
+                            endTime: e.target.value,
+                          })
+                        }
+                        className="bg-slate-900 border-slate-700 text-sm"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-1.5">
+                        {SHIFT_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() =>
+                              setEditNewShift({ ...editNewShift, color })
+                            }
+                            className={cn(
+                              "w-6 h-6 rounded-full transition-all",
+                              editNewShift.color === color
+                                ? "ring-2 ring-white ring-offset-2 ring-offset-slate-800"
+                                : "hover:scale-110"
+                            )}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={addEditShift}
+                        disabled={
+                          !editNewShift.name ||
+                          !editNewShift.startTime ||
+                          !editNewShift.endTime
+                        }
+                        className="bg-blue-600 hover:bg-blue-700 h-8"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Ekle
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <div className="flex justify-end gap-3">

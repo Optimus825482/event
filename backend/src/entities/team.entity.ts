@@ -7,7 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from "typeorm";
-import { User } from "./user.entity";
+import { Staff } from "./staff.entity";
 
 @Entity("teams")
 export class Team {
@@ -20,14 +20,14 @@ export class Team {
   @Column({ default: "#3b82f6" })
   color: string;
 
-  // Ekip üyeleri (User ID'leri)
+  // Ekip üyeleri (Staff ID'leri)
   @Column({ type: "text", array: true, default: "{}" })
   memberIds: string[];
 
-  // Ekip Lideri
-  @ManyToOne(() => User, { nullable: true })
+  // Ekip Lideri (Staff tablosundan)
+  @ManyToOne(() => Staff, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "leaderId" })
-  leader: User;
+  leader: Staff;
 
   @Column({ nullable: true })
   leaderId: string;

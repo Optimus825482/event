@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -41,6 +41,7 @@ import {
   Download,
   Upload,
   FolderOpen,
+  Box,
 } from "lucide-react";
 import { eventsApi, venuesApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,8 @@ import {
   CanvasHelpButton,
 } from "@/components/canvas/CanvasTutorialModal";
 import { TableElement, LocaElement } from "@/components/canvas/TableElement";
+import { Preview3DModal } from "@/components/canvas/Canvas3DPreview/Preview3DModal";
+import { Canvas3DPreview } from "@/components/canvas/Canvas3DPreview";
 import { useToast } from "@/components/ui/toast-notification";
 import { Input } from "@/components/ui/input";
 import {
@@ -365,41 +368,45 @@ const generateDefaultLayout = (
     }
   }
 
-  // ----- BÖLGE 3: CATWALK-2 YANLARI (Satır 5) -----
-  // Sol taraf: 6 masa (49-54)
-  // Sağ taraf: 6 masa (55-60)
+  // ----- BÖLGE 3: CATWALK-2 YANLARI (Satır 5-6) -----
+  // Sol taraf: 6 masa x 2 satır = 12 masa
+  // Sağ taraf: 6 masa x 2 satır = 12 masa
 
   const catwalk2LeftStartX = catwalk2X - 6 * spacing - 10;
   const catwalk2RightStartX = catwalk2X + catwalk2Width + 10;
 
-  // Sol taraf (49-54)
-  for (let col = 0; col < 6; col++) {
-    tables.push({
-      id: `catwalk2-left-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: catwalk2LeftStartX + col * spacing,
-      y: catwalk2Y,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
+  // Sol taraf - 2 satır
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 6; col++) {
+      tables.push({
+        id: `catwalk2-left-r${row}-${tableNum}`,
+        tableNumber: tableNum,
+        type: "unassigned",
+        capacity: 12,
+        x: catwalk2LeftStartX + col * spacing,
+        y: catwalk2Y + row * spacing,
+        isLoca: false,
+        isLocked: false,
+      });
+      tableNum++;
+    }
   }
 
-  // Sağ taraf (55-60)
-  for (let col = 0; col < 6; col++) {
-    tables.push({
-      id: `catwalk2-right-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: catwalk2RightStartX + col * spacing,
-      y: catwalk2Y,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
+  // Sağ taraf - 2 satır
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 6; col++) {
+      tables.push({
+        id: `catwalk2-right-r${row}-${tableNum}`,
+        tableNumber: tableNum,
+        type: "unassigned",
+        capacity: 12,
+        x: catwalk2RightStartX + col * spacing,
+        y: catwalk2Y + row * spacing,
+        isLoca: false,
+        isLocked: false,
+      });
+      tableNum++;
+    }
   }
 
   // ----- BÖLGE 4: ARKA ALAN (Satır 6-10) -----
@@ -476,14 +483,14 @@ const generateDefaultLayout = (
   }
 
   // ----- BÖLGE 6: LOCA ÖNÜ SATIRI (Satır 11) -----
-  // Sol 3 masa + Boşluk + Sağ 3 masa
+  // Sol 3 masa + Orta 9 masa + Sağ 3 masa = 15 masa
 
   const row11Y = backStartY + 5 * spacing;
 
-  // Sol 3 masa (133-135)
-  for (let col = 0; col < 3; col++) {
+  // Tam satır - 15 masa (ortadaki boşluk da dolu)
+  for (let col = 0; col < 15; col++) {
     tables.push({
-      id: `back-row11-left-${tableNum}`,
+      id: `back-row11-${tableNum}`,
       tableNumber: tableNum,
       type: "unassigned",
       capacity: 12,
@@ -495,28 +502,13 @@ const generateDefaultLayout = (
     tableNum++;
   }
 
-  // Sağ 3 masa (136-138)
-  for (let col = 0; col < 3; col++) {
-    tables.push({
-      id: `back-row11-right-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: backStartX + (12 + col) * spacing,
-      y: row11Y,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
-  }
-
   // ----- BÖLGE 7: KENAR MASALARI (Sol ve Sağ Duvar) -----
-  // Merit Royal'deki gibi kenar masaları
+  // Sol ve sağ kenarlara daha fazla masa
 
-  // Sol kenar masaları (139-142) - Dikey sıra
+  // Sol kenar masaları - Dikey sıra (6 masa)
   const leftEdgeX = 15;
   const leftEdgeStartY = catwalk2Y;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     tables.push({
       id: `left-edge-${tableNum}`,
       tableNumber: tableNum,
@@ -530,10 +522,10 @@ const generateDefaultLayout = (
     tableNum++;
   }
 
-  // Sağ kenar masaları (143-145) - Dikey sıra
+  // Sağ kenar masaları - Dikey sıra (6 masa)
   const rightEdgeX = CANVAS_WIDTH - 55;
   const rightEdgeStartY = catwalk2Y;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     tables.push({
       id: `right-edge-${tableNum}`,
       tableNumber: tableNum,
@@ -547,8 +539,41 @@ const generateDefaultLayout = (
     tableNum++;
   }
 
-  // ----- BÖLGE 8: VIP MASALARI -----
-  // VIP masaları (146-148) - Ortada özel konumda
+  // ----- BÖLGE 8: EK MASALAR (Sahne yanları 3. satır) -----
+  // Sahne yanlarına 3. satır ekle
+
+  // Sol taraf 3. satır (5 masa)
+  for (let col = 0; col < 5; col++) {
+    tables.push({
+      id: `stage-left-extra-${tableNum}`,
+      tableNumber: tableNum,
+      type: "unassigned",
+      capacity: 12,
+      x: stageLeftStartX + col * spacing,
+      y: stageY + 2 * spacing,
+      isLoca: false,
+      isLocked: false,
+    });
+    tableNum++;
+  }
+
+  // Sağ taraf 3. satır (5 masa)
+  for (let col = 0; col < 5; col++) {
+    tables.push({
+      id: `stage-right-extra-${tableNum}`,
+      tableNumber: tableNum,
+      type: "unassigned",
+      capacity: 12,
+      x: stageRightStartX + col * spacing,
+      y: stageY + 2 * spacing,
+      isLoca: false,
+      isLocked: false,
+    });
+    tableNum++;
+  }
+
+  // ----- BÖLGE 9: VIP MASALARI -----
+  // VIP masaları - Ortada özel konumda - Kullanıcı atayacak (3 masa)
   const vipY = row11Y;
   const vipStartX = centerX - 1.5 * spacing;
 
@@ -556,7 +581,7 @@ const generateDefaultLayout = (
     tables.push({
       id: `vip-${tableNum}`,
       tableNumber: tableNum,
-      type: "vip",
+      type: "unassigned", // Kullanıcı kendisi atayacak
       capacity: 12,
       x: vipStartX + i * spacing,
       y: vipY,
@@ -566,7 +591,7 @@ const generateDefaultLayout = (
     tableNum++;
   }
 
-  // ----- BÖLGE 9: LOCALAR (12 adet) -----
+  // ----- BÖLGE 10: LOCALAR (12 adet) -----
   // Localar en altta, yan yana sıralı
 
   const locaY = row11Y + spacing + 15;
@@ -594,9 +619,14 @@ const generateDefaultLayout = (
 export default function VenuePlannerPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
   const eventId = params.id as string;
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // URL query params
+  const tabParam = searchParams.get("tab");
+  const viewParam = searchParams.get("view");
 
   // Core state
   const [event, setEvent] = useState<Event | null>(null);
@@ -604,6 +634,8 @@ export default function VenuePlannerPage() {
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState<PlanStep>("tables");
   const [showCanvasTutorial, setShowCanvasTutorial] = useState(false);
+  const [show3DPreview, setShow3DPreview] = useState(false);
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
 
   // Step 1: Table Planning
   const [tablePlans, setTablePlans] = useState<TablePlan[]>([]);
@@ -965,15 +997,39 @@ export default function VenuePlannerPage() {
       toast.error("Geçerli değerler girin");
       return;
     }
-    const newPlan: TablePlan = {
-      id: `plan-${Date.now()}`,
-      type: newTableType,
-      capacity: newTableCapacity,
-      count: newTableCount,
-    };
-    setTablePlans([...tablePlans, newPlan]);
+
+    // Aynı tip ve kapasitede plan var mı kontrol et
+    const existingPlanIndex = tablePlans.findIndex(
+      (p) => p.type === newTableType && p.capacity === newTableCapacity
+    );
+
+    if (existingPlanIndex >= 0) {
+      // Mevcut plana ekle (adet sayısını artır)
+      setTablePlans((prev) =>
+        prev.map((p, index) =>
+          index === existingPlanIndex
+            ? { ...p, count: p.count + newTableCount }
+            : p
+        )
+      );
+      toast.success(
+        `${newTableType} masasına ${newTableCount} adet eklendi (Toplam: ${
+          tablePlans[existingPlanIndex].count + newTableCount
+        })`
+      );
+    } else {
+      // Yeni plan oluştur
+      const newPlan: TablePlan = {
+        id: `plan-${Date.now()}`,
+        type: newTableType,
+        capacity: newTableCapacity,
+        count: newTableCount,
+      };
+      setTablePlans([...tablePlans, newPlan]);
+      toast.success("Masa planı eklendi");
+    }
+
     setNewTableCount(1);
-    toast.success("Masa planı eklendi");
   };
 
   const removeTablePlan = (id: string) => {
@@ -996,17 +1052,61 @@ export default function VenuePlannerPage() {
     // Default layout oluştur
     const { tables, stages } = generateDefaultLayout(stageConfig);
 
-    setPlacedTables(tables);
+    // Planlanan toplam masa sayısı (loca hariç)
+    const plannedTableCount = totalPlannedTables;
+
+    // Layout'taki masa sayısı (loca hariç)
+    const layoutTables = tables.filter((t) => !t.isLoca);
+    const layoutLocas = tables.filter((t) => t.isLoca);
+
+    let finalTables: PlacedTable[] = [];
+
+    if (plannedTableCount <= layoutTables.length) {
+      // Planlanan sayı kadar masa al
+      finalTables = [
+        ...layoutTables.slice(0, plannedTableCount),
+        ...layoutLocas,
+      ];
+    } else {
+      // Daha fazla masa gerekiyor - mevcut layout'a ek masalar ekle
+      finalTables = [...layoutTables];
+
+      // Eksik masaları ekle
+      const extraCount = plannedTableCount - layoutTables.length;
+      const lastTable = layoutTables[layoutTables.length - 1];
+      const spacing = 43;
+
+      for (let i = 0; i < extraCount; i++) {
+        const row = Math.floor(i / 15);
+        const col = i % 15;
+        finalTables.push({
+          id: `extra-${Date.now()}-${i}`,
+          tableNumber: layoutTables.length + i + 1,
+          type: "unassigned",
+          capacity: 12,
+          x: 40 + col * spacing,
+          y: (lastTable?.y || 500) + spacing + row * spacing,
+          isLoca: false,
+          isLocked: false,
+        });
+      }
+
+      finalTables = [...finalTables, ...layoutLocas];
+    }
+
+    setPlacedTables(finalTables);
     setStageElements(stages);
     setDrawnLines([]);
     setHistory([
-      { placedTables: tables, stageElements: stages, drawnLines: [] },
+      { placedTables: finalTables, stageElements: stages, drawnLines: [] },
     ]);
     setHistoryIndex(0);
     setCurrentStep("layout");
 
+    const tableCount = finalTables.filter((t) => !t.isLoca).length;
+    const locaCount = finalTables.filter((t) => t.isLoca).length;
     toast.success(
-      "Varsayılan yerleşim yüklendi. Sol panelden masa tipi seçip masalara tıklayarak atama yapın."
+      `${tableCount} masa ve ${locaCount} loca ile yerleşim yüklendi. Sol panelden masa tipi seçip masalara tıklayarak atama yapın.`
     );
   };
 
@@ -1775,6 +1875,60 @@ export default function VenuePlannerPage() {
   };
 
   // ==================== RENDER ====================
+  // tab=assignment parametresi varsa EventAssignmentTab'ı göster
+  if (tabParam === "assignment") {
+    // Dinamik import ile EventAssignmentTab'ı yükle
+    const EventAssignmentTab =
+      require("@/components/team-organization/EventAssignmentTab").EventAssignmentTab;
+
+    return (
+      <PageContainer>
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.back()}
+              className="text-slate-400 hover:text-white"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-6">
+              <h1 className="text-base font-semibold text-white">
+                {event?.name} - Ekip Organizasyonu
+              </h1>
+              {event && (
+                <div className="flex items-center gap-4 text-sm text-slate-400">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4" />
+                    {new Date(event.eventDate).toLocaleDateString("tr-TR")}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                className={
+                  viewParam === "organization"
+                    ? "bg-green-500/20 text-green-400 border-green-500/30"
+                    : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                }
+              >
+                {viewParam === "organization"
+                  ? "Mevcut Organizasyon"
+                  : "Yeni Atama"}
+              </Badge>
+            </div>
+          </div>
+
+          {/* EventAssignmentTab */}
+          <EventAssignmentTab eventId={eventId} />
+        </div>
+      </PageContainer>
+    );
+  }
+
   if (loading) {
     return (
       <PageContainer>
@@ -2232,7 +2386,7 @@ export default function VenuePlannerPage() {
             </div>
 
             {/* Toolbar */}
-            <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 flex items-center justify-between">
+            <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 flex items-center justify-between relative">
               <div className="flex items-center gap-1">
                 {/* Tools */}
                 <Button
@@ -2380,37 +2534,41 @@ export default function VenuePlannerPage() {
                     </span>
                   )}
                 </Button>
+              </div>
 
-                {/* Selection Summary */}
-                {selectionSummary && (
-                  <>
-                    <div className="w-px h-6 bg-slate-700 mx-2" />
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-400">Seçili:</span>
-                      <div className="flex flex-wrap gap-1 max-w-[400px]">
-                        {selectionSummary.items.map((item, idx) => (
-                          <Badge
-                            key={idx}
-                            variant="outline"
-                            className="bg-slate-700/50 text-slate-200 border-slate-600 text-[10px] px-1.5 py-0"
-                          >
-                            {item.count}x {item.typeLabel} {item.capacity}K
-                          </Badge>
-                        ))}
-                      </div>
-                      <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
-                        Σ {selectionSummary.totalCapacity} Kişi
-                      </Badge>
-                    </div>
-                  </>
-                )}
+              <div className="flex items-center gap-2">
+                <div className="w-px h-6 bg-slate-700 mx-2" />
+
+                {/* 3D Preview Toggle - ORTADA VE BÜYÜK */}
+                <Button
+                  variant={viewMode === "3d" ? "default" : "outline"}
+                  size="default"
+                  onClick={() => setViewMode(viewMode === "2d" ? "3d" : "2d")}
+                  className={
+                    viewMode === "3d"
+                      ? "bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white px-4 py-2 shadow-lg shadow-cyan-500/30"
+                      : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 px-4 py-2"
+                  }
+                  title={
+                    viewMode === "2d" ? "3D Görünüme Geç" : "2D Görünüme Geç"
+                  }
+                >
+                  <Box className="w-5 h-5" />
+                  <span className="ml-2 font-medium">
+                    {viewMode === "2d" ? "3D Görünüm" : "2D Görünüm"}
+                  </span>
+                </Button>
               </div>
 
               <div className="flex items-center gap-1">
-                {/* Stats */}
+                {/* Stats - Loca'lar hariç, sadece masalar için atama durumu */}
                 <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 mr-2">
-                  {placedTables.filter((t) => t.type !== "unassigned").length} /{" "}
-                  {placedTables.length} Atandı
+                  {
+                    placedTables.filter(
+                      (t) => !t.isLoca && t.type !== "unassigned"
+                    ).length
+                  }{" "}
+                  / {placedTables.filter((t) => !t.isLoca).length} Atandı
                 </Badge>
 
                 <div className="w-px h-6 bg-slate-700 mx-2" />
@@ -2492,6 +2650,29 @@ export default function VenuePlannerPage() {
                 <CanvasHelpButton />
               </div>
             </div>
+
+            {/* Selection Summary - Toolbar altında ORTADA */}
+            {selectionSummary && (
+              <div className="flex justify-center mt-2">
+                <div className="flex items-center gap-2 text-xs bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5">
+                  <span className="text-slate-400">Seçili:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {selectionSummary.items.map((item, idx) => (
+                      <Badge
+                        key={idx}
+                        variant="outline"
+                        className="bg-slate-700/50 text-slate-200 border-slate-600 text-[10px] px-1.5 py-0"
+                      >
+                        {item.count}x {item.typeLabel} {item.capacity}K
+                      </Badge>
+                    ))}
+                  </div>
+                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+                    Σ {selectionSummary.totalCapacity} Kişi
+                  </Badge>
+                </div>
+              </div>
+            )}
 
             {/* Main Layout */}
             <div
@@ -2689,313 +2870,370 @@ export default function VenuePlannerPage() {
               {/* Canvas */}
               <div className={isFullscreen ? "col-span-1" : "col-span-10"}>
                 <Card className="bg-slate-800 border-slate-700 overflow-hidden">
-                  <div
-                    ref={canvasRef}
-                    className={`relative bg-slate-900 overflow-hidden ${
-                      activeTool === "pan"
-                        ? "cursor-grab"
-                        : activeTool === "assign"
-                        ? "cursor-pointer"
-                        : "cursor-default"
-                    } ${isPanning ? "cursor-grabbing" : ""}`}
-                    style={{
-                      width: "100%",
-                      height: isFullscreen ? "calc(100vh - 120px)" : 580,
-                    }}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    onMouseDown={handleCanvasMouseDown}
-                    onContextMenu={(e) => handleContextMenu(e, null, "canvas")}
-                    onClick={() => {
-                      if (lassoJustFinishedRef.current) return;
-                      if (activeTool === "select" && !isLassoSelecting) {
-                        setSelectedItems([]);
-                      }
-                    }}
-                  >
-                    {/* Grid */}
-                    {gridSnap && (
-                      <svg
-                        className="absolute inset-0 pointer-events-none"
-                        style={{
-                          width: CANVAS_WIDTH * zoom,
-                          height: CANVAS_HEIGHT * zoom,
-                          transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px)`,
-                        }}
-                      >
-                        <defs>
-                          <pattern
-                            id="grid"
-                            width={GRID_SIZE * zoom}
-                            height={GRID_SIZE * zoom}
-                            patternUnits="userSpaceOnUse"
-                          >
-                            <path
-                              d={`M ${GRID_SIZE * zoom} 0 L 0 0 0 ${
-                                GRID_SIZE * zoom
-                              }`}
-                              fill="none"
-                              stroke={
-                                gridSnap
-                                  ? "rgba(139,92,246,0.25)"
-                                  : "rgba(100,116,139,0.1)"
-                              }
-                              strokeWidth="1"
-                            />
-                            {/* Grid Snap aktifken kare merkezinde nokta */}
-                            {gridSnap && (
-                              <circle
-                                cx={(GRID_SIZE * zoom) / 2}
-                                cy={(GRID_SIZE * zoom) / 2}
-                                r={3 * zoom}
-                                fill="rgba(139,92,246,0.6)"
-                              />
-                            )}
-                          </pattern>
-                        </defs>
-                        <rect width="100%" height="100%" fill="url(#grid)" />
-                      </svg>
-                    )}
-
-                    {/* Canvas Content */}
+                  {/* 3D View Mode - Sadece Görüntüleme */}
+                  {viewMode === "3d" ? (
                     <div
                       style={{
-                        transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px) scale(${zoom})`,
-                        transformOrigin: "top left",
-                        width: CANVAS_WIDTH,
-                        height: CANVAS_HEIGHT,
-                        position: "relative",
+                        width: "100%",
+                        height: isFullscreen ? "calc(100vh - 120px)" : 580,
                       }}
                     >
-                      {/* Drawn Lines */}
-                      <svg
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
+                      <Canvas3DPreview
+                        layout={{
+                          width: CANVAS_WIDTH,
+                          height: CANVAS_HEIGHT,
+                          tables: [],
+                          walls: [],
+                          gridSize: GRID_SIZE,
+                          zones: stageElements.map((el) => ({
+                            id: el.id,
+                            type:
+                              el.type === "stage"
+                                ? "stage"
+                                : el.type === "system_control"
+                                ? "system"
+                                : "stage-extension",
+                            x: el.x,
+                            y: el.y,
+                            width: el.width,
+                            height: el.height,
+                            label: el.label,
+                            color:
+                              el.type === "stage"
+                                ? "#1e40af"
+                                : el.type === "system_control"
+                                ? "#d97706"
+                                : "#7c3aed",
+                          })),
+                        }}
+                        tables={placedTables.map((t) => ({
+                          id: t.id,
+                          typeId: t.type,
+                          typeName: TABLE_TYPE_CONFIG[t.type]?.label || t.type,
+                          x: t.x,
+                          y: t.y,
+                          rotation: 0,
+                          capacity: t.capacity,
+                          color: TABLE_TYPE_CONFIG[t.type]?.color || "#6b7280",
+                          shape: "round",
+                          label: `M${t.tableNumber}`,
+                        }))}
+                        selectedTableIds={selectedItems}
+                        onClose={() => setViewMode("2d")}
+                      />
+                    </div>
+                  ) : (
+                    /* 2D View Mode */
+                    <div
+                      ref={canvasRef}
+                      className={`relative bg-slate-900 overflow-hidden ${
+                        activeTool === "pan"
+                          ? "cursor-grab"
+                          : activeTool === "assign"
+                          ? "cursor-pointer"
+                          : "cursor-default"
+                      } ${isPanning ? "cursor-grabbing" : ""}`}
+                      style={{
+                        width: "100%",
+                        height: isFullscreen ? "calc(100vh - 120px)" : 580,
+                      }}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                      onMouseDown={handleCanvasMouseDown}
+                      onContextMenu={(e) =>
+                        handleContextMenu(e, null, "canvas")
+                      }
+                      onClick={() => {
+                        if (lassoJustFinishedRef.current) return;
+                        if (activeTool === "select" && !isLassoSelecting) {
+                          setSelectedItems([]);
+                        }
+                      }}
+                    >
+                      {/* Grid */}
+                      {gridSnap && (
+                        <svg
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            width: CANVAS_WIDTH * zoom,
+                            height: CANVAS_HEIGHT * zoom,
+                            transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px)`,
+                          }}
+                        >
+                          <defs>
+                            <pattern
+                              id="grid"
+                              width={GRID_SIZE * zoom}
+                              height={GRID_SIZE * zoom}
+                              patternUnits="userSpaceOnUse"
+                            >
+                              <path
+                                d={`M ${GRID_SIZE * zoom} 0 L 0 0 0 ${
+                                  GRID_SIZE * zoom
+                                }`}
+                                fill="none"
+                                stroke={
+                                  gridSnap
+                                    ? "rgba(139,92,246,0.25)"
+                                    : "rgba(100,116,139,0.1)"
+                                }
+                                strokeWidth="1"
+                              />
+                              {/* Grid Snap aktifken kare merkezinde nokta */}
+                              {gridSnap && (
+                                <circle
+                                  cx={(GRID_SIZE * zoom) / 2}
+                                  cy={(GRID_SIZE * zoom) / 2}
+                                  r={3 * zoom}
+                                  fill="rgba(139,92,246,0.6)"
+                                />
+                              )}
+                            </pattern>
+                          </defs>
+                          <rect width="100%" height="100%" fill="url(#grid)" />
+                        </svg>
+                      )}
+
+                      {/* Canvas Content */}
+                      <div
+                        style={{
+                          transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px) scale(${zoom})`,
+                          transformOrigin: "top left",
+                          width: CANVAS_WIDTH,
+                          height: CANVAS_HEIGHT,
+                          position: "relative",
+                        }}
                       >
-                        {drawnLines.map((line) => (
-                          <polyline
-                            key={line.id}
-                            points={line.points
-                              .map((p) => `${p.x},${p.y}`)
-                              .join(" ")}
-                            fill="none"
-                            stroke={line.color}
-                            strokeWidth={line.width}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
+                        {/* Drawn Lines */}
+                        <svg
+                          className="absolute inset-0 pointer-events-none"
+                          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
+                        >
+                          {drawnLines.map((line) => (
+                            <polyline
+                              key={line.id}
+                              points={line.points
+                                .map((p) => `${p.x},${p.y}`)
+                                .join(" ")}
+                              fill="none"
+                              stroke={line.color}
+                              strokeWidth={line.width}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          ))}
+                          {currentLine && (
+                            <polyline
+                              points={currentLine.points
+                                .map((p) => `${p.x},${p.y}`)
+                                .join(" ")}
+                              fill="none"
+                              stroke={currentLine.color}
+                              strokeWidth={currentLine.width}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          )}
+                        </svg>
+
+                        {/* Stage Elements */}
+                        {stageElements.map((element) => (
+                          <div
+                            key={element.id}
+                            className="absolute select-none group"
+                            style={{
+                              left: element.x,
+                              top: element.y,
+                              width: element.width,
+                              height: element.height,
+                              cursor: !element.isLocked ? "move" : "default",
+                            }}
+                            onMouseDown={(e) => {
+                              // Kilitli elementler hariç sürüklenebilir
+                              if (element.isLocked) return;
+                              e.stopPropagation();
+
+                              // Ctrl+Click: Seçime ekle/çıkar
+                              if (e.ctrlKey) {
+                                setSelectedItems((prev) =>
+                                  prev.includes(element.id)
+                                    ? prev.filter((id) => id !== element.id)
+                                    : [...prev, element.id]
+                                );
+                                return;
+                              }
+
+                              // Tek tıklama: Elementi seç
+                              setSelectedItems([element.id]);
+
+                              const rect = (
+                                e.currentTarget as HTMLElement
+                              ).getBoundingClientRect();
+                              setDraggedItem({
+                                id: element.id,
+                                type: "stage",
+                                offsetX: e.clientX - rect.left,
+                                offsetY: e.clientY - rect.top,
+                              });
+                            }}
+                            onContextMenu={(e) =>
+                              handleContextMenu(e, element.id, "stage")
+                            }
+                          >
+                            <div
+                              className={`w-full h-full rounded-lg flex items-center justify-center relative ${
+                                element.type === "stage"
+                                  ? "bg-blue-600"
+                                  : element.type === "system_control"
+                                  ? "bg-amber-600"
+                                  : "bg-purple-500"
+                              } ${
+                                element.isLocked ? "ring-2 ring-amber-400" : ""
+                              } ${
+                                selectedItems.includes(element.id) &&
+                                !element.isLocked
+                                  ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900"
+                                  : ""
+                              }`}
+                            >
+                              <div className="text-center text-white">
+                                <span className="text-xs font-medium">
+                                  {element.label}
+                                </span>
+                              </div>
+                            </div>
+                            {/* Resize Handles - tüm stage elementleri için (kilitli değilse) */}
+                            {!element.isLocked && (
+                              <>
+                                {/* Sağ kenar */}
+                                <div
+                                  className="absolute top-0 right-0 w-2 h-full cursor-ew-resize opacity-0 group-hover:opacity-100 bg-white/30"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    if (!canvasRef.current) return;
+                                    const canvasRect =
+                                      canvasRef.current.getBoundingClientRect();
+                                    setResizingStage({
+                                      id: element.id,
+                                      edge: "right",
+                                      startX:
+                                        (e.clientX -
+                                          canvasRect.left -
+                                          canvasOffset.x) /
+                                        zoom,
+                                      startY:
+                                        (e.clientY -
+                                          canvasRect.top -
+                                          canvasOffset.y) /
+                                        zoom,
+                                      startWidth: element.width,
+                                      startHeight: element.height,
+                                    });
+                                  }}
+                                />
+                                {/* Alt kenar */}
+                                <div
+                                  className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-white/30"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    if (!canvasRef.current) return;
+                                    const canvasRect =
+                                      canvasRef.current.getBoundingClientRect();
+                                    setResizingStage({
+                                      id: element.id,
+                                      edge: "bottom",
+                                      startX:
+                                        (e.clientX -
+                                          canvasRect.left -
+                                          canvasOffset.x) /
+                                        zoom,
+                                      startY:
+                                        (e.clientY -
+                                          canvasRect.top -
+                                          canvasOffset.y) /
+                                        zoom,
+                                      startWidth: element.width,
+                                      startHeight: element.height,
+                                    });
+                                  }}
+                                />
+                                {/* Köşe */}
+                                <div
+                                  className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-0 group-hover:opacity-100 bg-white/50 rounded-tl"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    if (!canvasRef.current) return;
+                                    const canvasRect =
+                                      canvasRef.current.getBoundingClientRect();
+                                    setResizingStage({
+                                      id: element.id,
+                                      edge: "corner",
+                                      startX:
+                                        (e.clientX -
+                                          canvasRect.left -
+                                          canvasOffset.x) /
+                                        zoom,
+                                      startY:
+                                        (e.clientY -
+                                          canvasRect.top -
+                                          canvasOffset.y) /
+                                        zoom,
+                                      startWidth: element.width,
+                                      startHeight: element.height,
+                                    });
+                                  }}
+                                />
+                              </>
+                            )}
+                          </div>
                         ))}
-                        {currentLine && (
-                          <polyline
-                            points={currentLine.points
-                              .map((p) => `${p.x},${p.y}`)
-                              .join(" ")}
-                            fill="none"
-                            stroke={currentLine.color}
-                            strokeWidth={currentLine.width}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+
+                        {/* Tables - Memoized Components */}
+                        {placedTables
+                          .filter((t) => !t.isLoca)
+                          .map((table) => (
+                            <TableElement
+                              key={table.id}
+                              table={table}
+                              isSelected={selectedItemsSet.has(table.id)}
+                              activeTool={activeTool}
+                              customTableTypes={customTableTypes}
+                              onMouseDown={handleTableMouseDown}
+                              onContextMenu={handleTableContextMenu}
+                            />
+                          ))}
+
+                        {/* Locas - Memoized Components */}
+                        {placedTables
+                          .filter((t) => t.isLoca)
+                          .map((loca) => (
+                            <LocaElement
+                              key={loca.id}
+                              loca={loca}
+                              isSelected={selectedItemsSet.has(loca.id)}
+                              activeTool={activeTool}
+                              customTableTypes={customTableTypes}
+                              onMouseDown={handleTableMouseDown}
+                              onContextMenu={handleTableContextMenu}
+                            />
+                          ))}
+
+                        {/* Lasso Selection */}
+                        {isLassoSelecting && (
+                          <div
+                            className="absolute border-2 border-blue-500 bg-blue-500/10 pointer-events-none z-50"
+                            style={{
+                              left: Math.min(lassoStart.x, lassoEnd.x),
+                              top: Math.min(lassoStart.y, lassoEnd.y),
+                              width: Math.abs(lassoEnd.x - lassoStart.x),
+                              height: Math.abs(lassoEnd.y - lassoStart.y),
+                            }}
                           />
                         )}
-                      </svg>
-
-                      {/* Stage Elements */}
-                      {stageElements.map((element) => (
-                        <div
-                          key={element.id}
-                          className="absolute select-none group"
-                          style={{
-                            left: element.x,
-                            top: element.y,
-                            width: element.width,
-                            height: element.height,
-                            cursor: !element.isLocked ? "move" : "default",
-                          }}
-                          onMouseDown={(e) => {
-                            // Kilitli elementler hariç sürüklenebilir
-                            if (element.isLocked) return;
-                            e.stopPropagation();
-
-                            // Ctrl+Click: Seçime ekle/çıkar
-                            if (e.ctrlKey) {
-                              setSelectedItems((prev) =>
-                                prev.includes(element.id)
-                                  ? prev.filter((id) => id !== element.id)
-                                  : [...prev, element.id]
-                              );
-                              return;
-                            }
-
-                            // Tek tıklama: Elementi seç
-                            setSelectedItems([element.id]);
-
-                            const rect = (
-                              e.currentTarget as HTMLElement
-                            ).getBoundingClientRect();
-                            setDraggedItem({
-                              id: element.id,
-                              type: "stage",
-                              offsetX: e.clientX - rect.left,
-                              offsetY: e.clientY - rect.top,
-                            });
-                          }}
-                          onContextMenu={(e) =>
-                            handleContextMenu(e, element.id, "stage")
-                          }
-                        >
-                          <div
-                            className={`w-full h-full rounded-lg flex items-center justify-center relative ${
-                              element.type === "stage"
-                                ? "bg-blue-600"
-                                : element.type === "system_control"
-                                ? "bg-amber-600"
-                                : "bg-purple-500"
-                            } ${
-                              element.isLocked ? "ring-2 ring-amber-400" : ""
-                            } ${
-                              selectedItems.includes(element.id) &&
-                              !element.isLocked
-                                ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900"
-                                : ""
-                            }`}
-                          >
-                            <div className="text-center text-white">
-                              <span className="text-xs font-medium">
-                                {element.label}
-                              </span>
-                            </div>
-                          </div>
-                          {/* Resize Handles - tüm stage elementleri için (kilitli değilse) */}
-                          {!element.isLocked && (
-                            <>
-                              {/* Sağ kenar */}
-                              <div
-                                className="absolute top-0 right-0 w-2 h-full cursor-ew-resize opacity-0 group-hover:opacity-100 bg-white/30"
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  if (!canvasRef.current) return;
-                                  const canvasRect =
-                                    canvasRef.current.getBoundingClientRect();
-                                  setResizingStage({
-                                    id: element.id,
-                                    edge: "right",
-                                    startX:
-                                      (e.clientX -
-                                        canvasRect.left -
-                                        canvasOffset.x) /
-                                      zoom,
-                                    startY:
-                                      (e.clientY -
-                                        canvasRect.top -
-                                        canvasOffset.y) /
-                                      zoom,
-                                    startWidth: element.width,
-                                    startHeight: element.height,
-                                  });
-                                }}
-                              />
-                              {/* Alt kenar */}
-                              <div
-                                className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-white/30"
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  if (!canvasRef.current) return;
-                                  const canvasRect =
-                                    canvasRef.current.getBoundingClientRect();
-                                  setResizingStage({
-                                    id: element.id,
-                                    edge: "bottom",
-                                    startX:
-                                      (e.clientX -
-                                        canvasRect.left -
-                                        canvasOffset.x) /
-                                      zoom,
-                                    startY:
-                                      (e.clientY -
-                                        canvasRect.top -
-                                        canvasOffset.y) /
-                                      zoom,
-                                    startWidth: element.width,
-                                    startHeight: element.height,
-                                  });
-                                }}
-                              />
-                              {/* Köşe */}
-                              <div
-                                className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-0 group-hover:opacity-100 bg-white/50 rounded-tl"
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  if (!canvasRef.current) return;
-                                  const canvasRect =
-                                    canvasRef.current.getBoundingClientRect();
-                                  setResizingStage({
-                                    id: element.id,
-                                    edge: "corner",
-                                    startX:
-                                      (e.clientX -
-                                        canvasRect.left -
-                                        canvasOffset.x) /
-                                      zoom,
-                                    startY:
-                                      (e.clientY -
-                                        canvasRect.top -
-                                        canvasOffset.y) /
-                                      zoom,
-                                    startWidth: element.width,
-                                    startHeight: element.height,
-                                  });
-                                }}
-                              />
-                            </>
-                          )}
-                        </div>
-                      ))}
-
-                      {/* Tables - Memoized Components */}
-                      {placedTables
-                        .filter((t) => !t.isLoca)
-                        .map((table) => (
-                          <TableElement
-                            key={table.id}
-                            table={table}
-                            isSelected={selectedItemsSet.has(table.id)}
-                            activeTool={activeTool}
-                            customTableTypes={customTableTypes}
-                            onMouseDown={handleTableMouseDown}
-                            onContextMenu={handleTableContextMenu}
-                          />
-                        ))}
-
-                      {/* Locas - Memoized Components */}
-                      {placedTables
-                        .filter((t) => t.isLoca)
-                        .map((loca) => (
-                          <LocaElement
-                            key={loca.id}
-                            loca={loca}
-                            isSelected={selectedItemsSet.has(loca.id)}
-                            activeTool={activeTool}
-                            customTableTypes={customTableTypes}
-                            onMouseDown={handleTableMouseDown}
-                            onContextMenu={handleTableContextMenu}
-                          />
-                        ))}
-
-                      {/* Lasso Selection */}
-                      {isLassoSelecting && (
-                        <div
-                          className="absolute border-2 border-blue-500 bg-blue-500/10 pointer-events-none z-50"
-                          style={{
-                            left: Math.min(lassoStart.x, lassoEnd.x),
-                            top: Math.min(lassoStart.y, lassoEnd.y),
-                            width: Math.abs(lassoEnd.x - lassoStart.x),
-                            height: Math.abs(lassoEnd.y - lassoStart.y),
-                          }}
-                        />
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </Card>
               </div>
             </div>
@@ -3699,6 +3937,57 @@ export default function VenuePlannerPage() {
           <CanvasTutorialModal
             forceOpen={showCanvasTutorial}
             onClose={() => setShowCanvasTutorial(false)}
+          />
+        )}
+
+        {/* 3D Preview Modal */}
+        {currentStep === "layout" && (
+          <Preview3DModal
+            open={show3DPreview}
+            onOpenChange={setShow3DPreview}
+            layout={{
+              width: CANVAS_WIDTH * 10,
+              height: CANVAS_HEIGHT * 10,
+              tables: [],
+              walls: [],
+              gridSize: GRID_SIZE,
+              zones: stageElements.map((el) => ({
+                id: el.id,
+                x: el.x * 10,
+                y: el.y * 10,
+                width: el.width * 10,
+                height: el.height * 10,
+                label: el.label,
+                color:
+                  el.type === "stage"
+                    ? "#1e1e1e"
+                    : el.type === "system_control"
+                    ? "#374151"
+                    : "#2d2d2d",
+                type:
+                  el.type === "stage"
+                    ? "stage"
+                    : el.type === "system_control"
+                    ? "system"
+                    : "stage-extension",
+              })),
+            }}
+            tables={placedTables.map((t) => ({
+              id: t.id,
+              typeId: t.type,
+              typeName: TABLE_TYPE_CONFIG[t.type]?.label || "Masa",
+              x: t.x * 10,
+              y: t.y * 10,
+              rotation: 0,
+              capacity: t.capacity,
+              color: TABLE_TYPE_CONFIG[t.type]?.color || "#3b82f6",
+              shape: t.isLoca ? "rectangle" : "round",
+              label: t.isLoca
+                ? t.locaName || `L${t.tableNumber}`
+                : `${t.tableNumber}`,
+              status: "available",
+            }))}
+            eventName={event?.name}
           />
         )}
       </div>

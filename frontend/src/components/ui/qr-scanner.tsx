@@ -50,7 +50,7 @@ export function QRScanner({
         setError("Kamera bulunamadı");
         setHasPermission(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[QRScanner] Kamera erişim hatası:", err);
       setError("Kamera erişimi reddedildi");
       setHasPermission(false);
@@ -94,10 +94,11 @@ export function QRScanner({
       );
 
       setIsScanning(true);
-    } catch (err: any) {
-      console.error("[QRScanner] Başlatma hatası:", err);
-      setError(err.message || "Kamera başlatılamadı");
-      onError?.(err.message || "Kamera başlatılamadı");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("[QRScanner] Başlatma hatası:", error);
+      setError(error.message || "Kamera başlatılamadı");
+      onError?.(error.message || "Kamera başlatılamadı");
     }
   }, [selectedCamera, isScanning, onScan, onError]);
 

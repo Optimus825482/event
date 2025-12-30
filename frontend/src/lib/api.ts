@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
@@ -6,7 +6,25 @@ export const API_BASE = API_URL.replace("/api", ""); // http://localhost:4000
 
 // Simple in-memory cache for API responses
 const apiCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL = 30000; // 30 saniye cache süresi
+const CACHE_TTL = 60000; // 60 saniye cache süresi (OPTİMİZE: 30s -> 60s)
+
+// Token refresh state
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: Error) => void;
+}> = [];
+
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
 
 // Cache helper functions
 const getCached = <T>(key: string): T | null => {
@@ -48,27 +66,131 @@ api.interceptors.request.use((config) => {
       try {
         const parsed = JSON.parse(authStorage);
         const token = parsed?.state?.token;
+
+        // DEBUG: Token kontrolü
+        console.log(
+          "[API Interceptor] Token exists:",
+          !!token,
+          "Token length:",
+          token?.length || 0
+        );
+
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+        } else {
+          console.warn(
+            "[API Interceptor] Token is null/undefined in auth-storage"
+          );
         }
-      } catch {
-        // JSON parse hatası
+      } catch (e) {
+        console.error("[API Interceptor] JSON parse error:", e);
       }
+    } else {
+      console.warn("[API Interceptor] No auth-storage in localStorage");
     }
   }
   return config;
 });
 
-// Response interceptor - 401 hatalarında login'e yönlendirme YAPMA
-// Çünkü backend henüz hazır olmayabilir, varsayılan değerler kullanılacak
+// Response interceptor - 401 hatalarında auto token refresh
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
+
     // Network hatası veya backend kapalıysa sessizce devam et
     if (!error.response) {
       return Promise.reject(error);
     }
-    // 401 hatası - sadece reject et, login'e yönlendirme
+
+    // 401 hatası ve henüz retry yapılmadıysa token refresh dene
+    if (error.response.status === 401 && !originalRequest._retry) {
+      // Login endpoint'i için refresh deneme
+      if (originalRequest.url?.includes("/auth/login")) {
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        // Zaten refresh yapılıyorsa kuyruğa ekle
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Refresh token'ı localStorage'dan al
+        const authStorage = localStorage.getItem("auth-storage");
+        if (!authStorage) {
+          throw new Error("No auth storage");
+        }
+
+        const parsed = JSON.parse(authStorage);
+        const refreshToken = parsed?.state?.refreshToken;
+
+        if (!refreshToken) {
+          throw new Error("No refresh token");
+        }
+
+        // Refresh token ile yeni access token al
+        const response = await axios.post(`${API_URL}/auth/refresh`, {
+          refreshToken,
+        });
+
+        const { accessToken, refreshToken: newRefreshToken } = response.data;
+
+        // Yeni token'ları localStorage'a kaydet
+        parsed.state.token = accessToken;
+        if (newRefreshToken) {
+          parsed.state.refreshToken = newRefreshToken;
+        }
+        localStorage.setItem("auth-storage", JSON.stringify(parsed));
+
+        console.log("[API] Token refreshed successfully");
+
+        // Bekleyen istekleri işle
+        processQueue(null, accessToken);
+
+        // Orijinal isteği yeni token ile tekrarla
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        console.error("[API] Token refresh failed:", refreshError);
+        processQueue(refreshError as Error, null);
+
+        // Refresh başarısız - sadece state'i temizle
+        // Yönlendirme layout'larda yapılacak
+        const authStorage = localStorage.getItem("auth-storage");
+        if (authStorage) {
+          try {
+            const parsed = JSON.parse(authStorage);
+            parsed.state.token = null;
+            parsed.state.refreshToken = null;
+            parsed.state.isAuthenticated = false;
+            parsed.state.user = null;
+            localStorage.setItem("auth-storage", JSON.stringify(parsed));
+            console.log("[API] Auth state cleared - refresh failed");
+          } catch (e) {
+            // JSON parse hatası - storage'ı tamamen temizle
+            localStorage.removeItem("auth-storage");
+          }
+        }
+
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -136,8 +258,21 @@ export const tablesApi = {
 // Customers API
 export const customersApi = {
   getAll: () => api.get("/customers"),
-  getAllWithStats: (search?: string) =>
-    api.get(`/customers/list/with-stats${search ? `?search=${search}` : ""}`),
+  getAllWithStats: (search?: string, page = 1, limit = 50) => {
+    const params = new URLSearchParams();
+    if (search) params.append("search", search);
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+    return api.get(`/customers/list/with-stats?${params.toString()}`);
+  },
+  // Tüm misafirler (customers + reservations'dan benzersiz misafirler)
+  getAllGuests: (search?: string, page = 1, limit = 50) => {
+    const params = new URLSearchParams();
+    if (search) params.append("search", search);
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+    return api.get(`/customers/list/all-guests?${params.toString()}`);
+  },
   getOne: (id: string) => api.get(`/customers/${id}`),
   getWithNotes: (id: string) => api.get(`/customers/${id}/with-notes`),
   search: (query: string) => api.get(`/customers/search?q=${query}`),
@@ -166,6 +301,10 @@ export const customersApi = {
   updateNote: (noteId: string, content: string) =>
     api.put(`/customers/notes/${noteId}`, { content }),
   deleteNote: (noteId: string) => api.delete(`/customers/notes/${noteId}`),
+  // Blacklist toggle
+  toggleBlacklist: (id: string) => api.post(`/customers/${id}/blacklist`),
+  // Delete customer
+  delete: (id: string) => api.delete(`/customers/${id}`),
 };
 
 // Reservations API
@@ -351,6 +490,37 @@ export const staffApi = {
     return response;
   },
 
+  // Alias for getAllTeams (React Query hooks compatibility)
+  getAllTeams: async (useCache = true) => {
+    const cacheKey = "staff:teams";
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get("/staff/teams");
+    setCache(cacheKey, response.data);
+    return response;
+  },
+
+  // Etkinlik için personel getir
+  getForEvent: (eventId: string) => api.get(`/staff/event/${eventId}`),
+
+  // Ekibe üye ekle (alias)
+  addTeamMember: async (teamId: string, staffId: string) => {
+    clearApiCache("staff:teams");
+    return api.post(`/staff/teams/${teamId}/members`, { memberId: staffId });
+  },
+
+  // Ekipten üye çıkar (alias)
+  removeTeamMember: async (teamId: string, staffId: string) => {
+    clearApiCache("staff:teams");
+    return api.delete(`/staff/teams/${teamId}/members/${staffId}`);
+  },
+
+  // Etkinliğe personel ata (alias)
+  assignToEvent: (eventId: string, assignments: any[]) =>
+    api.post(`/staff/events/${eventId}/assignments/save`, { assignments }),
+
   // Atama işlemleri
   getEventAssignments: (eventId: string) => api.get(`/staff/event/${eventId}`),
   getEventSummary: (eventId: string) =>
@@ -394,7 +564,7 @@ export const staffApi = {
   }) => api.post("/staff/teams", data),
 
   // Ekip güncelle
-  updateTeam: (
+  updateTeam: async (
     teamId: string,
     data: {
       name?: string;
@@ -402,18 +572,46 @@ export const staffApi = {
       memberIds?: string[];
       leaderId?: string;
     }
-  ) => api.put(`/staff/teams/${teamId}`, data),
+  ) => {
+    clearApiCache("staff:teams");
+    return api.put(`/staff/teams/${teamId}`, data);
+  },
+
+  // Ekip liderini ata/değiştir - HIZLI ENDPOINT
+  setTeamLeader: async (teamId: string, leaderId: string | null) => {
+    clearApiCache("staff:teams");
+    return api.put(`/staff/teams/${teamId}/leader`, { leaderId });
+  },
 
   // Ekip sil
-  deleteTeam: (teamId: string) => api.delete(`/staff/teams/${teamId}`),
+  deleteTeam: async (teamId: string) => {
+    clearApiCache("staff:teams");
+    return api.delete(`/staff/teams/${teamId}`);
+  },
+
+  // Toplu ekip sil
+  bulkDeleteTeams: async (teamIds: string[]) => {
+    clearApiCache("staff:teams");
+    return api.delete(`/staff/teams/bulk/delete`, { data: { teamIds } });
+  },
 
   // Ekibe üye ekle
-  addMemberToTeam: (teamId: string, data: { memberId: string }) =>
-    api.post(`/staff/teams/${teamId}/members`, data),
+  addMemberToTeam: async (teamId: string, data: { memberId: string }) => {
+    clearApiCache("staff:teams");
+    return api.post(`/staff/teams/${teamId}/members`, data);
+  },
+
+  // Ekibe toplu üye ekle
+  addMembersToTeamBulk: async (teamId: string, memberIds: string[]) => {
+    clearApiCache("staff:teams");
+    return api.post(`/staff/teams/${teamId}/members/bulk`, { memberIds });
+  },
 
   // Ekipten üye çıkar
-  removeMemberFromTeam: (teamId: string, memberId: string) =>
-    api.delete(`/staff/teams/${teamId}/members/${memberId}`),
+  removeMemberFromTeam: async (teamId: string, memberId: string) => {
+    clearApiCache("staff:teams");
+    return api.delete(`/staff/teams/${teamId}/members/${memberId}`);
+  },
 
   // Ekibe masa ata
   assignTablesToTeam: (teamId: string, tableIds: string[]) =>
@@ -544,16 +742,33 @@ export const staffApi = {
 
   // ==================== WORK SHIFTS (ÇALIŞMA SAATLERİ) API ====================
 
-  // Tüm çalışma saatlerini getir
-  getShifts: () => api.get("/staff/shifts"),
+  // Tüm çalışma saatlerini getir (global + opsiyonel eventId)
+  getShifts: (eventId?: string) =>
+    api.get(`/staff/shifts${eventId ? `?eventId=${eventId}` : ""}`),
 
-  // Yeni çalışma saati oluştur
+  // Etkinliğe özel vardiyaları getir
+  getEventShifts: (eventId: string) =>
+    api.get(`/staff/events/${eventId}/shifts`),
+
+  // Yeni çalışma saati oluştur (global veya etkinliğe özel)
   createShift: (data: {
     name: string;
     startTime: string;
     endTime: string;
     color?: string;
+    eventId?: string;
   }) => api.post("/staff/shifts", data),
+
+  // Etkinliğe özel toplu vardiya oluştur
+  createBulkShifts: (
+    eventId: string,
+    shifts: Array<{
+      name: string;
+      startTime: string;
+      endTime: string;
+      color?: string;
+    }>
+  ) => api.post(`/staff/events/${eventId}/shifts/bulk`, { shifts }),
 
   // Çalışma saati güncelle
   updateShift: (
@@ -611,7 +826,7 @@ export const staffApi = {
 
   // Etkinlik için tüm personel atamalarını getir
   getEventStaffAssignments: (eventId: string) =>
-    api.get(`/staff/event/${eventId}/staff-assignments`),
+    api.get(`/staff/events/${eventId}/assignments`),
 
   // Personel ata (masa/masalara)
   assignStaffToTables: (
@@ -627,7 +842,7 @@ export const staffApi = {
       specialTaskStartTime?: string;
       specialTaskEndTime?: string;
     }
-  ) => api.post(`/staff/event/${eventId}/staff-assignments`, data),
+  ) => api.post(`/staff/events/${eventId}/assignments`, data),
 
   // Personel atamasını güncelle
   updateStaffAssignment: (
@@ -639,11 +854,11 @@ export const staffApi = {
       color?: string;
       notes?: string;
     }
-  ) => api.put(`/staff/staff-assignments/${assignmentId}`, data),
+  ) => api.put(`/staff/assignments/${assignmentId}`, data),
 
   // Personel atamasını kaldır
   removeStaffAssignment: (assignmentId: string) =>
-    api.delete(`/staff/staff-assignments/${assignmentId}`),
+    api.delete(`/staff/assignments/${assignmentId}`),
 
   // Tüm etkinlik atamalarını kaydet (toplu)
   saveEventStaffAssignments: (
@@ -655,8 +870,7 @@ export const staffApi = {
       teamId?: string;
       color?: string;
     }>
-  ) =>
-    api.post(`/staff/event/${eventId}/staff-assignments/save`, { assignments }),
+  ) => api.post(`/staff/events/${eventId}/assignments/save`, { assignments }),
 
   // ==================== ORGANIZATION TEMPLATE API ====================
 
@@ -685,6 +899,188 @@ export const staffApi = {
   // Varsayılan şablon yap
   setDefaultTemplate: (id: string) =>
     api.post(`/staff/organization-templates/${id}/set-default`),
+
+  // ==================== PERSONNEL (HR STAFF) API ====================
+
+  // Tüm personeli listele (yeni Staff tablosundan)
+  getPersonnel: async (
+    filters?: {
+      department?: string;
+      workLocation?: string;
+      position?: string;
+      isActive?: boolean;
+      status?: string;
+    },
+    useCache = true
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.department) params.append("department", filters.department);
+    if (filters?.workLocation)
+      params.append("workLocation", filters.workLocation);
+    if (filters?.position) params.append("position", filters.position);
+    if (filters?.isActive !== undefined)
+      params.append("isActive", String(filters.isActive));
+    if (filters?.status) params.append("status", filters.status);
+
+    const cacheKey = `personnel:${params.toString()}`;
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get(`/staff/personnel?${params.toString()}`);
+    setCache(cacheKey, response.data);
+    return response;
+  },
+
+  // Personel istatistikleri
+  getPersonnelStats: () => api.get("/staff/personnel/stats"),
+
+  // ==================== LAZY LOADING API ====================
+
+  // Pozisyon bazlı özet (sadece pozisyon adı ve sayısı) - İlk yüklemede kullan
+  getPersonnelSummaryByPosition: async (useCache = true) => {
+    const cacheKey = "personnel:summary:position";
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get("/staff/personnel/summary/by-position");
+    setCache(cacheKey, response.data);
+    return response;
+  },
+
+  // Departman bazlı özet
+  getPersonnelSummaryByDepartment: async (useCache = true) => {
+    const cacheKey = "personnel:summary:department";
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get("/staff/personnel/summary/by-department");
+    setCache(cacheKey, response.data);
+    return response;
+  },
+
+  // Pozisyona göre personel listesi (lazy loading - tıklandığında yükle)
+  getPersonnelByPosition: async (position: string, useCache = true) => {
+    const cacheKey = `personnel:position:${position}`;
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get(
+      `/staff/personnel/by-position/${encodeURIComponent(position)}`
+    );
+    setCache(cacheKey, response.data);
+    return response;
+  },
+
+  // Departmana göre personel listesi (lazy loading)
+  getPersonnelByDepartment: async (department: string, useCache = true) => {
+    const cacheKey = `personnel:department:${department}`;
+    if (useCache) {
+      const cached = getCached<any>(cacheKey);
+      if (cached) return { data: cached };
+    }
+    const response = await api.get(
+      `/staff/personnel/by-department/${encodeURIComponent(department)}`
+    );
+    setCache(cacheKey, response.data);
+    return response;
+  },
+
+  // Tek personel getir (ID ile)
+  getPersonnelById: (id: string) => api.get(`/staff/personnel/${id}`),
+
+  // Sicil numarası ile personel getir
+  getPersonnelBySicilNo: (sicilNo: string) =>
+    api.get(`/staff/personnel/sicil/${sicilNo}`),
+
+  // Yeni personel oluştur
+  createPersonnel: async (data: {
+    sicilNo: string;
+    fullName: string;
+    email?: string;
+    phone?: string;
+    avatar?: string;
+    position: string;
+    department?: string;
+    workLocation?: string;
+    mentor?: string;
+    color?: string;
+    gender?: "male" | "female";
+    birthDate?: string;
+    age?: number;
+    bloodType?: string;
+    shoeSize?: number;
+    sockSize?: string;
+    hireDate?: string;
+    terminationDate?: string;
+    terminationReason?: string;
+    yearsAtCompany?: number;
+    isActive?: boolean;
+    status?: "active" | "inactive" | "terminated";
+  }) => {
+    clearApiCache("personnel");
+    return api.post("/staff/personnel", data);
+  },
+
+  // Personel güncelle
+  updatePersonnel: async (
+    id: string,
+    data: {
+      sicilNo?: string;
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      avatar?: string;
+      position?: string;
+      department?: string;
+      workLocation?: string;
+      mentor?: string;
+      color?: string;
+      gender?: "male" | "female";
+      birthDate?: string;
+      age?: number;
+      bloodType?: string;
+      shoeSize?: number;
+      sockSize?: string;
+      hireDate?: string;
+      terminationDate?: string;
+      terminationReason?: string;
+      yearsAtCompany?: number;
+      isActive?: boolean;
+      status?: "active" | "inactive" | "terminated";
+    }
+  ) => {
+    clearApiCache("personnel");
+    return api.put(`/staff/personnel/${id}`, data);
+  },
+
+  // Personel sil (soft delete)
+  deletePersonnel: async (id: string) => {
+    clearApiCache("personnel");
+    return api.delete(`/staff/personnel/${id}`);
+  },
+
+  // Avatar yükle
+  uploadPersonnelAvatar: async (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    clearApiCache("personnel");
+    return api.post(`/staff/personnel/${id}/avatar`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  // CSV'den toplu personel import et
+  importPersonnelCSV: async (data: Array<Record<string, string>>) => {
+    clearApiCache("personnel");
+    return api.post("/staff/personnel/import-csv", { data });
+  },
+
+  // Users tablosundan Staff tablosuna migration
+  migrateUsersToStaff: () => api.post("/staff/personnel/migrate"),
 };
 
 // Upload API
@@ -1026,4 +1422,309 @@ export const notificationsApi = {
   // Admin: Bildirimi sil
   deleteNotification: (id: string) =>
     api.post(`/notifications/admin/${id}/delete`),
+};
+
+// Positions API (Unvanlar)
+export const positionsApi = {
+  getAll: (all = false) => api.get(`/staff/positions${all ? "?all=true" : ""}`),
+  create: (data: { name: string; description?: string }) =>
+    api.post("/staff/positions", data),
+  update: (
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ) => api.put(`/staff/positions/${id}`, data),
+  delete: (id: string) => api.delete(`/staff/positions/${id}`),
+};
+
+// Departments API (Bölümler)
+export const departmentsApi = {
+  getAll: (all = false) =>
+    api.get(`/staff/departments${all ? "?all=true" : ""}`),
+  getAllWithRelations: () => api.get("/staff/departments-with-relations"),
+  getDetails: (id: string) => api.get(`/staff/departments/${id}/details`),
+  getPositions: (id: string) => api.get(`/staff/departments/${id}/positions`),
+  getLocations: (id: string) => api.get(`/staff/departments/${id}/locations`),
+  create: (data: { name: string; description?: string; color?: string }) =>
+    api.post("/staff/departments", data),
+  update: (
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      color?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ) => api.put(`/staff/departments/${id}`, data),
+  delete: (id: string) => api.delete(`/staff/departments/${id}`),
+  updatePositions: (id: string, positionIds: string[]) =>
+    api.put(`/staff/departments/${id}/positions`, { positionIds }),
+  updateLocations: (id: string, locationIds: string[]) =>
+    api.put(`/staff/departments/${id}/locations`, { locationIds }),
+};
+
+// Work Locations API (Görev Yerleri)
+export const workLocationsApi = {
+  getAll: (all = false) =>
+    api.get(`/staff/work-locations${all ? "?all=true" : ""}`),
+  create: (data: { name: string; description?: string; address?: string }) =>
+    api.post("/staff/work-locations", data),
+  update: (
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      address?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ) => api.put(`/staff/work-locations/${id}`, data),
+  delete: (id: string) => api.delete(`/staff/work-locations/${id}`),
+};
+
+// Sync Relations API
+export const syncApi = {
+  syncRelations: () => api.post("/staff/sync-relations"),
+};
+
+// ==================== SERVICE POINTS API ====================
+// Hizmet Noktaları (Bar, Lounge, Karşılama vb.)
+export const servicePointsApi = {
+  // Etkinliğe ait tüm hizmet noktalarını getir
+  getAll: (eventId: string) => api.get(`/events/${eventId}/service-points`),
+
+  // Tek bir hizmet noktasını getir
+  getOne: (eventId: string, id: string) =>
+    api.get(`/events/${eventId}/service-points/${id}`),
+
+  // Yeni hizmet noktası oluştur
+  create: (
+    eventId: string,
+    data: {
+      name: string;
+      pointType?: string; // bar, lounge, reception, vip_area, backstage, other
+      requiredStaffCount?: number;
+      allowedRoles?: string[]; // barman, hostes, garson, barboy, security
+      x?: number;
+      y?: number;
+      color?: string;
+      shape?: string; // square, circle, rectangle
+      description?: string;
+      sortOrder?: number;
+    }
+  ) => api.post(`/events/${eventId}/service-points`, data),
+
+  // Hizmet noktasını güncelle
+  update: (
+    eventId: string,
+    id: string,
+    data: {
+      name?: string;
+      pointType?: string;
+      requiredStaffCount?: number;
+      allowedRoles?: string[];
+      x?: number;
+      y?: number;
+      color?: string;
+      shape?: string;
+      description?: string;
+      sortOrder?: number;
+      isActive?: boolean;
+    }
+  ) => api.put(`/events/${eventId}/service-points/${id}`, data),
+
+  // Hizmet noktasını sil
+  delete: (eventId: string, id: string) =>
+    api.delete(`/events/${eventId}/service-points/${id}`),
+
+  // ==================== STAFF ASSIGNMENTS ====================
+
+  // Hizmet noktasına ait personel atamalarını getir
+  getAssignments: (eventId: string, servicePointId: string) =>
+    api.get(`/events/${eventId}/service-points/${servicePointId}/assignments`),
+
+  // Etkinliğe ait tüm hizmet noktası personel atamalarını getir
+  getAllAssignments: (eventId: string) =>
+    api.get(`/events/${eventId}/service-points/assignments/all`),
+
+  // Personel ataması oluştur
+  createAssignment: (
+    eventId: string,
+    data: {
+      servicePointId: string;
+      staffId: string;
+      role: string; // barman, hostes, garson, barboy, security
+      shiftId?: string;
+      shiftStart?: string; // "18:00"
+      shiftEnd?: string; // "02:00"
+      notes?: string;
+      sortOrder?: number;
+    }
+  ) => api.post(`/events/${eventId}/service-points/assignments`, data),
+
+  // Toplu personel ataması oluştur
+  createBulkAssignments: (
+    eventId: string,
+    assignments: Array<{
+      servicePointId: string;
+      staffId: string;
+      role: string;
+      shiftId?: string;
+      shiftStart?: string;
+      shiftEnd?: string;
+      notes?: string;
+      sortOrder?: number;
+    }>
+  ) =>
+    api.post(`/events/${eventId}/service-points/assignments/bulk`, {
+      assignments,
+    }),
+
+  // Personel atamasını güncelle
+  updateAssignment: (
+    eventId: string,
+    assignmentId: string,
+    data: {
+      role?: string;
+      shiftId?: string;
+      shiftStart?: string;
+      shiftEnd?: string;
+      notes?: string;
+      sortOrder?: number;
+      isActive?: boolean;
+    }
+  ) =>
+    api.put(
+      `/events/${eventId}/service-points/assignments/${assignmentId}`,
+      data
+    ),
+
+  // Personel atamasını sil
+  deleteAssignment: (eventId: string, assignmentId: string) =>
+    api.delete(`/events/${eventId}/service-points/assignments/${assignmentId}`),
+
+  // ==================== STATISTICS ====================
+
+  // Etkinlik için hizmet noktası istatistikleri
+  getStats: (eventId: string) =>
+    api.get(`/events/${eventId}/service-points/stats/summary`),
+};
+
+// ==================== EVENT EXTRA STAFF API ====================
+// Etkinlik Ekstra Personel (Geçici personeller)
+export const eventExtraStaffApi = {
+  // Etkinliğe ait tüm ekstra personelleri getir
+  getAll: (eventId: string) => api.get(`/events/${eventId}/extra-staff`),
+
+  // Yeni ekstra personel ekle
+  create: (
+    eventId: string,
+    data: {
+      fullName: string;
+      position?: string;
+      role?: string;
+      shiftStart?: string;
+      shiftEnd?: string;
+      color?: string;
+      notes?: string;
+      assignedGroups?: string[];
+      assignedTables?: string[];
+      sortOrder?: number;
+    }
+  ) => api.post(`/events/${eventId}/extra-staff`, data),
+
+  // Ekstra personeli güncelle
+  update: (
+    eventId: string,
+    extraStaffId: string,
+    data: {
+      fullName?: string;
+      position?: string;
+      role?: string;
+      shiftStart?: string;
+      shiftEnd?: string;
+      color?: string;
+      notes?: string;
+      assignedGroups?: string[];
+      assignedTables?: string[];
+      sortOrder?: number;
+      isActive?: boolean;
+    }
+  ) => api.put(`/events/${eventId}/extra-staff/${extraStaffId}`, data),
+
+  // Ekstra personeli sil
+  delete: (eventId: string, extraStaffId: string) =>
+    api.delete(`/events/${eventId}/extra-staff/${extraStaffId}`),
+
+  // Toplu ekstra personel kaydet (mevcut olanları sil, yenilerini ekle)
+  saveBulk: (
+    eventId: string,
+    extraStaff: Array<{
+      fullName: string;
+      position?: string;
+      role?: string;
+      shiftStart?: string;
+      shiftEnd?: string;
+      color?: string;
+      notes?: string;
+      assignedGroups?: string[];
+      assignedTables?: string[];
+      sortOrder?: number;
+    }>
+  ) => api.post(`/events/${eventId}/extra-staff/bulk`, { extraStaff }),
+};
+
+// ==================== CHECK-IN API ====================
+// Check-in modülü için özel API fonksiyonları
+export const checkInApi = {
+  // Bugünün aktif etkinliklerini getir
+  getActiveEvents: () => api.get("/events/active/today"),
+
+  // Check-in için etkinlik detayları ve rezervasyonları getir
+  getEventForCheckIn: (eventId: string) =>
+    api.get(`/reservations/event/${eventId}/check-in-data`),
+
+  // QR kod ile check-in (mevcut reservationsApi.checkIn kullanır)
+  checkIn: (qrCodeHash: string) =>
+    api.post(`/reservations/check-in/${qrCodeHash}`),
+
+  // Manuel arama (isim veya telefon ile)
+  searchForCheckIn: (query: string, eventId: string) => {
+    const params = new URLSearchParams({ q: query, eventId });
+    return api.get(`/reservations/search?${params.toString()}`);
+  },
+
+  // Walk-in misafir kaydı
+  registerWalkIn: (data: {
+    eventId: string;
+    guestName: string;
+    guestCount: number;
+    tableId: string;
+    phone?: string;
+  }) => api.post("/reservations/walk-in", data),
+
+  // Check-in geçmişi
+  getCheckInHistory: (eventId: string, limit = 20) =>
+    api.get(`/reservations/event/${eventId}/check-in-history?limit=${limit}`),
+
+  // Etkinlik istatistikleri (mevcut reservationsApi.getEventStats kullanır)
+  getEventStats: (eventId: string) =>
+    api.get(`/reservations/event/${eventId}/stats`),
+
+  // Kişi sayısı güncelle
+  updateGuestCount: (reservationId: string, guestCount: number) =>
+    api.patch(`/reservations/${reservationId}/guest-count`, { guestCount }),
+
+  // QR kod ile rezervasyon getir (mevcut reservationsApi.getByQRCode kullanır)
+  getByQRCode: (qrCodeHash: string) =>
+    api.get(`/reservations/qr/${qrCodeHash}`),
+
+  // Müsait masaları getir (walk-in için)
+  getAvailableTables: (eventId: string) =>
+    api.get(`/reservations/event/${eventId}/available-tables`),
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import {
+import React, {
   useState,
   useEffect,
   useCallback,
@@ -8,6 +8,7 @@ import {
   useMemo,
   useImperativeHandle,
   forwardRef,
+  memo,
 } from "react";
 import {
   Loader2,
@@ -33,6 +34,8 @@ import {
   Unlink,
   MapPin,
   Edit,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { eventsApi, staffApi, API_BASE } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -62,6 +65,9 @@ import {
   StageElement,
   EventData,
   DEFAULT_COLORS,
+  TABLE_TYPE_COLORS,
+  RawTableData,
+  StaffAssignment,
 } from "./types";
 
 // ==================== CONSTANTS - Venue ile aynı ====================
@@ -76,6 +82,161 @@ const getAvatarUrl = (avatar?: string): string | undefined => {
   if (avatar.startsWith("http") || avatar.startsWith("data:")) return avatar;
   return `${API_BASE}${avatar}`;
 };
+
+// ==================== MEMOIZED TABLE COMPONENT ====================
+interface TableItemProps {
+  table: TableData;
+  isSelected: boolean;
+  group: TableGroup | undefined;
+  assignedStaff: Staff | null;
+  onClick: (tableId: string, e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent, tableId: string) => void;
+}
+
+const TableItem = memo(function TableItem({
+  table,
+  isSelected,
+  group,
+  assignedStaff,
+  onClick,
+  onContextMenu,
+}: TableItemProps) {
+  const tableType = table.type || "unassigned";
+  const isVipOrLoca = tableType === "vip" || tableType === "loca";
+  const isGrouped = !!group;
+  const tableColor = "#6b7280";
+  const groupBgColor = group
+    ? TABLE_TYPE_COLORS[tableType]?.bg || "#6b7280"
+    : "transparent";
+
+  return (
+    <div
+      data-table-id={table.id}
+      className={`absolute select-none transition-transform ${
+        isSelected
+          ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 z-10"
+          : ""
+      }`}
+      style={{
+        left: table.x,
+        top: table.y,
+        cursor: "pointer",
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => onClick(table.id, e)}
+      onContextMenu={(e) => onContextMenu(e, table.id)}
+    >
+      {group && (
+        <div
+          className="absolute -inset-1 rounded-full opacity-40"
+          style={{ backgroundColor: groupBgColor }}
+        />
+      )}
+      <div
+        className="w-8 h-8 rounded-full flex flex-col items-center justify-center text-white shadow-lg border-2 relative"
+        style={{
+          backgroundColor: tableColor,
+          borderColor: isSelected
+            ? "#fbbf24"
+            : assignedStaff
+            ? "#10b981"
+            : group
+            ? TABLE_TYPE_COLORS[tableType]?.border || "#9ca3af"
+            : "#9ca3af",
+        }}
+      >
+        <span className="text-[9px] font-bold">{table.label}</span>
+        {assignedStaff && (
+          <div
+            className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border border-white flex items-center justify-center"
+            title={assignedStaff.fullName}
+          >
+            <span className="text-[6px] font-bold text-white">
+              {assignedStaff.fullName.charAt(0)}
+            </span>
+          </div>
+        )}
+        {!isGrouped && !isVipOrLoca && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-slate-600 border border-slate-500 flex items-center justify-center"
+            title="Gruba atanmamış"
+          >
+            <span className="text-[6px]">🔒</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ==================== MEMOIZED LOCA COMPONENT ====================
+interface LocaItemProps {
+  loca: TableData;
+  isSelected: boolean;
+  group: TableGroup | undefined;
+  assignedStaff: Staff | null;
+  onClick: (tableId: string, e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent, tableId: string) => void;
+}
+
+const LocaItem = memo(function LocaItem({
+  loca,
+  isSelected,
+  group,
+  assignedStaff,
+  onClick,
+  onContextMenu,
+}: LocaItemProps) {
+  const groupBgColor = group ? group.color : "#6b7280";
+
+  return (
+    <div
+      data-table-id={loca.id}
+      className={`absolute select-none transition-transform ${
+        isSelected
+          ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 z-10"
+          : ""
+      }`}
+      style={{
+        left: loca.x,
+        top: loca.y,
+        cursor: "pointer",
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => onClick(loca.id, e)}
+      onContextMenu={(e) => onContextMenu(e, loca.id)}
+    >
+      <div
+        className="flex items-center justify-center text-white shadow-lg border-2 rounded-lg relative"
+        style={{
+          width: LOCA_WIDTH,
+          height: LOCA_HEIGHT,
+          backgroundColor: groupBgColor,
+          borderColor: isSelected
+            ? "#fbbf24"
+            : assignedStaff
+            ? "#10b981"
+            : "#9ca3af",
+        }}
+      >
+        <Sofa className="w-3 h-3 mr-1" />
+        <span className="text-[8px] font-bold truncate max-w-[36px]">
+          {loca.locaName || loca.label}
+        </span>
+        {assignedStaff && (
+          <div
+            className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border border-white flex items-center justify-center"
+            title={assignedStaff.fullName}
+          >
+            <span className="text-[6px] font-bold text-white">
+              {assignedStaff.fullName.charAt(0)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 // ==================== TYPES ====================
 interface EventAssignmentTabProps {
@@ -162,9 +323,73 @@ export const EventAssignmentTab = forwardRef<
     { staffId: string; shiftId: string }[]
   >([]);
 
+  // Özel Vardiya State
+  const [showCustomShiftInput, setShowCustomShiftInput] = useState<
+    string | null
+  >(null); // staffId for which custom shift is being added
+  const [customShiftStart, setCustomShiftStart] = useState("18:00");
+  const [customShiftEnd, setCustomShiftEnd] = useState("02:00");
+  const [creatingCustomShift, setCreatingCustomShift] = useState(false);
+
   // Ekibe Atama State
   const [showTeamAssignModal, setShowTeamAssignModal] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
+
+  // Takım Personel Atama Modal State (YENİ)
+  const [showTeamStaffAssignModal, setShowTeamStaffAssignModal] =
+    useState(false);
+  const [selectedTeamForStaffAssign, setSelectedTeamForStaffAssign] =
+    useState<any>(null);
+  const [pendingStaffAssignments, setPendingStaffAssignments] = useState<
+    {
+      staffId: string;
+      groupId: string;
+      shiftId: string;
+      shiftStart?: string;
+      shiftEnd?: string;
+      role?: string; // Görev
+    }[]
+  >([]);
+  const [showShiftSelectDialog, setShowShiftSelectDialog] = useState(false);
+  const [pendingDropData, setPendingDropData] = useState<{
+    staffId: string;
+    groupId: string;
+  } | null>(null);
+  const [selectedShiftForAssign, setSelectedShiftForAssign] =
+    useState<string>("event-default");
+  const [customShiftStartAssign, setCustomShiftStartAssign] = useState("18:00");
+  const [customShiftEndAssign, setCustomShiftEndAssign] = useState("02:00");
+  const [selectedRoleForAssign, setSelectedRoleForAssign] =
+    useState<string>("waiter");
+
+  // Görev seçenekleri (renkli)
+  const roleOptions = [
+    {
+      value: "waiter",
+      label: "Waiter / Waitress",
+      color: "bg-blue-500/30 border-blue-500 text-blue-300",
+    },
+    {
+      value: "commis",
+      label: "Commis",
+      color: "bg-emerald-500/30 border-emerald-500 text-emerald-300",
+    },
+    {
+      value: "hostess",
+      label: "Hostess",
+      color: "bg-pink-500/30 border-pink-500 text-pink-300",
+    },
+    {
+      value: "barmen",
+      label: "Barmen",
+      color: "bg-purple-500/30 border-purple-500 text-purple-300",
+    },
+    {
+      value: "barboy",
+      label: "Bar Boy",
+      color: "bg-amber-500/30 border-amber-500 text-amber-300",
+    },
+  ];
 
   // Şablon State
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
@@ -197,6 +422,14 @@ export const EventAssignmentTab = forwardRef<
 
   // Özel Görev Ata State
   const [showSpecialTaskModal, setShowSpecialTaskModal] = useState(false);
+
+  // Accordion State - Sol panel bölümleri için
+  const [accordionOpen, setAccordionOpen] = useState({
+    teams: true,
+    supervisors: false,
+    groups: true,
+    assignments: true,
+  });
   const [specialTaskLocation, setSpecialTaskLocation] = useState("");
   const [selectedStaffForTask, setSelectedStaffForTask] = useState<
     { staffId: string; shiftId: string }[]
@@ -231,21 +464,21 @@ export const EventAssignmentTab = forwardRef<
     []
   );
 
-  // Veri yükle
+  // Veri yükle - Rate limit'i önlemek için sıralı ve cache'li
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [eventRes, staffRes, teamsRes, shiftsRes, templatesRes] =
-          await Promise.all([
-            eventsApi.getOne(eventId),
-            staffApi.getAll(),
-            staffApi.getTeams(),
-            staffApi.getShifts(),
-            staffApi.getOrganizationTemplates(),
-          ]);
 
+        // İlk grup: Event ve cache'li veriler (hızlı)
+        const eventRes = await eventsApi.getOne(eventId);
         setEvent(eventRes.data);
+
+        // İkinci grup: Staff ve Teams (cache kullan)
+        const [staffRes, teamsRes] = await Promise.all([
+          staffApi.getPersonnel({ isActive: true }, true), // Staff tablosundan, useCache=true
+          staffApi.getTeams(true), // useCache=true
+        ]);
 
         const staffList = staffRes.data || [];
         setAllStaff(staffList);
@@ -256,16 +489,31 @@ export const EventAssignmentTab = forwardRef<
         setSupervisors(supervisorList);
 
         setTeams(teamsRes.data || []);
-        setShifts(shiftsRes.data || []);
-        setTemplates(templatesRes.data || []);
 
-        // Masa grupları ve personel atamaları
+        // Üçüncü grup: Templates (ayrı çağrı - rate limit için)
         try {
-          const [groupsRes, assignmentsRes] = await Promise.all([
-            staffApi.getEventTableGroups(eventId),
-            staffApi.getEventStaffAssignments(eventId),
-          ]);
+          const templatesRes = await staffApi.getOrganizationTemplates();
+          setTemplates(templatesRes.data || []);
+        } catch {
+          setTemplates([]);
+        }
+
+        // Dördüncü grup: Event-specific veriler (sıralı)
+        try {
+          const eventShiftsRes = await staffApi.getEventShifts(eventId);
+          setShifts(eventShiftsRes.data || []);
+        } catch {
+          setShifts([]);
+        }
+
+        // Beşinci grup: Masa grupları ve personel atamaları
+        try {
+          const groupsRes = await staffApi.getEventTableGroups(eventId);
           setTableGroups(groupsRes.data || []);
+
+          const assignmentsRes = await staffApi.getEventStaffAssignments(
+            eventId
+          );
           setStaffAssignments(assignmentsRes.data || []);
         } catch {
           setTableGroups([]);
@@ -296,12 +544,13 @@ export const EventAssignmentTab = forwardRef<
   // Canvas verileri
   const { tables, stageElements } = useMemo(() => {
     const layout = event?.venueLayout;
-    const rawTables = layout?.tables || layout?.placedTables || [];
+    const rawTables: RawTableData[] =
+      layout?.tables || layout?.placedTables || [];
     const rawStages: StageElement[] = layout?.stageElements || [];
 
-    const filteredTables = rawTables.filter((t: any) => !t.isLoca);
+    const filteredTables = rawTables.filter((t) => !t.isLoca);
 
-    const mappedTables: TableData[] = filteredTables.map((t: any) => ({
+    const mappedTables: TableData[] = filteredTables.map((t) => ({
       id: t.id,
       label: `${t.tableNumber || ""}`,
       x: t.x || 0,
@@ -314,8 +563,8 @@ export const EventAssignmentTab = forwardRef<
     }));
 
     // Locaları da ekle
-    const locaTables = rawTables.filter((t: any) => t.isLoca);
-    const mappedLocas: TableData[] = locaTables.map((t: any) => ({
+    const locaTables = rawTables.filter((t) => t.isLoca);
+    const mappedLocas: TableData[] = locaTables.map((t) => ({
       id: t.id,
       label: t.locaName || `L${t.tableNumber || ""}`,
       x: t.x || 0,
@@ -334,44 +583,76 @@ export const EventAssignmentTab = forwardRef<
     };
   }, [event]);
 
-  // Masa'nın hangi gruba ait olduğunu bul
+  // ==================== PERFORMANS OPTİMİZASYONU - Lookup Map'leri ====================
+
+  // Masa ID -> Grup Map'i (O(1) lookup için)
+  const tableToGroupMap = useMemo(() => {
+    const map = new Map<string, TableGroup>();
+    tableGroups.forEach((group) => {
+      group.tableIds.forEach((tableId) => {
+        map.set(tableId, group);
+      });
+    });
+    return map;
+  }, [tableGroups]);
+
+  // Masa ID -> Staff Assignment Map'i (O(1) lookup için)
+  const tableToAssignmentMap = useMemo(() => {
+    const map = new Map<string, StaffAssignment>();
+    staffAssignments.forEach((assignment: StaffAssignment) => {
+      (assignment.tableIds || []).forEach((tableId: string) => {
+        map.set(tableId, assignment);
+      });
+    });
+    return map;
+  }, [staffAssignments]);
+
+  // Supervisor ID -> Staff Map'i (O(1) lookup için)
+  const supervisorMap = useMemo(() => {
+    const map = new Map<string, Staff>();
+    supervisors.forEach((s) => map.set(s.id, s));
+    return map;
+  }, [supervisors]);
+
+  // Masa'nın hangi gruba ait olduğunu bul - O(1)
   const getTableGroup = useCallback(
     (tableId: string): TableGroup | undefined => {
-      return tableGroups.find((g) => g.tableIds.includes(tableId));
+      return tableToGroupMap.get(tableId);
     },
-    [tableGroups]
+    [tableToGroupMap]
   );
 
-  // Grubun süpervizörünü bul
+  // Grubun süpervizörünü bul - O(1)
   const getGroupSupervisor = useCallback(
     (groupId: string): Staff | undefined => {
       const group = tableGroups.find((g) => g.id === groupId);
       if (!group?.assignedSupervisorId) return undefined;
-      return supervisors.find((s) => s.id === group.assignedSupervisorId);
+      return supervisorMap.get(group.assignedSupervisorId);
     },
-    [tableGroups, supervisors]
+    [tableGroups, supervisorMap]
   );
 
-  // Masaya atanmış personeli bul
+  // Masaya atanmış personeli bul - O(1)
   const getTableStaffAssignment = useCallback(
     (tableId: string) => {
-      return staffAssignments.find((a: any) => a.tableIds?.includes(tableId));
+      return tableToAssignmentMap.get(tableId);
     },
-    [staffAssignments]
+    [tableToAssignmentMap]
   );
 
-  // Gruba atanmış tüm personelleri bul
+  // Gruba atanmış tüm personelleri bul - Optimized
   const getGroupStaffAssignments = useCallback(
     (groupId: string) => {
       const group = tableGroups.find((g) => g.id === groupId);
       if (!group) return [];
 
-      // Gruptaki masalara atanmış tüm personelleri bul
-      const assignments = staffAssignments.filter((a: any) =>
-        a.tableIds?.some((tid: string) => group.tableIds.includes(tid))
-      );
+      // Use Set for O(1) lookup
+      const groupTableSet = new Set(group.tableIds);
 
-      return assignments;
+      // Filter assignments that have any table in this group
+      return staffAssignments.filter((a: any) =>
+        (a.tableIds || []).some((tid: string) => groupTableSet.has(tid))
+      );
     },
     [tableGroups, staffAssignments]
   );
@@ -469,8 +750,19 @@ export const EventAssignmentTab = forwardRef<
     [activeTool, canvasOffset, zoom]
   );
 
+  // Throttle ref for mouse move optimization
+  const lastMouseMoveTime = useRef(0);
+  const MOUSE_MOVE_THROTTLE = 16; // ~60fps
+
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      // Throttle mouse move events
+      const now = Date.now();
+      if (now - lastMouseMoveTime.current < MOUSE_MOVE_THROTTLE) {
+        return;
+      }
+      lastMouseMoveTime.current = now;
+
       // Pan
       if (isPanning) {
         setCanvasOffset({
@@ -492,26 +784,27 @@ export const EventAssignmentTab = forwardRef<
         const minY = Math.min(lassoStart.y, y);
         const maxY = Math.max(lassoStart.y, y);
 
-        const lassoSelectedIds = tables
-          .filter((t) => {
-            const tableCenter = {
-              x: t.x + TABLE_SIZE / 2,
-              y: t.y + TABLE_SIZE / 2,
-            };
-            return (
-              tableCenter.x >= minX &&
-              tableCenter.x <= maxX &&
-              tableCenter.y >= minY &&
-              tableCenter.y <= maxY
-            );
-          })
-          .map((t) => t.id);
+        // Optimized: Pre-calculate table centers once
+        const lassoSelectedIds: string[] = [];
+        for (const t of tables) {
+          const centerX = t.x + TABLE_SIZE / 2;
+          const centerY = t.y + TABLE_SIZE / 2;
+          if (
+            centerX >= minX &&
+            centerX <= maxX &&
+            centerY >= minY &&
+            centerY <= maxY
+          ) {
+            lassoSelectedIds.push(t.id);
+          }
+        }
 
-        // Ctrl/Shift basılıysa mevcut seçime ekle
+        // Batch state update
         if (e.shiftKey || e.ctrlKey || e.metaKey) {
-          setSelectedTableIds((prev) => [
-            ...new Set([...prev, ...lassoSelectedIds]),
-          ]);
+          setSelectedTableIds((prev) => {
+            const newSet = new Set([...prev, ...lassoSelectedIds]);
+            return Array.from(newSet);
+          });
         } else {
           setSelectedTableIds(lassoSelectedIds);
         }
@@ -562,8 +855,20 @@ export const EventAssignmentTab = forwardRef<
       // Normal mod - Masanın ait olduğu grubu bul
       const group = getTableGroup(tableId);
 
+      // DEBUG: Grup bilgisini logla
+      console.log(
+        "[TableClick] tableId:",
+        tableId,
+        "group:",
+        group,
+        "tableGroups count:",
+        tableGroups.length
+      );
+
       // Seçilecek ID'ler - grup varsa tüm grup, yoksa tek masa
       const idsToSelect = group ? [...group.tableIds] : [tableId];
+
+      console.log("[TableClick] idsToSelect:", idsToSelect);
 
       if (e.ctrlKey || e.metaKey || e.shiftKey) {
         // Ctrl/Shift ile tıklama - grup/masa ekle/çıkar (toggle)
@@ -583,7 +888,7 @@ export const EventAssignmentTab = forwardRef<
       }
       setContextMenu((prev) => ({ ...prev, visible: false }));
     },
-    [getTableGroup, activeTool]
+    [getTableGroup, activeTool, tableGroups.length]
   );
 
   // Sağ tık menü
@@ -793,6 +1098,68 @@ export const EventAssignmentTab = forwardRef<
       showNotification("success", "Süpervizör gruptan kaldırıldı");
     },
     [showNotification]
+  );
+
+  // ==================== ÖZEL VARDİYA OLUŞTURMA ====================
+  const handleCreateCustomShift = useCallback(
+    async (staffId: string) => {
+      if (!customShiftStart || !customShiftEnd) {
+        showNotification("error", "Başlangıç ve bitiş saati girilmelidir");
+        return;
+      }
+
+      setCreatingCustomShift(true);
+      try {
+        // Mevcut özel vardiya sayısını bul
+        const existingCustomShifts = shifts.filter(
+          (s: any) => s.name?.startsWith("Özel-") && s.eventId === eventId
+        );
+        const nextNumber = existingCustomShifts.length + 1;
+        const shiftName = `Özel-${nextNumber}`;
+
+        // Yeni özel vardiyayı oluştur
+        const response = await staffApi.createBulkShifts(eventId, [
+          {
+            name: shiftName,
+            startTime: customShiftStart,
+            endTime: customShiftEnd,
+            color: "#9333ea", // Mor renk özel vardiyalar için
+          },
+        ]);
+
+        // Yeni vardiyayı shifts listesine ekle
+        const newShift = response.data?.[0] || {
+          id: `custom-${Date.now()}`,
+          name: shiftName,
+          startTime: customShiftStart,
+          endTime: customShiftEnd,
+          color: "#9333ea",
+          eventId,
+        };
+
+        setShifts((prev) => [...prev, newShift]);
+
+        // Personelin vardiyasını yeni oluşturulan vardiyaya ayarla
+        setSelectedStaffList((prev) =>
+          prev.map((s) =>
+            s.staffId === staffId ? { ...s, shiftId: newShift.id } : s
+          )
+        );
+
+        // State'leri sıfırla
+        setShowCustomShiftInput(null);
+        setCustomShiftStart("18:00");
+        setCustomShiftEnd("02:00");
+
+        showNotification("success", `"${shiftName}" vardiyası oluşturuldu`);
+      } catch (error) {
+        console.error("Özel vardiya oluşturma hatası:", error);
+        showNotification("error", "Özel vardiya oluşturulamadı");
+      } finally {
+        setCreatingCustomShift(false);
+      }
+    },
+    [customShiftStart, customShiftEnd, shifts, eventId, showNotification]
   );
 
   // ==================== PERSONEL ATAMA İŞLEMLERİ ====================
@@ -1013,14 +1380,40 @@ export const EventAssignmentTab = forwardRef<
     [showNotification]
   );
 
-  // Ekibe ait masaları seç
+  // Ekibe ait masaları seç VE Takım Personel Atama Modal'ını aç
   const selectTeamTables = useCallback(
     (teamId: string) => {
+      const team = teams.find((t) => t.id === teamId);
       const teamGroups = tableGroups.filter((g) => g.assignedTeamId === teamId);
       const teamTableIds = teamGroups.flatMap((g) => g.tableIds);
       setSelectedTableIds(teamTableIds);
+
+      // Takım Personel Atama Modal'ını aç
+      if (team) {
+        setSelectedTeamForStaffAssign(team);
+        // Mevcut atamaları yükle
+        const existingAssignments = staffAssignments
+          .filter((a: any) =>
+            teamTableIds.some((tid: string) => a.tableIds?.includes(tid))
+          )
+          .map((a: any) => {
+            const groupId =
+              tableGroups.find((g) =>
+                g.tableIds.some((tid) => a.tableIds?.includes(tid))
+              )?.id || "";
+            return {
+              staffId: a.staffId,
+              groupId,
+              shiftId: a.shiftId || "event-default",
+              shiftStart: a.shiftStart,
+              shiftEnd: a.shiftEnd,
+            };
+          });
+        setPendingStaffAssignments(existingAssignments);
+        setShowTeamStaffAssignModal(true);
+      }
     },
-    [tableGroups]
+    [tableGroups, teams, staffAssignments]
   );
 
   // ==================== KAYDET / SIFIRLA ====================
@@ -1323,6 +1716,72 @@ export const EventAssignmentTab = forwardRef<
     [handleSave, handleReset, hasChanges, saving]
   );
 
+  // ==================== MEMOIZED RENDER DATA (MUST BE BEFORE EARLY RETURNS) ====================
+  // Normal masalar ve localar
+  const normalTables = useMemo(() => tables.filter((t) => !t.isLoca), [tables]);
+  const locaTables = useMemo(() => tables.filter((t) => t.isLoca), [tables]);
+
+  // Pre-computed render data for tables (prevents recalculation on each render)
+  const tableRenderData = useMemo(() => {
+    const selectedSet = new Set(selectedTableIds);
+
+    return normalTables.map((table) => {
+      const group = tableToGroupMap.get(table.id);
+      const assignment = tableToAssignmentMap.get(table.id);
+      const assignedStaff = assignment
+        ? allStaff.find((s) => s.id === assignment.staffId) || null
+        : null;
+
+      return {
+        table,
+        isSelected: selectedSet.has(table.id),
+        group,
+        assignedStaff,
+      };
+    });
+  }, [
+    normalTables,
+    selectedTableIds,
+    tableToGroupMap,
+    tableToAssignmentMap,
+    allStaff,
+  ]);
+
+  // Pre-computed render data for locas
+  const locaRenderData = useMemo(() => {
+    const selectedSet = new Set(selectedTableIds);
+
+    return locaTables.map((loca) => {
+      const group = tableToGroupMap.get(loca.id);
+      const assignment = tableToAssignmentMap.get(loca.id);
+      const assignedStaff = assignment
+        ? allStaff.find((s) => s.id === assignment.staffId) || null
+        : null;
+
+      return {
+        loca,
+        isSelected: selectedSet.has(loca.id),
+        group,
+        assignedStaff,
+      };
+    });
+  }, [
+    locaTables,
+    selectedTableIds,
+    tableToGroupMap,
+    tableToAssignmentMap,
+    allStaff,
+  ]);
+
+  // Memoized table backgrounds
+  const tableBackgrounds = useMemo(() => {
+    return normalTables.map((table) => {
+      const tableType = table.type || "unassigned";
+      const typeColor = TABLE_TYPE_COLORS[tableType]?.bg || "#6b7280";
+      return { id: table.id, x: table.x, y: table.y, color: typeColor };
+    });
+  }, [normalTables]);
+
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
@@ -1350,10 +1809,6 @@ export const EventAssignmentTab = forwardRef<
       </div>
     );
   }
-
-  // Normal masalar ve localar
-  const normalTables = tables.filter((t) => !t.isLoca);
-  const locaTables = tables.filter((t) => t.isLoca);
 
   // ==================== MAIN RENDER ====================
   return (
@@ -1503,9 +1958,14 @@ export const EventAssignmentTab = forwardRef<
         {/* Left Panel */}
         {!isFullscreen && (
           <div className="col-span-3 border-r border-slate-700 bg-slate-800/30 p-3 space-y-3 h-[580px] overflow-y-auto">
-            {/* Ekipler - YENİ */}
+            {/* Ekipler - Accordion */}
             <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="pb-2">
+              <CardHeader
+                className="pb-2 cursor-pointer hover:bg-slate-700/50 transition-colors"
+                onClick={() =>
+                  setAccordionOpen((prev) => ({ ...prev, teams: !prev.teams }))
+                }
+              >
                 <CardTitle className="text-sm font-medium text-white flex items-center gap-2">
                   <Users className="h-4 w-4 text-purple-400" />
                   Ekipler
@@ -1515,196 +1975,230 @@ export const EventAssignmentTab = forwardRef<
                   >
                     {teams.length}
                   </Badge>
+                  {accordionOpen.teams ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                  )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {teams.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-2">
-                    Henüz ekip yok
-                  </p>
-                ) : (
-                  teams.map((team) => {
-                    const leader = allStaff.find((s) => s.id === team.leaderId);
-                    // Ekibe atanmış grupları bul
-                    const teamGroups = tableGroups.filter(
-                      (g) => g.assignedTeamId === team.id
-                    );
-                    // Ekibe ait tüm masa ID'lerini topla
-                    const teamTableIds = teamGroups.flatMap((g) => g.tableIds);
-                    const teamTableCount = teamTableIds.length;
-
-                    // Ekibe ait masalara atanmış personelleri bul (unique)
-                    const teamStaffIds = new Set<string>();
-                    staffAssignments.forEach((assignment: any) => {
-                      if (
-                        assignment.tableIds?.some((tid: string) =>
-                          teamTableIds.includes(tid)
-                        )
-                      ) {
-                        teamStaffIds.add(assignment.staffId);
-                      }
-                    });
-                    const memberCount = teamStaffIds.size;
-
-                    const isTeamSelected =
-                      teamGroups.length > 0 &&
-                      teamGroups.every((g) =>
-                        g.tableIds.every((id) => selectedTableIds.includes(id))
+              {accordionOpen.teams && (
+                <CardContent className="space-y-2">
+                  {teams.length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-2">
+                      Henüz ekip yok
+                    </p>
+                  ) : (
+                    teams.map((team) => {
+                      const leader = allStaff.find(
+                        (s) => s.id === team.leaderId
                       );
+                      // Ekibe atanmış grupları bul
+                      const teamGroups = tableGroups.filter(
+                        (g) => g.assignedTeamId === team.id
+                      );
+                      // Ekibe ait tüm masa ID'lerini topla
+                      const teamTableIds = teamGroups.flatMap(
+                        (g) => g.tableIds
+                      );
+                      const teamTableCount = teamTableIds.length;
 
-                    return (
-                      <div
-                        key={team.id}
-                        onClick={() => selectTeamTables(team.id)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setTeamContextMenu({
-                            visible: true,
-                            x: e.clientX,
-                            y: e.clientY,
-                            teamId: team.id,
-                            team: { id: team.id, name: team.name },
-                          });
-                        }}
-                        className={`p-2 rounded-lg border cursor-pointer transition-all ${
-                          isTeamSelected
-                            ? "bg-purple-600/20 border-purple-500"
-                            : "bg-slate-700/50 border-slate-600 hover:border-purple-400"
-                        }`}
-                        style={{
-                          borderLeftColor: team.color,
-                          borderLeftWidth: 4,
-                        }}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-white truncate">
-                            {team.name}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {teamTableCount > 0 && (
+                      // Ekibin kendi üye sayısı (memberIds array'inden)
+                      const memberCount = team.memberIds?.length || 0;
+
+                      const isTeamSelected =
+                        teamGroups.length > 0 &&
+                        teamGroups.every((g) =>
+                          g.tableIds.every((id) =>
+                            selectedTableIds.includes(id)
+                          )
+                        );
+
+                      return (
+                        <div
+                          key={team.id}
+                          onClick={() => selectTeamTables(team.id)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setTeamContextMenu({
+                              visible: true,
+                              x: e.clientX,
+                              y: e.clientY,
+                              teamId: team.id,
+                              team: { id: team.id, name: team.name },
+                            });
+                          }}
+                          className={`p-2 rounded-lg border cursor-pointer transition-all ${
+                            isTeamSelected
+                              ? "bg-purple-600/20 border-purple-500"
+                              : "bg-slate-700/50 border-slate-600 hover:border-purple-400"
+                          }`}
+                          style={{
+                            borderLeftColor: team.color,
+                            borderLeftWidth: 4,
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-white truncate">
+                              {team.name}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {teamTableCount > 0 && (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] bg-purple-500/20 text-purple-300"
+                                >
+                                  {teamTableCount} masa
+                                </Badge>
+                              )}
                               <Badge
                                 variant="secondary"
-                                className="text-[10px] bg-purple-500/20 text-purple-300"
+                                className="text-[10px] bg-slate-600 text-slate-300"
                               >
-                                {teamTableCount} masa
+                                {memberCount} üye
                               </Badge>
-                            )}
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px] bg-slate-600 text-slate-300"
-                            >
-                              {memberCount} üye
-                            </Badge>
+                            </div>
                           </div>
+                          {leader && (
+                            <div className="flex items-center gap-1.5">
+                              <Avatar className="h-5 w-5">
+                                <AvatarImage
+                                  src={getAvatarUrl(leader.avatar)}
+                                />
+                                <AvatarFallback
+                                  style={{ backgroundColor: leader.color }}
+                                  className="text-white text-[8px]"
+                                >
+                                  {leader.fullName.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-[10px] text-slate-400 truncate">
+                                {leader.fullName}
+                              </span>
+                            </div>
+                          )}
+                          {/* Ekibe atanmış gruplar */}
+                          {teamGroups.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {teamGroups.slice(0, 3).map((group) => (
+                                <Badge
+                                  key={group.id}
+                                  variant="outline"
+                                  className="text-[9px] bg-slate-600/50 text-slate-300 border-slate-500"
+                                >
+                                  {group.name}
+                                </Badge>
+                              ))}
+                              {teamGroups.length > 3 && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] bg-slate-600/50 text-slate-300 border-slate-500"
+                                >
+                                  +{teamGroups.length - 3}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {leader && (
-                          <div className="flex items-center gap-1.5">
-                            <Avatar className="h-5 w-5">
-                              <AvatarImage src={getAvatarUrl(leader.avatar)} />
-                              <AvatarFallback
-                                style={{ backgroundColor: leader.color }}
-                                className="text-white text-[8px]"
-                              >
-                                {leader.fullName.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-[10px] text-slate-400 truncate">
-                              {leader.fullName}
-                            </span>
-                          </div>
-                        )}
-                        {/* Ekibe atanmış gruplar */}
-                        {teamGroups.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {teamGroups.slice(0, 3).map((group) => (
-                              <Badge
-                                key={group.id}
-                                variant="outline"
-                                className="text-[9px] bg-slate-600/50 text-slate-300 border-slate-500"
-                              >
-                                {group.name}
-                              </Badge>
-                            ))}
-                            {teamGroups.length > 3 && (
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] bg-slate-600/50 text-slate-300 border-slate-500"
-                              >
-                                +{teamGroups.length - 3}
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </CardContent>
+                      );
+                    })
+                  )}
+                </CardContent>
+              )}
             </Card>
 
-            {/* Süpervizörler */}
+            {/* Süpervizörler - Accordion */}
             <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="pb-2">
+              <CardHeader
+                className="pb-2 cursor-pointer hover:bg-slate-700/50 transition-colors"
+                onClick={() =>
+                  setAccordionOpen((prev) => ({
+                    ...prev,
+                    supervisors: !prev.supervisors,
+                  }))
+                }
+              >
                 <CardTitle className="text-sm font-medium text-white flex items-center gap-2">
                   <Crown className="h-4 w-4 text-amber-400" />
                   Süpervizörler
+                  <Badge
+                    variant="outline"
+                    className="ml-auto text-[10px] bg-amber-500/10 border-amber-500/30 text-amber-400"
+                  >
+                    {supervisors.length}
+                  </Badge>
+                  {accordionOpen.supervisors ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                  )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {supervisors.map((supervisor) => {
-                  const assignedGroup = tableGroups.find(
-                    (g) => g.assignedSupervisorId === supervisor.id
-                  );
-                  return (
-                    <div
-                      key={supervisor.id}
-                      draggable
-                      onDragStart={() => setDraggingSupervisor(supervisor)}
-                      onDragEnd={() => setDraggingSupervisor(null)}
-                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-grab active:cursor-grabbing transition-all ${
-                        assignedGroup
-                          ? "bg-slate-700/50 border-slate-600 opacity-60"
-                          : "bg-slate-700 border-slate-600 hover:border-purple-500"
-                      }`}
-                      style={{
-                        borderLeftColor: supervisor.color,
-                        borderLeftWidth: 4,
-                      }}
-                    >
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={getAvatarUrl(supervisor.avatar)} />
-                        <AvatarFallback
-                          style={{ backgroundColor: supervisor.color }}
-                          className="text-white text-xs"
-                        >
-                          {supervisor.fullName.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-white truncate">
-                          {supervisor.fullName}
-                        </p>
-                        {assignedGroup && (
-                          <p className="text-[10px] text-slate-400 truncate">
-                            {assignedGroup.name}
+              {accordionOpen.supervisors && (
+                <CardContent className="space-y-2">
+                  {supervisors.map((supervisor) => {
+                    const assignedGroup = tableGroups.find(
+                      (g) => g.assignedSupervisorId === supervisor.id
+                    );
+                    return (
+                      <div
+                        key={supervisor.id}
+                        draggable
+                        onDragStart={() => setDraggingSupervisor(supervisor)}
+                        onDragEnd={() => setDraggingSupervisor(null)}
+                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-grab active:cursor-grabbing transition-all ${
+                          assignedGroup
+                            ? "bg-slate-700/50 border-slate-600 opacity-60"
+                            : "bg-slate-700 border-slate-600 hover:border-purple-500"
+                        }`}
+                        style={{
+                          borderLeftColor: supervisor.color,
+                          borderLeftWidth: 4,
+                        }}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={getAvatarUrl(supervisor.avatar)} />
+                          <AvatarFallback
+                            style={{ backgroundColor: supervisor.color }}
+                            className="text-white text-xs"
+                          >
+                            {supervisor.fullName.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-white truncate">
+                            {supervisor.fullName}
                           </p>
-                        )}
+                          {assignedGroup && (
+                            <p className="text-[10px] text-slate-400 truncate">
+                              {assignedGroup.name}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {supervisors.length === 0 && (
-                  <p className="text-xs text-slate-500 text-center py-2">
-                    Süpervizör bulunamadı
-                  </p>
-                )}
-              </CardContent>
+                    );
+                  })}
+                  {supervisors.length === 0 && (
+                    <p className="text-xs text-slate-500 text-center py-2">
+                      Süpervizör bulunamadı
+                    </p>
+                  )}
+                </CardContent>
+              )}
             </Card>
 
-            {/* Gruplar */}
+            {/* Gruplar - Accordion */}
             <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="pb-2">
+              <CardHeader
+                className="pb-2 cursor-pointer hover:bg-slate-700/50 transition-colors"
+                onClick={() =>
+                  setAccordionOpen((prev) => ({
+                    ...prev,
+                    groups: !prev.groups,
+                  }))
+                }
+              >
                 <CardTitle className="text-sm font-medium text-white flex items-center gap-2">
                   <Users className="h-4 w-4 text-blue-400" />
                   Masa Grupları
@@ -1714,166 +2208,197 @@ export const EventAssignmentTab = forwardRef<
                   >
                     {tableGroups.length}
                   </Badge>
+                  {accordionOpen.groups ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                  )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {tableGroups.map((group) => {
-                  const supervisor = getGroupSupervisor(group.id);
-                  const groupAssignments = getGroupStaffAssignments(group.id);
-                  const assignedStaffList = groupAssignments
-                    .map((a: any) => allStaff.find((s) => s.id === a.staffId))
-                    .filter(Boolean);
-                  const isGroupSelected = group.tableIds.every((id) =>
-                    selectedTableIds.includes(id)
-                  );
+              {accordionOpen.groups && (
+                <CardContent className="space-y-2">
+                  {tableGroups.map((group) => {
+                    const supervisor = getGroupSupervisor(group.id);
+                    const groupAssignments = getGroupStaffAssignments(group.id);
+                    const assignedStaffList = groupAssignments
+                      .map((a: any) => allStaff.find((s) => s.id === a.staffId))
+                      .filter(Boolean);
+                    const isGroupSelected = group.tableIds.every((id) =>
+                      selectedTableIds.includes(id)
+                    );
 
-                  return (
-                    <div
-                      key={group.id}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        if (draggingSupervisor)
-                          handleSupervisorDrop(draggingSupervisor, group.id);
-                      }}
-                      onClick={() => setSelectedTableIds([...group.tableIds])}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setGroupContextMenu({
-                          visible: true,
-                          x: e.clientX,
-                          y: e.clientY,
-                          group,
-                        });
-                      }}
-                      className={`p-2 rounded-lg border cursor-pointer transition-all ${
-                        isGroupSelected
-                          ? "bg-blue-600/20 border-blue-500"
-                          : draggingSupervisor
-                          ? "bg-slate-700/50 border-purple-500 border-dashed"
-                          : "bg-slate-700/50 border-slate-600 hover:border-blue-400"
-                      }`}
-                      style={{
-                        borderLeftColor: group.color,
-                        borderLeftWidth: 4,
-                      }}
-                      title={
-                        assignedStaffList.length > 0
-                          ? `Atanmış: ${assignedStaffList
-                              .map((s: any) => s.fullName)
-                              .join(", ")}`
-                          : "Henüz personel atanmamış"
-                      }
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-white truncate flex-1">
-                          {group.name}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] bg-slate-600 text-slate-300"
-                          >
-                            {group.tableIds.length}
-                          </Badge>
-                          {assignedStaffList.length > 0 && (
+                    return (
+                      <div
+                        key={group.id}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (draggingSupervisor)
+                            handleSupervisorDrop(draggingSupervisor, group.id);
+                        }}
+                        onClick={() => setSelectedTableIds([...group.tableIds])}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setGroupContextMenu({
+                            visible: true,
+                            x: e.clientX,
+                            y: e.clientY,
+                            group,
+                          });
+                        }}
+                        className={`p-2 rounded-lg border cursor-pointer transition-all ${
+                          isGroupSelected
+                            ? "bg-blue-600/20 border-blue-500"
+                            : draggingSupervisor
+                            ? "bg-slate-700/50 border-purple-500 border-dashed"
+                            : "bg-slate-700/50 border-slate-600 hover:border-blue-400"
+                        }`}
+                        style={{
+                          borderLeftColor: group.color,
+                          borderLeftWidth: 4,
+                        }}
+                        title={
+                          assignedStaffList.length > 0
+                            ? `Atanmış: ${assignedStaffList
+                                .map((s: any) => s.fullName)
+                                .join(", ")}`
+                            : "Henüz personel atanmamış"
+                        }
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-white truncate flex-1">
+                            {group.name}
+                          </span>
+                          <div className="flex items-center gap-1">
                             <Badge
                               variant="secondary"
-                              className="text-[10px] bg-emerald-500/20 text-emerald-400"
+                              className="text-[10px] bg-slate-600 text-slate-300"
                             >
-                              {assignedStaffList.length} kişi
+                              {group.tableIds.length}
                             </Badge>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 text-slate-400 hover:text-blue-400"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedGroupForStaff(group);
-                              setShowGroupStaffModal(true);
-                            }}
-                            title="Personelleri Görüntüle"
-                          >
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 text-slate-500 hover:text-red-400"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteGroup(group.id);
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      {supervisor && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <Crown className="h-3 w-3 text-amber-400" />
-                          <span className="text-[10px] text-slate-400 flex-1">
-                            {supervisor.fullName}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-4 w-4 text-slate-500 hover:text-red-400"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveSupervisor(group.id);
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                      {/* Atanmış personel avatarları */}
-                      {assignedStaffList.length > 0 && (
-                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                          {assignedStaffList.slice(0, 4).map((staff: any) => (
-                            <Avatar
-                              key={staff.id}
-                              className="h-5 w-5 border border-slate-600"
-                            >
-                              <AvatarImage src={getAvatarUrl(staff.avatar)} />
-                              <AvatarFallback
-                                style={{ backgroundColor: staff.color }}
-                                className="text-white text-[7px]"
+                            {assignedStaffList.length > 0 && (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] bg-emerald-500/20 text-emerald-400"
                               >
-                                {staff.fullName.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
-                          {assignedStaffList.length > 4 && (
-                            <span className="text-[9px] text-slate-400">
-                              +{assignedStaffList.length - 4}
-                            </span>
-                          )}
+                                {assignedStaffList.length} kişi
+                              </Badge>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-slate-400 hover:text-blue-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedGroupForStaff(group);
+                                setShowGroupStaffModal(true);
+                              }}
+                              title="Personelleri Görüntüle"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-slate-500 hover:text-red-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteGroup(group.id);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {tableGroups.length === 0 && (
-                  <p className="text-xs text-slate-500 text-center py-2">
-                    Henüz grup yok
-                  </p>
-                )}
-              </CardContent>
+                        {supervisor && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Crown className="h-3 w-3 text-amber-400" />
+                            <span className="text-[10px] text-slate-400 flex-1">
+                              {supervisor.fullName}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4 text-slate-500 hover:text-red-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveSupervisor(group.id);
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                        {/* Atanmış personel avatarları */}
+                        {assignedStaffList.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                            {assignedStaffList.slice(0, 4).map((staff: any) => (
+                              <Avatar
+                                key={staff.id}
+                                className="h-5 w-5 border border-slate-600"
+                              >
+                                <AvatarImage src={getAvatarUrl(staff.avatar)} />
+                                <AvatarFallback
+                                  style={{ backgroundColor: staff.color }}
+                                  className="text-white text-[7px]"
+                                >
+                                  {staff.fullName.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {assignedStaffList.length > 4 && (
+                              <span className="text-[9px] text-slate-400">
+                                +{assignedStaffList.length - 4}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {tableGroups.length === 0 && (
+                    <p className="text-xs text-slate-500 text-center py-2">
+                      Henüz grup yok
+                    </p>
+                  )}
+                </CardContent>
+              )}
             </Card>
 
             {/* Seçili masalar için aksiyon */}
             {selectedTableIds.length > 0 && (
               <div className="space-y-2">
-                <Button
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm"
-                  onClick={() => setShowStaffAssignModal(true)}
-                >
-                  <Users className="h-4 w-4 mr-1" />
-                  Personel Ata
-                </Button>
+                {/* Personel Ata - Gruplanmamış masalara (VIP/Loca hariç) izin verme */}
+                {(() => {
+                  const canAssignStaff = selectedTableIds.every((tableId) => {
+                    const table = tables.find((t) => t.id === tableId);
+                    const group = getTableGroup(tableId);
+                    const isVipOrLoca =
+                      table?.type === "vip" ||
+                      table?.type === "loca" ||
+                      table?.isLoca;
+                    return group || isVipOrLoca;
+                  });
+
+                  return canAssignStaff ? (
+                    <Button
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm"
+                      onClick={() => setShowStaffAssignModal(true)}
+                    >
+                      <Users className="h-4 w-4 mr-1" />
+                      Personel Ata
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full bg-slate-600 text-slate-400 text-sm cursor-not-allowed"
+                      disabled
+                      title="Önce masaları gruplandırın (VIP ve Loca hariç)"
+                    >
+                      <Users className="h-4 w-4 mr-1" />
+                      Personel Ata 🔒
+                    </Button>
+                  );
+                })()}
                 {teams.length > 0 && (
                   <Button
                     className="w-full bg-purple-600 hover:bg-purple-700 text-sm"
@@ -1883,21 +2408,98 @@ export const EventAssignmentTab = forwardRef<
                     Ekibe Ata
                   </Button>
                 )}
-                <Button
-                  variant="outline"
-                  className="w-full border-slate-600 text-slate-300 text-sm"
-                  onClick={() => setShowGroupModal(true)}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  {selectedTableIds.length} Masadan Grup Oluştur
-                </Button>
+                {/* Grup İşlemleri - Seçili masaların durumuna göre */}
+                {(() => {
+                  // Seçili masaların kaçı gruplanmış kontrol et
+                  const groupedCount = selectedTableIds.filter((id) =>
+                    getTableGroup(id)
+                  ).length;
+                  const ungroupedCount = selectedTableIds.length - groupedCount;
+                  const allGrouped = ungroupedCount === 0;
+                  const allUngrouped = groupedCount === 0;
+
+                  // Seçili masaların ait olduğu grupları bul (unique)
+                  const selectedGroups = [
+                    ...new Set(
+                      selectedTableIds
+                        .map((id) => getTableGroup(id))
+                        .filter(Boolean)
+                    ),
+                  ] as TableGroup[];
+
+                  // Tümü aynı gruptaysa
+                  const allSameGroup =
+                    selectedGroups.length === 1 && allGrouped;
+
+                  if (allSameGroup && selectedGroups[0]) {
+                    // Tümü aynı grupta - Gruptan Çıkar seçeneği
+                    return (
+                      <Button
+                        variant="outline"
+                        className="w-full border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm"
+                        onClick={() => handleRemoveFromGroup(selectedTableIds)}
+                      >
+                        <Unlink className="h-4 w-4 mr-1" />
+                        Gruptan Çıkar ({selectedGroups[0].name})
+                      </Button>
+                    );
+                  } else if (allUngrouped) {
+                    // Hiçbiri gruplanmamış - Grup Oluştur
+                    return (
+                      <Button
+                        variant="outline"
+                        className="w-full border-slate-600 text-slate-300 text-sm"
+                        onClick={() => setShowGroupModal(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        {selectedTableIds.length} Masadan Grup Oluştur
+                      </Button>
+                    );
+                  } else {
+                    // Karışık durum - hem gruplanmış hem gruplanmamış
+                    return (
+                      <div className="space-y-1">
+                        {ungroupedCount > 0 && (
+                          <Button
+                            variant="outline"
+                            className="w-full border-slate-600 text-slate-300 text-sm"
+                            onClick={() => setShowGroupModal(true)}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Yeni Grup Oluştur
+                          </Button>
+                        )}
+                        {groupedCount > 0 && (
+                          <Button
+                            variant="outline"
+                            className="w-full border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm"
+                            onClick={() =>
+                              handleRemoveFromGroup(selectedTableIds)
+                            }
+                          >
+                            <Unlink className="h-4 w-4 mr-1" />
+                            {groupedCount} Masayı Gruptan Çıkar
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  }
+                })()}
               </div>
             )}
 
-            {/* Atanmış Personeller */}
+            {/* Atanmış Personeller - Accordion */}
             {staffAssignments.length > 0 && (
               <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="pb-2">
+                <CardHeader
+                  className="pb-2 cursor-pointer hover:bg-slate-700/50 transition-colors"
+                  onClick={() =>
+                    setAccordionOpen((prev) => ({
+                      ...prev,
+                      assignments: !prev.assignments,
+                    }))
+                  }
+                >
                   <CardTitle className="text-sm font-medium text-white flex items-center gap-2">
                     <Users className="h-4 w-4 text-emerald-400" />
                     Atanmış Personeller
@@ -1907,115 +2509,122 @@ export const EventAssignmentTab = forwardRef<
                     >
                       {staffAssignments.length}
                     </Badge>
+                    {accordionOpen.assignments ? (
+                      <ChevronUp className="h-4 w-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-slate-400" />
+                    )}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  {staffAssignments.map((assignment: any) => {
-                    const staff = allStaff.find(
-                      (s) => s.id === assignment.staffId
-                    );
-                    const shift = shifts.find(
-                      (sh: any) => sh.id === assignment.shiftId
-                    );
-                    if (!staff) return null;
+                {accordionOpen.assignments && (
+                  <CardContent className="space-y-2">
+                    {staffAssignments.map((assignment: any) => {
+                      const staff = allStaff.find(
+                        (s) => s.id === assignment.staffId
+                      );
+                      const shift = shifts.find(
+                        (sh: any) => sh.id === assignment.shiftId
+                      );
+                      if (!staff) return null;
 
-                    const isSpecialTask =
-                      assignment.assignmentType === "special_task";
+                      const isSpecialTask =
+                        assignment.assignmentType === "special_task";
 
-                    return (
-                      <div
-                        key={assignment.id}
-                        onClick={() => {
-                          // Özel görev değilse ve masa ataması varsa konum modalını aç
-                          if (
-                            !isSpecialTask &&
-                            assignment.tableIds?.length > 0
-                          ) {
-                            openStaffLocationModal(assignment);
-                          } else {
-                            openAssignmentDetail(assignment);
-                          }
-                        }}
-                        className={`p-2 rounded-lg border bg-slate-700/50 cursor-pointer hover:bg-slate-700 transition-colors ${
-                          isSpecialTask
-                            ? "border-amber-500/50 hover:border-amber-400"
-                            : "border-slate-600 hover:border-slate-500"
-                        }`}
-                        style={{
-                          borderLeftColor: isSpecialTask
-                            ? "#f59e0b"
-                            : staff.color,
-                          borderLeftWidth: 4,
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarImage src={getAvatarUrl(staff.avatar)} />
-                            <AvatarFallback
-                              style={{ backgroundColor: staff.color }}
-                              className="text-white text-[8px]"
-                            >
-                              {staff.fullName.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-white truncate">
-                              {staff.fullName}
-                            </p>
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {isSpecialTask ? (
-                                <>
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[9px] bg-amber-500/20 text-amber-400"
-                                  >
-                                    <Briefcase className="h-2.5 w-2.5 mr-0.5" />
-                                    {assignment.specialTaskLocation}
-                                  </Badge>
-                                  {shift && (
+                      return (
+                        <div
+                          key={assignment.id}
+                          onClick={() => {
+                            // Özel görev değilse ve masa ataması varsa konum modalını aç
+                            if (
+                              !isSpecialTask &&
+                              assignment.tableIds?.length > 0
+                            ) {
+                              openStaffLocationModal(assignment);
+                            } else {
+                              openAssignmentDetail(assignment);
+                            }
+                          }}
+                          className={`p-2 rounded-lg border bg-slate-700/50 cursor-pointer hover:bg-slate-700 transition-colors ${
+                            isSpecialTask
+                              ? "border-amber-500/50 hover:border-amber-400"
+                              : "border-slate-600 hover:border-slate-500"
+                          }`}
+                          style={{
+                            borderLeftColor: isSpecialTask
+                              ? "#f59e0b"
+                              : staff.color,
+                            borderLeftWidth: 4,
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarImage src={getAvatarUrl(staff.avatar)} />
+                              <AvatarFallback
+                                style={{ backgroundColor: staff.color }}
+                                className="text-white text-[8px]"
+                              >
+                                {staff.fullName.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-white truncate">
+                                {staff.fullName}
+                              </p>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {isSpecialTask ? (
+                                  <>
                                     <Badge
                                       variant="secondary"
-                                      className="text-[9px]"
-                                      style={{
-                                        backgroundColor: `${shift.color}20`,
-                                        color: shift.color,
-                                        borderColor: `${shift.color}50`,
-                                      }}
+                                      className="text-[9px] bg-amber-500/20 text-amber-400"
                                     >
-                                      {shift.name}
+                                      <Briefcase className="h-2.5 w-2.5 mr-0.5" />
+                                      {assignment.specialTaskLocation}
                                     </Badge>
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[9px] bg-slate-600 text-slate-300"
-                                  >
-                                    {assignment.tableIds?.length || 0} masa
-                                  </Badge>
-                                  {shift && (
+                                    {shift && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[9px]"
+                                        style={{
+                                          backgroundColor: `${shift.color}20`,
+                                          color: shift.color,
+                                          borderColor: `${shift.color}50`,
+                                        }}
+                                      >
+                                        {shift.name}
+                                      </Badge>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
                                     <Badge
                                       variant="secondary"
-                                      className="text-[9px]"
-                                      style={{
-                                        backgroundColor: `${shift.color}20`,
-                                        color: shift.color,
-                                        borderColor: `${shift.color}50`,
-                                      }}
+                                      className="text-[9px] bg-slate-600 text-slate-300"
                                     >
-                                      {shift.name}
+                                      {assignment.tableIds?.length || 0} masa
                                     </Badge>
-                                  )}
-                                </>
-                              )}
+                                    {shift && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[9px]"
+                                        style={{
+                                          backgroundColor: `${shift.color}20`,
+                                          color: shift.color,
+                                          borderColor: `${shift.color}50`,
+                                        }}
+                                      >
+                                        {shift.name}
+                                      </Badge>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </CardContent>
+                      );
+                    })}
+                  </CardContent>
+                )}
               </Card>
             )}
           </div>
@@ -2055,6 +2664,48 @@ export const EventAssignmentTab = forwardRef<
                   position: "relative",
                 }}
               >
+                {/* Grid Çizgileri */}
+                <svg
+                  className="absolute inset-0 pointer-events-none"
+                  width={CANVAS_WIDTH}
+                  height={CANVAS_HEIGHT}
+                  style={{ opacity: 0.15 }}
+                >
+                  <defs>
+                    <pattern
+                      id="grid-pattern"
+                      width="43"
+                      height="43"
+                      patternUnits="userSpaceOnUse"
+                    >
+                      <path
+                        d="M 43 0 L 0 0 0 43"
+                        fill="none"
+                        stroke="#94a3b8"
+                        strokeWidth="1"
+                      />
+                    </pattern>
+                  </defs>
+                  <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+                </svg>
+
+                {/* Masa Tipi Arka Planları - Memoized */}
+                {tableBackgrounds.map((bg) => (
+                  <div
+                    key={`bg-${bg.id}`}
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: bg.x - 5,
+                      top: bg.y - 5,
+                      width: 42,
+                      height: 42,
+                      backgroundColor: bg.color,
+                      opacity: 0.2,
+                      borderRadius: 4,
+                    }}
+                  />
+                ))}
+
                 {/* Stage Elements */}
                 {stageElements.map((element) => (
                   <div
@@ -2083,107 +2734,35 @@ export const EventAssignmentTab = forwardRef<
                   </div>
                 ))}
 
-                {/* Normal Tables - Venue ile aynı boyut (w-8 h-8 = 32px) */}
-                {normalTables.map((table) => {
-                  const group = getTableGroup(table.id);
-                  const isSelected = selectedTableIds.includes(table.id);
-                  const staffAssignment = getTableStaffAssignment(table.id);
-                  const assignedStaff = staffAssignment
-                    ? allStaff.find((s) => s.id === staffAssignment.staffId)
-                    : null;
-                  const tableColor =
-                    assignedStaff?.color ||
-                    group?.color ||
-                    table.color ||
-                    "#6b7280";
-
-                  return (
-                    <div
+                {/* Normal Tables - Memoized Components */}
+                {tableRenderData.map(
+                  ({ table, isSelected, group, assignedStaff }) => (
+                    <TableItem
                       key={table.id}
-                      data-table-id={table.id}
-                      className={`absolute select-none transition-transform ${
-                        isSelected
-                          ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 z-10"
-                          : ""
-                      }`}
-                      style={{
-                        left: table.x,
-                        top: table.y,
-                        cursor: "pointer",
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => handleTableClick(table.id, e)}
-                      onContextMenu={(e) => handleContextMenu(e, table.id)}
-                    >
-                      <div
-                        className="w-8 h-8 rounded-full flex flex-col items-center justify-center text-white shadow-lg border-2 relative"
-                        style={{
-                          backgroundColor: tableColor,
-                          borderColor: isSelected
-                            ? "#fbbf24"
-                            : assignedStaff
-                            ? "#10b981"
-                            : "#9ca3af",
-                        }}
-                      >
-                        <span className="text-[9px] font-bold">
-                          {table.label}
-                        </span>
-                        {/* Atanmış personel göstergesi */}
-                        {assignedStaff && (
-                          <div
-                            className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border border-white flex items-center justify-center"
-                            title={assignedStaff.fullName}
-                          >
-                            <span className="text-[6px] font-bold text-white">
-                              {assignedStaff.fullName.charAt(0)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                      table={table}
+                      isSelected={isSelected}
+                      group={group}
+                      assignedStaff={assignedStaff}
+                      onClick={handleTableClick}
+                      onContextMenu={handleContextMenu}
+                    />
+                  )
+                )}
 
-                {/* Locas - Venue ile aynı boyut */}
-                {locaTables.map((loca) => {
-                  const group = getTableGroup(loca.id);
-                  const isSelected = selectedTableIds.includes(loca.id);
-                  const locaColor = group?.color || loca.color || "#ec4899";
-
-                  return (
-                    <div
+                {/* Locas - Memoized Components */}
+                {locaRenderData.map(
+                  ({ loca, isSelected, group, assignedStaff }) => (
+                    <LocaItem
                       key={loca.id}
-                      data-table-id={loca.id}
-                      className={`absolute select-none ${
-                        isSelected ? "ring-2 ring-white z-10" : ""
-                      }`}
-                      style={{
-                        left: loca.x,
-                        top: loca.y,
-                        cursor: "pointer",
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => handleTableClick(loca.id, e)}
-                      onContextMenu={(e) => handleContextMenu(e, loca.id)}
-                    >
-                      <div
-                        className="rounded-lg flex flex-col items-center justify-center text-white shadow-lg border"
-                        style={{
-                          width: LOCA_WIDTH,
-                          height: LOCA_HEIGHT,
-                          backgroundColor: locaColor,
-                          borderColor: isSelected ? "#fbbf24" : "#f472b6",
-                        }}
-                      >
-                        <Sofa className="w-3 h-3" />
-                        <span className="text-[9px] font-bold">
-                          {loca.locaName || loca.label}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+                      loca={loca}
+                      isSelected={isSelected}
+                      group={group}
+                      assignedStaff={assignedStaff}
+                      onClick={handleTableClick}
+                      onContextMenu={handleContextMenu}
+                    />
+                  )
+                )}
 
                 {/* Lasso Selection */}
                 {isLassoSelecting && (
@@ -2223,31 +2802,48 @@ export const EventAssignmentTab = forwardRef<
                 {contextMenu.targetIds.length} Masa Seçili
               </div>
 
-              {/* Personel Ata - YENİ */}
-              <button
-                className="w-full px-3 py-1.5 text-left text-sm text-emerald-400 hover:bg-slate-700 flex items-center gap-2"
-                onClick={() => {
-                  setShowStaffAssignModal(true);
-                  closeContextMenu();
-                }}
-              >
-                <Users className="w-4 h-4" />
-                Personel Ata
-              </button>
+              {/* Ekibe Ata - Her masa VIP/Loca olmalı VEYA bir grupta olmalı */}
+              {teams.length > 0 &&
+                (() => {
+                  // Seçili masaların tiplerini kontrol et
+                  const selectedTables = tables.filter((t) =>
+                    contextMenu.targetIds.includes(t.id)
+                  );
 
-              {/* Ekibe Ata */}
-              {teams.length > 0 && (
-                <button
-                  className="w-full px-3 py-1.5 text-left text-sm text-purple-400 hover:bg-slate-700 flex items-center gap-2"
-                  onClick={() => {
-                    setShowTeamAssignModal(true);
-                    closeContextMenu();
-                  }}
-                >
-                  <Crown className="w-4 h-4" />
-                  Ekibe Ata
-                </button>
-              )}
+                  // Her masa için: VIP/Loca mı VEYA bir grupta mı?
+                  const canAssignToTeam = selectedTables.every((t) => {
+                    const isVipOrLoca = t.type === "vip" || t.type === "loca";
+                    const isInGroup = tableGroups.some((g) =>
+                      g.tableIds.includes(t.id)
+                    );
+                    return isVipOrLoca || isInGroup;
+                  });
+
+                  return (
+                    <button
+                      className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 ${
+                        canAssignToTeam
+                          ? "text-purple-400 hover:bg-slate-700"
+                          : "text-slate-500 cursor-not-allowed"
+                      }`}
+                      onClick={() => {
+                        if (canAssignToTeam) {
+                          setShowTeamAssignModal(true);
+                          closeContextMenu();
+                        }
+                      }}
+                      disabled={!canAssignToTeam}
+                    >
+                      <Crown className="w-4 h-4" />
+                      Ekibe Ata
+                      {!canAssignToTeam && (
+                        <span className="text-[10px] ml-auto">
+                          🔒 Önce grupla
+                        </span>
+                      )}
+                    </button>
+                  );
+                })()}
 
               <div className="border-t border-slate-700 my-1" />
 
@@ -2547,6 +3143,9 @@ export const EventAssignmentTab = forwardRef<
           if (!open) {
             setSelectedStaffList([]);
             setStaffSearchQuery("");
+            setShowCustomShiftInput(null);
+            setCustomShiftStart("18:00");
+            setCustomShiftEnd("02:00");
           }
         }}
       >
@@ -2688,40 +3287,127 @@ export const EventAssignmentTab = forwardRef<
                           <p className="text-sm font-medium text-white truncate">
                             {staff.fullName}
                           </p>
+
+                          {/* Özel Vardiya Input Alanı */}
+                          {showCustomShiftInput === staffId && (
+                            <div className="mt-2 p-2 bg-slate-600/50 rounded-lg space-y-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1">
+                                  <label className="text-[10px] text-slate-400">
+                                    Başlangıç
+                                  </label>
+                                  <Input
+                                    type="time"
+                                    value={customShiftStart}
+                                    onChange={(e) =>
+                                      setCustomShiftStart(e.target.value)
+                                    }
+                                    className="h-7 text-xs bg-slate-700 border-slate-500 text-white"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <label className="text-[10px] text-slate-400">
+                                    Bitiş
+                                  </label>
+                                  <Input
+                                    type="time"
+                                    value={customShiftEnd}
+                                    onChange={(e) =>
+                                      setCustomShiftEnd(e.target.value)
+                                    }
+                                    className="h-7 text-xs bg-slate-700 border-slate-500 text-white"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-6 text-xs bg-purple-600 hover:bg-purple-700 flex-1"
+                                  onClick={() =>
+                                    handleCreateCustomShift(staffId)
+                                  }
+                                  disabled={creatingCustomShift}
+                                >
+                                  {creatingCustomShift ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    "Oluştur"
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 text-xs text-slate-400"
+                                  onClick={() => setShowCustomShiftInput(null)}
+                                >
+                                  İptal
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <Select
-                          value={shiftId}
-                          onValueChange={(value) => {
-                            setSelectedStaffList((prev) =>
-                              prev.map((s) =>
-                                s.staffId === staffId
-                                  ? { ...s, shiftId: value }
-                                  : s
-                              )
-                            );
-                          }}
-                        >
-                          <SelectTrigger className="w-32 h-8 bg-slate-600 border-slate-500 text-white text-xs">
-                            <SelectValue placeholder="Vardiya" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-slate-700 border-slate-600">
-                            <SelectItem
-                              value="none"
-                              className="text-slate-400 text-xs"
-                            >
-                              Vardiya yok
-                            </SelectItem>
-                            {shifts.map((shift: any) => (
+
+                        {/* Vardiya Seçimi - Özel vardiya input açık değilse göster */}
+                        {showCustomShiftInput !== staffId && (
+                          <Select
+                            value={shiftId}
+                            onValueChange={(value) => {
+                              if (value === "custom") {
+                                setShowCustomShiftInput(staffId);
+                              } else {
+                                setSelectedStaffList((prev) =>
+                                  prev.map((s) =>
+                                    s.staffId === staffId
+                                      ? { ...s, shiftId: value }
+                                      : s
+                                  )
+                                );
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-36 h-8 bg-slate-600 border-slate-500 text-white text-xs">
+                              <SelectValue placeholder="Vardiya seç" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-700 border-slate-600">
                               <SelectItem
-                                key={shift.id}
-                                value={shift.id}
-                                className="text-white text-xs"
+                                value="none"
+                                className="text-slate-400 text-xs"
                               >
-                                {shift.name}
+                                Vardiya yok
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                              {shifts.map((shift: any) => (
+                                <SelectItem
+                                  key={shift.id}
+                                  value={shift.id}
+                                  className="text-white text-xs"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-2.5 h-2.5 rounded-full"
+                                      style={{
+                                        backgroundColor:
+                                          shift.color || "#3b82f6",
+                                      }}
+                                    />
+                                    <span>{shift.name}</span>
+                                    <span className="text-slate-400 text-[10px]">
+                                      {shift.startTime}-{shift.endTime}
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                              <SelectItem
+                                value="custom"
+                                className="text-purple-400 text-xs border-t border-slate-600 mt-1 pt-1"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Plus className="w-3 h-3" />
+                                  <span>Özel Vardiya Ekle</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2820,18 +3506,8 @@ export const EventAssignmentTab = forwardRef<
                     const teamTableIds = teamGroups.flatMap((g) => g.tableIds);
                     const teamTableCount = teamTableIds.length;
 
-                    // Ekibe ait masalara atanmış personelleri bul (unique)
-                    const teamStaffIds = new Set<string>();
-                    staffAssignments.forEach((assignment: any) => {
-                      if (
-                        assignment.tableIds?.some((tid: string) =>
-                          teamTableIds.includes(tid)
-                        )
-                      ) {
-                        teamStaffIds.add(assignment.staffId);
-                      }
-                    });
-                    const teamMemberCount = teamStaffIds.size;
+                    // Takımın üye sayısı - memberIds'den al
+                    const teamMemberCount = team.memberIds?.length || 0;
 
                     return (
                       <div
@@ -3957,6 +4633,676 @@ export const EventAssignmentTab = forwardRef<
             >
               <Edit className="h-4 w-4 mr-1" />
               Düzenle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== TAKIM PERSONEL ATAMA MODAL ==================== */}
+      <Dialog
+        open={showTeamStaffAssignModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowTeamStaffAssignModal(false);
+            setSelectedTeamForStaffAssign(null);
+            setPendingStaffAssignments([]);
+          }
+        }}
+      >
+        <DialogContent className="bg-slate-800 border-slate-700 !max-w-[90vw] !w-[1400px] max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Users className="h-5 w-5 text-purple-400" />
+              {selectedTeamForStaffAssign?.name} - Personel Atama
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-12 gap-4 h-[70vh]">
+            {/* Sol Panel - Takıma Atanmış Masa Grupları */}
+            <div className="col-span-6 bg-slate-900/50 rounded-lg p-3 overflow-y-auto">
+              <h3 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Masa Grupları
+              </h3>
+
+              {(() => {
+                const teamGroups = tableGroups.filter(
+                  (g) => g.assignedTeamId === selectedTeamForStaffAssign?.id
+                );
+
+                // VIP ve Loca masaları da ekle (tek başına atanabilir)
+                const teamTableIds = teamGroups.flatMap((g) => g.tableIds);
+                const vipLocaTables = tables.filter(
+                  (t) =>
+                    (t.type === "vip" || t.type === "loca") &&
+                    teamTableIds.includes(t.id)
+                );
+
+                if (teamGroups.length === 0 && vipLocaTables.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-slate-500">
+                      <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">
+                        Bu takıma henüz masa grubu atanmamış
+                      </p>
+                      <p className="text-xs mt-1">
+                        Önce masaları seçip grup oluşturun ve takıma atayın
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {teamGroups.map((group) => {
+                      // Bu gruba atanmış personeller
+                      const groupAssignments = pendingStaffAssignments.filter(
+                        (a) => a.groupId === group.id
+                      );
+
+                      // Görev toplamlarını hesapla
+                      const roleCounts: Record<string, number> = {};
+                      groupAssignments.forEach((a) => {
+                        const role = a.role || "waiter";
+                        roleCounts[role] = (roleCounts[role] || 0) + 1;
+                      });
+
+                      return (
+                        <div
+                          key={group.id}
+                          className="bg-slate-800 rounded-lg p-4 border border-slate-700"
+                          style={{
+                            borderLeftColor: group.color,
+                            borderLeftWidth: 4,
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.classList.add(
+                              "ring-2",
+                              "ring-purple-500"
+                            );
+                          }}
+                          onDragLeave={(e) => {
+                            e.currentTarget.classList.remove(
+                              "ring-2",
+                              "ring-purple-500"
+                            );
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.classList.remove(
+                              "ring-2",
+                              "ring-purple-500"
+                            );
+                            const staffId = e.dataTransfer.getData("staffId");
+                            if (staffId) {
+                              // Vardiya seçim dialogunu aç
+                              setPendingDropData({
+                                staffId,
+                                groupId: group.id,
+                              });
+                              setShowShiftSelectDialog(true);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-base font-medium text-white">
+                              {group.name}
+                            </span>
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-slate-700"
+                            >
+                              {group.tableIds.length} masa
+                            </Badge>
+                          </div>
+
+                          {/* Görev Toplamları */}
+                          {Object.keys(roleCounts).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {Object.entries(roleCounts).map(
+                                ([role, count]) => {
+                                  const roleOption = roleOptions.find(
+                                    (r) => r.value === role
+                                  );
+                                  return (
+                                    <Badge
+                                      key={role}
+                                      variant="outline"
+                                      className={`text-[10px] px-1.5 py-0.5 border ${
+                                        roleOption?.color ||
+                                        "bg-slate-500/30 border-slate-500 text-slate-300"
+                                      }`}
+                                    >
+                                      {count} {roleOption?.label || role}
+                                    </Badge>
+                                  );
+                                }
+                              )}
+                            </div>
+                          )}
+
+                          {/* Atanmış Personeller */}
+                          {groupAssignments.length > 0 ? (
+                            <div className="space-y-2">
+                              {groupAssignments.map((assignment) => {
+                                const staff = allStaff.find(
+                                  (s) => s.id === assignment.staffId
+                                );
+                                const shift = shifts.find(
+                                  (s) => s.id === assignment.shiftId
+                                );
+                                const roleOption = roleOptions.find(
+                                  (r) => r.value === assignment.role
+                                );
+                                if (!staff) return null;
+
+                                // Vardiya saatini hesapla
+                                const shiftTime =
+                                  assignment.shiftId === "custom"
+                                    ? `${assignment.shiftStart} - ${assignment.shiftEnd}`
+                                    : assignment.shiftId === "event-default"
+                                    ? event?.eventDate
+                                      ? new Date(
+                                          event.eventDate
+                                        ).toLocaleTimeString("tr-TR", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "Etkinlik Saati"
+                                    : shift
+                                    ? `${shift.startTime} - ${shift.endTime}`
+                                    : "Belirtilmemiş";
+
+                                return (
+                                  <div
+                                    key={`${assignment.staffId}-${assignment.groupId}`}
+                                    className="flex items-center justify-between bg-slate-700/50 rounded-lg px-3 py-2"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarImage
+                                          src={getAvatarUrl(staff.avatar)}
+                                        />
+                                        <AvatarFallback
+                                          style={{
+                                            backgroundColor: staff.color,
+                                          }}
+                                          className="text-white text-xs"
+                                        >
+                                          {staff.fullName.charAt(0)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div>
+                                        <p className="text-sm font-medium text-white">
+                                          {staff.fullName}
+                                        </p>
+                                        <p className="text-xs text-slate-400">
+                                          {staff.position}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <Badge
+                                            variant="outline"
+                                            className={`text-[10px] px-1.5 py-0.5 h-5 border ${
+                                              roleOption?.color ||
+                                              "bg-slate-500/30 border-slate-500 text-slate-300"
+                                            }`}
+                                          >
+                                            {roleOption?.label ||
+                                              assignment.role ||
+                                              "Waiter"}
+                                          </Badge>
+                                          <span className="text-[10px] text-slate-400">
+                                            🕐 {shiftTime}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                                      onClick={() => {
+                                        setPendingStaffAssignments((prev) =>
+                                          prev.filter(
+                                            (a) =>
+                                              !(
+                                                a.staffId ===
+                                                  assignment.staffId &&
+                                                a.groupId === assignment.groupId
+                                              )
+                                          )
+                                        );
+                                      }}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-center py-3 border-2 border-dashed border-slate-600 rounded text-slate-500 text-xs">
+                              Personel sürükleyip bırakın
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Sağ Panel - Personel Listesi */}
+            <div className="col-span-6 bg-slate-900/50 rounded-lg p-3 overflow-y-auto">
+              <h3 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Personeller
+              </h3>
+
+              {/* Arama */}
+              <div className="relative mb-3">
+                <Input
+                  placeholder="Personel ara..."
+                  value={staffSearchQuery}
+                  onChange={(e) => setStaffSearchQuery(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-sm h-8 pl-8"
+                />
+                <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+              </div>
+
+              {/* Personel Listesi */}
+              <div className="space-y-1">
+                {(() => {
+                  // Takımın üyelerini öncelikli göster
+                  const teamMemberIds =
+                    selectedTeamForStaffAssign?.memberIds || [];
+                  const teamMembers = allStaff.filter((s) =>
+                    teamMemberIds.includes(s.id)
+                  );
+                  const otherStaff = allStaff.filter(
+                    (s) => !teamMemberIds.includes(s.id) && s.isActive
+                  );
+
+                  const filteredTeamMembers = staffSearchQuery
+                    ? teamMembers.filter(
+                        (s) =>
+                          s.fullName
+                            .toLowerCase()
+                            .includes(staffSearchQuery.toLowerCase()) ||
+                          s.position
+                            ?.toLowerCase()
+                            .includes(staffSearchQuery.toLowerCase())
+                      )
+                    : teamMembers;
+
+                  const filteredOtherStaff = staffSearchQuery
+                    ? otherStaff.filter(
+                        (s) =>
+                          s.fullName
+                            .toLowerCase()
+                            .includes(staffSearchQuery.toLowerCase()) ||
+                          s.position
+                            ?.toLowerCase()
+                            .includes(staffSearchQuery.toLowerCase())
+                      )
+                    : otherStaff;
+
+                  return (
+                    <>
+                      {/* Takım Üyeleri */}
+                      {filteredTeamMembers.length > 0 && (
+                        <>
+                          <p className="text-xs text-purple-400 font-medium mb-1">
+                            Takım Üyeleri
+                          </p>
+                          {filteredTeamMembers.map((staff) => {
+                            const isAssigned = pendingStaffAssignments.some(
+                              (a) => a.staffId === staff.id
+                            );
+
+                            return (
+                              <div
+                                key={staff.id}
+                                draggable={!isAssigned}
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData("staffId", staff.id);
+                                  e.dataTransfer.effectAllowed = "copy";
+                                }}
+                                className={`flex items-center gap-2 p-2 rounded cursor-grab active:cursor-grabbing transition-all ${
+                                  isAssigned
+                                    ? "bg-emerald-500/20 border border-emerald-500/30 opacity-60"
+                                    : "bg-slate-800 hover:bg-slate-700 border border-transparent"
+                                }`}
+                              >
+                                <Avatar className="h-7 w-7">
+                                  <AvatarImage
+                                    src={getAvatarUrl(staff.avatar)}
+                                  />
+                                  <AvatarFallback
+                                    style={{ backgroundColor: staff.color }}
+                                    className="text-white text-[10px]"
+                                  >
+                                    {staff.fullName.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-white truncate">
+                                    {staff.fullName}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 truncate">
+                                    {staff.position}
+                                  </p>
+                                </div>
+                                {isAssigned && (
+                                  <Check className="h-4 w-4 text-emerald-400" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {/* Diğer Personeller */}
+                      {filteredOtherStaff.length > 0 && (
+                        <>
+                          <p className="text-xs text-slate-400 font-medium mt-3 mb-1">
+                            Diğer Personeller
+                          </p>
+                          {filteredOtherStaff.slice(0, 20).map((staff) => {
+                            const isAssigned = pendingStaffAssignments.some(
+                              (a) => a.staffId === staff.id
+                            );
+
+                            return (
+                              <div
+                                key={staff.id}
+                                draggable={!isAssigned}
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData("staffId", staff.id);
+                                  e.dataTransfer.effectAllowed = "copy";
+                                }}
+                                className={`flex items-center gap-2 p-2 rounded cursor-grab active:cursor-grabbing transition-all ${
+                                  isAssigned
+                                    ? "bg-emerald-500/20 border border-emerald-500/30 opacity-60"
+                                    : "bg-slate-800 hover:bg-slate-700 border border-transparent"
+                                }`}
+                              >
+                                <Avatar className="h-7 w-7">
+                                  <AvatarImage
+                                    src={getAvatarUrl(staff.avatar)}
+                                  />
+                                  <AvatarFallback
+                                    style={{ backgroundColor: staff.color }}
+                                    className="text-white text-[10px]"
+                                  >
+                                    {staff.fullName.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-white truncate">
+                                    {staff.fullName}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 truncate">
+                                    {staff.position}
+                                  </p>
+                                </div>
+                                {isAssigned && (
+                                  <Check className="h-4 w-4 text-emerald-400" />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {filteredOtherStaff.length > 20 && (
+                            <p className="text-xs text-slate-500 text-center py-2">
+                              +{filteredOtherStaff.length - 20} daha...
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTeamStaffAssignModal(false);
+                setSelectedTeamForStaffAssign(null);
+                setPendingStaffAssignments([]);
+              }}
+              className="border-slate-600 text-slate-300"
+            >
+              İptal
+            </Button>
+            <Button
+              onClick={async () => {
+                // Atamaları kaydet
+                try {
+                  setSaving(true);
+
+                  // Her grup için atamaları kaydet
+                  const teamGroups = tableGroups.filter(
+                    (g) => g.assignedTeamId === selectedTeamForStaffAssign?.id
+                  );
+
+                  for (const group of teamGroups) {
+                    const groupAssignments = pendingStaffAssignments.filter(
+                      (a) => a.groupId === group.id
+                    );
+
+                    for (const assignment of groupAssignments) {
+                      await staffApi.assignStaffToTables(eventId, {
+                        staffId: assignment.staffId,
+                        tableIds: group.tableIds,
+                        teamId: selectedTeamForStaffAssign?.id,
+                        shiftId:
+                          assignment.shiftId === "custom"
+                            ? undefined
+                            : assignment.shiftId,
+                        assignmentType: "table",
+                      });
+                    }
+                  }
+
+                  showNotification("success", "Personel atamaları kaydedildi");
+                  setHasChanges(true);
+
+                  // Atamaları yeniden yükle
+                  const assignmentsRes =
+                    await staffApi.getEventStaffAssignments(eventId);
+                  setStaffAssignments(assignmentsRes.data || []);
+
+                  setShowTeamStaffAssignModal(false);
+                  setSelectedTeamForStaffAssign(null);
+                  setPendingStaffAssignments([]);
+                } catch (error) {
+                  console.error("Atama hatası:", error);
+                  showNotification("error", "Personel atamaları kaydedilemedi");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving || pendingStaffAssignments.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Save className="h-4 w-4 mr-1" />
+              )}
+              Kaydet ({pendingStaffAssignments.length} atama)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Vardiya ve Görev Seçim Dialog */}
+      <Dialog
+        open={showShiftSelectDialog}
+        onOpenChange={setShowShiftSelectDialog}
+      >
+        <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              Vardiya ve Görev Seçin
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Görev Seçimi */}
+            <div>
+              <label className="text-sm font-medium text-slate-300 mb-2 block">
+                Görev
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {roleOptions.map((role) => (
+                  <div
+                    key={role.value}
+                    className={`p-2 rounded-lg border cursor-pointer transition-all text-center ${
+                      selectedRoleForAssign === role.value
+                        ? "bg-emerald-600/20 border-emerald-500"
+                        : "bg-slate-700/50 border-slate-600 hover:border-emerald-400"
+                    }`}
+                    onClick={() => setSelectedRoleForAssign(role.value)}
+                  >
+                    <p className="text-sm font-medium text-white">
+                      {role.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Vardiya Seçimi */}
+            <div>
+              <label className="text-sm font-medium text-slate-300 mb-2 block">
+                Vardiya
+              </label>
+              <div className="space-y-2">
+                {/* Etkinlik Saati */}
+                <div
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    selectedShiftForAssign === "event-default"
+                      ? "bg-purple-600/20 border-purple-500"
+                      : "bg-slate-700/50 border-slate-600 hover:border-purple-400"
+                  }`}
+                  onClick={() => setSelectedShiftForAssign("event-default")}
+                >
+                  <p className="text-sm font-medium text-white">
+                    Etkinlik Saati
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {event?.eventDate
+                      ? new Date(event.eventDate).toLocaleTimeString("tr-TR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Belirtilmemiş"}
+                  </p>
+                </div>
+
+                {/* Mevcut Vardiyalar */}
+                {shifts.map((shift) => (
+                  <div
+                    key={shift.id}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      selectedShiftForAssign === shift.id
+                        ? "bg-purple-600/20 border-purple-500"
+                        : "bg-slate-700/50 border-slate-600 hover:border-purple-400"
+                    }`}
+                    onClick={() => setSelectedShiftForAssign(shift.id)}
+                  >
+                    <p className="text-sm font-medium text-white">
+                      {shift.name}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {shift.startTime} - {shift.endTime}
+                    </p>
+                  </div>
+                ))}
+
+                {/* Özel Saat */}
+                <div
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    selectedShiftForAssign === "custom"
+                      ? "bg-purple-600/20 border-purple-500"
+                      : "bg-slate-700/50 border-slate-600 hover:border-purple-400"
+                  }`}
+                  onClick={() => setSelectedShiftForAssign("custom")}
+                >
+                  <p className="text-sm font-medium text-white">Özel Saat</p>
+                  {selectedShiftForAssign === "custom" && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Input
+                        type="time"
+                        value={customShiftStartAssign}
+                        onChange={(e) =>
+                          setCustomShiftStartAssign(e.target.value)
+                        }
+                        className="bg-slate-800 border-slate-600 text-sm h-8"
+                      />
+                      <span className="text-slate-400">-</span>
+                      <Input
+                        type="time"
+                        value={customShiftEndAssign}
+                        onChange={(e) =>
+                          setCustomShiftEndAssign(e.target.value)
+                        }
+                        className="bg-slate-800 border-slate-600 text-sm h-8"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowShiftSelectDialog(false);
+                setPendingDropData(null);
+              }}
+              className="border-slate-600 text-slate-300"
+            >
+              İptal
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingDropData) {
+                  setPendingStaffAssignments((prev) => [
+                    ...prev,
+                    {
+                      staffId: pendingDropData.staffId,
+                      groupId: pendingDropData.groupId,
+                      shiftId: selectedShiftForAssign,
+                      shiftStart:
+                        selectedShiftForAssign === "custom"
+                          ? customShiftStartAssign
+                          : undefined,
+                      shiftEnd:
+                        selectedShiftForAssign === "custom"
+                          ? customShiftEndAssign
+                          : undefined,
+                      role: selectedRoleForAssign,
+                    },
+                  ]);
+                }
+                setShowShiftSelectDialog(false);
+                setPendingDropData(null);
+                setSelectedShiftForAssign("event-default");
+                setSelectedRoleForAssign("waiter");
+              }}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              Ata
             </Button>
           </DialogFooter>
         </DialogContent>

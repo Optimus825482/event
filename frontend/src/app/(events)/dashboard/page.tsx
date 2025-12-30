@@ -2,6 +2,7 @@
 
 import { useEffect, useState, memo, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Calendar,
   Users,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { useAuthStore } from "@/store/auth-store";
 
 interface DashboardStats {
   totalEvents: number;
@@ -112,26 +114,43 @@ const CountdownDisplay = memo(function CountdownDisplay({
 });
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { isAuthenticated, user } = useAuthStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [upcomingEvent, setUpcomingEvent] = useState<UpcomingEvent | null>(
-    null
-  );
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Auth kontrolü - login olmamışsa yönlendir
   useEffect(() => {
+    if (!isAuthenticated) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    // Login olmamışsa API çağrısı yapma
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       try {
         const [eventsRes, staffRes, teamsRes, venuesRes] = await Promise.all([
-          eventsApi.getAll().catch(() => ({ data: [] })),
+          eventsApi.getAll().catch(() => ({ data: { items: [] } })),
           staffApi.getAll().catch(() => ({ data: [] })),
           staffApi.getTeams().catch(() => ({ data: [] })),
           venuesApi.getAll().catch(() => ({ data: [] })),
         ]);
 
-        const events = eventsRes.data || [];
-        const staff = staffRes.data || [];
-        const teams = teamsRes.data || [];
-        const venues = venuesRes.data || [];
+        // API response formatı: { items: [], meta: {} } veya doğrudan array
+        const eventsData = eventsRes.data;
+        const events = Array.isArray(eventsData)
+          ? eventsData
+          : eventsData?.items || [];
+        const staff = Array.isArray(staffRes.data) ? staffRes.data : [];
+        const teams = Array.isArray(teamsRes.data) ? teamsRes.data : [];
+        const venues = Array.isArray(venuesRes.data) ? venuesRes.data : [];
         const now = new Date();
 
         // Etkinlik istatistikleri
@@ -154,7 +173,7 @@ export default function DashboardPage() {
           orgTemplates: 0, // TODO: API'den çekilecek
         });
 
-        // En yakın etkinliği bul (yerleşim planı ve ekip ataması tamamlanmış)
+        // Hazır etkinlikleri bul (yerleşim planı ve ekip ataması tamamlanmış)
         const readyEvents = upcoming
           .filter((e: any) => {
             const hasVenue =
@@ -165,11 +184,8 @@ export default function DashboardPage() {
           .sort(
             (a: any, b: any) =>
               new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
-          );
-
-        if (readyEvents.length > 0) {
-          const event = readyEvents[0];
-          setUpcomingEvent({
+          )
+          .map((event: any) => ({
             id: event.id,
             name: event.name,
             eventDate: event.eventDate,
@@ -178,8 +194,9 @@ export default function DashboardPage() {
               event.venueLayout?.placedTables?.length > 0 ||
               event.hasVenueLayout,
             hasTeamAssignment: event.hasTeamAssignment,
-          });
-        }
+          }));
+
+        setUpcomingEvents(readyEvents);
       } catch (error) {
         console.error("Dashboard verileri yüklenemedi:", error);
       } finally {
@@ -188,7 +205,12 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, []);
+  }, [isAuthenticated]);
+
+  // Login olmamışsa loading göster (redirect beklerken)
+  if (!isAuthenticated) {
+    return <DashboardSkeleton />;
+  }
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -208,65 +230,72 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Geri Sayım - Yaklaşan Etkinlik (Kompakt) */}
-        {upcomingEvent && (
-          <Card className="bg-gradient-to-r from-emerald-600/10 via-teal-600/10 to-cyan-600/10 border-emerald-500/30">
-            <CardContent className="py-3 px-4">
-              <div className="flex items-center justify-between gap-4">
-                {/* Sol - Etkinlik Bilgisi */}
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <Timer className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">
-                      {upcomingEvent.name}
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      {new Date(upcomingEvent.eventDate).toLocaleDateString(
-                        "tr-TR",
-                        {
-                          day: "numeric",
-                          month: "long",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
+        {/* Geri Sayım - Yaklaşan Etkinlikler */}
+        {upcomingEvents.length > 0 && (
+          <div className="space-y-3">
+            {upcomingEvents.map((event) => (
+              <Card
+                key={event.id}
+                className="bg-gradient-to-r from-emerald-600/10 via-teal-600/10 to-cyan-600/10 border-emerald-500/30"
+              >
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Sol - Etkinlik Bilgisi */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                        <Timer className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">
+                          {event.name}
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                          {new Date(event.eventDate).toLocaleDateString(
+                            "tr-TR",
+                            {
+                              day: "numeric",
+                              month: "long",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Orta - Geri Sayım (Kompakt) - Memo Component */}
+                    <CountdownDisplay eventDate={event.eventDate} />
+
+                    {/* Sağ - Badge'ler ve Buton */}
+                    <div className="flex items-center gap-2">
+                      {event.hasVenueLayout && (
+                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                          <MapPin className="w-3 h-3 mr-1" />
+                          Yerleşim
+                        </Badge>
                       )}
-                    </p>
+                      {event.hasTeamAssignment && (
+                        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                          <Users className="w-3 h-3 mr-1" />
+                          Ekip
+                        </Badge>
+                      )}
+                      <Button
+                        asChild
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 h-8"
+                      >
+                        <Link href={`/events/${event.id}`}>
+                          Detaylar
+                          <ArrowRight className="w-3 h-3 ml-1" />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
-                </div>
-
-                {/* Orta - Geri Sayım (Kompakt) - Memo Component */}
-                <CountdownDisplay eventDate={upcomingEvent.eventDate} />
-
-                {/* Sağ - Badge'ler ve Buton */}
-                <div className="flex items-center gap-2">
-                  {upcomingEvent.hasVenueLayout && (
-                    <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
-                      <MapPin className="w-3 h-3 mr-1" />
-                      Yerleşim
-                    </Badge>
-                  )}
-                  {upcomingEvent.hasTeamAssignment && (
-                    <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
-                      <Users className="w-3 h-3 mr-1" />
-                      Ekip
-                    </Badge>
-                  )}
-                  <Button
-                    asChild
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 h-8"
-                  >
-                    <Link href={`/events/${upcomingEvent.id}`}>
-                      Detaylar
-                      <ArrowRight className="w-3 h-3 ml-1" />
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
 
         {/* İstatistik Kartları */}

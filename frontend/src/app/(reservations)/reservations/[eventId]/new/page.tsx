@@ -19,6 +19,7 @@ import {
   Check,
   FileText,
   History,
+  Box,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { eventsApi, reservationsApi, customersApi } from "@/lib/api";
@@ -32,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageContainer } from "@/components/ui/PageContainer";
 
 // Canvas bileşenini client-side only olarak yükle
 const TableSelectionCanvas = dynamic(
@@ -90,6 +92,7 @@ export default function NewReservationPage() {
   const [customerNotes, setCustomerNotes] = useState<GuestNote[]>([]);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [canvasViewMode, setCanvasViewMode] = useState<"2d" | "3d">("2d");
 
   // Etkinlik ve rezervasyonları yükle
   useEffect(() => {
@@ -178,8 +181,25 @@ export default function NewReservationPage() {
 
   // Seçili masa bilgisi
   const selectedTable = useMemo(() => {
-    if (!event?.venueLayout?.tables || !selectedTableId) return null;
-    return event.venueLayout.tables.find((t: any) => t.id === selectedTableId);
+    const tables =
+      event?.venueLayout?.tables || (event?.venueLayout as any)?.placedTables;
+    if (!tables || !selectedTableId) return null;
+    const table = tables.find((t: any) => t.id === selectedTableId);
+    if (!table) return null;
+
+    // Label oluştur: tableNumber varsa kullan, yoksa ID'den çıkar
+    let displayLabel = table.label;
+    if (!displayLabel && table.tableNumber) {
+      displayLabel = `Masa ${table.tableNumber}`;
+    }
+    if (!displayLabel) {
+      // ID'den okunabilir format: "back-row3-122" -> "122"
+      const idParts = table.id.split("-");
+      const lastPart = idParts[idParts.length - 1];
+      displayLabel = `Masa ${lastPart}`;
+    }
+
+    return { ...table, displayLabel };
   }, [event, selectedTableId]);
 
   // Validasyonlar
@@ -188,10 +208,7 @@ export default function NewReservationPage() {
       setError("Ad soyad zorunludur");
       return false;
     }
-    if (!guestInfo.phone.trim()) {
-      setError("Telefon numarası zorunludur");
-      return false;
-    }
+    // Telefon ve email artık zorunlu değil
     setError("");
     return true;
   };
@@ -227,15 +244,26 @@ export default function NewReservationPage() {
     setError("");
 
     try {
-      const response = await reservationsApi.create({
+      // customerId boş string ise gönderme (UUID validasyonu için)
+      const reservationData: any = {
         eventId,
         tableId: selectedTableId,
-        customerId: guestInfo.customerId || "",
         guestCount,
         guestName: guestInfo.fullName,
-        guestPhone: guestInfo.phone,
-        guestEmail: guestInfo.email,
-      } as any);
+      };
+
+      // Sadece değer varsa ekle
+      if (guestInfo.customerId) {
+        reservationData.customerId = guestInfo.customerId;
+      }
+      if (guestInfo.phone?.trim()) {
+        reservationData.guestPhone = guestInfo.phone;
+      }
+      if (guestInfo.email?.trim()) {
+        reservationData.guestEmail = guestInfo.email;
+      }
+
+      const response = await reservationsApi.create(reservationData);
 
       setCreatedReservation(response.data);
 
@@ -309,22 +337,24 @@ export default function NewReservationPage() {
 
   if (eventLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-      </div>
+      <PageContainer maxWidth="4xl">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+        </div>
+      </PageContainer>
     );
   }
 
   if (!event) return null;
 
   return (
-    <div className="min-h-screen bg-slate-900 p-4 sm:p-6">
-      <div className="max-w-4xl mx-auto">
+    <PageContainer maxWidth="4xl">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4">
           <Link
             href={`/reservations/${eventId}`}
-            className="p-2 bg-slate-800 rounded-lg"
+            className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -488,7 +518,7 @@ export default function NewReservationPage() {
 
               <div>
                 <label className="block text-sm text-slate-400 mb-2">
-                  Telefon *
+                  Telefon (Opsiyonel)
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -553,10 +583,28 @@ export default function NewReservationPage() {
         {/* Step 2: Masa Seçimi */}
         {currentStep === "table" && (
           <div className="bg-slate-800 rounded-xl p-4 sm:p-6 border border-slate-700">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-purple-400" />
-              Masa Seçimi
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-purple-400" />
+                Masa Seçimi
+              </h2>
+              {/* 3D Toggle Button */}
+              <Button
+                size="sm"
+                variant={canvasViewMode === "3d" ? "secondary" : "outline"}
+                onClick={() =>
+                  setCanvasViewMode(canvasViewMode === "2d" ? "3d" : "2d")
+                }
+                className={
+                  canvasViewMode === "3d"
+                    ? "bg-cyan-600 text-white hover:bg-cyan-700 px-4"
+                    : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 px-4"
+                }
+              >
+                <Box className="w-4 h-4 mr-1.5" />
+                {canvasViewMode === "2d" ? "3D Görünüm" : "2D Görünüm"}
+              </Button>
+            </div>
 
             {/* Lejant */}
             <div className="flex flex-wrap gap-4 mb-4 text-sm">
@@ -577,7 +625,8 @@ export default function NewReservationPage() {
             </div>
 
             {/* Canvas */}
-            {event.venueLayout?.tables ? (
+            {event.venueLayout?.tables ||
+            (event.venueLayout as any)?.placedTables ? (
               <TableSelectionCanvas
                 event={event}
                 reservedTableIds={reservedTables}
@@ -592,6 +641,7 @@ export default function NewReservationPage() {
                   email: guestInfo.email,
                   guestCount: guestCount,
                 }}
+                viewMode={canvasViewMode}
               />
             ) : (
               <div className="w-full h-[400px] bg-slate-900 rounded-lg flex items-center justify-center text-slate-400">
@@ -605,7 +655,7 @@ export default function NewReservationPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-lg">
-                      Seçilen Masa: {selectedTable.label || selectedTable.id}
+                      Seçilen Masa: {selectedTable.displayLabel}
                     </p>
                     <p className="text-sm text-slate-400">
                       Kapasite: {selectedTable.capacity} kişi
@@ -667,7 +717,7 @@ export default function NewReservationPage() {
               <div className="bg-slate-700/50 rounded-lg p-4">
                 <h3 className="text-sm text-slate-400 mb-2">Masa</h3>
                 <p className="font-medium text-xl">
-                  {selectedTable?.label || selectedTableId}
+                  {selectedTable?.displayLabel || selectedTableId}
                 </p>
                 <p className="text-sm text-slate-400">
                   Kapasite: {selectedTable?.capacity} kişi
@@ -712,8 +762,7 @@ export default function NewReservationPage() {
             <h2 className="text-2xl font-bold mb-2">Rezervasyon Tamamlandı!</h2>
             <p className="text-slate-400 mb-6">
               {guestInfo.fullName} için{" "}
-              {selectedTable?.label || selectedTableId} numaralı masa rezerve
-              edildi.
+              {selectedTable?.displayLabel || selectedTableId} rezerve edildi.
             </p>
 
             {/* E-Bilet */}
@@ -836,6 +885,6 @@ export default function NewReservationPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

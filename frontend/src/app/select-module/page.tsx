@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Calendar, Ticket, QrCode, Shield, LogOut, Users } from "lucide-react";
+import {
+  Calendar,
+  Ticket,
+  QrCode,
+  Shield,
+  LogOut,
+  Users,
+  Loader2,
+} from "lucide-react";
 import { useAuthStore, MODULES, ModuleType } from "@/store/auth-store";
 
 const iconMap = {
@@ -62,8 +70,17 @@ const iconColors: Record<ModuleType, string> = {
 export default function SelectModulePage() {
   const router = useRouter();
   const { user, isAuthenticated, setActiveModule, logout } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Hydration tamamlanana kadar bekle
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
+    // Hydration tamamlanmadan kontrol yapma
+    if (!isHydrated) return;
+
     if (!isAuthenticated) {
       router.push("/login");
       return;
@@ -74,7 +91,16 @@ export default function SelectModulePage() {
       router.push("/leader");
       return;
     }
-  }, [isAuthenticated, user, router]);
+  }, [isHydrated, isAuthenticated, user, router]);
+
+  // Hydration beklerken loading göster
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
 
   if (!user) return null;
 

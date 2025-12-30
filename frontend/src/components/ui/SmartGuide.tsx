@@ -339,10 +339,22 @@ const saveState = (state: GuideState) => {
 export function SmartGuide() {
   const pathname = usePathname();
   const router = useRouter();
-  const [state, setState] = useState<GuideState>(getStoredState);
+  const [mounted, setMounted] = useState(false);
+  const [state, setState] = useState<GuideState>({
+    isEnabled: true,
+    isMinimized: false,
+    completedSteps: [],
+  });
   const [previousPath, setPreviousPath] = useState<string | null>(null);
   const [currentGuide, setCurrentGuide] = useState<PageGuide | null>(null);
   const [contextualTips, setContextualTips] = useState<string[]>([]);
+
+  // Client-side mount - localStorage'dan state'i yükle
+  useEffect(() => {
+    setMounted(true);
+    const stored = getStoredState();
+    setState(stored);
+  }, []);
 
   // Sayfa değişikliğini takip et
   useEffect(() => {
@@ -407,6 +419,11 @@ export function SmartGuide() {
     },
     [pathname, router]
   );
+
+  // Hydration uyumu için mount olana kadar render etme
+  if (!mounted) {
+    return null;
+  }
 
   // Rehber kapalıysa veya guide yoksa gösterme
   if (!state.isEnabled || !currentGuide) {

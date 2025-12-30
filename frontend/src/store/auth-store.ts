@@ -77,6 +77,7 @@ export interface User {
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   activeModule: ModuleType | null;
   isAuthenticated: boolean;
 
@@ -108,6 +109,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       token: null,
+      refreshToken: null,
       activeModule: null,
       isAuthenticated: false,
 
@@ -115,7 +117,19 @@ export const useAuthStore = create<AuthState>()(
         try {
           // API login
           const response = await authApi.login(username, password);
-          const { token, user } = response.data;
+          const { tokens, user } = response.data;
+
+          // Backend tokens: { accessToken, refreshToken, expiresIn } döndürüyor
+          const accessToken = tokens?.accessToken;
+          const refreshToken = tokens?.refreshToken;
+
+          if (!accessToken) {
+            console.error(
+              "Login response'da accessToken bulunamadı:",
+              response.data
+            );
+            return false;
+          }
 
           // Rol bazlı modül erişimi hesapla
           const allowedModules = calculateAllowedModules(user.role);
@@ -134,7 +148,8 @@ export const useAuthStore = create<AuthState>()(
 
           set({
             user: userData,
-            token: token,
+            token: accessToken,
+            refreshToken: refreshToken || null,
             isAuthenticated: true,
             activeModule: null,
           });
@@ -150,6 +165,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           token: null,
+          refreshToken: null,
           activeModule: null,
           isAuthenticated: false,
         });
@@ -183,6 +199,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         token: state.token,
+        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
         activeModule: state.activeModule,
       }),

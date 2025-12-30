@@ -1,16 +1,17 @@
-import { IsOptional, IsInt, Min, Max } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ApiPropertyOptional } from "@nestjs/swagger";
+import { IsInt, IsOptional, Min, Max } from "class-validator";
 
 /**
  * Pagination Query DTO
- * Tüm liste endpoint'lerinde kullanılır
+ * Tüm paginated endpoint'ler için kullanılır
  */
 export class PaginationQueryDto {
-  @ApiPropertyOptional({
-    description: "Sayfa numarası (1'den başlar)",
+  @ApiProperty({
+    description: "Sayfa numarası",
     minimum: 1,
     default: 1,
+    required: false,
   })
   @IsOptional()
   @Type(() => Number)
@@ -18,75 +19,39 @@ export class PaginationQueryDto {
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: "Sayfa başına kayıt sayısı",
     minimum: 1,
     maximum: 100,
-    default: 20,
+    default: 50,
+    required: false,
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  limit?: number = 20;
-
-  @ApiPropertyOptional({
-    description: "Arama terimi",
-  })
-  @IsOptional()
-  search?: string;
-
-  /**
-   * Offset hesapla (TypeORM skip için)
-   */
-  get skip(): number {
-    return ((this.page || 1) - 1) * (this.limit || 20);
-  }
-
-  /**
-   * Take değeri (TypeORM take için)
-   */
-  get take(): number {
-    return this.limit || 20;
-  }
+  limit?: number = 50;
 }
 
 /**
- * Paginated Response Interface
+ * Pagination Metadata
+ * Response'larda pagination bilgisi için
+ */
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+/**
+ * Paginated Response DTO
+ * Generic paginated response wrapper
  */
 export interface PaginatedResponse<T> {
-  data: T[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
-}
-
-/**
- * Paginated response oluşturucu helper
- */
-export function createPaginatedResponse<T>(
-  data: T[],
-  total: number,
-  page: number,
-  limit: number
-): PaginatedResponse<T> {
-  const totalPages = Math.ceil(total / limit);
-
-  return {
-    data,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1,
-    },
-  };
+  items: T[];
+  meta: PaginationMeta;
 }

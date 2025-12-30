@@ -127,7 +127,9 @@ export default function ReservationsDashboardPage() {
     const fetchData = async () => {
       try {
         const eventsRes = await eventsApi.getAll();
-        const allEvents = eventsRes.data || [];
+        // API response formatı: { items: [], meta: {} } veya doğrudan array
+        const data = eventsRes.data;
+        const allEvents = Array.isArray(data) ? data : data?.items || [];
 
         const now = new Date();
         now.setHours(0, 0, 0, 0);

@@ -22,8 +22,9 @@ import {
   Loader2,
   ClipboardList,
   CalendarCheck,
+  Box,
 } from "lucide-react";
-import { eventsApi, staffApi, adminApi } from "@/lib/api";
+import { eventsApi, staffApi, adminApi, servicePointsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Canvas3DPreview } from "@/components/canvas/Canvas3DPreview";
 
 interface Event {
   id: string;
@@ -65,8 +67,24 @@ interface Team {
 
 interface TableGroup {
   id: string;
+  name?: string;
+  color?: string;
   tableIds: string[];
   assignedTeamId?: string;
+  staffAssignments?: any[];
+}
+
+interface ServicePoint {
+  id: string;
+  name: string;
+  pointType: string;
+  color: string;
+  x: number;
+  y: number;
+  requiredStaffCount: number;
+  assignedStaffCount?: number;
+  allowedRoles?: string[];
+  staffAssignments?: any[];
 }
 
 // Masa tipi renkleri
@@ -98,6 +116,7 @@ export default function EventSummaryPage() {
   const [event, setEvent] = useState<Event | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [tableGroups, setTableGroups] = useState<TableGroup[]>([]);
+  const [servicePoints, setServicePoints] = useState<ServicePoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState({
     days: 0,
@@ -143,15 +162,18 @@ export default function EventSummaryPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [eventRes, teamsRes, tableGroupsRes] = await Promise.all([
-          eventsApi.getOne(eventId),
-          staffApi.getTeams().catch(() => ({ data: [] })),
-          staffApi.getEventTableGroups(eventId).catch(() => ({ data: [] })),
-        ]);
+        const [eventRes, teamsRes, tableGroupsRes, servicePointsRes] =
+          await Promise.all([
+            eventsApi.getOne(eventId),
+            staffApi.getTeams().catch(() => ({ data: [] })),
+            staffApi.getEventTableGroups(eventId).catch(() => ({ data: [] })),
+            servicePointsApi.getAll(eventId).catch(() => ({ data: [] })),
+          ]);
 
         setEvent(eventRes.data);
         setTeams(teamsRes.data || []);
         setTableGroups(tableGroupsRes.data || []);
+        setServicePoints(servicePointsRes.data || []);
       } catch (error) {
         console.error("Veri yüklenemedi:", error);
         router.push("/events");
@@ -208,17 +230,15 @@ export default function EventSummaryPage() {
     return stats;
   };
 
-  // Ekip istatistikleri hesaplama - SADECE BU ETKİNLİĞE AİT tableGroups'a göre
+  // Ekip istatistikleri hesaplama - tableGroups'tan direkt hesapla
   const getTeamStats = () => {
     const tables =
       event?.venueLayout?.placedTables || event?.venueLayout?.tables || [];
     const groups = tableGroups || [];
 
-    // SADECE bu etkinliğe ait tableGroups'tan hesapla
-    // Backend'den gelen assignedTableCount TÜM etkinlikleri içerdiği için kullanmıyoruz
-    return teams
+    // Önce teams tablosundan eşleşme dene
+    const teamsFromDb = teams
       .map((team) => {
-        // Bu etkinliğe ait ve bu ekibe atanmış grupları bul
         const assignedGroups = groups.filter(
           (g) => g.assignedTeamId === team.id
         );
@@ -241,6 +261,55 @@ export default function EventSummaryPage() {
         };
       })
       .filter((t) => t.tableCount > 0);
+
+    // Eğer teams tablosundan eşleşme yoksa, tableGroups'tan direkt oluştur
+    if (teamsFromDb.length === 0 && groups.some((g) => g.assignedTeamId)) {
+      // Unique assignedTeamId'leri grupla
+      const teamMap = new Map<
+        string,
+        { name: string; color: string; tableIds: string[]; memberCount: number }
+      >();
+
+      groups.forEach((group: any) => {
+        if (group.assignedTeamId) {
+          const existing = teamMap.get(group.assignedTeamId);
+          if (existing) {
+            existing.tableIds = [
+              ...existing.tableIds,
+              ...(group.tableIds || []),
+            ];
+          } else {
+            teamMap.set(group.assignedTeamId, {
+              name: group.name || "Ekip",
+              color: group.color || "#3b82f6",
+              tableIds: group.tableIds || [],
+              memberCount: 0,
+            });
+          }
+        }
+      });
+
+      return Array.from(teamMap.entries()).map(([id, data]) => {
+        const assignedTables = tables.filter((t: any) =>
+          data.tableIds.includes(t.id)
+        );
+        const totalCapacity = assignedTables.reduce(
+          (sum: number, t: any) => sum + (t.capacity || 0),
+          0
+        );
+
+        return {
+          id,
+          name: data.name,
+          color: data.color,
+          tableCount: assignedTables.length,
+          capacity: totalCapacity,
+          memberCount: data.memberCount,
+        };
+      });
+    }
+
+    return teamsFromDb;
   };
 
   const tableStats = getTableStats();
@@ -637,7 +706,12 @@ export default function EventSummaryPage() {
                     </div>
                     <div className="bg-slate-700/50 rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-white">
-                        {teamStats.reduce((sum, t) => sum + t.memberCount, 0)}
+                        {teamStats.reduce((sum, t) => sum + t.memberCount, 0) +
+                          servicePoints.reduce(
+                            (sum, sp) =>
+                              sum + (sp.staffAssignments?.length || 0),
+                            0
+                          )}
                       </p>
                       <p className="text-xs text-slate-400">Toplam Personel</p>
                     </div>
@@ -648,7 +722,7 @@ export default function EventSummaryPage() {
                     <p className="text-sm font-medium text-slate-300">
                       Ekipler
                     </p>
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
                       {teamStats.map((team) => (
                         <div
                           key={team.id}
@@ -675,6 +749,45 @@ export default function EventSummaryPage() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Hizmet Noktaları */}
+                  {servicePoints.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                        <span className="w-4 h-4 rounded bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-[10px]">
+                          📍
+                        </span>
+                        Hizmet Noktaları
+                      </p>
+                      <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                        {servicePoints.map((sp) => (
+                          <div
+                            key={sp.id}
+                            className="flex items-center justify-between bg-cyan-700/20 rounded-lg px-3 py-2 border border-cyan-700/30"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded"
+                                style={{ backgroundColor: sp.color }}
+                              />
+                              <span className="text-sm text-white">
+                                {sp.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm">
+                              <span className="text-slate-400">
+                                {sp.staffAssignments?.length || 0}/
+                                {sp.requiredStaffCount} kişi
+                              </span>
+                              <span className="text-cyan-400 text-xs capitalize">
+                                {sp.pointType.replace("_", " ")}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Butonlar */}
                   <div className="flex gap-2 pt-2">
@@ -776,6 +889,7 @@ export default function EventSummaryPage() {
           tables={tables}
           teams={teams}
           tableGroups={tableGroups}
+          servicePoints={servicePoints}
           event={event}
         />
       </div>
@@ -824,6 +938,8 @@ function VenuePreviewModal({
   tables: any[];
   event: Event;
 }) {
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+
   if (!open) return null;
 
   const canvasWidth = event.venueLayout?.dimensions?.width || 1050;
@@ -834,83 +950,162 @@ function VenuePreviewModal({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="!max-w-[900px] bg-slate-800 border-slate-700">
         <DialogHeader>
-          <DialogTitle className="text-white flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-green-400" />
-            Yerleşim Planı Önizleme
+          <DialogTitle className="text-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-green-400" />
+              Yerleşim Planı Önizleme
+            </div>
+            <div className="flex-1 flex justify-center">
+              <Button
+                variant={viewMode === "3d" ? "secondary" : "outline"}
+                onClick={() => setViewMode(viewMode === "2d" ? "3d" : "2d")}
+                className={
+                  viewMode === "3d"
+                    ? "bg-cyan-600 text-white hover:bg-cyan-700 px-6 py-2"
+                    : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 px-6 py-2"
+                }
+              >
+                <Box className="w-5 h-5 mr-2" />
+                {viewMode === "2d" ? "3D Görünüm" : "2D Görünüm"}
+              </Button>
+            </div>
+            <div className="w-[140px]" />{" "}
+            {/* Sağ taraf için boşluk - dengeleme */}
           </DialogTitle>
         </DialogHeader>
-        <div
-          className="relative bg-slate-900 rounded-lg overflow-hidden"
-          style={{ height: "520px" }}
-        >
+
+        {viewMode === "3d" ? (
+          <div style={{ height: "520px" }}>
+            <Canvas3DPreview
+              layout={{
+                width: canvasWidth,
+                height: canvasHeight,
+                tables: [],
+                walls: [],
+                gridSize: 20,
+                zones:
+                  event.venueLayout?.stageElements?.map((el: any) => ({
+                    id: el.id,
+                    type:
+                      el.type === "stage"
+                        ? "stage"
+                        : el.type === "system_control"
+                        ? "system"
+                        : "stage-extension",
+                    x: el.x,
+                    y: el.y,
+                    width: el.width,
+                    height: el.height,
+                    label: el.label,
+                    color:
+                      el.type === "stage"
+                        ? "#1e40af"
+                        : el.type === "system_control"
+                        ? "#d97706"
+                        : "#7c3aed",
+                  })) || [],
+              }}
+              tables={tables.map((t: any) => ({
+                id: t.id,
+                typeId: t.type || "standard",
+                typeName: t.typeName || "Masa",
+                x: t.x,
+                y: t.y,
+                rotation: 0,
+                capacity: t.capacity || 12,
+                color:
+                  t.type === "vip"
+                    ? "#f59e0b"
+                    : t.type === "premium"
+                    ? "#8b5cf6"
+                    : t.type === "loca"
+                    ? "#ec4899"
+                    : "#3b82f6",
+                shape: t.isLoca ? "square" : "round",
+                label: t.isLoca ? t.locaName : t.tableNumber?.toString(),
+              }))}
+              servicePoints={[]}
+              tableGroups={[]}
+              teams={[]}
+              viewMode="step1"
+              selectedTableIds={[]}
+            />
+          </div>
+        ) : (
           <div
-            className="absolute left-1/2 top-1/2 border border-slate-600 rounded"
-            style={{
-              width: canvasWidth * scale,
-              height: canvasHeight * scale,
-              transform: "translate(-50%, -49%)",
-              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-            }}
+            className="relative bg-slate-900 rounded-lg overflow-hidden"
+            style={{ height: "520px" }}
           >
-            {/* Sahne elemanları */}
-            {event.venueLayout?.stageElements?.map((stage: any) => (
-              <div
-                key={stage.id}
-                className="absolute flex items-center justify-center text-xs font-medium"
-                style={{
-                  left: stage.x * scale,
-                  top: stage.y * scale,
-                  width: stage.width * scale,
-                  height: stage.height * scale,
-                  backgroundColor:
-                    stage.type === "system_control" ? "#dc2626" : "#3b82f6",
-                  opacity: 0.8,
-                  borderRadius: "4px",
-                }}
-              >
-                <span className="text-white text-[10px]">{stage.label}</span>
-              </div>
-            ))}
-
-            {/* Masalar */}
-            {tables.map((table: any) => {
-              const config =
-                TABLE_TYPE_COLORS[table.type] || TABLE_TYPE_COLORS.unassigned;
-              const isLoca = table.isLoca || table.type === "loca";
-              const size = isLoca ? 16 : 20;
-
-              return (
+            <div
+              className="absolute left-1/2 top-1/2 border border-slate-600 rounded"
+              style={{
+                width: canvasWidth * scale,
+                height: canvasHeight * scale,
+                transform: "translate(-50%, -49%)",
+                background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+              }}
+            >
+              {/* Sahne elemanları */}
+              {event.venueLayout?.stageElements?.map((stage: any) => (
                 <div
-                  key={table.id}
-                  className="absolute flex items-center justify-center"
+                  key={stage.id}
+                  className="absolute flex items-center justify-center text-xs font-medium"
                   style={{
-                    left: table.x * scale - size / 2,
-                    top: table.y * scale - size / 2,
-                    width: size,
-                    height: isLoca ? 14 : size,
+                    left: stage.x * scale,
+                    top: stage.y * scale,
+                    width: stage.width * scale,
+                    height: stage.height * scale,
                     backgroundColor:
-                      table.type === "unassigned"
-                        ? "#475569"
-                        : table.type === "vip"
-                        ? "#f59e0b"
-                        : table.type === "premium"
-                        ? "#8b5cf6"
-                        : table.type === "standard"
-                        ? "#3b82f6"
-                        : table.type === "loca"
-                        ? "#ec4899"
-                        : "#475569",
-                    borderRadius: isLoca ? "3px" : "50%",
+                      stage.type === "system_control" ? "#dc2626" : "#3b82f6",
+                    opacity: 0.8,
+                    borderRadius: "4px",
                   }}
                 >
-                  <span className="text-white text-[8px] font-bold">
-                    {isLoca ? table.locaName : table.tableNumber}
-                  </span>
+                  <span className="text-white text-[10px]">{stage.label}</span>
                 </div>
-              );
-            })}
+              ))}
+
+              {/* Masalar */}
+              {tables.map((table: any) => {
+                const config =
+                  TABLE_TYPE_COLORS[table.type] || TABLE_TYPE_COLORS.unassigned;
+                const isLoca = table.isLoca || table.type === "loca";
+                const size = isLoca ? 16 : 20;
+
+                return (
+                  <div
+                    key={table.id}
+                    className="absolute flex items-center justify-center"
+                    style={{
+                      left: table.x * scale - size / 2,
+                      top: table.y * scale - size / 2,
+                      width: size,
+                      height: isLoca ? 14 : size,
+                      backgroundColor:
+                        table.type === "unassigned"
+                          ? "#475569"
+                          : table.type === "vip"
+                          ? "#f59e0b"
+                          : table.type === "premium"
+                          ? "#8b5cf6"
+                          : table.type === "standard"
+                          ? "#3b82f6"
+                          : table.type === "loca"
+                          ? "#ec4899"
+                          : "#475569",
+                      borderRadius: isLoca ? "3px" : "50%",
+                    }}
+                  >
+                    <span className="text-white text-[8px] font-bold">
+                      {isLoca ? table.locaName : table.tableNumber}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
+
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             Kapat
@@ -934,6 +1129,7 @@ function TeamPreviewModal({
   tables,
   teams,
   tableGroups,
+  servicePoints,
   event,
 }: {
   open: boolean;
@@ -941,8 +1137,11 @@ function TeamPreviewModal({
   tables: any[];
   teams: Team[];
   tableGroups: TableGroup[];
+  servicePoints: ServicePoint[];
   event: Event;
 }) {
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+
   if (!open) return null;
 
   const canvasWidth = event.venueLayout?.dimensions?.width || 1050;
@@ -956,100 +1155,244 @@ function TeamPreviewModal({
     return teams.find((t) => t.id === group.assignedTeamId);
   };
 
+  // Masa -> Grup eşleştirmesi
+  const getTableGroup = (tableId: string) => {
+    return tableGroups.find((g) => g.tableIds?.includes(tableId));
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="!max-w-[900px] bg-slate-800 border-slate-700">
         <DialogHeader>
-          <DialogTitle className="text-white flex items-center gap-2">
-            <UsersRound className="w-5 h-5 text-purple-400" />
-            Ekip Organizasyonu Önizleme
+          <DialogTitle className="text-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UsersRound className="w-5 h-5 text-purple-400" />
+              Ekip Organizasyonu Önizleme
+            </div>
+            <div className="flex-1 flex justify-center">
+              <Button
+                variant={viewMode === "3d" ? "secondary" : "outline"}
+                onClick={() => setViewMode(viewMode === "2d" ? "3d" : "2d")}
+                className={
+                  viewMode === "3d"
+                    ? "bg-cyan-600 text-white hover:bg-cyan-700 px-6 py-2"
+                    : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 px-6 py-2"
+                }
+              >
+                <Box className="w-5 h-5 mr-2" />
+                {viewMode === "2d" ? "3D Görünüm" : "2D Görünüm"}
+              </Button>
+            </div>
+            <div className="w-[180px]" />{" "}
+            {/* Sağ taraf için boşluk - dengeleme */}
           </DialogTitle>
         </DialogHeader>
-        <div
-          className="relative bg-slate-900 rounded-lg overflow-hidden"
-          style={{ height: "520px" }}
-        >
+
+        {viewMode === "3d" ? (
+          <div style={{ height: "520px" }}>
+            <Canvas3DPreview
+              layout={{
+                width: canvasWidth,
+                height: canvasHeight,
+                tables: [],
+                walls: [],
+                gridSize: 20,
+                zones:
+                  event.venueLayout?.stageElements?.map((el: any) => ({
+                    id: el.id,
+                    type:
+                      el.type === "stage"
+                        ? "stage"
+                        : el.type === "system_control"
+                        ? "system"
+                        : "stage-extension",
+                    x: el.x,
+                    y: el.y,
+                    width: el.width,
+                    height: el.height,
+                    label: el.label,
+                    color:
+                      el.type === "stage"
+                        ? "#1e40af"
+                        : el.type === "system_control"
+                        ? "#d97706"
+                        : "#7c3aed",
+                  })) || [],
+              }}
+              tables={tables.map((t: any) => {
+                const group = getTableGroup(t.id);
+                const team = getTableTeam(t.id);
+                return {
+                  id: t.id,
+                  typeId: t.type || "standard",
+                  typeName: group?.name || t.typeName || "Masa",
+                  x: t.x,
+                  y: t.y,
+                  rotation: 0,
+                  capacity: t.capacity || 12,
+                  color: team?.color || group?.color || "#475569",
+                  shape: t.isLoca ? "square" : "round",
+                  label: t.isLoca ? t.locaName : t.tableNumber?.toString(),
+                };
+              })}
+              servicePoints={servicePoints.map((sp) => ({
+                id: sp.id,
+                name: sp.name,
+                pointType: sp.pointType,
+                x: sp.x,
+                y: sp.y,
+                color: sp.color,
+                requiredStaffCount: sp.requiredStaffCount,
+                assignedStaffCount: sp.assignedStaffCount || 0,
+                allowedRoles: sp.allowedRoles || [],
+              }))}
+              tableGroups={tableGroups.map((g) => ({
+                id: g.id,
+                name: g.name || "",
+                color: g.color || "#475569",
+                tableIds: g.tableIds || [],
+                assignedTeamId: g.assignedTeamId,
+              }))}
+              teams={teams.map((t) => ({
+                id: t.id,
+                name: t.name,
+                color: t.color,
+                assignedGroupIds: tableGroups
+                  .filter((g) => g.assignedTeamId === t.id)
+                  .map((g) => g.id),
+              }))}
+              viewMode="step2"
+              selectedTableIds={[]}
+            />
+          </div>
+        ) : (
           <div
-            className="absolute left-1/2 top-1/2 border border-slate-600 rounded"
-            style={{
-              width: canvasWidth * scale,
-              height: canvasHeight * scale,
-              transform: "translate(-50%, -49%)",
-              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-            }}
+            className="relative bg-slate-900 rounded-lg overflow-hidden"
+            style={{ height: "520px" }}
           >
-            {/* Sahne elemanları */}
-            {event.venueLayout?.stageElements?.map((stage: any) => (
-              <div
-                key={stage.id}
-                className="absolute flex items-center justify-center text-xs font-medium"
-                style={{
-                  left: stage.x * scale,
-                  top: stage.y * scale,
-                  width: stage.width * scale,
-                  height: stage.height * scale,
-                  backgroundColor:
-                    stage.type === "system_control" ? "#dc2626" : "#3b82f6",
-                  opacity: 0.8,
-                  borderRadius: "4px",
-                }}
-              >
-                <span className="text-white text-[10px]">{stage.label}</span>
-              </div>
-            ))}
-
-            {/* Masalar - Ekip renkleriyle */}
-            {tables.map((table: any) => {
-              const team = getTableTeam(table.id);
-              const isLoca = table.isLoca || table.type === "loca";
-              const size = isLoca ? 16 : 20;
-
-              return (
+            <div
+              className="absolute left-1/2 top-1/2 border border-slate-600 rounded"
+              style={{
+                width: canvasWidth * scale,
+                height: canvasHeight * scale,
+                transform: "translate(-50%, -49%)",
+                background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+              }}
+            >
+              {/* Sahne elemanları */}
+              {event.venueLayout?.stageElements?.map((stage: any) => (
                 <div
-                  key={table.id}
-                  className="absolute flex items-center justify-center"
+                  key={stage.id}
+                  className="absolute flex items-center justify-center text-xs font-medium"
                   style={{
-                    left: table.x * scale - size / 2,
-                    top: table.y * scale - size / 2,
-                    width: size,
-                    height: isLoca ? 14 : size,
-                    backgroundColor: team?.color || "#475569",
-                    borderRadius: isLoca ? "3px" : "50%",
-                    border: team ? "2px solid rgba(255,255,255,0.3)" : "none",
+                    left: stage.x * scale,
+                    top: stage.y * scale,
+                    width: stage.width * scale,
+                    height: stage.height * scale,
+                    backgroundColor:
+                      stage.type === "system_control" ? "#dc2626" : "#3b82f6",
+                    opacity: 0.8,
+                    borderRadius: "4px",
                   }}
                 >
-                  <span className="text-white text-[8px] font-bold">
-                    {isLoca ? table.locaName : table.tableNumber}
+                  <span className="text-white text-[10px]">{stage.label}</span>
+                </div>
+              ))}
+
+              {/* Masalar - Ekip renkleriyle */}
+              {tables.map((table: any) => {
+                const team = getTableTeam(table.id);
+                const isLoca = table.isLoca || table.type === "loca";
+                const size = isLoca ? 16 : 20;
+
+                return (
+                  <div
+                    key={table.id}
+                    className="absolute flex items-center justify-center"
+                    style={{
+                      left: table.x * scale - size / 2,
+                      top: table.y * scale - size / 2,
+                      width: size,
+                      height: isLoca ? 14 : size,
+                      backgroundColor: team?.color || "#475569",
+                      borderRadius: isLoca ? "3px" : "50%",
+                      border: team ? "2px solid rgba(255,255,255,0.3)" : "none",
+                    }}
+                  >
+                    <span className="text-white text-[8px] font-bold">
+                      {isLoca ? table.locaName : table.tableNumber}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Hizmet Noktaları */}
+              {servicePoints.map((sp) => (
+                <div
+                  key={sp.id}
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    left: sp.x * scale - 12,
+                    top: sp.y * scale - 12,
+                    width: 24,
+                    height: 24,
+                    backgroundColor: sp.color,
+                    borderRadius: "4px",
+                    border: "2px solid rgba(255,255,255,0.4)",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+                  }}
+                >
+                  <span className="text-white text-[7px] font-bold">
+                    {sp.name.substring(0, 2).toUpperCase()}
                   </span>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
 
-          {/* Ekip Renk Açıklaması */}
-          <div className="absolute bottom-4 left-4 bg-slate-800/90 rounded-lg p-3">
-            <p className="text-xs text-slate-400 mb-2">Ekipler</p>
-            <div className="flex flex-wrap gap-2">
-              {teams
-                .filter((t) =>
-                  tableGroups.some((g) => g.assignedTeamId === t.id)
-                )
-                .map((team) => (
-                  <div key={team.id} className="flex items-center gap-1.5">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: team.color }}
-                    />
-                    <span className="text-xs text-white">{team.name}</span>
-                  </div>
-                ))}
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-slate-500" />
-                <span className="text-xs text-slate-400">Atanmamış</span>
+            {/* Ekip ve Hizmet Noktası Renk Açıklaması */}
+            <div className="absolute bottom-4 left-4 bg-slate-800/90 rounded-lg p-3 max-w-xs">
+              <p className="text-xs text-slate-400 mb-2">Ekipler</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {teams
+                  .filter((t) =>
+                    tableGroups.some((g) => g.assignedTeamId === t.id)
+                  )
+                  .map((team) => (
+                    <div key={team.id} className="flex items-center gap-1.5">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: team.color }}
+                      />
+                      <span className="text-xs text-white">{team.name}</span>
+                    </div>
+                  ))}
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-slate-500" />
+                  <span className="text-xs text-slate-400">Atanmamış</span>
+                </div>
               </div>
+              {servicePoints.length > 0 && (
+                <>
+                  <p className="text-xs text-slate-400 mb-2 mt-3 border-t border-slate-700 pt-2">
+                    Hizmet Noktaları
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {servicePoints.map((sp) => (
+                      <div key={sp.id} className="flex items-center gap-1.5">
+                        <div
+                          className="w-3 h-3 rounded"
+                          style={{ backgroundColor: sp.color }}
+                        />
+                        <span className="text-xs text-white">{sp.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
+        )}
+
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             Kapat

@@ -52,7 +52,7 @@ export interface NotificationPayload {
 
 @WebSocketGateway({
   cors: {
-    origin: true, // Production'da tüm origin'lere izin ver (Coolify reverse proxy arkasında)
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
     credentials: true,
   },
 })

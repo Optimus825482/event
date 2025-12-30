@@ -30,6 +30,15 @@ import {
   Team,
   EventStaffAssignment,
   OrganizationTemplate,
+  Staff,
+  Position,
+  Department,
+  WorkLocation,
+  DepartmentPosition,
+  DepartmentLocation,
+  ServicePoint,
+  ServicePointStaffAssignment,
+  EventExtraStaff,
 } from "./entities";
 import { StaffPerformanceReview } from "./entities/staff-performance-review.entity";
 import { Notification, NotificationRead } from "./entities/notification.entity";
@@ -70,7 +79,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
           {
             name: "default",
             ttl: parseInt(configService.get("THROTTLE_TTL") || "60000", 10), // 60 saniye
-            limit: parseInt(configService.get("THROTTLE_LIMIT") || "100", 10), // 100 istek
+            limit: parseInt(configService.get("THROTTLE_LIMIT") || "200", 10), // 200 istek (artırıldı)
           },
           {
             name: "auth",
@@ -121,6 +130,15 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
           StaffPerformanceReview,
           Notification,
           NotificationRead,
+          Staff,
+          Position,
+          Department,
+          WorkLocation,
+          DepartmentPosition,
+          DepartmentLocation,
+          ServicePoint,
+          ServicePointStaffAssignment,
+          EventExtraStaff,
         ],
         // UYARI: Production'da synchronize: false olmalı!
         synchronize: configService.get("NODE_ENV") === "development",

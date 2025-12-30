@@ -8,10 +8,10 @@ import {
   JoinColumn,
   Index,
 } from "typeorm";
-import { User } from "./user.entity";
 import { Event } from "./event.entity";
 import { WorkShift } from "./work-shift.entity";
 import { Team } from "./team.entity";
+import { Staff } from "./staff.entity";
 
 @Entity("event_staff_assignments")
 @Index("IDX_event_staff_assignment_event", ["eventId"]) // Performans: Event bazlı sorgular
@@ -30,10 +30,13 @@ export class EventStaffAssignment {
   @Column()
   eventId: string;
 
-  // Personel
-  @ManyToOne(() => User)
-  @JoinColumn({ name: "staffId" })
-  staff: User;
+  // Personel - Staff tablosuna bağlı (foreign key constraint yok - eski User verileri için)
+  @ManyToOne(() => Staff, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({
+    name: "staffId",
+    foreignKeyConstraintName: "FK_staff_assignment_staff",
+  })
+  staff: Staff;
 
   @Column()
   staffId: string;

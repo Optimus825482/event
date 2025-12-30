@@ -249,3 +249,90 @@ export interface VenueTemplate {
   createdBy: string;
   createdAt: string;
 }
+
+// ==================== PERSONNEL (HR STAFF) ====================
+
+// Cinsiyet
+export type Gender = "male" | "female";
+
+// Personel Durumu
+export type StaffStatus = "active" | "inactive" | "terminated";
+
+// Personel (HR Staff tablosundan)
+export interface Personnel {
+  id: string;
+  sicilNo: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  avatar?: string;
+  position: string;
+  department?: string;
+  workLocation?: string;
+  mentor?: string;
+  color?: string;
+  gender?: Gender;
+  birthDate?: string;
+  age?: number;
+  bloodType?: string;
+  shoeSize?: number;
+  sockSize?: string;
+  hireDate?: string;
+  terminationDate?: string;
+  terminationReason?: string;
+  yearsAtCompany?: number;
+  isActive: boolean;
+  status: StaffStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Personel Oluşturma DTO
+export interface CreatePersonnelDto {
+  sicilNo: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  avatar?: string;
+  position: string;
+  department?: string;
+  workLocation?: string;
+  mentor?: string;
+  color?: string;
+  gender?: Gender;
+  birthDate?: string;
+  age?: number;
+  bloodType?: string;
+  shoeSize?: number;
+  sockSize?: string;
+  hireDate?: string;
+  terminationDate?: string;
+  terminationReason?: string;
+  yearsAtCompany?: number;
+  isActive?: boolean;
+  status?: StaffStatus;
+}
+
+// Personel Güncelleme DTO
+export interface UpdatePersonnelDto extends Partial<CreatePersonnelDto> {}
+
+// Personel İstatistikleri
+export interface PersonnelStats {
+  total: number;
+  active: number;
+  inactive: number;
+  terminated: number;
+  byDepartment: Record<string, number>;
+  byWorkLocation: Record<string, number>;
+  byPosition: Record<string, number>;
+  byGender: Record<string, number>;
+}
+
+// Personel Filtreleri
+export interface PersonnelFilters {
+  department?: string;
+  workLocation?: string;
+  position?: string;
+  isActive?: boolean;
+  status?: StaffStatus;
+}

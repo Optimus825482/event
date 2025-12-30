@@ -76,6 +76,23 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   error: null,
 
   fetchNotifications: async (options = {}) => {
+    // Auth kontrolü - token yoksa API çağrısı yapma
+    const authStorage = localStorage.getItem("auth-storage");
+    if (!authStorage) {
+      set({ isLoading: false });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(authStorage);
+      if (!parsed?.state?.token || !parsed?.state?.isAuthenticated) {
+        set({ isLoading: false });
+        return;
+      }
+    } catch {
+      set({ isLoading: false });
+      return;
+    }
+
     set({ isLoading: true, error: null });
     try {
       const response = await notificationsApi.getNotifications(options);
@@ -94,6 +111,16 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   fetchUnreadCount: async () => {
+    // Auth kontrolü - token yoksa API çağrısı yapma
+    const authStorage = localStorage.getItem("auth-storage");
+    if (!authStorage) return;
+    try {
+      const parsed = JSON.parse(authStorage);
+      if (!parsed?.state?.token || !parsed?.state?.isAuthenticated) return;
+    } catch {
+      return;
+    }
+
     try {
       const response = await notificationsApi.getUnreadCount();
       set({ unreadCount: response.data.unreadCount });

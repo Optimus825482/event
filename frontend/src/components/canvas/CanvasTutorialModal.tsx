@@ -25,6 +25,8 @@ import {
   ChevronLeft,
   Lightbulb,
   CheckCircle2,
+  Box,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -36,9 +38,23 @@ interface TutorialStep {
   description: string;
   icon: React.ReactNode;
   tips: string[];
+  highlight?: boolean;
+  showToolbarHint?: boolean;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    id: "welcome",
+    title: "🎉 Hoş Geldiniz!",
+    description: "EventFlow Canvas ile yerleşim planınızı kolayca oluşturun",
+    icon: <Sparkles className="w-8 h-8 text-amber-400" />,
+    tips: [
+      "2D Canvas ile masaları yerleştirin ve düzenleyin",
+      "🆕 3D Önizleme ile mekanınızı gerçekçi görün!",
+    ],
+    highlight: true,
+    showToolbarHint: true,
+  },
   {
     id: "basics",
     title: "Temel Kullanım",
@@ -114,6 +130,21 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       "Escape: Seçimi temizle",
       "1/2/3/4: Hızlı tip seçimi (VIP/Premium/Standart/Loca)",
     ],
+  },
+  {
+    id: "3d-preview",
+    title: "3D Önizleme",
+    description: "Mekanınızı 3 boyutlu olarak görüntüleyin",
+    icon: <Box className="w-8 h-8 text-cyan-400" />,
+    tips: [
+      "Toolbar'daki 3D butonuna tıklayarak 3D görünüme geçin",
+      "Sol tık + sürükle: Kamerayı döndür",
+      "Mouse tekerleği: Yakınlaştır/Uzaklaştır",
+      "Masaya tıkla: Masa bilgisini görüntüle",
+      "3D modda sadece görüntüleme yapılabilir",
+      "Düzenleme için 2D moduna geri dönün",
+    ],
+    highlight: true,
   },
 ];
 
@@ -203,13 +234,32 @@ export function CanvasTutorialModal({
 
         {/* Current Step Content */}
         <div className="py-4">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-slate-700/50 rounded-xl">
+          <div
+            className={cn(
+              "flex items-center gap-4 mb-4 p-3 rounded-xl",
+              currentTutorial.highlight
+                ? "bg-gradient-to-r from-amber-500/20 to-cyan-500/20 border border-amber-500/30"
+                : ""
+            )}
+          >
+            <div
+              className={cn(
+                "p-3 rounded-xl",
+                currentTutorial.highlight
+                  ? "bg-gradient-to-br from-amber-500/30 to-cyan-500/30"
+                  : "bg-slate-700/50"
+              )}
+            >
               {currentTutorial.icon}
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 {currentTutorial.title}
+                {currentTutorial.highlight && (
+                  <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full">
+                    YENİ
+                  </span>
+                )}
               </h3>
               <p className="text-sm text-slate-400">
                 {currentTutorial.description}
@@ -225,6 +275,30 @@ export function CanvasTutorialModal({
               </div>
             ))}
           </div>
+
+          {/* Toolbar 3D Button Hint */}
+          {currentTutorial.showToolbarHint && (
+            <div className="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+              <p className="text-xs text-slate-400 mb-2">
+                3D butonu toolbar'da şurada:
+              </p>
+              <div className="flex items-center gap-2 bg-slate-800 rounded-lg p-2 border border-slate-600">
+                <div className="flex items-center gap-1 text-slate-500 text-xs">
+                  <span>🔍</span>
+                  <span>100%</span>
+                  <span className="mx-1">|</span>
+                  <span>🔄</span>
+                  <span className="mx-1">|</span>
+                  <span>↔️</span>
+                </div>
+                <div className="flex items-center gap-1 px-2 py-1 bg-cyan-600 rounded text-white text-xs font-medium animate-pulse">
+                  <Box className="w-3 h-3" />
+                  <span>3D</span>
+                </div>
+                <span className="text-cyan-400 text-xs">← Buraya tıkla!</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}

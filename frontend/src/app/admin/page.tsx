@@ -14,6 +14,7 @@ import {
   Calendar,
   Loader2,
   Ticket,
+  Building2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -352,6 +353,43 @@ export default function AdminDashboard() {
                 <Link href="/admin/notifications">
                   <Bell className="w-4 h-4 mr-2" />
                   Bildirimleri Görüntüle
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Organizasyon Yönetimi */}
+          <Card className="bg-slate-800 border-slate-700 hover:border-emerald-500/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3 text-white">
+                <div className="w-10 h-10 rounded-lg bg-emerald-600/20 flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-emerald-400" />
+                </div>
+                Organizasyon Yönetimi
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-400 text-sm mb-4">
+                Bölümler, unvanlar ve görev yerlerini yönetin. Departman
+                ilişkilerini düzenleyin.
+              </p>
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  <span className="text-slate-300">Bölümler & Pozisyonlar</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  <span className="text-slate-300">Görev Yerleri</span>
+                </div>
+              </div>
+              <Button
+                asChild
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                <Link href="/admin/organization">
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Organizasyonu Yönet
                 </Link>
               </Button>
             </CardContent>

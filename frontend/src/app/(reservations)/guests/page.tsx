@@ -42,15 +42,18 @@ const noteTypeLabels: Record<GuestNoteType, { label: string; color: string }> =
     general: { label: "Genel", color: "bg-slate-600/20 text-slate-400" },
   };
 
+// Extended customer type with source info
+type GuestWithSource = Customer & {
+  noteCount: number;
+  source?: "customer" | "reservation";
+};
+
 export default function GuestsPage() {
-  const [customers, setCustomers] = useState<
-    (Customer & { noteCount: number })[]
-  >([]);
+  const [customers, setCustomers] = useState<GuestWithSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
-  );
+  const [selectedCustomer, setSelectedCustomer] =
+    useState<GuestWithSource | null>(null);
   const [customerNotes, setCustomerNotes] = useState<GuestNote[]>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showAddNoteModal, setShowAddNoteModal] = useState(false);
@@ -61,13 +64,24 @@ export default function GuestsPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [editingNote, setEditingNote] = useState<GuestNote | null>(null);
 
+  // Kayıtlı müşteri mi kontrol et (not eklenebilir)
+  const isRegisteredCustomer =
+    selectedCustomer?.source === "customer" &&
+    selectedCustomer?.id &&
+    !selectedCustomer.id.startsWith("guest-");
+
   const loadCustomers = async (search?: string) => {
     setLoading(true);
     try {
-      const response = await customersApi.getAllWithStats(search);
-      setCustomers(response.data);
+      // Tüm misafirleri getir (customers + reservations'dan benzersiz misafirler)
+      const response = await customersApi.getAllGuests(search);
+      // API paginated response döndürüyor: { items: [], meta: {} }
+      const data = response.data;
+      const customerList = Array.isArray(data) ? data : data?.items || [];
+      setCustomers(customerList);
     } catch (err) {
       console.error("Misafirler yüklenemedi:", err);
+      setCustomers([]);
     } finally {
       setLoading(false);
     }
@@ -84,14 +98,24 @@ export default function GuestsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const openCustomerDetail = async (customer: Customer) => {
+  const openCustomerDetail = async (customer: GuestWithSource) => {
     setSelectedCustomer(customer);
+    setCustomerNotes([]);
     setShowDetailModal(true);
-    try {
-      const response = await customersApi.getWithNotes(customer.id);
-      setCustomerNotes(response.data.notes || []);
-    } catch (err) {
-      console.error("Notlar yüklenemedi:", err);
+
+    // Sadece kayıtlı müşteriler için notları yükle
+    const isRegistered =
+      customer.source === "customer" &&
+      customer.id &&
+      !customer.id.startsWith("guest-");
+
+    if (isRegistered) {
+      try {
+        const response = await customersApi.getWithNotes(customer.id);
+        setCustomerNotes(response.data.notes || []);
+      } catch (err) {
+        console.error("Notlar yüklenemedi:", err);
+      }
     }
   };
 
@@ -180,11 +204,30 @@ export default function GuestsPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-purple-600/20 rounded-full flex items-center justify-center">
-                      <Users className="w-6 h-6 text-purple-400" />
+                    <div
+                      className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        customer.source === "reservation"
+                          ? "bg-amber-600/20"
+                          : "bg-purple-600/20"
+                      }`}
+                    >
+                      <Users
+                        className={`w-6 h-6 ${
+                          customer.source === "reservation"
+                            ? "text-amber-400"
+                            : "text-purple-400"
+                        }`}
+                      />
                     </div>
                     <div>
-                      <h3 className="font-medium">{customer.fullName}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium">{customer.fullName}</h3>
+                        {customer.source === "reservation" && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-amber-600/20 text-amber-400">
+                            Rezervasyon
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-slate-400">
                         {customer.phone || "Telefon yok"}
                         {customer.email && ` • ${customer.email}`}
@@ -232,6 +275,16 @@ export default function GuestsPage() {
 
           {selectedCustomer && (
             <div className="space-y-6 py-4">
+              {/* Rezervasyondan gelen misafir uyarısı */}
+              {selectedCustomer.source === "reservation" && (
+                <div className="bg-amber-600/10 border border-amber-600/30 rounded-lg p-3">
+                  <p className="text-sm text-amber-400">
+                    ⚠️ Bu misafir sadece rezervasyon kaydından geliyor. Müşteri
+                    olarak kaydetmek için telefon veya e-posta bilgisi ekleyin.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-700/50 rounded-lg p-3">
                   <p className="text-xs text-slate-400 mb-1">Telefon</p>
@@ -259,109 +312,112 @@ export default function GuestsPage() {
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-medium flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-yellow-400" />
-                    Notlar
-                  </h3>
-                  <Button
-                    size="sm"
-                    onClick={() => setShowAddNoteModal(true)}
-                    className="bg-purple-600"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> Yeni Not
-                  </Button>
-                </div>
+              {/* Notlar - Sadece kayıtlı müşteriler için */}
+              {isRegisteredCustomer && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-yellow-400" />
+                      Notlar
+                    </h3>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAddNoteModal(true)}
+                      className="bg-purple-600"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Yeni Not
+                    </Button>
+                  </div>
 
-                {customerNotes.length === 0 ? (
-                  <p className="text-slate-400 text-center py-4 bg-slate-700/30 rounded-lg">
-                    Bu misafir için not bulunmuyor.
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {customerNotes.map((note) => (
-                      <div
-                        key={note.id}
-                        className="bg-slate-700/50 rounded-lg p-3 border border-slate-600"
-                      >
-                        {editingNote?.id === note.id ? (
-                          <div className="space-y-2">
-                            <textarea
-                              value={editingNote.content}
-                              onChange={(e) =>
-                                setEditingNote({
-                                  ...editingNote,
-                                  content: e.target.value,
-                                })
-                              }
-                              className="w-full bg-slate-600 border border-slate-500 rounded p-2 text-sm"
-                              rows={3}
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={handleUpdateNote}
-                                disabled={savingNote}
-                                className="bg-green-600"
-                              >
-                                {savingNote ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  "Kaydet"
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setEditingNote(null)}
-                                className="border-slate-500"
-                              >
-                                İptal
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center justify-between mb-2">
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded ${
-                                  noteTypeLabels[note.noteType]?.color
-                                }`}
-                              >
-                                {noteTypeLabels[note.noteType]?.label}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-slate-500">
-                                  {formatDate(note.createdAt)}
-                                </span>
-                                <button
-                                  onClick={() => setEditingNote(note)}
-                                  className="p-1 text-slate-400 hover:text-white"
+                  {customerNotes.length === 0 ? (
+                    <p className="text-slate-400 text-center py-4 bg-slate-700/30 rounded-lg">
+                      Bu misafir için not bulunmuyor.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {customerNotes.map((note) => (
+                        <div
+                          key={note.id}
+                          className="bg-slate-700/50 rounded-lg p-3 border border-slate-600"
+                        >
+                          {editingNote?.id === note.id ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editingNote.content}
+                                onChange={(e) =>
+                                  setEditingNote({
+                                    ...editingNote,
+                                    content: e.target.value,
+                                  })
+                                }
+                                className="w-full bg-slate-600 border border-slate-500 rounded p-2 text-sm"
+                                rows={3}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={handleUpdateNote}
+                                  disabled={savingNote}
+                                  className="bg-green-600"
                                 >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteNote(note.id)}
-                                  className="p-1 text-red-400 hover:text-red-300"
+                                  {savingNote ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    "Kaydet"
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditingNote(null)}
+                                  className="border-slate-500"
                                 >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+                                  İptal
+                                </Button>
                               </div>
                             </div>
-                            {note.event && (
-                              <p className="text-xs text-slate-400 mb-1">
-                                📅 {note.event.name}
-                              </p>
-                            )}
-                            <p className="text-sm">{note.content}</p>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center justify-between mb-2">
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded ${
+                                    noteTypeLabels[note.noteType]?.color
+                                  }`}
+                                >
+                                  {noteTypeLabels[note.noteType]?.label}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-slate-500">
+                                    {formatDate(note.createdAt)}
+                                  </span>
+                                  <button
+                                    onClick={() => setEditingNote(note)}
+                                    className="p-1 text-slate-400 hover:text-white"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteNote(note.id)}
+                                    className="p-1 text-red-400 hover:text-red-300"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                              {note.event && (
+                                <p className="text-xs text-slate-400 mb-1">
+                                  📅 {note.event.name}
+                                </p>
+                              )}
+                              <p className="text-sm">{note.content}</p>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

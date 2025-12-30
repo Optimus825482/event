@@ -13,7 +13,13 @@ import {
   Team,
   EventStaffAssignment,
   OrganizationTemplate,
+  Staff,
 } from "../../entities";
+import { Position } from "../../entities/position.entity";
+import { Department } from "../../entities/department.entity";
+import { WorkLocation } from "../../entities/work-location.entity";
+import { DepartmentPosition } from "../../entities/department-position.entity";
+import { DepartmentLocation } from "../../entities/department-location.entity";
 import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
@@ -29,6 +35,12 @@ import { NotificationsModule } from "../notifications/notifications.module";
       Team,
       EventStaffAssignment,
       OrganizationTemplate,
+      Staff,
+      Position,
+      Department,
+      WorkLocation,
+      DepartmentPosition,
+      DepartmentLocation,
     ]),
     forwardRef(() => NotificationsModule),
   ],

@@ -53,9 +53,69 @@ export class CustomersController {
 
   // Detaylı liste (not sayısı ile) - Pagination destekli
   @Get("list/with-stats")
-  @ApiOperation({ summary: "Müşterileri istatistiklerle listele" })
-  findAllWithStats(@Query() pagination: PaginationQueryDto) {
-    return this.customersService.findAllWithStats(pagination.search);
+  @ApiOperation({ summary: "Müşterileri istatistiklerle listele (paginated)" })
+  @ApiQuery({
+    name: "search",
+    required: false,
+    description: "Arama terimi (fullName, phone, email)",
+  })
+  @ApiQuery({
+    name: "page",
+    required: false,
+    description: "Sayfa numarası (default: 1)",
+    type: Number,
+  })
+  @ApiQuery({
+    name: "limit",
+    required: false,
+    description: "Sayfa başına kayıt sayısı (default: 50, max: 100)",
+    type: Number,
+  })
+  findAllWithStats(
+    @Query("search") search?: string,
+    @Query("page") page?: number,
+    @Query("limit") limit?: number
+  ) {
+    const pageNum = page && page > 0 ? page : 1;
+    const limitNum = limit && limit > 0 && limit <= 100 ? limit : 50;
+    return this.customersService.findAllWithStats(search, pageNum, limitNum);
+  }
+
+  // Tüm misafirler (customers + reservations'dan benzersiz misafirler)
+  @Get("list/all-guests")
+  @ApiOperation({
+    summary:
+      "Tüm misafirleri listele (kayıtlı müşteriler + rezervasyon misafirleri)",
+  })
+  @ApiQuery({
+    name: "search",
+    required: false,
+    description: "Arama terimi (fullName, phone, email)",
+  })
+  @ApiQuery({
+    name: "page",
+    required: false,
+    description: "Sayfa numarası (default: 1)",
+    type: Number,
+  })
+  @ApiQuery({
+    name: "limit",
+    required: false,
+    description: "Sayfa başına kayıt sayısı (default: 50, max: 100)",
+    type: Number,
+  })
+  findAllGuestsIncludingReservations(
+    @Query("search") search?: string,
+    @Query("page") page?: number,
+    @Query("limit") limit?: number
+  ) {
+    const pageNum = page && page > 0 ? page : 1;
+    const limitNum = limit && limit > 0 && limit <= 100 ? limit : 50;
+    return this.customersService.findAllGuestsIncludingReservations(
+      search,
+      pageNum,
+      limitNum
+    );
   }
 
   @Get(":id")

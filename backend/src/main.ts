@@ -4,13 +4,34 @@ import { ValidationPipe, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
+import compression from "compression";
 import { GlobalExceptionFilter } from "./common/filters/http-exception.filter";
+import { ResponseTimeInterceptor } from "./common/interceptors/response-time.interceptor";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const isProduction = configService.get("NODE_ENV") === "production";
+
+  // ==================== PERFORMANCE ====================
+
+  // Response compression - gzip/deflate
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (req.headers["x-no-compression"]) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+      level: 6, // Balanced compression level
+      threshold: 1024, // 1KB'dan büyük response'ları sıkıştır
+    })
+  );
+
+  // Response time tracking
+  app.useGlobalInterceptors(new ResponseTimeInterceptor());
 
   // ==================== GÜVENLİK ====================
 
@@ -19,6 +40,7 @@ async function bootstrap() {
     helmet({
       contentSecurityPolicy: isProduction ? undefined : false, // Dev'de CSP kapalı
       crossOriginEmbedderPolicy: false, // WebSocket için gerekli
+      crossOriginResourcePolicy: { policy: "cross-origin" }, // Static dosyalar için CORS
     })
   );
 
@@ -138,6 +160,8 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
   logger.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
   logger.log(`🔒 Helmet: Enabled`);
   logger.log(`⚡ Rate Limiting: Enabled (100 req/60s)`);
+  logger.log(`📦 Compression: Enabled (gzip)`);
+  logger.log(`⏱️ Response Time Tracking: Enabled`);
   logger.log(
     `🌐 CORS: ${
       isProduction ? allowedOrigins.join(", ") : "Open (development)"

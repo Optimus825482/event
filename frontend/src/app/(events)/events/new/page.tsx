@@ -15,8 +15,10 @@ import {
   Layout,
   Clock,
   Mail,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import { eventsApi, venuesApi } from "@/lib/api";
+import { eventsApi, venuesApi, staffApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,6 +82,24 @@ interface VenueTemplate {
   thumbnail?: string;
 }
 
+interface EventShift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  color: string;
+}
+
+// Varsayılan vardiya renkleri
+const SHIFT_COLORS = [
+  "#3b82f6", // Mavi
+  "#10b981", // Yeşil
+  "#f59e0b", // Turuncu
+  "#8b5cf6", // Mor
+  "#ef4444", // Kırmızı
+  "#ec4899", // Pembe
+];
+
 export default function NewEventPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
@@ -87,6 +107,15 @@ export default function NewEventPage() {
   const [createdEventId, setCreatedEventId] = useState<string | null>(null);
   const [venues, setVenues] = useState<VenueTemplate[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(false);
+
+  // Vardiya state'leri
+  const [eventShifts, setEventShifts] = useState<EventShift[]>([]);
+  const [newShift, setNewShift] = useState({
+    name: "",
+    startTime: "",
+    endTime: "",
+    color: SHIFT_COLORS[0],
+  });
 
   // Form verileri
   const [formData, setFormData] = useState({
@@ -161,7 +190,27 @@ export default function NewEventPage() {
         description: formData.description || undefined,
       });
 
-      setCreatedEventId(response.data.id);
+      const eventId = response.data.id;
+      setCreatedEventId(eventId);
+
+      // Vardiyaları kaydet (varsa)
+      if (eventShifts.length > 0) {
+        try {
+          await staffApi.createBulkShifts(
+            eventId,
+            eventShifts.map((s) => ({
+              name: s.name,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              color: s.color,
+            }))
+          );
+        } catch (shiftError) {
+          console.error("Vardiya kaydetme hatası:", shiftError);
+          // Vardiya hatası etkinlik oluşturmayı engellemez
+        }
+      }
+
       setCurrentStep(2);
     } catch (error) {
       console.error("Etkinlik oluşturma hatası:", error);
@@ -169,6 +218,35 @@ export default function NewEventPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Vardiya ekleme
+  const addShift = () => {
+    if (!newShift.name || !newShift.startTime || !newShift.endTime) {
+      alert("Lütfen vardiya bilgilerini doldurun");
+      return;
+    }
+
+    const shift: EventShift = {
+      id: `temp-${Date.now()}`,
+      name: newShift.name,
+      startTime: newShift.startTime,
+      endTime: newShift.endTime,
+      color: newShift.color,
+    };
+
+    setEventShifts([...eventShifts, shift]);
+    setNewShift({
+      name: "",
+      startTime: "",
+      endTime: "",
+      color: SHIFT_COLORS[(eventShifts.length + 1) % SHIFT_COLORS.length],
+    });
+  };
+
+  // Vardiya silme
+  const removeShift = (id: string) => {
+    setEventShifts(eventShifts.filter((s) => s.id !== id));
   };
 
   // Adım 2: Şablon seç ve devam et
@@ -377,6 +455,127 @@ export default function NewEventPage() {
                     rows={3}
                     className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
                   />
+                </div>
+
+                {/* Vardiyalar (Shifts) */}
+                <div className="space-y-4">
+                  <Label className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-blue-400" />
+                    Vardiyalar (Opsiyonel)
+                  </Label>
+
+                  {/* Mevcut Vardiyalar */}
+                  {eventShifts.length > 0 && (
+                    <div className="space-y-2">
+                      {eventShifts.map((shift) => (
+                        <div
+                          key={shift.id}
+                          className="flex items-center justify-between p-3 rounded-lg bg-slate-700/50 border border-slate-600"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-4 h-4 rounded-full"
+                              style={{ backgroundColor: shift.color }}
+                            />
+                            <span className="font-medium text-white">
+                              {shift.name}
+                            </span>
+                            <span className="text-sm text-slate-400">
+                              {shift.startTime} - {shift.endTime}
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeShift(shift.id)}
+                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Yeni Vardiya Ekleme Formu */}
+                  <div className="p-4 rounded-lg bg-slate-700/30 border border-slate-600 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div className="sm:col-span-1">
+                        <Input
+                          value={newShift.name}
+                          onChange={(e) =>
+                            setNewShift({ ...newShift, name: e.target.value })
+                          }
+                          placeholder="Vardiya adı"
+                          className="bg-slate-700 border-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <Input
+                          type="time"
+                          value={newShift.startTime}
+                          onChange={(e) =>
+                            setNewShift({
+                              ...newShift,
+                              startTime: e.target.value,
+                            })
+                          }
+                          className="bg-slate-700 border-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <Input
+                          type="time"
+                          value={newShift.endTime}
+                          onChange={(e) =>
+                            setNewShift({
+                              ...newShift,
+                              endTime: e.target.value,
+                            })
+                          }
+                          className="bg-slate-700 border-slate-600"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          {SHIFT_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              onClick={() =>
+                                setNewShift({ ...newShift, color })
+                              }
+                              className={cn(
+                                "w-6 h-6 rounded-full transition-all",
+                                newShift.color === color
+                                  ? "ring-2 ring-white ring-offset-2 ring-offset-slate-800"
+                                  : "hover:scale-110"
+                              )}
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={addShift}
+                          disabled={
+                            !newShift.name ||
+                            !newShift.startTime ||
+                            !newShift.endTime
+                          }
+                          className="bg-blue-600 hover:bg-blue-700 ml-auto"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Örn: Sabah Vardiyası (08:00-16:00), Akşam Vardiyası
+                      (16:00-00:00)
+                    </p>
+                  </div>
                 </div>
 
                 {/* Bilgi Notu */}

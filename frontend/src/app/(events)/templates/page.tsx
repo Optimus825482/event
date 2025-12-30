@@ -12,6 +12,8 @@ import {
   MoreVertical,
   Search,
   X,
+  UserCheck,
+  Layers,
 } from "lucide-react";
 import { venuesApi, staffApi } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +47,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Yerleşim Şablonu
 interface VenueTemplate {
   id: string;
   name: string;
@@ -57,28 +60,36 @@ interface VenueTemplate {
   updatedAt: string;
 }
 
+// Ekip Organizasyonu Şablonu (Step 3'ten kaydedilen)
+// Her şablon = Birden fazla takım + personel içerir
 interface OrganizationTemplate {
   id: string;
-  name: string;
+  name: string; // "Şablon 1", "Şablon 2" gibi
   description?: string;
-  staffAssignments: any[];
-  teamAssignments: any[];
-  tableGroups: any[];
-  tags: string[];
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
+  teams: TeamInTemplate[]; // İçindeki takımlar
+  totalPersonnel: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-interface PlacedTable {
+// Şablon içindeki takım
+interface TeamInTemplate {
   id: string;
-  x: number;
-  y: number;
-  tableNumber: number;
-  isLoca: boolean;
-  capacity: number;
-  type?: string;
-  locaName?: string;
+  name: string;
+  color: string;
+  members: Array<{
+    id: string;
+    fullName: string;
+    position?: string;
+    avatar?: string;
+  }>;
+  leader?: {
+    id: string;
+    fullName: string;
+    position?: string;
+    avatar?: string;
+  };
+  leaderId?: string;
 }
 
 export default function TemplatesPage() {
@@ -91,39 +102,59 @@ export default function TemplatesPage() {
     id: string;
     name: string;
   } | null>(null);
-  const [previewTemplate, setPreviewTemplate] = useState<VenueTemplate | null>(
+  const [previewVenue, setPreviewVenue] = useState<VenueTemplate | null>(null);
+  const [previewOrg, setPreviewOrg] = useState<OrganizationTemplate | null>(
     null
   );
-  const [previewOrgTemplate, setPreviewOrgTemplate] =
-    useState<OrganizationTemplate | null>(null);
-  const [placedTablesForOrg, setPlacedTablesForOrg] = useState<PlacedTable[]>(
-    []
-  );
-  const [stageElementsForOrg, setStageElementsForOrg] = useState<any[]>([]);
-  const [teamsData, setTeamsData] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [venuesRes, orgRes, teamsRes] = await Promise.all([
+        const [venuesRes, teamsRes] = await Promise.all([
           venuesApi.getAll().catch(() => ({ data: [] })),
-          staffApi.getOrganizationTemplates().catch(() => ({ data: [] })),
           staffApi.getTeams().catch(() => ({ data: [] })),
         ]);
 
+        // Yerleşim şablonları
         const venues = Array.isArray(venuesRes.data)
           ? venuesRes.data
           : venuesRes.data || [];
-        const orgs = Array.isArray(orgRes.data)
-          ? orgRes.data
-          : orgRes.data || [];
+        setVenueTemplates(venues);
+
+        // Takımları "Ekip Organizasyonu Şablonu" olarak grupla
+        // Her takım grubu = 1 şablon (şimdilik tüm takımlar tek şablonda)
         const teams = Array.isArray(teamsRes.data)
           ? teamsRes.data
           : teamsRes.data || [];
 
-        setVenueTemplates(venues);
-        setOrgTemplates(orgs);
-        setTeamsData(teams);
+        if (teams.length > 0) {
+          // Tüm takımları tek bir şablon olarak grupla
+          const totalPersonnel = teams.reduce(
+            (sum: number, t: any) =>
+              sum + (t.members?.length || t.memberIds?.length || 0),
+            0
+          );
+
+          const defaultTemplate: OrganizationTemplate = {
+            id: "default-org-template",
+            name: "Varsayılan Ekip Şablonu",
+            description: `${teams.length} takım, ${totalPersonnel} personel içerir`,
+            teams: teams.map((t: any) => ({
+              id: t.id,
+              name: t.name,
+              color: t.color,
+              members: t.members || [],
+              leader: t.leader,
+              leaderId: t.leaderId,
+            })),
+            totalPersonnel,
+            createdAt: new Date().toISOString(),
+          };
+
+          setOrgTemplates([defaultTemplate]);
+        } else {
+          setOrgTemplates([]);
+        }
       } catch (error) {
         console.error("Şablonlar yüklenemedi:", error);
       } finally {
@@ -148,8 +179,15 @@ export default function TemplatesPage() {
 
   const handleDeleteOrg = async () => {
     if (!deleteConfirm || deleteConfirm.type !== "org") return;
+    // Organizasyon şablonu silme - tüm takımları sil
     try {
-      await staffApi.deleteOrganizationTemplate(deleteConfirm.id);
+      const template = orgTemplates.find((t) => t.id === deleteConfirm.id);
+      if (template) {
+        // Tüm takımları sil
+        await Promise.all(
+          template.teams.map((team) => staffApi.deleteTeam(team.id))
+        );
+      }
       setOrgTemplates((prev) => prev.filter((t) => t.id !== deleteConfirm.id));
       setDeleteConfirm(null);
     } catch (error) {
@@ -169,6 +207,7 @@ export default function TemplatesPage() {
   return (
     <PageContainer>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -176,7 +215,7 @@ export default function TemplatesPage() {
               Şablonlar
             </h1>
             <p className="text-slate-400 mt-1">
-              Yerleşim ve ekip atama şablonlarını yönetin
+              Yerleşim ve ekip organizasyonu şablonlarını yönetin
             </p>
           </div>
           <div className="relative">
@@ -190,6 +229,7 @@ export default function TemplatesPage() {
           </div>
         </div>
 
+        {/* Tabs */}
         <Tabs defaultValue="venue" className="w-full">
           <TabsList className="bg-slate-800 border border-slate-700">
             <TabsTrigger
@@ -204,10 +244,11 @@ export default function TemplatesPage() {
               className="data-[state=active]:bg-amber-600"
             >
               <Users className="w-4 h-4 mr-2" />
-              Ekip Atama Şablonları ({filteredOrgs.length})
+              Ekip Organizasyonu Şablonları ({filteredOrgs.length})
             </TabsTrigger>
           </TabsList>
 
+          {/* TAB 1: Yerleşim Şablonları */}
           <TabsContent value="venue" className="mt-6">
             {filteredVenues.length === 0 ? (
               <EmptyState
@@ -230,19 +271,20 @@ export default function TemplatesPage() {
                         name: template.name,
                       })
                     }
-                    onPreview={() => setPreviewTemplate(template)}
+                    onPreview={() => setPreviewVenue(template)}
                   />
                 ))}
               </div>
             )}
           </TabsContent>
 
+          {/* TAB 2: Ekip Organizasyonu Şablonları */}
           <TabsContent value="organization" className="mt-6">
             {filteredOrgs.length === 0 ? (
               <EmptyState
                 icon={<Users className="w-12 h-12" />}
-                title="Ekip atama şablonu yok"
-                description="Etkinlik ekip organizasyonunda şablon olarak kaydedebilirsiniz"
+                title="Ekip organizasyonu şablonu yok"
+                description="Etkinlik ekip organizasyonunda (Step 3) şablon olarak kaydedebilirsiniz"
                 actionLabel="Etkinliklere Git"
                 actionHref="/events"
               />
@@ -259,21 +301,7 @@ export default function TemplatesPage() {
                         name: template.name,
                       })
                     }
-                    onPreview={() => {
-                      // İlk venue template'den placedTables al
-                      const firstVenue = venueTemplates[0];
-                      if (firstVenue?.layoutData?.placedTables) {
-                        setPlacedTablesForOrg(
-                          firstVenue.layoutData.placedTables
-                        );
-                      }
-                      if (firstVenue?.layoutData?.stageElements) {
-                        setStageElementsForOrg(
-                          firstVenue.layoutData.stageElements
-                        );
-                      }
-                      setPreviewOrgTemplate(template);
-                    }}
+                    onPreview={() => setPreviewOrg(template)}
                   />
                 ))}
               </div>
@@ -282,6 +310,7 @@ export default function TemplatesPage() {
         </Tabs>
       </div>
 
+      {/* Delete Confirmation */}
       <AlertDialog
         open={!!deleteConfirm}
         onOpenChange={() => setDeleteConfirm(null)}
@@ -294,6 +323,11 @@ export default function TemplatesPage() {
             <AlertDialogDescription className="text-slate-400">
               &quot;{deleteConfirm?.name}&quot; şablonunu silmek istediğinize
               emin misiniz? Bu işlem geri alınamaz.
+              {deleteConfirm?.type === "org" && (
+                <span className="block mt-2 text-red-400">
+                  ⚠️ Bu şablondaki tüm takımlar da silinecek!
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -314,48 +348,36 @@ export default function TemplatesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog
-        open={!!previewTemplate}
-        onOpenChange={() => setPreviewTemplate(null)}
-      >
+      {/* Venue Preview Modal */}
+      <Dialog open={!!previewVenue} onOpenChange={() => setPreviewVenue(null)}>
         <DialogContent className="bg-slate-800 border-slate-700 max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <MapPin className="w-5 h-5 text-green-400" />
-              {previewTemplate?.name} - Yerleşim Önizleme
+              {previewVenue?.name} - Yerleşim Önizleme
             </DialogTitle>
             <DialogDescription className="text-slate-400">
               Şablondaki masa yerleşiminin önizlemesi
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4">
-            {previewTemplate && (
-              <LayoutPreview layoutData={previewTemplate.layoutData} />
+            {previewVenue && (
+              <LayoutPreview layoutData={previewVenue.layoutData} />
             )}
           </div>
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-700">
             <div className="flex items-center gap-4 text-sm text-slate-400">
               <span className="flex items-center gap-1">
                 <LayoutGrid className="w-4 h-4" />
-                {previewTemplate?.layoutData?.placedTables?.length ||
-                  previewTemplate?.layoutData?.tables?.length ||
+                {previewVenue?.layoutData?.placedTables?.length ||
+                  previewVenue?.layoutData?.tables?.length ||
                   0}{" "}
                 masa
-              </span>
-              <span className="flex items-center gap-1">
-                <Users className="w-4 h-4" />
-                {(
-                  previewTemplate?.layoutData?.placedTables ||
-                  previewTemplate?.layoutData?.tables ||
-                  []
-                ).reduce((sum: number, t: any) => sum + (t.capacity || 0), 0) ||
-                  0}{" "}
-                kişi
               </span>
             </div>
             <Button
               variant="outline"
-              onClick={() => setPreviewTemplate(null)}
+              onClick={() => setPreviewVenue(null)}
               className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
               <X className="w-4 h-4 mr-2" />
@@ -365,53 +387,112 @@ export default function TemplatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Ekip Şablonu Detay Modal */}
-      <Dialog
-        open={!!previewOrgTemplate}
-        onOpenChange={() => {
-          setPreviewOrgTemplate(null);
-          setPlacedTablesForOrg([]);
-          setStageElementsForOrg([]);
-        }}
-      >
-        <DialogContent className="bg-slate-800 border-slate-700 max-w-4xl max-h-[90vh]">
+      {/* Organization Template Preview Modal */}
+      <Dialog open={!!previewOrg} onOpenChange={() => setPreviewOrg(null)}>
+        <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-amber-400" />
-              {previewOrgTemplate?.name} - Ekip Organizasyonu
+              {previewOrg?.name}
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Şablondaki ekip atamaları ve masa grupları
+              {previewOrg?.description}
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-4">
-            {previewOrgTemplate && (
-              <OrgLayoutPreview
-                placedTables={placedTablesForOrg}
-                tableGroups={previewOrgTemplate.tableGroups || []}
-                stageElements={stageElementsForOrg}
-                teams={teamsData}
-              />
-            )}
-          </div>
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-700">
-            <div className="flex items-center gap-4 text-sm text-slate-400">
-              <span className="flex items-center gap-1">
-                <Users className="w-4 h-4" />
-                {previewOrgTemplate?.staffAssignments?.length || 0} personel
-              </span>
-              <span className="flex items-center gap-1">
-                <LayoutGrid className="w-4 h-4" />
-                {previewOrgTemplate?.tableGroups?.length || 0} grup
-              </span>
+
+          <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            {/* Özet Bilgiler */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-amber-400">
+                  {previewOrg?.teams.length || 0}
+                </div>
+                <div className="text-xs text-slate-400">Takım</div>
+              </div>
+              <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-blue-400">
+                  {previewOrg?.totalPersonnel || 0}
+                </div>
+                <div className="text-xs text-slate-400">Personel</div>
+              </div>
             </div>
+
+            {/* Takımlar Listesi */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-slate-300">Takımlar</h4>
+              {previewOrg?.teams.map((team) => (
+                <div
+                  key={team.id}
+                  className="bg-slate-700/30 rounded-lg p-3 border-l-4"
+                  style={{ borderLeftColor: team.color }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: team.color }}
+                      />
+                      <span className="font-medium text-white">
+                        {team.name}
+                      </span>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="bg-slate-600/50 text-slate-300 border-slate-500"
+                    >
+                      {team.members?.length || 0} üye
+                    </Badge>
+                  </div>
+
+                  {/* Lider */}
+                  {team.leader && (
+                    <div className="flex items-center gap-2 mb-2 text-xs">
+                      <UserCheck className="w-3 h-3 text-amber-400" />
+                      <span className="text-amber-400">Lider:</span>
+                      <span className="text-white">{team.leader.fullName}</span>
+                    </div>
+                  )}
+
+                  {/* Üye Avatarları */}
+                  <div className="flex -space-x-2">
+                    {team.members?.slice(0, 6).map((member, idx) => (
+                      <div
+                        key={member.id}
+                        className="w-7 h-7 rounded-full border-2 border-slate-700 overflow-hidden"
+                        style={{ zIndex: 6 - idx }}
+                        title={member.fullName}
+                      >
+                        {member.avatar ? (
+                          <img
+                            src={member.avatar}
+                            alt={member.fullName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-full flex items-center justify-center text-xs font-bold text-white"
+                            style={{ backgroundColor: team.color }}
+                          >
+                            {member.fullName.charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {(team.members?.length || 0) > 6 && (
+                      <div className="w-7 h-7 rounded-full border-2 border-slate-700 bg-slate-600 flex items-center justify-center text-xs text-white">
+                        +{(team.members?.length || 0) - 6}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end mt-4 pt-4 border-t border-slate-700">
             <Button
               variant="outline"
-              onClick={() => {
-                setPreviewOrgTemplate(null);
-                setPlacedTablesForOrg([]);
-                setStageElementsForOrg([]);
-              }}
+              onClick={() => setPreviewOrg(null)}
               className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
               <X className="w-4 h-4 mr-2" />
@@ -424,6 +505,7 @@ export default function TemplatesPage() {
   );
 }
 
+// ==================== COMPONENT: LayoutPreview ====================
 function LayoutPreview({ layoutData }: { layoutData: any }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -456,7 +538,6 @@ function LayoutPreview({ layoutData }: { layoutData: any }) {
       ctx.stroke();
     }
 
-    // placedTables veya tables kullan
     const tables = layoutData.placedTables || layoutData.tables || [];
     const stageElements = layoutData.stageElements || [];
 
@@ -488,7 +569,7 @@ function LayoutPreview({ layoutData }: { layoutData: any }) {
     const offsetX = (width - contentWidth * scale) / 2 - minX * scale;
     const offsetY = (height - contentHeight * scale) / 2 - minY * scale;
 
-    // Sahne elemanlarını çiz
+    // Sahne elemanları
     stageElements.forEach((element: any) => {
       const x = (element.x || 0) * scale + offsetX;
       const y = (element.y || 0) * scale + offsetY;
@@ -510,7 +591,7 @@ function LayoutPreview({ layoutData }: { layoutData: any }) {
       ctx.fillText(element.label || element.type || "", x + w / 2, y + h / 2);
     });
 
-    // Masaları çiz
+    // Masalar
     tables.forEach((table: any) => {
       const x = (table.x || 0) * scale + offsetX;
       const y = (table.y || 0) * scale + offsetY;
@@ -520,13 +601,9 @@ function LayoutPreview({ layoutData }: { layoutData: any }) {
       const type = table.type || "standard";
 
       let fillColor = "#22c55e";
-      if (isLoca) {
-        fillColor = "#a855f7";
-      } else if (type === "vip") {
-        fillColor = "#f59e0b";
-      } else if (type === "premium") {
-        fillColor = "#3b82f6";
-      }
+      if (isLoca) fillColor = "#a855f7";
+      else if (type === "vip") fillColor = "#f59e0b";
+      else if (type === "premium") fillColor = "#3b82f6";
 
       ctx.fillStyle = fillColor + "60";
       ctx.strokeStyle = fillColor;
@@ -551,11 +628,8 @@ function LayoutPreview({ layoutData }: { layoutData: any }) {
       ctx.textBaseline = "middle";
 
       let displayLabel = "";
-      if (isLoca && table.locaName) {
-        displayLabel = table.locaName;
-      } else if (table.tableNumber) {
-        displayLabel = String(table.tableNumber);
-      }
+      if (isLoca && table.locaName) displayLabel = table.locaName;
+      else if (table.tableNumber) displayLabel = String(table.tableNumber);
 
       if (isLoca) {
         ctx.fillText(displayLabel, x + (w * 1.2) / 2, y + (h * 0.8) / 2);
@@ -564,6 +638,7 @@ function LayoutPreview({ layoutData }: { layoutData: any }) {
       }
     });
 
+    // Legend
     const legendY = height - 25;
     const legendItems = [
       { color: "#22c55e", label: "Standard" },
@@ -600,153 +675,7 @@ function LayoutPreview({ layoutData }: { layoutData: any }) {
   );
 }
 
-function OrgLayoutPreview({
-  placedTables,
-  tableGroups,
-  stageElements = [],
-  teams = [],
-}: {
-  placedTables: PlacedTable[];
-  tableGroups: any[];
-  stageElements?: any[];
-  teams?: any[];
-}) {
-  if (placedTables.length === 0) {
-    return (
-      <div className="bg-slate-900 rounded-lg p-8 text-center">
-        <MapPin className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-        <p className="text-slate-400">Yerleşim verisi bulunamadı</p>
-      </div>
-    );
-  }
-
-  // Bounding box hesapla - orijinal koordinatlar
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-
-  placedTables.forEach((table) => {
-    minX = Math.min(minX, table.x || 0);
-    minY = Math.min(minY, table.y || 0);
-    maxX = Math.max(maxX, (table.x || 0) + 40);
-    maxY = Math.max(maxY, (table.y || 0) + 40);
-  });
-
-  stageElements.forEach((element: any) => {
-    minX = Math.min(minX, element.x || 0);
-    minY = Math.min(minY, element.y || 0);
-    maxX = Math.max(maxX, (element.x || 0) + (element.width || 100));
-    maxY = Math.max(maxY, (element.y || 0) + (element.height || 50));
-  });
-
-  // Orijinal içerik boyutları
-  const contentWidth = maxX - minX || 1;
-  const contentHeight = maxY - minY || 1;
-
-  // Scale hesapla - daha küçük scale ile tüm içerik görünsün
-  // Modal genişliği ~850px, yükseklik ~450px (lejant için yer bırak)
-  const scale = Math.min(400 / contentWidth, 600 / contentHeight);
-  const scaledWidth = contentWidth * scale;
-  const scaledHeight = contentHeight * scale;
-
-  // Masa -> Ekip eşleştirmesi
-  const getTableTeam = (tableId: string) => {
-    const group = tableGroups.find((g: any) => g.tableIds?.includes(tableId));
-    if (!group?.assignedTeamId) return null;
-    return teams.find((t: any) => t.id === group.assignedTeamId);
-  };
-
-  // Aktif ekipleri bul
-  const activeTeams = teams.filter((t: any) =>
-    tableGroups.some((g: any) => g.assignedTeamId === t.id)
-  );
-
-  return (
-    <div
-      className="relative bg-slate-900 rounded-lg overflow-hidden"
-      style={{ height: "520px" }}
-    >
-      <div
-        className="absolute left-1/2 top-1/2 border border-slate-600 rounded"
-        style={{
-          width: scaledWidth,
-          height: scaledHeight,
-          transform: "translate(-50%, -85%)",
-          background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-        }}
-      >
-        {/* Sahne elemanları */}
-        {stageElements.map((stage: any) => (
-          <div
-            key={stage.id}
-            className="absolute flex items-center justify-center text-xs font-medium"
-            style={{
-              left: (stage.x - minX) * scale,
-              top: (stage.y - minY) * scale,
-              width: stage.width * scale,
-              height: stage.height * scale,
-              backgroundColor:
-                stage.type === "system_control" ? "#dc2626" : "#3b82f6",
-              opacity: 0.8,
-              borderRadius: "4px",
-            }}
-          >
-            <span className="text-white text-[10px]">{stage.label}</span>
-          </div>
-        ))}
-
-        {/* Masalar - Ekip renkleriyle */}
-        {placedTables.map((table) => {
-          const team = getTableTeam(table.id);
-          const isLoca = table.isLoca;
-          const size = isLoca ? 16 : 20;
-
-          return (
-            <div
-              key={table.id}
-              className="absolute flex items-center justify-center"
-              style={{
-                left: (table.x - minX) * scale - size / 2,
-                top: (table.y - minY) * scale - size / 2,
-                width: size,
-                height: isLoca ? 14 : size,
-                backgroundColor: team?.color || "#475569",
-                borderRadius: isLoca ? "3px" : "50%",
-                border: team ? "2px solid rgba(255,255,255,0.3)" : "none",
-              }}
-            >
-              <span className="text-white text-[8px] font-bold">
-                {isLoca ? table.locaName : table.tableNumber}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Ekip Renk Açıklaması */}
-      <div className="absolute bottom-4 left-4 bg-slate-800/90 rounded-lg p-3">
-        <p className="text-xs text-slate-400 mb-2">Ekipler</p>
-        <div className="flex flex-wrap gap-2">
-          {activeTeams.map((team: any) => (
-            <div key={team.id} className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: team.color }}
-              />
-              <span className="text-xs text-white">{team.name}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-slate-500" />
-            <span className="text-xs text-slate-400">Atanmamış</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ==================== COMPONENT: VenueTemplateCard ====================
 function VenueTemplateCard({
   template,
   onDelete,
@@ -756,7 +685,6 @@ function VenueTemplateCard({
   onDelete: () => void;
   onPreview: () => void;
 }) {
-  // placedTables veya tables kullan
   const tables =
     template.layoutData?.placedTables || template.layoutData?.tables || [];
   const tableCount = tables.length;
@@ -846,7 +774,7 @@ function VenueTemplateCard({
           </Badge>
           <span className="text-xs text-slate-500 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Eye className="w-3 h-3" />
-            Önizlemek için tıkla
+            Önizle
           </span>
         </div>
       </CardContent>
@@ -854,6 +782,7 @@ function VenueTemplateCard({
   );
 }
 
+// ==================== COMPONENT: OrgTemplateCard ====================
 function OrgTemplateCard({
   template,
   onDelete,
@@ -863,11 +792,11 @@ function OrgTemplateCard({
   onDelete: () => void;
   onPreview: () => void;
 }) {
-  const staffCount = template.staffAssignments?.length || 0;
-  const groupCount = template.tableGroups?.length || 0;
-  const teamCount = new Set(
-    template.tableGroups?.map((g: any) => g.assignedTeamId).filter(Boolean)
-  ).size;
+  const teamCount = template.teams?.length || 0;
+  const personnelCount = template.totalPersonnel || 0;
+
+  // İlk 4 takımın renklerini al
+  const teamColors = template.teams?.slice(0, 4).map((t) => t.color) || [];
 
   return (
     <Card
@@ -879,7 +808,7 @@ function OrgTemplateCard({
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:bg-amber-500/30 transition-colors">
-              <Users className="w-5 h-5 text-amber-400" />
+              <Layers className="w-5 h-5 text-amber-400" />
             </div>
             <div>
               <h3 className="font-semibold text-white group-hover:text-amber-300 transition-colors">
@@ -920,45 +849,38 @@ function OrgTemplateCard({
           </DropdownMenu>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="bg-slate-700/50 rounded-lg px-2 py-2 text-center">
-            <div className="text-lg font-bold text-amber-400">{staffCount}</div>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-slate-700/50 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold text-amber-400">{teamCount}</div>
+            <div className="text-xs text-slate-400">Takım</div>
+          </div>
+          <div className="bg-slate-700/50 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold text-blue-400">
+              {personnelCount}
+            </div>
             <div className="text-xs text-slate-400">Personel</div>
-          </div>
-          <div className="bg-slate-700/50 rounded-lg px-2 py-2 text-center">
-            <div className="text-lg font-bold text-blue-400">{groupCount}</div>
-            <div className="text-xs text-slate-400">Grup</div>
-          </div>
-          <div className="bg-slate-700/50 rounded-lg px-2 py-2 text-center">
-            <div className="text-lg font-bold text-green-400">{teamCount}</div>
-            <div className="text-xs text-slate-400">Ekip</div>
           </div>
         </div>
 
+        {/* Takım Renkleri */}
         <div className="flex items-center justify-between">
-          {template.isDefault ? (
-            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
-              Varsayılan
-            </Badge>
-          ) : (
-            <div className="flex flex-wrap gap-1">
-              {template.tags?.slice(0, 2).map((tag, idx) => (
-                <Badge
-                  key={idx}
-                  variant="outline"
-                  className="text-xs bg-slate-700/50 border-slate-600 text-slate-300"
-                >
-                  {tag}
-                </Badge>
-              ))}
-              {(!template.tags || template.tags.length === 0) && (
-                <span className="text-xs text-slate-500">Etiket yok</span>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-1">
+            {teamColors.map((color, idx) => (
+              <div
+                key={idx}
+                className="w-4 h-4 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+            ))}
+            {teamCount > 4 && (
+              <span className="text-xs text-slate-500 ml-1">
+                +{teamCount - 4}
+              </span>
+            )}
+          </div>
           <span className="text-xs text-slate-500 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Eye className="w-3 h-3" />
-            Detaylar için tıkla
+            Detaylar
           </span>
         </div>
       </CardContent>
@@ -966,6 +888,7 @@ function OrgTemplateCard({
   );
 }
 
+// ==================== COMPONENT: EmptyState ====================
 function EmptyState({
   icon,
   title,
@@ -991,6 +914,7 @@ function EmptyState({
   );
 }
 
+// ==================== COMPONENT: TemplatesSkeleton ====================
 function TemplatesSkeleton() {
   return (
     <PageContainer>

@@ -15,6 +15,9 @@ import { Reservation } from "./reservation.entity";
 import { StaffAssignment } from "./staff-assignment.entity";
 import { ServiceTeam } from "./service-team.entity";
 import { EventStaffAssignment } from "./event-staff-assignment.entity";
+import { TableGroup } from "./table-group.entity";
+import { ServicePoint } from "./service-point.entity";
+import { ServicePointStaffAssignment } from "./service-point-staff-assignment.entity";
 
 export enum EventStatus {
   DRAFT = "draft",
@@ -109,6 +112,17 @@ export class Event {
 
   @OneToMany(() => EventStaffAssignment, (assignment) => assignment.event)
   eventStaffAssignments: EventStaffAssignment[];
+
+  @OneToMany(() => TableGroup, (group) => group.event)
+  tableGroups: TableGroup[];
+
+  // Hizmet Noktaları (Bar, Lounge, Karşılama vb.)
+  @OneToMany(() => ServicePoint, (sp) => sp.event)
+  servicePoints: ServicePoint[];
+
+  // Hizmet Noktası Personel Atamaları
+  @OneToMany(() => ServicePointStaffAssignment, (spsa) => spsa.event)
+  servicePointStaffAssignments: ServicePointStaffAssignment[];
 
   // Performans değerlendirme sistemi ayarları
   @Column({ type: "boolean", default: false })

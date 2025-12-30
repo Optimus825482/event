@@ -12,18 +12,34 @@ import { User } from "./user.entity";
 // Şablon içindeki personel ataması
 interface TemplateStaffAssignment {
   staffId: string;
+  staffName?: string; // Personel adı (eşleştirme için)
   tableIds: string[];
   shiftId?: string;
   teamId?: string;
+  teamName?: string; // Takım adı (farklı etkinliklerde eşleştirme için)
   color?: string;
 }
 
 // Şablon içindeki ekip ataması
 interface TemplateTeamAssignment {
   teamId: string;
+  teamName: string; // Takım adı (farklı etkinliklerde eşleştirme için)
   staffIds: string[];
+  staffNames?: string[]; // Personel adları (eşleştirme için)
   tableIds: string[];
   color?: string;
+}
+
+// Şablon içindeki masa grubu
+interface TemplateTableGroup {
+  name: string;
+  color: string;
+  tableIds: string[];
+  groupType?: string;
+  assignedTeamId?: string;
+  assignedTeamName?: string; // Takım adı (farklı etkinliklerde eşleştirme için)
+  assignedSupervisorId?: string;
+  assignedSupervisorName?: string; // Süpervizör adı (eşleştirme için)
 }
 
 @Entity("organization_templates")
@@ -55,7 +71,7 @@ export class OrganizationTemplate {
 
   // Masa grupları (JSON)
   @Column({ type: "jsonb", default: [] })
-  tableGroups: any[];
+  tableGroups: TemplateTableGroup[];
 
   // Şablon ayarları
   @Column({ type: "jsonb", default: {} })

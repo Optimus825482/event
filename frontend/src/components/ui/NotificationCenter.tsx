@@ -105,17 +105,19 @@ export function NotificationCenter() {
     };
   }, [user?.id, user?.role, addNotification, toast]);
 
-  // İlk yüklemede bildirimleri çek
+  // İlk yüklemede bildirimleri çek - sadece login olmuşsa
   useEffect(() => {
-    fetchUnreadCount();
-  }, [fetchUnreadCount]);
+    if (user?.id) {
+      fetchUnreadCount();
+    }
+  }, [fetchUnreadCount, user?.id]);
 
-  // Panel açıldığında bildirimleri yükle
+  // Panel açıldığında bildirimleri yükle - sadece login olmuşsa
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && user?.id) {
       fetchNotifications({ limit: 20 });
     }
-  }, [isOpen, fetchNotifications]);
+  }, [isOpen, fetchNotifications, user?.id]);
 
   const formatTime = useCallback((dateStr: string) => {
     const date = new Date(dateStr);

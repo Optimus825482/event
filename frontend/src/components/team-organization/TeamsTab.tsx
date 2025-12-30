@@ -608,8 +608,9 @@ function TeamFormDialog({
         });
       }
       onSave();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "İşlem başarısız");
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setError(error.response?.data?.message || "İşlem başarısız");
     } finally {
       setSaving(false);
     }

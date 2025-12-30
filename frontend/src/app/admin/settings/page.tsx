@@ -75,6 +75,15 @@ export default function AdminSettingsPage() {
     "success" | "error" | null
   >(null);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Canlı saat için useEffect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Form states
   const [generalSettings, setGeneralSettings] = useState({
@@ -347,7 +356,7 @@ export default function AdminSettingsPage() {
                       }
                     >
                       <SelectTrigger className="bg-slate-700 border-slate-600">
-                        <SelectValue />
+                        <SelectValue placeholder="Zaman dilimi seçin" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
                         <SelectItem value="Europe/Nicosia">
@@ -364,6 +373,29 @@ export default function AdminSettingsPage() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    {/* Canlı Tarih ve Saat */}
+                    <div className="mt-3 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+                      <p className="text-xs text-slate-400 mb-1">
+                        Şu anki tarih ve saat
+                      </p>
+                      <p className="text-lg font-mono text-amber-400">
+                        {currentTime.toLocaleDateString("tr-TR", {
+                          weekday: "long",
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          timeZone: generalSettings.timezone,
+                        })}
+                      </p>
+                      <p className="text-2xl font-mono text-white">
+                        {currentTime.toLocaleTimeString("tr-TR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                          timeZone: generalSettings.timezone,
+                        })}
+                      </p>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Dil</Label>

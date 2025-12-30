@@ -10,9 +10,15 @@ import {
   BadRequestException,
   UseGuards,
   Request,
+  UseInterceptors,
+  UploadedFile,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { diskStorage } from "multer";
+import { extname } from "path";
 import { StaffService } from "./staff.service";
 import { StaffPosition } from "../../entities/user.entity";
+import { Staff, Gender, StaffStatus } from "../../entities/staff.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 
 // DTO tanımları
@@ -63,6 +69,173 @@ export class StaffController {
     return this.staffService.getAllRoles();
   }
 
+  // ==================== POSITIONS (UNVANLAR) ====================
+  // NOT: Bu endpoint'ler :id parametreli endpoint'lerden ÖNCE olmalı!
+
+  // Tüm unvanları getir
+  @Get("positions")
+  getAllPositions(@Query("all") all?: string) {
+    const onlyActive = all !== "true";
+    return this.staffService.getAllPositions(onlyActive);
+  }
+
+  // Yeni unvan ekle
+  @Post("positions")
+  createPosition(@Body() dto: { name: string; description?: string }) {
+    return this.staffService.createPosition(dto);
+  }
+
+  // Unvan güncelle
+  @Put("positions/:id")
+  updatePosition(
+    @Param("id") id: string,
+    @Body()
+    dto: {
+      name?: string;
+      description?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ) {
+    return this.staffService.updatePosition(id, dto);
+  }
+
+  // Unvan sil
+  @Delete("positions/:id")
+  deletePosition(@Param("id") id: string) {
+    return this.staffService.deletePosition(id);
+  }
+
+  // ==================== DEPARTMENTS (BÖLÜMLER) ====================
+  // NOT: Bu endpoint'ler :id parametreli endpoint'lerden ÖNCE olmalı!
+
+  // Tüm bölümleri getir
+  @Get("departments")
+  getAllDepartments(@Query("all") all?: string) {
+    const onlyActive = all !== "true";
+    return this.staffService.getAllDepartments(onlyActive);
+  }
+
+  // Yeni bölüm ekle
+  @Post("departments")
+  createDepartment(
+    @Body() dto: { name: string; description?: string; color?: string }
+  ) {
+    return this.staffService.createDepartment(dto);
+  }
+
+  // Bölüm güncelle
+  @Put("departments/:id")
+  updateDepartment(
+    @Param("id") id: string,
+    @Body()
+    dto: {
+      name?: string;
+      description?: string;
+      color?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ) {
+    return this.staffService.updateDepartment(id, dto);
+  }
+
+  // Bölüm sil
+  @Delete("departments/:id")
+  deleteDepartment(@Param("id") id: string) {
+    return this.staffService.deleteDepartment(id);
+  }
+
+  // ==================== WORK LOCATIONS (GÖREV YERLERİ) ====================
+  // NOT: Bu endpoint'ler :id parametreli endpoint'lerden ÖNCE olmalı!
+
+  // Tüm görev yerlerini getir
+  @Get("work-locations")
+  getAllWorkLocations(@Query("all") all?: string) {
+    const onlyActive = all !== "true";
+    return this.staffService.getAllWorkLocations(onlyActive);
+  }
+
+  // Yeni görev yeri ekle
+  @Post("work-locations")
+  createWorkLocation(
+    @Body() dto: { name: string; description?: string; address?: string }
+  ) {
+    return this.staffService.createWorkLocation(dto);
+  }
+
+  // Görev yeri güncelle
+  @Put("work-locations/:id")
+  updateWorkLocation(
+    @Param("id") id: string,
+    @Body()
+    dto: {
+      name?: string;
+      description?: string;
+      address?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
+  ) {
+    return this.staffService.updateWorkLocation(id, dto);
+  }
+
+  // Görev yeri sil
+  @Delete("work-locations/:id")
+  deleteWorkLocation(@Param("id") id: string) {
+    return this.staffService.deleteWorkLocation(id);
+  }
+
+  // ==================== İLİŞKİ ENDPOINT'LERİ ====================
+
+  // Departmana ait pozisyonları getir
+  @Get("departments/:id/positions")
+  getPositionsByDepartment(@Param("id") id: string) {
+    return this.staffService.getPositionsByDepartment(id);
+  }
+
+  // Departmana ait görev yerlerini getir
+  @Get("departments/:id/locations")
+  getLocationsByDepartment(@Param("id") id: string) {
+    return this.staffService.getLocationsByDepartment(id);
+  }
+
+  // Departman detaylarını ilişkileriyle getir
+  @Get("departments/:id/details")
+  getDepartmentWithRelations(@Param("id") id: string) {
+    return this.staffService.getDepartmentWithRelations(id);
+  }
+
+  // Tüm departmanları ilişkileriyle getir
+  @Get("departments-with-relations")
+  getAllDepartmentsWithRelations() {
+    return this.staffService.getAllDepartmentsWithRelations();
+  }
+
+  // Departmanın pozisyonlarını güncelle
+  @Put("departments/:id/positions")
+  updateDepartmentPositions(
+    @Param("id") id: string,
+    @Body() dto: { positionIds: string[] }
+  ) {
+    return this.staffService.updateDepartmentPositions(id, dto.positionIds);
+  }
+
+  // Departmanın görev yerlerini güncelle
+  @Put("departments/:id/locations")
+  updateDepartmentLocations(
+    @Param("id") id: string,
+    @Body() dto: { locationIds: string[] }
+  ) {
+    return this.staffService.updateDepartmentLocations(id, dto.locationIds);
+  }
+
+  // İlişkileri staff verilerinden senkronize et
+  @Post("sync-relations")
+  syncRelationsFromStaffData() {
+    return this.staffService.syncRelationsFromStaffData();
+  }
+
   // Süpervizörleri getir
   @Get("supervisors")
   getSupervisors() {
@@ -72,10 +245,33 @@ export class StaffController {
   // ==================== WORK SHIFT (ÇALIŞMA SAATLERİ) GET ====================
   // NOT: Bu endpoint :id parametreli endpoint'lerden ÖNCE olmalı!
 
-  // Tüm çalışma saatlerini getir
+  // Tüm çalışma saatlerini getir (global + opsiyonel eventId)
   @Get("shifts")
-  getAllShifts() {
-    return this.staffService.getAllShifts();
+  getAllShifts(@Query("eventId") eventId?: string) {
+    return this.staffService.getAllShifts(eventId);
+  }
+
+  // Etkinliğe özel vardiyaları getir
+  @Get("events/:eventId/shifts")
+  getEventShifts(@Param("eventId") eventId: string) {
+    return this.staffService.getEventShifts(eventId);
+  }
+
+  // Etkinliğe özel toplu vardiya oluştur
+  @Post("events/:eventId/shifts/bulk")
+  createBulkShifts(
+    @Param("eventId") eventId: string,
+    @Body()
+    dto: {
+      shifts: Array<{
+        name: string;
+        startTime: string;
+        endTime: string;
+        color?: string;
+      }>;
+    }
+  ) {
+    return this.staffService.createBulkShifts(eventId, dto.shifts);
   }
 
   // ==================== TEAM (EKİP) GET ====================
@@ -102,12 +298,164 @@ export class StaffController {
     return this.staffService.getOrganizationTemplateById(id);
   }
 
+  // ==================== PERSONNEL (YENİ STAFF ENTITY) GET ENDPOINT'LERİ ====================
+  // NOT: Bu endpoint'ler :id parametreli endpoint'lerden ÖNCE olmalı!
+
+  // Tüm personeli listele (yeni Staff tablosundan)
+  @Get("personnel")
+  findAllPersonnel(
+    @Query("department") department?: string,
+    @Query("workLocation") workLocation?: string,
+    @Query("position") position?: string,
+    @Query("isActive") isActive?: string,
+    @Query("status") status?: string
+  ) {
+    return this.staffService.findAllPersonnel({
+      department,
+      workLocation,
+      position,
+      isActive:
+        isActive === "true" ? true : isActive === "false" ? false : undefined,
+      status,
+    });
+  }
+
+  // Personel istatistikleri
+  @Get("personnel/stats")
+  getPersonnelStats() {
+    return this.staffService.getPersonnelStats();
+  }
+
+  // ==================== LAZY LOADING ENDPOINT'LERİ ====================
+
+  // Pozisyon bazlı özet (sadece pozisyon adı ve sayısı)
+  @Get("personnel/summary/by-position")
+  getPersonnelSummaryByPosition() {
+    return this.staffService.getPersonnelSummaryByPosition();
+  }
+
+  // Departman bazlı özet
+  @Get("personnel/summary/by-department")
+  getPersonnelSummaryByDepartment() {
+    return this.staffService.getPersonnelSummaryByDepartment();
+  }
+
+  // Pozisyona göre personel listesi (lazy loading)
+  @Get("personnel/by-position/:position")
+  getPersonnelByPosition(@Param("position") position: string) {
+    return this.staffService.getPersonnelByPosition(
+      decodeURIComponent(position)
+    );
+  }
+
+  // Departmana göre personel listesi (lazy loading)
+  @Get("personnel/by-department/:department")
+  getPersonnelByDepartment(@Param("department") department: string) {
+    return this.staffService.getPersonnelByDepartment(
+      decodeURIComponent(department)
+    );
+  }
+
+  // Sicil numarası ile personel getir
+  @Get("personnel/sicil/:sicilNo")
+  getPersonnelBySicilNo(@Param("sicilNo") sicilNo: string) {
+    return this.staffService.getPersonnelBySicilNo(sicilNo);
+  }
+
+  // Tek personel getir (ID ile) - Bu :id'den önce olmalı
+  @Get("personnel/:id")
+  getPersonnelById(@Param("id") id: string) {
+    return this.staffService.getPersonnelById(id);
+  }
+
   // Tüm personeli listele
   @Get()
   findAll(@Query("active") active?: string) {
     const onlyActive = active === "true";
     return this.staffService.findAllStaff(onlyActive);
   }
+
+  // ==================== EVENT STAFF ASSIGNMENT ENDPOINT'LERİ ====================
+  // NOT: Bu route'lar :id parametreli route'lardan ÖNCE olmalı!
+
+  // Etkinlik için tüm personel atamalarını getir
+  @Get("events/:eventId/assignments")
+  getEventStaffAssignments(@Param("eventId") eventId: string) {
+    return this.staffService.getEventStaffAssignments(eventId);
+  }
+
+  // Personel ata (masa/masalara veya özel görev)
+  @Post("events/:eventId/assignments")
+  assignStaffToTables(
+    @Param("eventId") eventId: string,
+    @Body()
+    dto: {
+      staffId: string;
+      tableIds: string[];
+      shiftId?: string;
+      teamId?: string;
+      color?: string;
+      assignmentType?: string;
+      specialTaskLocation?: string;
+      specialTaskStartTime?: string;
+      specialTaskEndTime?: string;
+    }
+  ) {
+    return this.staffService.assignStaffToTables({ eventId, ...dto });
+  }
+
+  // Tüm etkinlik atamalarını kaydet (toplu)
+  @Post("events/:eventId/assignments/save")
+  @UseGuards(JwtAuthGuard)
+  saveEventStaffAssignments(
+    @Param("eventId") eventId: string,
+    @Body()
+    dto: {
+      assignments: Array<{
+        staffId: string;
+        tableIds: string[];
+        shiftId?: string;
+        teamId?: string;
+        color?: string;
+      }>;
+    },
+    @Request() req
+  ) {
+    const userId = req.user?.id;
+    return this.staffService.saveEventStaffAssignments(
+      eventId,
+      dto.assignments,
+      userId
+    );
+  }
+
+  // Personel atamasını güncelle
+  @Put("assignments/:assignmentId")
+  updateStaffAssignment(
+    @Param("assignmentId") assignmentId: string,
+    @Body()
+    dto: {
+      tableIds?: string[];
+      shiftId?: string;
+      teamId?: string;
+      color?: string;
+      notes?: string;
+      assignmentType?: string;
+      specialTaskLocation?: string;
+      specialTaskStartTime?: string;
+      specialTaskEndTime?: string;
+    }
+  ) {
+    return this.staffService.updateStaffAssignment(assignmentId, dto);
+  }
+
+  // Personel atamasını kaldır
+  @Delete("assignments/:assignmentId")
+  removeStaffAssignment(@Param("assignmentId") assignmentId: string) {
+    return this.staffService.removeStaffAssignment(assignmentId);
+  }
+
+  // ==================== END EVENT STAFF ASSIGNMENT ====================
 
   // Yeni personel oluştur
   @Post()
@@ -488,7 +836,7 @@ export class StaffController {
 
   // ==================== WORK SHIFT (ÇALIŞMA SAATLERİ) CRUD ====================
 
-  // Yeni çalışma saati oluştur
+  // Yeni çalışma saati oluştur (global veya etkinliğe özel)
   @Post("shifts")
   createShift(
     @Body()
@@ -497,6 +845,7 @@ export class StaffController {
       startTime: string;
       endTime: string;
       color?: string;
+      eventId?: string;
     }
   ) {
     return this.staffService.createShift(dto);
@@ -562,6 +911,21 @@ export class StaffController {
     return this.staffService.deleteTeam(id);
   }
 
+  // Toplu ekip sil
+  @Delete("teams/bulk/delete")
+  bulkDeleteTeams(@Body() dto: { teamIds: string[] }) {
+    return this.staffService.bulkDeleteTeams(dto.teamIds);
+  }
+
+  // Ekip liderini ata/değiştir - HIZLI ENDPOINT
+  @Put("teams/:id/leader")
+  setTeamLeader(
+    @Param("id") teamId: string,
+    @Body() dto: { leaderId: string | null }
+  ) {
+    return this.staffService.setTeamLeader(teamId, dto.leaderId);
+  }
+
   // Ekibe üye ekle
   @Post("teams/:id/members")
   addMemberToTeam(
@@ -571,6 +935,15 @@ export class StaffController {
     return this.staffService.addMemberToTeam(teamId, dto.memberId);
   }
 
+  // Ekibe toplu üye ekle
+  @Post("teams/:id/members/bulk")
+  addMembersToTeamBulk(
+    @Param("id") teamId: string,
+    @Body() dto: { memberIds: string[] }
+  ) {
+    return this.staffService.addMembersToTeamBulk(teamId, dto.memberIds);
+  }
+
   // Ekipten üye çıkar
   @Delete("teams/:id/members/:memberId")
   removeMemberFromTeam(
@@ -578,85 +951,6 @@ export class StaffController {
     @Param("memberId") memberId: string
   ) {
     return this.staffService.removeMemberFromTeam(teamId, memberId);
-  }
-
-  // ==================== EVENT STAFF ASSIGNMENT ENDPOINT'LERİ ====================
-
-  // Etkinlik için tüm personel atamalarını getir
-  @Get("event/:eventId/staff-assignments")
-  getEventStaffAssignments(@Param("eventId") eventId: string) {
-    return this.staffService.getEventStaffAssignments(eventId);
-  }
-
-  // Personel ata (masa/masalara veya özel görev)
-  @Post("event/:eventId/staff-assignments")
-  assignStaffToTables(
-    @Param("eventId") eventId: string,
-    @Body()
-    dto: {
-      staffId: string;
-      tableIds: string[];
-      shiftId?: string;
-      teamId?: string;
-      color?: string;
-      assignmentType?: string;
-      specialTaskLocation?: string;
-      specialTaskStartTime?: string;
-      specialTaskEndTime?: string;
-    }
-  ) {
-    return this.staffService.assignStaffToTables({ eventId, ...dto });
-  }
-
-  // Personel atamasını güncelle
-  @Put("staff-assignments/:assignmentId")
-  updateStaffAssignment(
-    @Param("assignmentId") assignmentId: string,
-    @Body()
-    dto: {
-      tableIds?: string[];
-      shiftId?: string;
-      teamId?: string;
-      color?: string;
-      notes?: string;
-      assignmentType?: string;
-      specialTaskLocation?: string;
-      specialTaskStartTime?: string;
-      specialTaskEndTime?: string;
-    }
-  ) {
-    return this.staffService.updateStaffAssignment(assignmentId, dto);
-  }
-
-  // Personel atamasını kaldır
-  @Delete("staff-assignments/:assignmentId")
-  removeStaffAssignment(@Param("assignmentId") assignmentId: string) {
-    return this.staffService.removeStaffAssignment(assignmentId);
-  }
-
-  // Tüm etkinlik atamalarını kaydet (toplu)
-  @Post("event/:eventId/staff-assignments/save")
-  @UseGuards(JwtAuthGuard)
-  saveEventStaffAssignments(
-    @Param("eventId") eventId: string,
-    @Body()
-    dto: {
-      assignments: Array<{
-        staffId: string;
-        tableIds: string[];
-        shiftId?: string;
-        teamId?: string;
-        color?: string;
-      }>;
-    },
-    @Request() req
-  ) {
-    const userId = req.user?.id;
-    return this.staffService.saveEventStaffAssignments(
-      eventId,
-      dto.assignments,
-      userId
-    );
   }
 
   // ==================== ORGANIZATION TEMPLATE ENDPOINT'LERİ (POST/DELETE) ====================
@@ -694,5 +988,145 @@ export class StaffController {
   @Post("organization-templates/:id/set-default")
   setDefaultTemplate(@Param("id") id: string) {
     return this.staffService.setDefaultTemplate(id);
+  }
+
+  // ==================== PERSONNEL (YENİ STAFF ENTITY) POST/PUT/DELETE ENDPOINT'LERİ ====================
+
+  // Yeni personel oluştur
+  @Post("personnel")
+  createPersonnel(
+    @Body()
+    dto: {
+      sicilNo: string;
+      fullName: string;
+      email?: string;
+      phone?: string;
+      avatar?: string;
+      position: string;
+      department?: string;
+      workLocation?: string;
+      mentor?: string;
+      color?: string;
+      gender?: Gender;
+      birthDate?: string;
+      age?: number;
+      bloodType?: string;
+      shoeSize?: number;
+      sockSize?: string;
+      hireDate?: string;
+      terminationDate?: string;
+      terminationReason?: string;
+      yearsAtCompany?: number;
+      isActive?: boolean;
+      status?: StaffStatus;
+    }
+  ) {
+    // Tarih string'lerini Date'e çevir
+    const staffData: Partial<Staff> = {
+      ...dto,
+      birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
+      hireDate: dto.hireDate ? new Date(dto.hireDate) : undefined,
+      terminationDate: dto.terminationDate
+        ? new Date(dto.terminationDate)
+        : undefined,
+    };
+    return this.staffService.createPersonnel(staffData);
+  }
+
+  // Personel güncelle
+  @Put("personnel/:id")
+  updatePersonnel(
+    @Param("id") id: string,
+    @Body()
+    dto: {
+      sicilNo?: string;
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      avatar?: string;
+      position?: string;
+      department?: string;
+      workLocation?: string;
+      mentor?: string;
+      color?: string;
+      gender?: Gender;
+      birthDate?: string;
+      age?: number;
+      bloodType?: string;
+      shoeSize?: number;
+      sockSize?: string;
+      hireDate?: string;
+      terminationDate?: string;
+      terminationReason?: string;
+      yearsAtCompany?: number;
+      isActive?: boolean;
+      status?: StaffStatus;
+    }
+  ) {
+    // Tarih string'lerini Date'e çevir
+    const staffData: Partial<Staff> = {
+      ...dto,
+      birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
+      hireDate: dto.hireDate ? new Date(dto.hireDate) : undefined,
+      terminationDate: dto.terminationDate
+        ? new Date(dto.terminationDate)
+        : undefined,
+    };
+    return this.staffService.updatePersonnel(id, staffData);
+  }
+
+  // Personel sil (soft delete)
+  @Delete("personnel/:id")
+  deletePersonnel(@Param("id") id: string) {
+    return this.staffService.deletePersonnel(id);
+  }
+
+  // Avatar yükle
+  @Post("personnel/:id/avatar")
+  @UseInterceptors(
+    FileInterceptor("avatar", {
+      storage: diskStorage({
+        destination: "./uploads/avatars",
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + "-" + Math.round(Math.random() * 1e9);
+          cb(null, `avatar-${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          return cb(
+            new BadRequestException("Sadece resim dosyaları yüklenebilir"),
+            false
+          );
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    })
+  )
+  async uploadPersonnelAvatar(
+    @Param("id") id: string,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    if (!file) {
+      throw new BadRequestException("Dosya yüklenemedi");
+    }
+    const avatarPath = `/uploads/avatars/${file.filename}`;
+    return this.staffService.updatePersonnelAvatar(id, avatarPath);
+  }
+
+  // CSV'den toplu personel import et
+  @Post("personnel/import-csv")
+  importPersonnelFromCSV(@Body() dto: { data: Array<Record<string, string>> }) {
+    return this.staffService.importPersonnelFromCSV(dto.data);
+  }
+
+  // Users tablosundan Staff tablosuna migration
+  @Post("personnel/migrate")
+  migrateUsersToStaff() {
+    return this.staffService.migrateUsersToStaff();
   }
 }

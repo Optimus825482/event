@@ -1,22 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { User, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
+  const { login, isAuthenticated, user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
   const [error, setError] = useState("");
+
+  // Hydration tamamlanana kadar bekle
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Zaten login olmuşsa yönlendir
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (isAuthenticated && user) {
+      if (user.role === "leader") {
+        router.push("/leader");
+      } else {
+        router.push("/select-module");
+      }
+    }
+  }, [isHydrated, isAuthenticated, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +67,15 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Hydration beklerken veya zaten login olmuşsa loading göster
+  if (!isHydrated || (isAuthenticated && user)) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">

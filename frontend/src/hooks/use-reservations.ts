@@ -216,7 +216,9 @@ export function useEvents() {
     queryKey: ["events"],
     queryFn: async () => {
       const response = await eventsApi.getAll();
-      return response.data as Event[];
+      // API response formatı: { items: [], meta: {} } veya doğrudan array
+      const data = response.data;
+      return (Array.isArray(data) ? data : data?.items || []) as Event[];
     },
     enabled: !!token,
   });
