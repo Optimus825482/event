@@ -16,6 +16,7 @@ import {
   Save,
   Loader2,
   MapPin,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,7 @@ interface Step5SummaryProps {
 
 // ==================== STAT CARD ====================
 interface StatCardProps {
-  icon: React.ElementType;
+  icon: LucideIcon;
   label: string;
   value: number | string;
   subValue?: string;
