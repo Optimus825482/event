@@ -1063,14 +1063,18 @@ export const staffApi = {
     return api.delete(`/staff/personnel/${id}`);
   },
 
-  // Avatar yükle
+  // Avatar yükle (Base64 - Coolify için)
   uploadPersonnelAvatar: async (id: string, file: File) => {
-    const formData = new FormData();
-    formData.append("avatar", file);
-    clearApiCache("personnel");
-    return api.post(`/staff/personnel/${id}/avatar`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+    // Dosyayı base64'e çevir
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
+
+    clearApiCache("personnel");
+    return api.post(`/staff/personnel/${id}/avatar-base64`, { avatar: base64 });
   },
 
   // CSV'den toplu personel import et

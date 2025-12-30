@@ -1081,7 +1081,27 @@ export class StaffController {
     return this.staffService.deletePersonnel(id);
   }
 
-  // Avatar yükle
+  // Avatar yükle (Base64 - Coolify için)
+  @Post("personnel/:id/avatar-base64")
+  async uploadPersonnelAvatarBase64(
+    @Param("id") id: string,
+    @Body() dto: { avatar: string }
+  ) {
+    if (!dto.avatar) {
+      throw new BadRequestException("Avatar verisi gerekli");
+    }
+    // Base64 formatını kontrol et
+    if (!dto.avatar.startsWith("data:image/")) {
+      throw new BadRequestException("Geçersiz resim formatı");
+    }
+    // Boyut kontrolü (yaklaşık 5MB base64 = ~6.6MB string)
+    if (dto.avatar.length > 7 * 1024 * 1024) {
+      throw new BadRequestException("Dosya boyutu çok büyük (max 5MB)");
+    }
+    return this.staffService.updatePersonnelAvatar(id, dto.avatar);
+  }
+
+  // Avatar yükle (File upload - legacy)
   @Post("personnel/:id/avatar")
   @UseInterceptors(
     FileInterceptor("avatar", {
