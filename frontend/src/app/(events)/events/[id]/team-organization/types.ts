@@ -74,6 +74,16 @@ export interface TeamDefinition {
   color: string;
   requiredStaff: TeamStaffRequirement[];
   assignedGroupIds: string[];
+  leaders?: TeamLeader[];
+}
+
+// Takım Lideri/Kaptan
+export interface TeamLeader {
+  staffId: string;
+  staffName: string;
+  role: StaffRole;
+  shiftStart?: string;
+  shiftEnd?: string;
 }
 
 // Takım Personel Gereksinimi

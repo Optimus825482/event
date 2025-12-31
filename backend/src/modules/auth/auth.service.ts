@@ -185,17 +185,25 @@ export class AuthService implements OnModuleInit {
   private generateTokens(user: User): TokenResponseDto {
     const payload = { sub: user.id, username: user.username, role: user.role };
 
-    const accessToken = this.jwtService.sign(payload);
+    // Controller rolü için sonsuz session (100 yıl)
+    const isController = user.role === UserRole.CONTROLLER;
+    const accessTokenExpiry = isController ? "100y" : "15m";
+    const refreshTokenExpiry = isController ? "100y" : this.refreshExpiresIn;
+    const expiresInSeconds = isController ? 3153600000 : 900; // 100 yıl veya 15 dakika
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: accessTokenExpiry,
+    });
 
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.refreshSecret,
-      expiresIn: this.refreshExpiresIn as string,
+      expiresIn: refreshTokenExpiry as string,
     } as any);
 
     return {
       accessToken,
       refreshToken,
-      expiresIn: 900, // 15 dakika
+      expiresIn: expiresInSeconds,
     };
   }
 }

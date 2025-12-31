@@ -290,14 +290,46 @@ export function useOrganizationData(
         );
 
         // Backend'den gelen takımları dönüştür
-        const teams: TeamDefinition[] = (teamsRes.data || []).map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          color: t.color,
-          requiredStaff: t.requiredStaff || [],
-          assignedGroupIds: t.assignedGroupIds || [],
-        }));
+        // tableIds -> assignedGroupIds eşleştirmesi yap
+        const teams: TeamDefinition[] = (teamsRes.data || []).map((t: any) => {
+          // Takımın tableIds'inden hangi gruplara ait olduğunu bul
+          const assignedGroupIds: string[] = [];
+          const teamTableIds = t.tableIds || [];
+
+          groups.forEach((group) => {
+            // Grup masalarından herhangi biri takımın masalarında varsa, bu grup takıma ait
+            const hasCommonTable = group.tableIds.some((tid: string) =>
+              teamTableIds.includes(tid)
+            );
+            if (hasCommonTable) {
+              assignedGroupIds.push(group.id);
+              // Grubun assignedTeamId'sini de güncelle
+              group.assignedTeamId = t.id;
+            }
+          });
+
+          return {
+            id: t.id,
+            name: t.name,
+            color: t.color,
+            requiredStaff: t.requiredStaff || [],
+            assignedGroupIds,
+            leaders: t.leaders || [],
+          };
+        });
+
+        // Grupları tekrar set et (assignedTeamId güncellenmiş haliyle)
+        setExistingGroups([...groups]);
         setExistingTeams(teams);
+
+        console.log(
+          "📦 Takımlar yüklendi:",
+          teams.length,
+          teams.map((t) => ({
+            name: t.name,
+            groupCount: t.assignedGroupIds.length,
+          }))
+        );
       } catch {
         // Mevcut veri yoksa boş başla
         setExistingGroups([]);

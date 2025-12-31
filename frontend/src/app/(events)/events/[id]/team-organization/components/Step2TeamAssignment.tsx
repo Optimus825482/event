@@ -37,6 +37,7 @@ import {
   TableData,
   TableGroup,
   TeamDefinition,
+  TeamLeader,
   DEFAULT_COLORS,
   StageElement,
   ServicePoint,
@@ -50,13 +51,6 @@ import {
 } from "../hooks/useCanvasInteraction";
 import { CanvasRenderer } from "./CanvasRenderer";
 import { cn } from "@/lib/utils";
-
-// Takım Lideri/Kaptan tipi
-interface TeamLeader {
-  staffId: string;
-  staffName: string;
-  role: StaffRole;
-}
 
 interface Step2TeamAssignmentProps {
   tables: TableData[];
@@ -136,9 +130,17 @@ export function Step2TeamAssignment({
   const [editingTeam, setEditingTeam] = useState<TeamDefinition | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
+  // DEBUG: teams prop'unu kontrol et
+  useEffect(() => {
+    console.log("[Step2] teams prop:", teams?.length, teams);
+  }, [teams]);
+
   // Kaptan/Lider seçimi state
   const [teamLeaders, setTeamLeaders] = useState<TeamLeader[]>([]);
   const [leaderSearchQuery, setLeaderSearchQuery] = useState("");
+  // Kaptan shift time state
+  const [leaderShiftStart, setLeaderShiftStart] = useState("18:00");
+  const [leaderShiftEnd, setLeaderShiftEnd] = useState("02:00");
 
   // Stable refs for callbacks
   const handlersRef = useRef({
@@ -261,10 +263,26 @@ export function Step2TeamAssignment({
 
       setTeamLeaders((prev) => [
         ...prev,
-        { staffId: staff.id, staffName: staff.fullName, role },
+        {
+          staffId: staff.id,
+          staffName: staff.fullName,
+          role,
+          shiftStart: leaderShiftStart,
+          shiftEnd: leaderShiftEnd,
+        },
       ]);
     },
-    [teamLeaders]
+    [teamLeaders, leaderShiftStart, leaderShiftEnd]
+  );
+
+  // Kaptan shift time güncelle
+  const handleUpdateLeaderShift = useCallback(
+    (staffId: string, field: "shiftStart" | "shiftEnd", value: string) => {
+      setTeamLeaders((prev) =>
+        prev.map((l) => (l.staffId === staffId ? { ...l, [field]: value } : l))
+      );
+    },
+    []
   );
 
   // Kaptan kaldır
@@ -827,20 +845,20 @@ export function Step2TeamAssignment({
                         return (
                           <div
                             key={leader.staffId}
-                            className="flex items-center justify-between px-2 py-1.5 bg-slate-700/50 rounded-lg"
+                            className="flex items-center gap-2 px-2 py-1.5 bg-slate-700/50 rounded-lg"
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
                               <Crown
-                                className="w-3 h-3"
+                                className="w-3 h-3 flex-shrink-0"
                                 style={{
                                   color: roleConfig?.color || "#f59e0b",
                                 }}
                               />
-                              <span className="text-sm text-white">
+                              <span className="text-sm text-white truncate">
                                 {leader.staffName}
                               </span>
                               <Badge
-                                className="text-[10px]"
+                                className="text-[10px] flex-shrink-0"
                                 style={{
                                   backgroundColor: `${roleConfig?.color}30`,
                                   color: roleConfig?.color,
@@ -849,11 +867,39 @@ export function Step2TeamAssignment({
                                 {roleConfig?.label || leader.role}
                               </Badge>
                             </div>
+                            {/* Shift Time Inputs */}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Input
+                                type="time"
+                                value={leader.shiftStart || "18:00"}
+                                onChange={(e) =>
+                                  handleUpdateLeaderShift(
+                                    leader.staffId,
+                                    "shiftStart",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-20 h-6 text-xs bg-slate-600 border-slate-500 px-1"
+                              />
+                              <span className="text-slate-500 text-xs">-</span>
+                              <Input
+                                type="time"
+                                value={leader.shiftEnd || "02:00"}
+                                onChange={(e) =>
+                                  handleUpdateLeaderShift(
+                                    leader.staffId,
+                                    "shiftEnd",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-20 h-6 text-xs bg-slate-600 border-slate-500 px-1"
+                              />
+                            </div>
                             <Button
                               size="icon"
                               variant="ghost"
                               onClick={() => handleRemoveLeader(leader.staffId)}
-                              className="h-5 w-5 text-red-400 hover:text-red-300"
+                              className="h-5 w-5 text-red-400 hover:text-red-300 flex-shrink-0"
                             >
                               <X className="w-3 h-3" />
                             </Button>
@@ -864,14 +910,35 @@ export function Step2TeamAssignment({
                   )}
 
                   {/* Kaptan Arama */}
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <Input
-                      placeholder="Kaptan/Süpervizör ara..."
-                      value={leaderSearchQuery}
-                      onChange={(e) => setLeaderSearchQuery(e.target.value)}
-                      className="pl-8 h-8 text-sm bg-slate-700 border-slate-600"
-                    />
+                  <div className="space-y-2">
+                    {/* Varsayılan Vardiya Saatleri */}
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-slate-400">
+                        Varsayılan Vardiya:
+                      </span>
+                      <Input
+                        type="time"
+                        value={leaderShiftStart}
+                        onChange={(e) => setLeaderShiftStart(e.target.value)}
+                        className="w-20 h-6 text-xs bg-slate-600 border-slate-500 px-1"
+                      />
+                      <span className="text-slate-500">-</span>
+                      <Input
+                        type="time"
+                        value={leaderShiftEnd}
+                        onChange={(e) => setLeaderShiftEnd(e.target.value)}
+                        className="w-20 h-6 text-xs bg-slate-600 border-slate-500 px-1"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        placeholder="Kaptan/Süpervizör ara..."
+                        value={leaderSearchQuery}
+                        onChange={(e) => setLeaderSearchQuery(e.target.value)}
+                        className="pl-8 h-8 text-sm bg-slate-700 border-slate-600"
+                      />
+                    </div>
                   </div>
 
                   {/* Kaptan Listesi */}

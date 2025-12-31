@@ -31,6 +31,8 @@ export default function LoginPage() {
     if (isAuthenticated && user) {
       if (user.role === "leader") {
         router.push("/leader");
+      } else if (user.role === "controller") {
+        router.push("/check-in");
       } else {
         router.push("/select-module");
       }
@@ -54,9 +56,11 @@ export default function LoginPage() {
       if (result) {
         // Login fonksiyonu artık role döndürüyor (string veya false)
         if (result === "leader") {
-          router.push("/leader");
+          router.replace("/leader");
+        } else if (result === "controller") {
+          router.replace("/check-in");
         } else {
-          router.push("/select-module");
+          router.replace("/select-module");
         }
       } else {
         setError("Kullanıcı adı veya şifre hatalı");

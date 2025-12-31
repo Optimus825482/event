@@ -82,19 +82,19 @@ export default function SelectModulePage() {
     if (!isHydrated) return;
 
     if (!isAuthenticated) {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
 
     // Leader kullanıcıları kendi paneline yönlendir
     if (user?.role === "leader") {
-      router.push("/leader");
+      router.replace("/leader");
       return;
     }
 
     // Controller kullanıcıları direkt check-in'e yönlendir (sadece bu modüle erişebilirler)
     if (user?.role === "controller") {
-      router.push("/check-in");
+      router.replace("/check-in");
       return;
     }
   }, [isHydrated, isAuthenticated, user, router]);

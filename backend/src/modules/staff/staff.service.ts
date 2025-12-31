@@ -1787,10 +1787,65 @@ export class StaffService {
   async getEventStaffAssignments(
     eventId: string
   ): Promise<EventStaffAssignment[]> {
-    return this.eventStaffAssignmentRepository.find({
+    // Staff relation nullable olduğu için raw query ile daha güvenli
+    const assignments = await this.eventStaffAssignmentRepository.find({
       where: { eventId, isActive: true },
-      relations: ["staff", "shift", "team"],
       order: { sortOrder: "ASC" },
+    });
+
+    // Staff bilgilerini ayrı çek (Staff tablosundan)
+    const staffIds = [
+      ...new Set(assignments.map((a) => a.staffId).filter(Boolean)),
+    ];
+
+    let staffMap = new Map<
+      string,
+      { id: string; fullName: string; position: string }
+    >();
+
+    if (staffIds.length > 0) {
+      // Önce Staff tablosundan dene
+      const staffMembers = await this.staffRepository
+        .createQueryBuilder("staff")
+        .select(["staff.id", "staff.fullName", "staff.position"])
+        .where("staff.id IN (:...staffIds)", { staffIds })
+        .getMany();
+
+      staffMembers.forEach((s) => {
+        staffMap.set(s.id, {
+          id: s.id,
+          fullName: s.fullName,
+          position: s.position || "",
+        });
+      });
+
+      // Staff'ta bulunamayanları User tablosundan dene
+      const missingIds = staffIds.filter((id) => !staffMap.has(id));
+      if (missingIds.length > 0) {
+        const users = await this.userRepository
+          .createQueryBuilder("user")
+          .select(["user.id", "user.fullName", "user.position"])
+          .where("user.id IN (:...missingIds)", { missingIds })
+          .getMany();
+
+        users.forEach((u) => {
+          staffMap.set(u.id, {
+            id: u.id,
+            fullName: u.fullName,
+            position: u.position || "",
+          });
+        });
+      }
+    }
+
+    // Assignment'lara staff bilgisi ekle
+    return assignments.map((a) => {
+      const staffInfo = staffMap.get(a.staffId);
+      return {
+        ...a,
+        staff: staffInfo || null,
+        staffName: staffInfo?.fullName || "Bilinmeyen",
+      } as EventStaffAssignment & { staffName: string };
     });
   }
 

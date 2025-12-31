@@ -33,6 +33,7 @@ import { staffApi } from "@/lib/api";
 import {
   TableGroup,
   TeamDefinition,
+  TeamLeader,
   Staff,
   STAFF_ROLES,
   GroupStaffAssignment,
@@ -585,6 +586,24 @@ async function exportToExcel(
 
   teamsWithGroups.forEach((team) => {
     const teamGroups = tableGroups.filter((g) => g.assignedTeamId === team.id);
+    // Takım kaptanları
+    const teamLeaders: TeamLeader[] = team.leaders || [];
+
+    // Önce takım kaptanlarını ekle
+    teamLeaders.forEach((leader) => {
+      data.push({
+        Bölüm: "Takım Kaptanı",
+        "Takım/Nokta": team.name,
+        Grup: "-",
+        Masalar: "-",
+        Görev: leader.role === "supervisor" ? "Süpervizör" : "Kaptan",
+        "Ad Soyad": leader.staffName,
+        Unvan: "-",
+        "Görev Yeri": "-",
+        "Vardiya Başlangıç": leader.shiftStart || "18:00",
+        "Vardiya Bitiş": leader.shiftEnd || "02:00",
+      });
+    });
 
     teamGroups.forEach((group) => {
       const assignments = group.staffAssignments || [];
@@ -892,6 +911,8 @@ function exportToPDF(
       const allAssignments = teamGroups.flatMap(
         (g) => g.staffAssignments || []
       );
+      // Takım kaptanları
+      const teamLeaders: TeamLeader[] = team.leaders || [];
 
       content += `
   <div class="team-section">
@@ -901,6 +922,23 @@ function exportToPDF(
       <span class="team-stats">${teamGroups.length} grup | ${totalTables} masa | ${allAssignments.length} personel</span>
     </div>
 `;
+
+      // Takım Kaptanları Satırı
+      if (teamLeaders.length > 0) {
+        content += `
+    <div style="background: #fff8e1; padding: 6px 10px; border-bottom: 1px solid #ffe082; font-size: 9px;">
+      <strong style="color: #f59e0b;">👑 Takım Kaptanları:</strong>
+      ${teamLeaders
+        .map(
+          (l) =>
+            `${l.staffName} (${l.shiftStart || "18:00"} - ${
+              l.shiftEnd || "02:00"
+            })`
+        )
+        .join(", ")}
+    </div>
+`;
+      }
 
       if (allAssignments.length === 0) {
         content += `<div class="no-staff">Henüz personel atanmamış</div>`;

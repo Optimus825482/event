@@ -11,8 +11,11 @@ export default function CheckInLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, activeModule } = useAuthStore();
+  const { isAuthenticated, activeModule, user } = useAuthStore();
   const [isHydrated, setIsHydrated] = useState(false);
+
+  // Controller rolü için activeModule kontrolü bypass edilir
+  const isController = user?.role === "controller";
 
   useEffect(() => {
     setIsHydrated(true);
@@ -21,19 +24,26 @@ export default function CheckInLayout({
   useEffect(() => {
     if (!isHydrated) return;
     if (!isAuthenticated) {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
+
+    // Controller için activeModule kontrolü yapma - direkt erişim izni var
+    if (isController) return;
+
     if (!activeModule) {
-      router.push("/select-module");
+      router.replace("/select-module");
       return;
     }
     if (activeModule !== "checkin") {
-      router.push("/select-module");
+      router.replace("/select-module");
     }
-  }, [isHydrated, isAuthenticated, activeModule, router]);
+  }, [isHydrated, isAuthenticated, activeModule, isController, router]);
 
-  if (!isHydrated || !isAuthenticated || activeModule !== "checkin") {
+  // Controller için veya activeModule checkin ise içeriği göster
+  const canAccess = isController || activeModule === "checkin";
+
+  if (!isHydrated || !isAuthenticated || !canAccess) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />

@@ -15,6 +15,7 @@ import {
   Text,
   Html,
   Line,
+  useTexture,
 } from "@react-three/drei";
 import {
   Loader2,
@@ -75,6 +76,290 @@ type ViewMode = "step1" | "step2" | "default";
 
 const SCALE = 0.01;
 const TABLE_RADIUS = 0.12;
+
+// ==================== GLASS WALL WITH LOGO ====================
+function GlassWall({
+  position,
+  rotation,
+  width,
+  height,
+  logoUrl,
+  showLogo = true,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  width: number;
+  height: number;
+  logoUrl?: string;
+  showLogo?: boolean;
+}) {
+  const wallHeight = 4;
+  const wallY = wallHeight / 2;
+
+  return (
+    <group position={position} rotation={rotation}>
+      {/* Ana cam duvar - şeffaf */}
+      <mesh position={[0, wallY, 0]}>
+        <planeGeometry args={[width, wallHeight]} />
+        <meshPhysicalMaterial
+          color="#1a365d"
+          transparent
+          opacity={0.15}
+          roughness={0.1}
+          metalness={0.1}
+          clearcoat={1}
+          clearcoatRoughness={0.1}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Altın çerçeve - alt */}
+      <mesh position={[0, 0.025, 0.01]}>
+        <boxGeometry args={[width, 0.05, 0.02]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+      </mesh>
+
+      {/* Altın çerçeve - üst */}
+      <mesh position={[0, wallHeight, 0.01]}>
+        <boxGeometry args={[width, 0.05, 0.02]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+      </mesh>
+
+      {/* Altın çerçeve - sol */}
+      <mesh position={[-width / 2, wallY, 0.01]}>
+        <boxGeometry args={[0.05, wallHeight, 0.02]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+      </mesh>
+
+      {/* Altın çerçeve - sağ */}
+      <mesh position={[width / 2, wallY, 0.01]}>
+        <boxGeometry args={[0.05, wallHeight, 0.02]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+      </mesh>
+
+      {/* Dekoratif ışık şeridi - alt */}
+      <mesh position={[0, 0.1, 0.02]}>
+        <boxGeometry args={[width - 0.1, 0.02, 0.01]} />
+        <meshBasicMaterial color="#ffd700" />
+      </mesh>
+
+      {/* Dekoratif ışık şeridi - üst */}
+      <mesh position={[0, wallHeight - 0.1, 0.02]}>
+        <boxGeometry args={[width - 0.1, 0.02, 0.01]} />
+        <meshBasicMaterial color="#ffd700" />
+      </mesh>
+
+      {/* Logo alanı - ortada */}
+      {showLogo && logoUrl && (
+        <Suspense fallback={null}>
+          <LogoPlane url={logoUrl} position={[0, wallY, 0.03]} scale={1.5} />
+        </Suspense>
+      )}
+    </group>
+  );
+}
+
+// ==================== LOGO PLANE ====================
+function LogoPlane({
+  url,
+  position,
+  scale = 1,
+}: {
+  url: string;
+  position: [number, number, number];
+  scale?: number;
+}) {
+  const texture = useTexture(url);
+
+  return (
+    <mesh position={position}>
+      <planeGeometry args={[1.5 * scale, 1.5 * scale]} />
+      <meshBasicMaterial
+        map={texture}
+        transparent
+        opacity={0.9}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+// ==================== VENUE WALLS ====================
+function VenueWalls({
+  width,
+  height,
+  centerX,
+  centerZ,
+}: {
+  width: number;
+  height: number;
+  centerX: number;
+  centerZ: number;
+}) {
+  const wallDistance = 1.5; // Duvarların masalardan uzaklığı
+  const wallWidth = width + wallDistance * 2;
+  const wallDepth = height + wallDistance * 2;
+
+  return (
+    <group>
+      {/* Arka duvar - Merit Royal logosu */}
+      <GlassWall
+        position={[centerX, 0, centerZ - height / 2 - wallDistance]}
+        rotation={[0, 0, 0]}
+        width={wallWidth}
+        height={4}
+        logoUrl="/images/merit-royal-logo.png"
+        showLogo={true}
+      />
+
+      {/* Sol duvar - Merit International logosu */}
+      <GlassWall
+        position={[centerX - width / 2 - wallDistance, 0, centerZ]}
+        rotation={[0, Math.PI / 2, 0]}
+        width={wallDepth}
+        height={4}
+        logoUrl="/images/merit-international-logo.png"
+        showLogo={true}
+      />
+
+      {/* Sağ duvar - Merit International logosu */}
+      <GlassWall
+        position={[centerX + width / 2 + wallDistance, 0, centerZ]}
+        rotation={[0, -Math.PI / 2, 0]}
+        width={wallDepth}
+        height={4}
+        logoUrl="/images/merit-international-logo.png"
+        showLogo={true}
+      />
+
+      {/* Köşe kolonları - altın */}
+      <CornerPillar
+        position={[
+          centerX - width / 2 - wallDistance,
+          0,
+          centerZ - height / 2 - wallDistance,
+        ]}
+      />
+      <CornerPillar
+        position={[
+          centerX + width / 2 + wallDistance,
+          0,
+          centerZ - height / 2 - wallDistance,
+        ]}
+      />
+      <CornerPillar
+        position={[
+          centerX - width / 2 - wallDistance,
+          0,
+          centerZ + height / 2 + wallDistance,
+        ]}
+      />
+      <CornerPillar
+        position={[
+          centerX + width / 2 + wallDistance,
+          0,
+          centerZ + height / 2 + wallDistance,
+        ]}
+      />
+
+      {/* Zemin ışık şeritleri */}
+      <FloorLightStrip
+        start={[
+          centerX - width / 2 - wallDistance,
+          0.01,
+          centerZ - height / 2 - wallDistance,
+        ]}
+        end={[
+          centerX + width / 2 + wallDistance,
+          0.01,
+          centerZ - height / 2 - wallDistance,
+        ]}
+      />
+      <FloorLightStrip
+        start={[
+          centerX - width / 2 - wallDistance,
+          0.01,
+          centerZ - height / 2 - wallDistance,
+        ]}
+        end={[
+          centerX - width / 2 - wallDistance,
+          0.01,
+          centerZ + height / 2 + wallDistance,
+        ]}
+      />
+      <FloorLightStrip
+        start={[
+          centerX + width / 2 + wallDistance,
+          0.01,
+          centerZ - height / 2 - wallDistance,
+        ]}
+        end={[
+          centerX + width / 2 + wallDistance,
+          0.01,
+          centerZ + height / 2 + wallDistance,
+        ]}
+      />
+    </group>
+  );
+}
+
+// ==================== CORNER PILLAR ====================
+function CornerPillar({ position }: { position: [number, number, number] }) {
+  const pillarHeight = 4.2;
+
+  return (
+    <group position={position}>
+      {/* Ana kolon */}
+      <mesh position={[0, pillarHeight / 2, 0]}>
+        <cylinderGeometry args={[0.08, 0.1, pillarHeight, 16]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} />
+      </mesh>
+
+      {/* Taban */}
+      <mesh position={[0, 0.05, 0]}>
+        <cylinderGeometry args={[0.15, 0.15, 0.1, 16]} />
+        <meshStandardMaterial color="#b8860b" metalness={0.8} roughness={0.2} />
+      </mesh>
+
+      {/* Üst başlık */}
+      <mesh position={[0, pillarHeight, 0]}>
+        <cylinderGeometry args={[0.12, 0.08, 0.15, 16]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} />
+      </mesh>
+
+      {/* Işık topu - üstte */}
+      <mesh position={[0, pillarHeight + 0.15, 0]}>
+        <sphereGeometry args={[0.06, 16, 16]} />
+        <meshBasicMaterial color="#ffd700" />
+      </mesh>
+      <pointLight
+        position={[0, pillarHeight + 0.15, 0]}
+        color="#ffd700"
+        intensity={0.3}
+        distance={3}
+      />
+    </group>
+  );
+}
+
+// ==================== FLOOR LIGHT STRIP ====================
+function FloorLightStrip({
+  start,
+  end,
+}: {
+  start: [number, number, number];
+  end: [number, number, number];
+}) {
+  return (
+    <Line
+      points={[start, end]}
+      color="#d4af37"
+      lineWidth={3}
+      transparent
+      opacity={0.8}
+    />
+  );
+}
 
 // ==================== TABLE MESH ====================
 function TableMesh({
@@ -607,6 +892,16 @@ function Scene({
         args={[Math.max(width, height) * 1.1, 25, "#334155", "#1e293b"]}
         position={[centerX, 0.002, centerZ]}
       />
+
+      {/* Venue Walls - Şeffaf cam duvarlar ve logolar */}
+      <Suspense fallback={null}>
+        <VenueWalls
+          width={width}
+          height={height}
+          centerX={centerX}
+          centerZ={centerZ}
+        />
+      </Suspense>
 
       {layout.zones?.map((zone) => (
         <ZoneMesh key={zone.id} zone={zone} scale={SCALE} />

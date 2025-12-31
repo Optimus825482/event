@@ -17,6 +17,7 @@ import {
   Check,
   Crosshair,
   Users,
+  Crown,
 } from "lucide-react";
 import { eventsApi, staffApi } from "@/lib/api";
 import { Input } from "@/components/ui/input";
@@ -68,6 +69,21 @@ interface StaffAssignment {
   tableIds: string[];
 }
 
+interface TeamData {
+  id: string;
+  name: string;
+  color: string;
+  members: Array<{ id: string; name: string; role?: string }>;
+  leaderId?: string;
+  tableIds: string[];
+}
+
+interface TeamLeader {
+  staffId: string;
+  staffName: string;
+  role?: string;
+}
+
 const TABLE_TYPE_CONFIG: Record<
   string,
   { label: string; color: string; borderColor: string }
@@ -112,7 +128,7 @@ export default function CheckInLayoutPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
-  const [zoom, setZoom] = useState(1.2);
+  const [zoom, setZoom] = useState(1);
   const [highlightedTableId, setHighlightedTableId] = useState<string | null>(
     null
   );
@@ -134,9 +150,24 @@ export default function CheckInLayoutPage() {
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>(
     []
   );
+  const [teams, setTeams] = useState<TeamData[]>([]);
 
   // Kamera sabit kalma ayarı
   const [lockCamera, setLockCamera] = useState(true);
+
+  // Tıklanan masanın görevli bilgisi popup'ı
+  const [selectedTablePopup, setSelectedTablePopup] = useState<{
+    tableId: string;
+    x: number;
+    y: number;
+    tableLabel: string;
+    groupName: string;
+    groupColor: string;
+    staffNames: string[];
+    teamName?: string;
+    teamColor?: string;
+    teamLeaders?: TeamLeader[];
+  } | null>(null);
 
   // localStorage'dan konumu yükle
   useEffect(() => {
@@ -153,13 +184,15 @@ export default function CheckInLayoutPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [eventRes, groupsRes, assignmentsRes] = await Promise.all([
-          eventsApi.getOne(eventId),
-          staffApi.getEventTableGroups(eventId).catch(() => ({ data: [] })),
-          staffApi
-            .getEventStaffAssignments(eventId)
-            .catch(() => ({ data: [] })),
-        ]);
+        const [eventRes, groupsRes, assignmentsRes, teamsRes] =
+          await Promise.all([
+            eventsApi.getOne(eventId),
+            staffApi.getEventTableGroups(eventId).catch(() => ({ data: [] })),
+            staffApi
+              .getEventStaffAssignments(eventId)
+              .catch(() => ({ data: [] })),
+            staffApi.getEventTeams(eventId).catch(() => ({ data: [] })),
+          ]);
 
         setEvent(eventRes.data);
         if (eventRes.data?.venueLayout) {
@@ -188,6 +221,20 @@ export default function CheckInLayoutPage() {
               staffId: a.staffId,
               staffName: a.staffName || a.staff?.fullName || "Personel",
               tableIds: a.tableIds || [],
+            }))
+          );
+        }
+
+        // Takımları ayarla
+        if (teamsRes.data) {
+          setTeams(
+            teamsRes.data.map((t: any) => ({
+              id: t.id,
+              name: t.name,
+              color: t.color,
+              members: t.members || [],
+              leaderId: t.leaderId,
+              tableIds: t.tableIds || [],
             }))
           );
         }
@@ -234,37 +281,6 @@ export default function CheckInLayoutPage() {
       .slice(0, 12);
   }, [searchQuery, placedTables]);
 
-  const handleTableSelect = useCallback(
-    (table: PlacedTable) => {
-      setHighlightedTableId(table.id);
-      setSearchQuery("");
-
-      // Kamera kilidi kapalıysa hareket ettir
-      if (!lockCamera && viewMode === "2d" && canvasContainerRef.current) {
-        const containerWidth = canvasContainerRef.current.clientWidth;
-        const containerHeight = canvasContainerRef.current.clientHeight;
-        const targetX = -(table.x * zoom - containerWidth / 2);
-        const targetY = -(table.y * zoom - containerHeight / 2);
-        setPanOffset({ x: targetX, y: targetY });
-      }
-      setTimeout(() => setHighlightedTableId(null), 8000);
-    },
-    [viewMode, zoom, lockCamera]
-  );
-
-  const handleDirectSearch = useCallback(() => {
-    if (!searchQuery.trim()) return;
-    const query = searchQuery.trim();
-    const exactMatch = placedTables.find(
-      (t) => t.tableNumber.toString() === query || t.locaName === query
-    );
-    if (exactMatch) {
-      handleTableSelect(exactMatch);
-    } else if (searchResults.length > 0) {
-      handleTableSelect(searchResults[0]);
-    }
-  }, [searchQuery, placedTables, searchResults, handleTableSelect]);
-
   const venueLayout: VenueLayout = useMemo(() => {
     const zones: Zone[] = stageElements.map((el) => ({
       id: el.id,
@@ -300,8 +316,20 @@ export default function CheckInLayoutPage() {
   const tableToGroupMap = useMemo(() => {
     const map: Record<
       string,
-      { groupName: string; groupColor: string; staffNames: string[] }
+      {
+        groupName: string;
+        groupColor: string;
+        staffNames: string[];
+        teamName?: string;
+        teamColor?: string;
+        teamLeaders?: TeamLeader[];
+      }
     > = {};
+
+    // DEBUG: Veri yapılarını kontrol et
+    console.log("[DEBUG] tableGroups:", tableGroups);
+    console.log("[DEBUG] placedTables sample:", placedTables.slice(0, 3));
+    console.log("[DEBUG] staffAssignments:", staffAssignments);
 
     tableGroups.forEach((group, index) => {
       const groupColor =
@@ -318,26 +346,128 @@ export default function CheckInLayoutPage() {
         }
       });
 
+      // Bu gruba atanmış takımı bul
+      let teamInfo: {
+        name: string;
+        color: string;
+        leaders: TeamLeader[];
+      } | null = null;
+      const assignedTeam = teams.find((t) =>
+        t.tableIds.some((tid) => group.tableIds.includes(tid))
+      );
+      if (assignedTeam) {
+        // Takım liderlerini bul
+        const leaders: TeamLeader[] = assignedTeam.members
+          .filter(
+            (m) =>
+              m.role === "captain" ||
+              m.role === "supervisor" ||
+              m.id === assignedTeam.leaderId
+          )
+          .map((m) => ({
+            staffId: m.id,
+            staffName: m.name,
+            role: m.role,
+          }));
+
+        teamInfo = {
+          name: assignedTeam.name,
+          color: assignedTeam.color,
+          leaders,
+        };
+      }
+
       group.tableIds.forEach((tableLabel) => {
-        // tableLabel "114", "115" gibi string olabilir
-        const matchingTable = placedTables.find(
-          (t) =>
-            t.tableNumber.toString() === tableLabel ||
-            t.locaName === tableLabel ||
-            t.id === tableLabel
-        );
+        // tableLabel "1", "96", "1001" (loca) gibi string
+        // placedTables'da tableNumber (number) veya locaName ile eşleştir
+        const tableNum = parseInt(tableLabel, 10);
+
+        const matchingTable = placedTables.find((t) => {
+          // Masa numarası ile eşleştir (hem number hem string)
+          if (t.tableNumber === tableNum) return true;
+          if (t.tableNumber.toString() === tableLabel) return true;
+          // Loca adı ile eşleştir
+          if (t.locaName === tableLabel) return true;
+          // Tam ID ile eşleştir
+          if (t.id === tableLabel) return true;
+          return false;
+        });
+
         if (matchingTable) {
           map[matchingTable.id] = {
             groupName: group.name,
             groupColor,
             staffNames: staffForGroup,
+            teamName: teamInfo?.name,
+            teamColor: teamInfo?.color,
+            teamLeaders: teamInfo?.leaders,
           };
         }
       });
     });
 
+    console.log(
+      "[DEBUG] tableToGroupMap result:",
+      Object.keys(map).length,
+      "entries"
+    );
     return map;
-  }, [tableGroups, staffAssignments, placedTables]);
+  }, [tableGroups, staffAssignments, placedTables, teams]);
+
+  // handleTableSelect - tableToGroupMap'den sonra tanımlanmalı
+  const handleTableSelect = useCallback(
+    (table: PlacedTable) => {
+      setHighlightedTableId(table.id);
+      setSearchQuery("");
+
+      // Grup görünümü açıksa ve masanın grup bilgisi varsa popup göster
+      if (showGroupView) {
+        const groupInfo = tableToGroupMap[table.id];
+        if (groupInfo) {
+          setSelectedTablePopup({
+            tableId: table.id,
+            x: table.x,
+            y: table.y,
+            tableLabel: table.isLoca
+              ? table.locaName || `L${table.tableNumber}`
+              : `Masa ${table.tableNumber}`,
+            groupName: groupInfo.groupName,
+            groupColor: groupInfo.groupColor,
+            staffNames: groupInfo.staffNames,
+            teamName: groupInfo.teamName,
+            teamColor: groupInfo.teamColor,
+            teamLeaders: groupInfo.teamLeaders,
+          });
+        }
+      } else {
+        setSelectedTablePopup(null);
+      }
+
+      // Kamera kilidi kapalıysa hareket ettir
+      if (!lockCamera && viewMode === "2d" && canvasContainerRef.current) {
+        const containerWidth = canvasContainerRef.current.clientWidth;
+        const containerHeight = canvasContainerRef.current.clientHeight;
+        const targetX = -(table.x * zoom - containerWidth / 2);
+        const targetY = -(table.y * zoom - containerHeight / 2);
+        setPanOffset({ x: targetX, y: targetY });
+      }
+      setTimeout(() => setHighlightedTableId(null), 8000);
+    },
+    [viewMode, zoom, lockCamera, showGroupView, tableToGroupMap]
+  );
+
+  const handleDirectSearch = useCallback(() => {
+    if (!searchQuery.trim()) return;
+    const query = searchQuery.trim();
+    const exactMatch = placedTables.find(
+      (t) => t.tableNumber.toString() === query || t.locaName === query
+    );
+    if (exactMatch) {
+      handleTableSelect(exactMatch);
+    } else if (searchResults.length > 0) {
+      handleTableSelect(searchResults[0]);
+    }
+  }, [searchQuery, placedTables, searchResults, handleTableSelect]);
 
   const canvasTables: CanvasTable[] = useMemo(() => {
     return placedTables.map((table) => {
@@ -398,6 +528,11 @@ export default function CheckInLayoutPage() {
         setIsSettingPosition(false);
         return;
       }
+    }
+
+    // Popup açıksa ve boş alana tıklandıysa kapat
+    if (selectedTablePopup) {
+      setSelectedTablePopup(null);
     }
 
     setIsDragging(true);
@@ -769,23 +904,6 @@ export default function CheckInLayoutPage() {
                       onClick={() => handleTableSelect(table)}
                     >
                       {table.tableNumber}
-
-                      {/* Grup görünümünde görevli isimlerini göster */}
-                      {showGroupView &&
-                        groupInfo &&
-                        groupInfo.staffNames.length > 0 && (
-                          <div
-                            className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 text-white text-[8px] px-1.5 py-0.5 rounded-full"
-                            style={{ fontSize: Math.max(6, 8 * zoom) }}
-                          >
-                            {groupInfo.staffNames
-                              .slice(0, 2)
-                              .map((n) => n.split(" ")[0])
-                              .join(", ")}
-                            {groupInfo.staffNames.length > 2 &&
-                              `+${groupInfo.staffNames.length - 2}`}
-                          </div>
-                        )}
                     </div>
                   );
                 })}
@@ -831,32 +949,16 @@ export default function CheckInLayoutPage() {
                       onClick={() => handleTableSelect(loca)}
                     >
                       {loca.locaName}
-
-                      {/* Grup görünümünde görevli isimlerini göster */}
-                      {showGroupView &&
-                        groupInfo &&
-                        groupInfo.staffNames.length > 0 && (
-                          <div
-                            className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 text-white text-[8px] px-1.5 py-0.5 rounded-full"
-                            style={{ fontSize: Math.max(6, 8 * zoom) }}
-                          >
-                            {groupInfo.staffNames
-                              .slice(0, 2)
-                              .map((n) => n.split(" ")[0])
-                              .join(", ")}
-                            {groupInfo.staffNames.length > 2 &&
-                              `+${groupInfo.staffNames.length - 2}`}
-                          </div>
-                        )}
                     </div>
                   );
                 })}
 
               {highlightedTableId && (
                 <div
-                  className="absolute top-4 left-1/2 -translate-x-1/2 z-40"
+                  className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-start gap-3"
                   style={{ transform: `translateX(-50%) scale(${1 / zoom})` }}
                 >
+                  {/* Masa Kartı */}
                   <div className="bg-cyan-600 text-white px-6 py-3 rounded-xl shadow-2xl animate-bounce flex items-center gap-3">
                     <MapPin className="w-6 h-6" />
                     <span className="font-bold text-lg">
@@ -871,6 +973,190 @@ export default function CheckInLayoutPage() {
                       })()}
                     </span>
                     <span className="text-cyan-200">← Burada</span>
+                  </div>
+
+                  {/* Takım Bilgi Kartı - Grup görünümü açıksa göster */}
+                  {showGroupView &&
+                    (() => {
+                      const groupInfo = tableToGroupMap[highlightedTableId];
+                      if (!groupInfo) return null;
+
+                      return (
+                        <div
+                          className="bg-slate-900/95 border-2 rounded-xl p-4 shadow-2xl backdrop-blur-sm min-w-[220px] animate-fadeIn"
+                          style={{
+                            borderColor:
+                              groupInfo.teamColor || groupInfo.groupColor,
+                          }}
+                        >
+                          {/* Grup Bilgisi */}
+                          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-700">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: groupInfo.groupColor }}
+                            />
+                            <span className="text-white font-bold text-sm">
+                              {groupInfo.groupName}
+                            </span>
+                          </div>
+
+                          {/* Takım Bilgisi */}
+                          {groupInfo.teamName && (
+                            <div className="mb-3">
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+                                Takım
+                              </p>
+                              <div
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                                style={{
+                                  backgroundColor: `${groupInfo.teamColor}20`,
+                                }}
+                              >
+                                <Users
+                                  className="w-4 h-4"
+                                  style={{ color: groupInfo.teamColor }}
+                                />
+                                <span className="text-white font-medium text-sm">
+                                  {groupInfo.teamName}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Takım Kaptanları */}
+                          {groupInfo.teamLeaders &&
+                            groupInfo.teamLeaders.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+                                  Takım Kaptanı
+                                </p>
+                                <div className="space-y-1">
+                                  {groupInfo.teamLeaders.map((leader, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="flex items-center gap-2 bg-amber-500/20 px-3 py-2 rounded-lg"
+                                    >
+                                      <Crown className="w-4 h-4 text-amber-400" />
+                                      <span className="text-amber-200 font-medium text-sm">
+                                        {leader.staffName}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                          {/* Görevliler */}
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+                              Görevliler
+                            </p>
+                            {groupInfo.staffNames.length > 0 ? (
+                              <div className="space-y-1 max-h-24 overflow-y-auto">
+                                {groupInfo.staffNames.map((name, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg"
+                                  >
+                                    <User className="w-3 h-3 text-slate-400" />
+                                    <span className="text-white text-xs">
+                                      {name}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500 italic">
+                                Görevli atanmamış
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                </div>
+              )}
+
+              {/* Staff Info Popup - Masaya tıklayınca gösterilir */}
+              {selectedTablePopup && showGroupView && (
+                <div
+                  className="absolute z-50"
+                  style={{
+                    left: selectedTablePopup.x * zoom,
+                    top: selectedTablePopup.y * zoom - 80,
+                    transform: "translateX(-50%)",
+                  }}
+                >
+                  <div
+                    className="bg-slate-900/95 border-2 rounded-xl p-3 shadow-2xl backdrop-blur-sm min-w-[180px] max-w-[280px]"
+                    style={{ borderColor: selectedTablePopup.groupColor }}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-700">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{
+                            backgroundColor: selectedTablePopup.groupColor,
+                          }}
+                        />
+                        <span className="text-white font-bold text-sm">
+                          {selectedTablePopup.tableLabel}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTablePopup(null);
+                        }}
+                        className="p-1 hover:bg-slate-700 rounded-full transition-colors"
+                      >
+                        <X className="w-3 h-3 text-slate-400" />
+                      </button>
+                    </div>
+
+                    {/* Grup Adı */}
+                    <div
+                      className="text-xs font-medium mb-2 px-2 py-1 rounded-lg"
+                      style={{
+                        backgroundColor: `${selectedTablePopup.groupColor}20`,
+                        color: selectedTablePopup.groupColor,
+                      }}
+                    >
+                      {selectedTablePopup.groupName}
+                    </div>
+
+                    {/* Görevliler */}
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">
+                        Görevliler
+                      </p>
+                      {selectedTablePopup.staffNames.length > 0 ? (
+                        <div className="space-y-1">
+                          {selectedTablePopup.staffNames.map((name, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 text-xs text-white bg-slate-800 px-2 py-1.5 rounded-lg"
+                            >
+                              <User className="w-3 h-3 text-slate-400" />
+                              {name}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">
+                          Görevli atanmamış
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Arrow */}
+                    <div
+                      className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-t-[8px] border-l-transparent border-r-transparent"
+                      style={{
+                        borderTopColor: selectedTablePopup.groupColor,
+                      }}
+                    />
                   </div>
                 </div>
               )}
@@ -1003,6 +1289,19 @@ export default function CheckInLayoutPage() {
             box-shadow: 0 0 0 8px rgba(34, 211, 238, 0.4),
               0 0 50px rgba(34, 211, 238, 0.8);
           }
+        }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
         }
       `}</style>
     </div>
