@@ -104,6 +104,19 @@ interface OrganizationTemplate {
   isDefault?: boolean;
 }
 
+// Ekstra personel tipi (hook'tan gelen)
+interface ExtraStaffItem {
+  id: string;
+  fullName: string;
+  position?: string;
+  role?: string;
+  shiftStart?: string;
+  shiftEnd?: string;
+  color?: string;
+  assignedTables?: string[];
+  workLocation?: string;
+}
+
 interface Step1TableGroupingProps {
   tables: TableData[];
   tableGroups: TableGroup[];
@@ -111,6 +124,7 @@ interface Step1TableGroupingProps {
   stageElements?: StageElement[];
   servicePoints?: ServicePoint[];
   allStaff?: Staff[];
+  extraStaffList?: ExtraStaffItem[];
   workShifts?: WorkShift[];
   eventId?: string;
   onAddGroup: (name: string, tableIds: string[], color?: string) => TableGroup;
@@ -168,6 +182,7 @@ export function Step1TableGrouping({
   stageElements = [],
   servicePoints = [],
   allStaff = [],
+  extraStaffList = [],
   workShifts = [],
   eventId,
   onAddGroup,
@@ -310,14 +325,35 @@ export function Step1TableGrouping({
     }
   }, [zoom, activeTool]);
 
-  // Table -> Group map
+  // Table label -> Table ID map (masa numarası -> UUID)
+  const labelToIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    tables.forEach((t) => map.set(t.label, t.id));
+    return map;
+  }, [tables]);
+
+  // Table ID -> Table label map (UUID -> masa numarası)
+  const idToLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    tables.forEach((t) => map.set(t.id, t.label));
+    return map;
+  }, [tables]);
+
+  // Table -> Group map (UUID bazlı)
   const tableToGroupMap = useMemo(() => {
     const map = new Map<string, TableGroup>();
     tableGroups.forEach((group) => {
-      group.tableIds.forEach((tableId) => map.set(tableId, group));
+      group.tableIds.forEach((tableLabel) => {
+        // tableLabel masa numarası ("1", "2", "3"), UUID'ye çevir
+        const tableId = labelToIdMap.get(tableLabel);
+        if (tableId) {
+          map.set(tableId, group);
+        }
+      });
     });
+    console.log("🗺️ tableToGroupMap oluşturuldu:", map.size, "masa gruplanmış");
     return map;
-  }, [tableGroups]);
+  }, [tableGroups, labelToIdMap]);
 
   // Get table group helper for click handling
   const getTableGroup = useCallback(
@@ -588,36 +624,62 @@ export function Step1TableGrouping({
     onLoadFromTemplate,
   ]);
 
+  // Helper: Convert table labels (masa numaraları) to table IDs (UUIDs)
+  const getTableIdsByLabels = useCallback(
+    (labels: string[]): string[] => {
+      const result: string[] = [];
+      labels.forEach((label) => {
+        const tableId = labelToIdMap.get(label);
+        if (tableId) {
+          result.push(tableId);
+        }
+      });
+      console.log(
+        "🔍 getTableIdsByLabels:",
+        labels.length,
+        "label ->",
+        result.length,
+        "UUID"
+      );
+      return result;
+    },
+    [labelToIdMap]
+  );
+
   // Select group tables (with Ctrl support for multi-select)
   const handleGroupClick = useCallback(
     (groupId: string, e?: React.MouseEvent) => {
       const group = tableGroups.find((g) => g.id === groupId);
       if (group) {
+        // group.tableIds masa numaralarını içeriyor (örn: ["1", "2", "3"])
+        // Canvas table.id (UUID) bekliyor, bu yüzden dönüştürüyoruz
+        const tableUUIDs = getTableIdsByLabels(group.tableIds);
+
         if (e?.ctrlKey || e?.metaKey) {
           // Ctrl+click: toggle group and add/remove its tables
           setSelectedGroupIds((prev) => {
             if (prev.includes(groupId)) {
               // Remove group's tables from selection
               setSelectedTableIds((prevTables) =>
-                prevTables.filter((id) => !group.tableIds.includes(id))
+                prevTables.filter((id) => !tableUUIDs.includes(id))
               );
               return prev.filter((id) => id !== groupId);
             } else {
               // Add group's tables to selection
               setSelectedTableIds((prevTables) => [
-                ...new Set([...prevTables, ...group.tableIds]),
+                ...new Set([...prevTables, ...tableUUIDs]),
               ]);
               return [...prev, groupId];
             }
           });
         } else {
           // Normal click: select only this group
-          setSelectedTableIds(group.tableIds);
+          setSelectedTableIds(tableUUIDs);
           setSelectedGroupIds([groupId]);
         }
       }
     },
-    [tableGroups, setSelectedTableIds]
+    [tableGroups, setSelectedTableIds, getTableIdsByLabels]
   );
 
   // Keyboard shortcuts
@@ -1680,19 +1742,17 @@ export function Step1TableGrouping({
                 ?.tableIds || newlyCreatedGroup.tableIds
             }
             tableLabels={
-              // tableGroups'tan güncel tableIds'i al (masa eklenince güncellenir)
-              (
-                tableGroups.find((g) => g.id === newlyCreatedGroup.id)
-                  ?.tableIds || newlyCreatedGroup.tableIds
-              )
-                .map((tid) => tables.find((t) => t.id === tid)?.label)
-                .filter(Boolean) as string[]
+              // tableGroups.tableIds zaten masa numaralarını içeriyor (örn: ["1", "2", "3"])
+              // Direkt kullan, UUID'ye çevirmeye gerek yok
+              tableGroups.find((g) => g.id === newlyCreatedGroup.id)
+                ?.tableIds || newlyCreatedGroup.tableIds
             }
             availableTables={ungroupedTables.map((t) => ({
               id: t.id,
               label: t.label,
             }))}
             allStaff={allStaff}
+            extraStaffList={extraStaffList}
             workShifts={workShifts}
             existingAssignments={
               tableGroups.find((g) => g.id === newlyCreatedGroup.id)

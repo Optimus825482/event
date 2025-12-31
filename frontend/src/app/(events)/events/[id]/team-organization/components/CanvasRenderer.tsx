@@ -691,14 +691,27 @@ export const CanvasRenderer = forwardRef<HTMLDivElement, CanvasRendererProps>(
     const internalRef = useRef<HTMLDivElement>(null);
     const canvasRef = (ref as React.RefObject<HTMLDivElement>) || internalRef;
 
-    // Table -> Group map
+    // Table label -> Table ID map (masa numarası -> UUID)
+    const labelToIdMap = useMemo(() => {
+      const map = new Map<string, string>();
+      tables.forEach((t) => map.set(t.label, t.id));
+      return map;
+    }, [tables]);
+
+    // Table -> Group map (UUID bazlı)
     const tableToGroupMap = useMemo(() => {
       const map = new Map<string, TableGroup>();
       tableGroups.forEach((group) => {
-        group.tableIds.forEach((tableId) => map.set(tableId, group));
+        group.tableIds.forEach((tableLabel) => {
+          // tableLabel masa numarası ("1", "2", "3"), UUID'ye çevir
+          const tableId = labelToIdMap.get(tableLabel);
+          if (tableId) {
+            map.set(tableId, group);
+          }
+        });
       });
       return map;
-    }, [tableGroups]);
+    }, [tableGroups, labelToIdMap]);
 
     // Group -> Team map
     const groupToTeamMap = useMemo(() => {

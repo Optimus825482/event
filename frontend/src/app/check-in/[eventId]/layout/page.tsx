@@ -7,21 +7,21 @@ import {
   X,
   Eye,
   Box,
-  Users,
   MapPin,
   ZoomIn,
   ZoomOut,
   RotateCcw,
   Calendar,
-  Clock,
   ArrowLeft,
+  User,
+  Check,
+  Crosshair,
 } from "lucide-react";
 import { eventsApi } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Canvas3DPreview } from "@/components/canvas/Canvas3DPreview";
 import { VenueLayout, CanvasTable, Zone } from "@/types";
 
-// ==================== TYPES ====================
 interface PlacedTable {
   id: string;
   tableNumber: number;
@@ -53,7 +53,6 @@ interface Event {
   };
 }
 
-// ==================== CONSTANTS ====================
 const TABLE_TYPE_CONFIG: Record<
   string,
   { label: string; color: string; borderColor: string }
@@ -68,7 +67,6 @@ const TABLE_TYPE_CONFIG: Record<
 const CANVAS_WIDTH = 1050;
 const CANVAS_HEIGHT = 680;
 
-// ==================== MAIN COMPONENT ====================
 export default function CheckInLayoutPage() {
   const params = useParams();
   const router = useRouter();
@@ -76,7 +74,6 @@ export default function CheckInLayoutPage() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // State
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,18 +83,34 @@ export default function CheckInLayoutPage() {
     null
   );
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-
-  // Data
   const [placedTables, setPlacedTables] = useState<PlacedTable[]>([]);
   const [stageElements, setStageElements] = useState<StageElement[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  // Fetch event data
+  // Personel konum işaretleme
+  const [myPosition, setMyPosition] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [isSettingPosition, setIsSettingPosition] = useState(false);
+
+  // localStorage'dan konumu yükle
+  useEffect(() => {
+    const savedPosition = localStorage.getItem(`myPosition_${eventId}`);
+    if (savedPosition) {
+      try {
+        setMyPosition(JSON.parse(savedPosition));
+      } catch (e) {
+        console.error("Position parse error:", e);
+      }
+    }
+  }, [eventId]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const res = await eventsApi.getOne(eventId);
         setEvent(res.data);
-
         if (res.data?.venueLayout) {
           const layout = res.data.venueLayout;
           if (layout.placedTables) setPlacedTables(layout.placedTables);
@@ -112,7 +125,6 @@ export default function CheckInLayoutPage() {
     fetchData();
   }, [eventId]);
 
-  // Keyboard shortcut for search focus
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "/" || (e.ctrlKey && e.key === "k")) {
@@ -129,17 +141,14 @@ export default function CheckInLayoutPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Search results
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase().trim();
-
     return placedTables
       .filter((table) => {
         if (table.tableNumber.toString() === query) return true;
         if (table.tableNumber.toString().includes(query)) return true;
         if (table.locaName?.toLowerCase().includes(query)) return true;
-        if (table.type.toLowerCase().includes(query)) return true;
         return false;
       })
       .sort((a, b) => {
@@ -150,12 +159,10 @@ export default function CheckInLayoutPage() {
       .slice(0, 12);
   }, [searchQuery, placedTables]);
 
-  // Handle table select from search
   const handleTableSelect = useCallback(
     (table: PlacedTable) => {
       setHighlightedTableId(table.id);
       setSearchQuery("");
-
       if (viewMode === "2d" && canvasContainerRef.current) {
         const containerWidth = canvasContainerRef.current.clientWidth;
         const containerHeight = canvasContainerRef.current.clientHeight;
@@ -163,20 +170,17 @@ export default function CheckInLayoutPage() {
         const targetY = -(table.y * zoom - containerHeight / 2);
         setPanOffset({ x: targetX, y: targetY });
       }
-
       setTimeout(() => setHighlightedTableId(null), 8000);
     },
     [viewMode, zoom]
   );
 
-  // Direct search
   const handleDirectSearch = useCallback(() => {
     if (!searchQuery.trim()) return;
     const query = searchQuery.trim();
     const exactMatch = placedTables.find(
       (t) => t.tableNumber.toString() === query || t.locaName === query
     );
-
     if (exactMatch) {
       handleTableSelect(exactMatch);
     } else if (searchResults.length > 0) {
@@ -184,7 +188,6 @@ export default function CheckInLayoutPage() {
     }
   }, [searchQuery, placedTables, searchResults, handleTableSelect]);
 
-  // Convert to VenueLayout format for 3D
   const venueLayout: VenueLayout = useMemo(() => {
     const zones: Zone[] = stageElements.map((el) => ({
       id: el.id,
@@ -206,7 +209,6 @@ export default function CheckInLayoutPage() {
           ? "#78350f"
           : "#334155",
     }));
-
     return {
       width: CANVAS_WIDTH,
       height: CANVAS_HEIGHT,
@@ -217,7 +219,6 @@ export default function CheckInLayoutPage() {
     };
   }, [stageElements]);
 
-  // Convert tables to CanvasTable format for 3D
   const canvasTables: CanvasTable[] = useMemo(() => {
     return placedTables.map((table) => ({
       id: table.id,
@@ -236,7 +237,6 @@ export default function CheckInLayoutPage() {
     }));
   }, [placedTables]);
 
-  // Zoom controls
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.2, 3));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.2, 0.5));
   const handleZoomReset = () => {
@@ -244,7 +244,45 @@ export default function CheckInLayoutPage() {
     setPanOffset({ x: 0, y: 0 });
   };
 
-  // Stats
+  // Canvas drag handlers
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (viewMode !== "2d") return;
+
+    // Konum belirleme modundaysa, tıklanan yeri kaydet
+    if (isSettingPosition) {
+      const canvasRect = (e.currentTarget as HTMLElement)
+        .querySelector(".relative")
+        ?.getBoundingClientRect();
+      if (canvasRect) {
+        const x = (e.clientX - canvasRect.left) / zoom;
+        const y = (e.clientY - canvasRect.top) / zoom;
+        const newPosition = { x, y };
+        setMyPosition(newPosition);
+        localStorage.setItem(
+          `myPosition_${eventId}`,
+          JSON.stringify(newPosition)
+        );
+        setIsSettingPosition(false);
+        return;
+      }
+    }
+
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || viewMode !== "2d") return;
+    setPanOffset({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y,
+    });
+  };
+
+  const handleCanvasMouseUp = () => {
+    setIsDragging(false);
+  };
+
   const stats = useMemo(() => {
     const tables = placedTables.filter((t) => !t.isLoca);
     const locas = placedTables.filter((t) => t.isLoca);
@@ -257,11 +295,6 @@ export default function CheckInLayoutPage() {
       day: "numeric",
       month: "long",
       year: "numeric",
-    });
-  const formatTime = (dateStr: string) =>
-    new Date(dateStr).toLocaleTimeString("tr-TR", {
-      hour: "2-digit",
-      minute: "2-digit",
     });
 
   if (loading) {
@@ -278,179 +311,208 @@ export default function CheckInLayoutPage() {
   return (
     <div className="fixed inset-0 bg-slate-900 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700 px-6 py-3 flex-shrink-0">
-        <div className="flex items-center justify-between gap-6">
+      <header className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700 px-4 py-2 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3">
           {/* Left: Back + Event Info */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/check-in")}
               className="p-2 rounded-lg hover:bg-slate-700 transition-colors"
             >
-              <ArrowLeft className="w-6 h-6 text-slate-400" />
+              <ArrowLeft className="w-5 h-5 text-slate-400" />
             </button>
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
-              <MapPin className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">{event?.name}</h1>
-              <div className="flex items-center gap-4 text-sm text-slate-400">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
-                  {event?.eventDate && formatDate(event.eventDate)}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {event?.eventDate && formatTime(event.eventDate)}
-                </span>
+            <div className="hidden md:flex items-center gap-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
+                <MapPin className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-white truncate max-w-[150px]">
+                  {event?.name}
+                </h1>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {event?.eventDate && formatDate(event.eventDate)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Center: Search */}
-          <div className="flex-1 max-w-xl relative">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-400" />
+          {/* Center: Search + Controls */}
+          <div className="flex items-center gap-2 flex-1 justify-center max-w-2xl">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Masa numarası ara... (/ veya Ctrl+K)"
+                placeholder="Masa ara..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleDirectSearch();
                 }}
-                className="pl-12 pr-12 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 text-xl h-14 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                className="pl-9 pr-8 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 text-sm h-10 rounded-lg focus:ring-2 focus:ring-cyan-500 w-full"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
+              )}
+              {searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl z-50 max-h-64 overflow-y-auto">
+                  {searchResults.map((table) => (
+                    <button
+                      key={table.id}
+                      onClick={() => handleTableSelect(table)}
+                      className="w-full px-3 py-2 flex items-center gap-2 hover:bg-slate-700 transition-colors border-b border-slate-700 last:border-0"
+                    >
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                        style={{
+                          backgroundColor:
+                            TABLE_TYPE_CONFIG[table.type]?.color || "#6b7280",
+                        }}
+                      >
+                        {table.isLoca ? table.locaName : table.tableNumber}
+                      </div>
+                      <div className="text-left flex-1">
+                        <p className="text-white text-sm font-medium">
+                          {table.isLoca
+                            ? `Loca ${table.locaName}`
+                            : `Masa ${table.tableNumber}`}
+                        </p>
+                      </div>
+                      <MapPin className="w-3 h-3 text-cyan-400" />
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
 
-            {/* Search Results */}
-            {searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
-                {searchResults.map((table) => (
-                  <button
-                    key={table.id}
-                    onClick={() => handleTableSelect(table)}
-                    className="w-full px-4 py-3 flex items-center gap-4 hover:bg-slate-700 transition-colors border-b border-slate-700 last:border-0"
-                  >
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg"
-                      style={{
-                        backgroundColor:
-                          TABLE_TYPE_CONFIG[table.type]?.color || "#6b7280",
-                      }}
-                    >
-                      {table.isLoca ? table.locaName : table.tableNumber}
-                    </div>
-                    <div className="text-left flex-1">
-                      <p className="text-white font-semibold text-lg">
-                        {table.isLoca
-                          ? `Loca ${table.locaName}`
-                          : `Masa ${table.tableNumber}`}
-                      </p>
-                      <p className="text-sm text-slate-400">
-                        {TABLE_TYPE_CONFIG[table.type]?.label} •{" "}
-                        {table.capacity} Kişilik
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 text-cyan-400">
-                      <MapPin className="w-5 h-5" />
-                      <span className="text-sm">Göster</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {searchQuery && searchResults.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 p-6 text-center">
-                <p className="text-slate-400 text-lg">
-                  "{searchQuery}" için masa bulunamadı
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Controls */}
-          <div className="flex items-center gap-3">
-            <div className="hidden lg:flex items-center gap-4 px-4 py-2 bg-slate-800/50 rounded-lg border border-slate-700">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-white">{stats.tables}</p>
-                <p className="text-xs text-slate-400">Masa</p>
-              </div>
-              <div className="w-px h-8 bg-slate-700" />
-              <div className="text-center">
-                <p className="text-2xl font-bold text-pink-400">
-                  {stats.locas}
-                </p>
-                <p className="text-xs text-slate-400">Loca</p>
-              </div>
-              <div className="w-px h-8 bg-slate-700" />
-              <div className="text-center">
-                <p className="text-2xl font-bold text-cyan-400">
-                  {stats.totalCapacity}
-                </p>
-                <p className="text-xs text-slate-400">Kapasite</p>
-              </div>
-            </div>
-
-            <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+            {/* View Mode Toggle */}
+            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-600">
               <button
                 onClick={() => setViewMode("2d")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
                   viewMode === "2d"
-                    ? "bg-cyan-600 text-white shadow-lg shadow-cyan-500/30"
+                    ? "bg-cyan-600 text-white"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <Eye className="w-5 h-5" />
+                <Eye className="w-3.5 h-3.5" />
                 2D
               </button>
               <button
                 onClick={() => setViewMode("3d")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
                   viewMode === "3d"
-                    ? "bg-purple-600 text-white shadow-lg shadow-purple-500/30"
+                    ? "bg-purple-600 text-white"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <Box className="w-5 h-5" />
+                <Box className="w-3.5 h-3.5" />
                 3D
               </button>
             </div>
 
+            {/* Zoom Controls - Only in 2D */}
             {viewMode === "2d" && (
-              <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
+              <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5 border border-slate-600">
                 <button
                   onClick={handleZoomOut}
-                  className="p-2 text-slate-400 hover:text-white transition-colors"
+                  className="p-1.5 text-slate-400 hover:text-white transition-colors"
+                  title="Uzaklaştır"
                 >
-                  <ZoomOut className="w-5 h-5" />
+                  <ZoomOut className="w-4 h-4" />
                 </button>
-                <span className="text-sm text-slate-400 w-14 text-center font-mono">
+                <span className="text-xs text-cyan-400 font-mono w-10 text-center">
                   {Math.round(zoom * 100)}%
                 </span>
                 <button
                   onClick={handleZoomIn}
-                  className="p-2 text-slate-400 hover:text-white transition-colors"
+                  className="p-1.5 text-slate-400 hover:text-white transition-colors"
+                  title="Yakınlaştır"
                 >
-                  <ZoomIn className="w-5 h-5" />
+                  <ZoomIn className="w-4 h-4" />
                 </button>
                 <button
                   onClick={handleZoomReset}
-                  className="p-2 text-slate-400 hover:text-white transition-colors border-l border-slate-700"
+                  className="p-1.5 text-slate-400 hover:text-white transition-colors border-l border-slate-600"
+                  title="Sıfırla"
                 >
-                  <RotateCcw className="w-5 h-5" />
+                  <RotateCcw className="w-4 h-4" />
                 </button>
               </div>
             )}
+
+            {/* My Position Button - Both 2D and 3D */}
+            <button
+              onClick={() => {
+                if (viewMode === "3d") {
+                  // 3D modda 2D'ye geç ve konum belirleme modunu aç
+                  setViewMode("2d");
+                  setIsSettingPosition(true);
+                } else {
+                  setIsSettingPosition(!isSettingPosition);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                isSettingPosition
+                  ? "bg-green-600 text-white border-green-500 animate-pulse"
+                  : myPosition
+                  ? "bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30"
+                  : "bg-slate-800 text-slate-400 border-slate-600 hover:text-white hover:bg-slate-700"
+              }`}
+              title={
+                isSettingPosition
+                  ? "Konumu belirlemek için haritaya tıkla"
+                  : myPosition
+                  ? "Konumum işaretli"
+                  : "Konumumu İşaretle"
+              }
+            >
+              {isSettingPosition ? (
+                <>
+                  <Crosshair className="w-3.5 h-3.5" />
+                  Tıkla
+                </>
+              ) : myPosition ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Yerim
+                </>
+              ) : (
+                <>
+                  <User className="w-3.5 h-3.5" />
+                  Yerim
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Right: Stats */}
+          <div className="hidden lg:flex items-center gap-2 px-2 py-1 bg-slate-800/50 rounded-lg border border-slate-700">
+            <div className="text-center px-2">
+              <p className="text-lg font-bold text-white">{stats.tables}</p>
+              <p className="text-[9px] text-slate-400">Masa</p>
+            </div>
+            <div className="w-px h-5 bg-slate-700" />
+            <div className="text-center px-2">
+              <p className="text-lg font-bold text-pink-400">{stats.locas}</p>
+              <p className="text-[9px] text-slate-400">Loca</p>
+            </div>
+            <div className="w-px h-5 bg-slate-700" />
+            <div className="text-center px-2">
+              <p className="text-lg font-bold text-cyan-400">
+                {stats.totalCapacity}
+              </p>
+              <p className="text-[9px] text-slate-400">Kapasite</p>
+            </div>
           </div>
         </div>
       </header>
@@ -469,7 +531,16 @@ export default function CheckInLayoutPage() {
             className="min-w-full min-h-full flex items-center justify-center p-8"
             style={{
               transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+              cursor: isSettingPosition
+                ? "crosshair"
+                : isDragging
+                ? "grabbing"
+                : "grab",
             }}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
           >
             <div
               className="relative bg-slate-800/50 rounded-2xl border border-slate-700 shadow-2xl"
@@ -598,6 +669,39 @@ export default function CheckInLayoutPage() {
                   </div>
                 </div>
               )}
+
+              {/* My Position Marker */}
+              {myPosition && (
+                <div
+                  className="absolute z-50 pointer-events-none"
+                  style={{
+                    left: myPosition.x * zoom - 16,
+                    top: myPosition.y * zoom - 40,
+                  }}
+                >
+                  <div className="relative">
+                    <div className="w-8 h-8 bg-green-500 rounded-full border-4 border-white shadow-lg flex items-center justify-center animate-bounce">
+                      <User className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-t-[12px] border-l-transparent border-r-transparent border-t-green-500" />
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg">
+                      BEN
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Position Setting Mode Indicator */}
+              {isSettingPosition && (
+                <div className="absolute inset-0 bg-green-500/10 border-4 border-dashed border-green-500/50 rounded-2xl flex items-center justify-center pointer-events-none z-40">
+                  <div className="bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3">
+                    <Crosshair className="w-6 h-6 animate-pulse" />
+                    <span className="font-bold">
+                      Konumunuzu belirlemek için haritaya tıklayın
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -610,7 +714,9 @@ export default function CheckInLayoutPage() {
                 setHighlightedTableId(tableId);
                 setTimeout(() => setHighlightedTableId(null), 8000);
               }}
-              entrancePosition={{ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 50 }}
+              entrancePosition={
+                myPosition || { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 50 }
+              }
               showPath={!!highlightedTableId}
             />
           </div>
@@ -618,39 +724,19 @@ export default function CheckInLayoutPage() {
       </div>
 
       {/* Legend */}
-      <div className="fixed bottom-4 left-4 bg-slate-800/95 border border-slate-700 rounded-xl p-4 z-40 backdrop-blur-sm">
-        <p className="text-xs text-slate-400 mb-3 font-medium">MASA TİPLERİ</p>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+      <div className="fixed bottom-4 left-4 bg-slate-800/95 border border-slate-700 rounded-xl p-3 z-40 backdrop-blur-sm">
+        <p className="text-xs text-slate-400 mb-2 font-medium">MASA TİPLERİ</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
           {Object.entries(TABLE_TYPE_CONFIG).map(([key, config]) => (
             <div key={key} className="flex items-center gap-2">
               <div
-                className="w-4 h-4 rounded-full shadow-lg"
-                style={{
-                  backgroundColor: config.color,
-                  boxShadow: `0 0 8px ${config.color}60`,
-                }}
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: config.color }}
               />
-              <span className="text-sm text-slate-300">{config.label}</span>
+              <span className="text-xs text-slate-300">{config.label}</span>
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="fixed bottom-4 right-4 bg-slate-800/95 border border-slate-700 rounded-xl px-4 py-2 z-40 backdrop-blur-sm">
-        <p className="text-xs text-slate-500">
-          <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">
-            /
-          </kbd>{" "}
-          veya{" "}
-          <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">
-            Ctrl+K
-          </kbd>{" "}
-          ile ara •{" "}
-          <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">
-            Esc
-          </kbd>{" "}
-          ile kapat
-        </p>
       </div>
 
       <style jsx global>{`

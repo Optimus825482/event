@@ -255,6 +255,9 @@ export const SERVICE_POINT_TYPES = [
 // Hizmet Noktası Personel Görevleri
 export const SERVICE_POINT_ROLES = [
   { value: "barman", label: "Barmen", color: "#06b6d4" },
+  { value: "captain", label: "Bar / Restaurant Captain", color: "#f97316" },
+  { value: "waiter", label: "Waiter / Waitress", color: "#3b82f6" },
+  { value: "comis", label: "Comis", color: "#10b981" },
   { value: "hostes", label: "Hostes", color: "#ec4899" },
   { value: "garson", label: "Garson", color: "#3b82f6" },
   { value: "barboy", label: "Barboy", color: "#22c55e" },

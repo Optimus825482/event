@@ -5,10 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   Index,
 } from "typeorm";
 import { Event } from "./event.entity";
+import { ServicePointStaffAssignment } from "./service-point-staff-assignment.entity";
 
 /**
  * Hizmet Noktası Entity
@@ -31,6 +33,10 @@ export class ServicePoint {
 
   @Column()
   eventId: string;
+
+  // Personel atamaları
+  @OneToMany(() => ServicePointStaffAssignment, (spsa) => spsa.servicePoint)
+  staffAssignments: ServicePointStaffAssignment[];
 
   // Hizmet noktası adı (örn: "Ana Bar", "VIP Lounge", "Karşılama")
   @Column()

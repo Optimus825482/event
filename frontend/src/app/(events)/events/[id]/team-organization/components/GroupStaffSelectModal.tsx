@@ -99,6 +99,19 @@ interface SelectedStaffRow {
   isExtra: boolean;
 }
 
+// Ekstra personel tipi (API'den gelen)
+interface ExtraStaffFromAPI {
+  id: string;
+  fullName: string;
+  position?: string;
+  role?: string;
+  shiftStart?: string;
+  shiftEnd?: string;
+  color?: string;
+  assignedTables?: string[];
+  workLocation?: string;
+}
+
 // Ekstra personel tipi
 interface ExtraStaffInput {
   fullName: string;
@@ -124,6 +137,7 @@ interface GroupStaffSelectModalProps {
   tableIds?: string[]; // Gruptaki masa ID'leri (çıkarma için)
   availableTables?: Array<{ id: string; label: string }>; // Grupsuz masalar
   allStaff: Staff[];
+  extraStaffList?: ExtraStaffFromAPI[]; // API'den gelen ekstra personeller
   workShifts: WorkShift[];
   existingAssignments?: GroupStaffAssignment[];
   isLoading?: boolean;
@@ -143,6 +157,7 @@ export function GroupStaffSelectModal({
   tableIds = [],
   availableTables = [],
   allStaff,
+  extraStaffList = [],
   workShifts,
   existingAssignments = [],
   isLoading = false,
@@ -159,12 +174,31 @@ export function GroupStaffSelectModal({
   const [showExtraInput, setShowExtraInput] = useState(false);
   const [extraName, setExtraName] = useState("");
 
+  // Role değerini normalize et - STAFF_ROLES'daki değerlerle eşleşmeli
+  const normalizeRole = useCallback((role?: string): StaffRole => {
+    if (!role) return "waiter";
+    const r = role.toLowerCase();
+    if (r === "supervisor" || r === "süpervizör") return "supervisor";
+    if (r === "captain" || r === "kaptan" || r === "şef") return "captain";
+    if (r === "runner" || r === "komi" || r === "commis") return "runner";
+    if (r === "hostess" || r === "hostes") return "hostess";
+    if (r === "barman" || r === "barmen" || r === "bartender") return "barman";
+    return "waiter"; // Garson varsayılan
+  }, []);
+
   // Mevcut atamaları yükle (normal ve ekstra personeller dahil)
   // Modal açıldığında VEYA groupId değiştiğinde yeniden yükle
   // NOT: existingAssignments dependency'den çıkarıldı çünkü her render'da yeni referans alıyor
   // ve bu selectedStaff'ı sıfırlıyordu
   useEffect(() => {
     if (!open) return; // Modal kapalıysa işlem yapma
+
+    console.log("🔄 useEffect: Modal açıldı, existingAssignments yükleniyor:", {
+      groupId,
+      groupName,
+      existingAssignmentsCount: existingAssignments.length,
+      tableLabels,
+    });
 
     if (existingAssignments.length > 0) {
       const rows: SelectedStaffRow[] = existingAssignments.map((a) => {
@@ -178,7 +212,7 @@ export function GroupStaffSelectModal({
           staffName: isExtra
             ? a.staffName || "Ekstra Personel"
             : staff?.fullName || "Bilinmeyen",
-          role: a.role,
+          role: normalizeRole(a.role),
           shiftId: a.shiftId || null,
           shiftStart: a.shiftStart,
           shiftEnd: a.shiftEnd,
@@ -187,9 +221,11 @@ export function GroupStaffSelectModal({
           isExtra: isExtra,
         };
       });
+      console.log("📋 Mevcut atamalar yüklendi:", rows.length, "personel");
       setSelectedStaff(rows);
     } else {
       // Mevcut atama yoksa state'i sıfırla
+      console.log("📋 Mevcut atama yok, state sıfırlandı");
       setSelectedStaff([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,6 +245,42 @@ export function GroupStaffSelectModal({
     return result;
   }, [allStaff]);
 
+  // Bu grubun masalarına atanmış ekstra personeller
+  const relevantExtraStaff = useMemo(() => {
+    if (!extraStaffList || extraStaffList.length === 0) {
+      console.log("⚠️ relevantExtraStaff: extraStaffList boş");
+      return [];
+    }
+
+    // Grubun masa numaralarını al
+    const groupTableLabels = new Set(tableLabels.map((l) => l.toString()));
+    console.log("🔍 relevantExtraStaff hesaplanıyor:", {
+      extraStaffCount: extraStaffList.length,
+      groupTableLabels: Array.from(groupTableLabels),
+    });
+
+    // Ekstra personellerin assignedTables'ı ile eşleştir
+    const filtered = extraStaffList.filter((es) => {
+      if (!es.assignedTables || es.assignedTables.length === 0) return false;
+      // Herhangi bir masa eşleşiyorsa göster
+      const matches = es.assignedTables.some((t) =>
+        groupTableLabels.has(t.toString())
+      );
+      if (matches) {
+        console.log(
+          "✅ Eşleşen ekstra personel:",
+          es.fullName,
+          "masalar:",
+          es.assignedTables
+        );
+      }
+      return matches;
+    });
+
+    console.log("📋 relevantExtraStaff sonuç:", filtered.length, "personel");
+    return filtered;
+  }, [extraStaffList, tableLabels]);
+
   // Arama filtresi
   const filteredStaffByCategory = useMemo(() => {
     if (!searchQuery.trim()) return staffByCategory;
@@ -227,6 +299,18 @@ export function GroupStaffSelectModal({
 
     return result;
   }, [staffByCategory, searchQuery]);
+
+  // Filtrelenmiş ekstra personeller
+  const filteredExtraStaff = useMemo(() => {
+    if (!searchQuery.trim()) return relevantExtraStaff;
+
+    const query = searchQuery.toLowerCase();
+    return relevantExtraStaff.filter(
+      (es) =>
+        es.fullName.toLowerCase().includes(query) ||
+        es.position?.toLowerCase().includes(query)
+    );
+  }, [relevantExtraStaff, searchQuery]);
 
   // Personel seç
   const handleSelectStaff = useCallback(
@@ -253,6 +337,63 @@ export function GroupStaffSelectModal({
       setSelectedStaff((prev) => [...prev, newRow]);
     },
     [selectedStaff, workShifts]
+  );
+
+  // API'den gelen ekstra personeli seç
+  const handleSelectExtraStaffFromAPI = useCallback(
+    (extraStaff: ExtraStaffFromAPI) => {
+      // Zaten seçili mi kontrol et
+      if (selectedStaff.some((s) => s.staffId === extraStaff.id)) {
+        console.log("⚠️ Ekstra personel zaten seçili:", extraStaff.fullName);
+        return;
+      }
+
+      // Role değerini normalize et - STAFF_ROLES'daki değerlerle eşleşmeli
+      const normalizeRole = (role?: string): StaffRole => {
+        if (!role) return "waiter";
+        const r = role.toLowerCase();
+        if (r === "supervisor" || r === "süpervizör") return "supervisor";
+        if (r === "captain" || r === "kaptan" || r === "şef") return "captain";
+        if (r === "runner" || r === "komi" || r === "commis") return "runner";
+        if (r === "hostess" || r === "hostes") return "hostess";
+        if (r === "barman" || r === "barmen" || r === "bartender")
+          return "barman";
+        return "waiter"; // Garson varsayılan
+      };
+
+      const normalizedRole = normalizeRole(extraStaff.role);
+      console.log("✅ Ekstra personel seçiliyor:", {
+        fullName: extraStaff.fullName,
+        originalRole: extraStaff.role,
+        normalizedRole,
+        shiftStart: extraStaff.shiftStart,
+        shiftEnd: extraStaff.shiftEnd,
+      });
+
+      const newRow: SelectedStaffRow = {
+        id: `extra-api-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        staffId: extraStaff.id,
+        staffName: extraStaff.fullName,
+        role: normalizedRole,
+        shiftId: null,
+        shiftStart: extraStaff.shiftStart || "17:00",
+        shiftEnd: extraStaff.shiftEnd || "04:00",
+        position: extraStaff.position || "Garson",
+        department: "Ekstra",
+        isExtra: true,
+      };
+
+      setSelectedStaff((prev) => {
+        const updated = [...prev, newRow];
+        console.log(
+          "📋 selectedStaff güncellendi:",
+          updated.length,
+          "personel"
+        );
+        return updated;
+      });
+    },
+    [selectedStaff]
   );
 
   // Personel kaldır
@@ -335,6 +476,13 @@ export function GroupStaffSelectModal({
         grouped[staff.role] = [];
       }
       grouped[staff.role].push(staff);
+    });
+    console.log("🔄 staffByRole güncellendi:", {
+      totalSelected: selectedStaff.length,
+      roles: Object.keys(grouped),
+      counts: Object.fromEntries(
+        Object.entries(grouped).map(([k, v]) => [k, v.length])
+      ),
     });
     return grouped;
   }, [selectedStaff]);
@@ -602,7 +750,72 @@ export function GroupStaffSelectModal({
                   );
                 })}
 
-                {/* Ekstra Personel */}
+                {/* API'den Gelen Ekstra Personeller - Bu grubun masalarına atanmış */}
+                {filteredExtraStaff.length > 0 && (
+                  <AccordionItem
+                    value="extra-api"
+                    className="border border-emerald-600/50 rounded-lg overflow-hidden bg-emerald-500/5"
+                  >
+                    <AccordionTrigger className="px-3 py-2 hover:bg-emerald-700/20">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-emerald-400" />
+                        <span className="text-sm font-medium text-emerald-400">
+                          Bu Grubun Ekstra Personeli
+                        </span>
+                        <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">
+                          {filteredExtraStaff.length}
+                        </Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-2 pb-2">
+                      <p className="text-xs text-slate-400 mb-2 px-1">
+                        Bu masalara atanmış ekstra personeller
+                      </p>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {filteredExtraStaff.map((extraStaff) => {
+                          const isSelected = selectedStaff.some(
+                            (s) => s.staffId === extraStaff.id
+                          );
+                          return (
+                            <button
+                              key={extraStaff.id}
+                              onClick={() =>
+                                handleSelectExtraStaffFromAPI(extraStaff)
+                              }
+                              disabled={isSelected}
+                              className={cn(
+                                "w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors",
+                                isSelected
+                                  ? "bg-slate-600/50 opacity-50 cursor-not-allowed"
+                                  : "hover:bg-emerald-700/30 cursor-pointer"
+                              )}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white truncate">
+                                  {extraStaff.fullName}
+                                </p>
+                                <p className="text-xs text-slate-400 truncate">
+                                  {extraStaff.position || "Garson"} •{" "}
+                                  {extraStaff.shiftStart || "17:00"}-
+                                  {extraStaff.shiftEnd || "04:00"}
+                                </p>
+                              </div>
+                              {isSelected ? (
+                                <Badge className="bg-emerald-500/20 text-emerald-400 text-xs ml-2">
+                                  Seçili
+                                </Badge>
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-slate-500 ml-2" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+
+                {/* Manuel Ekstra Personel Ekleme */}
                 <AccordionItem
                   value="extra"
                   className="border border-dashed border-slate-600 rounded-lg overflow-hidden"
@@ -611,7 +824,7 @@ export function GroupStaffSelectModal({
                     <div className="flex items-center gap-2">
                       <UserPlus className="w-4 h-4 text-amber-400" />
                       <span className="text-sm font-medium text-amber-400">
-                        Ekstra Personel
+                        Yeni Ekstra Personel
                       </span>
                     </div>
                   </AccordionTrigger>

@@ -79,7 +79,7 @@ const moduleMenus: Record<
     { href: "/reservations", label: "Dashboard", icon: LayoutDashboard },
     { href: "/guests", label: "Misafirler", icon: Users },
   ],
-  checkin: [{ href: "/check-in", label: "QR Okuyucu", icon: QrCode }],
+  checkin: [{ href: "/check-in", label: "Check-in", icon: MapPin }],
   admin: [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/users", label: "Kullanıcılar", icon: UserCog },

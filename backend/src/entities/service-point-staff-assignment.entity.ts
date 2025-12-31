@@ -37,7 +37,9 @@ export class ServicePointStaffAssignment {
   eventId: string;
 
   // Hizmet noktası ilişkisi
-  @ManyToOne(() => ServicePoint, { onDelete: "CASCADE" })
+  @ManyToOne(() => ServicePoint, (sp) => sp.staffAssignments, {
+    onDelete: "CASCADE",
+  })
   @JoinColumn({ name: "servicePointId" })
   servicePoint: ServicePoint;
 

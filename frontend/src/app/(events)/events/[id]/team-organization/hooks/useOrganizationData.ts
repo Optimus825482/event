@@ -209,6 +209,11 @@ export function useOrganizationData(
         });
 
         // Backend'den gelen grupları dönüştür ve staffAssignments ekle
+        console.log(
+          "🔍 Backend'den gelen gruplar:",
+          groupsRes.data?.length || 0,
+          groupsRes.data
+        );
         const groups: TableGroup[] = (groupsRes.data || []).map((g: any) => {
           // Bu grubun masalarına atanmış personelleri bul
           const groupStaffAssignments: any[] = [];
@@ -223,6 +228,36 @@ export function useOrganizationData(
                 const staff = staffRes.data?.find(
                   (s: any) => s.id === assignment.staffId
                 );
+
+                // Position'ı StaffRole'a çevir
+                const positionToRole = (pos: string | undefined): string => {
+                  if (!pos) return "waiter";
+                  const p = pos.toLowerCase();
+                  if (p.includes("süpervizör") || p.includes("supervisor"))
+                    return "supervisor";
+                  if (
+                    p.includes("kaptan") ||
+                    p.includes("captain") ||
+                    p.includes("şef")
+                  )
+                    return "captain";
+                  if (
+                    p.includes("komi") ||
+                    p.includes("runner") ||
+                    p.includes("commis")
+                  )
+                    return "runner";
+                  if (p.includes("hostes") || p.includes("hostess"))
+                    return "hostess";
+                  if (
+                    p.includes("barmen") ||
+                    p.includes("barman") ||
+                    p.includes("bartender")
+                  )
+                    return "barman";
+                  return "waiter"; // Garson varsayılan
+                };
+
                 groupStaffAssignments.push({
                   id: assignment.id,
                   staffId: assignment.staffId,
@@ -231,9 +266,9 @@ export function useOrganizationData(
                     assignment.staff?.fullName ||
                     "Bilinmeyen",
                   staffColor: assignment.color || staff?.color || "#3b82f6",
-                  role: staff?.position || "Garson",
-                  shiftStart: assignment.specialTaskStartTime,
-                  shiftEnd: assignment.specialTaskEndTime,
+                  role: positionToRole(staff?.position),
+                  shiftStart: assignment.shiftStart || "18:00",
+                  shiftEnd: assignment.shiftEnd || "02:00",
                 });
               }
             });

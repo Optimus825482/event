@@ -31,6 +31,7 @@ export class ServicePointsService {
   async findAllByEvent(eventId: string): Promise<ServicePoint[]> {
     return this.servicePointRepository.find({
       where: { eventId, isActive: true },
+      relations: ["staffAssignments", "staffAssignments.staff"],
       order: { sortOrder: "ASC", createdAt: "ASC" },
     });
   }

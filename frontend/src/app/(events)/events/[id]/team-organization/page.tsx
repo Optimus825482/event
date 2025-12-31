@@ -252,6 +252,7 @@ export default function TeamOrganizationPage() {
             teams={wizard.teams}
             stageElements={stageElements}
             allStaff={allStaff}
+            extraStaffList={extraStaffList}
             workShifts={eventShifts}
             eventId={eventId}
             viewMode={viewMode}

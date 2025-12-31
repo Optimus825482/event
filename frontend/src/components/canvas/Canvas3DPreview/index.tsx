@@ -101,9 +101,6 @@ function TableMesh({
   // Renk: Grup varsa grup rengi, yoksa masa rengi
   const color = group?.color || table.color || "#3b82f6";
 
-  // Personel sayısı
-  const staffCount = group?.staffAssignments?.length || 0;
-
   return (
     <group
       position={[x, 0, z]}
@@ -112,108 +109,7 @@ function TableMesh({
         onSelect();
       }}
     >
-      {/* Info popup - sadece seçiliyken göster */}
-      {isSelected && (
-        <Html position={[0, 0.8, 0]} center distanceFactor={10}>
-          <div className="bg-slate-800/95 text-white text-xs px-3 py-2 rounded-lg shadow-xl whitespace-nowrap border border-cyan-500/50 pointer-events-none animate-in fade-in zoom-in duration-200 min-w-[140px]">
-            {/* Step 1: Grup bilgileri */}
-            {viewMode === "step1" && group && (
-              <>
-                <div
-                  className="font-semibold text-sm"
-                  style={{ color: group.color }}
-                >
-                  {group.name}
-                </div>
-                <div className="text-slate-300 mt-1 flex items-center gap-1">
-                  <span className="text-slate-400">Masa:</span> {table.label}
-                </div>
-                <div className="text-slate-300 flex items-center gap-1">
-                  <Users className="w-3 h-3" />
-                  <span>{staffCount} Personel</span>
-                </div>
-                {staffCount > 0 && (
-                  <div className="mt-1 pt-1 border-t border-slate-600 space-y-0.5">
-                    {group.staffAssignments?.slice(0, 3).map((s, i) => (
-                      <div
-                        key={i}
-                        className="text-[10px] text-slate-400 truncate max-w-[120px]"
-                      >
-                        • {s.staffName || "Personel"}
-                      </div>
-                    ))}
-                    {staffCount > 3 && (
-                      <div className="text-[10px] text-slate-500">
-                        +{staffCount - 3} daha...
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Step 2: Takım bilgileri */}
-            {viewMode === "step2" && team && (
-              <>
-                <div
-                  className="font-semibold text-sm"
-                  style={{ color: team.color }}
-                >
-                  {team.name}
-                </div>
-                {group && (
-                  <div className="text-slate-300 mt-1 flex items-center gap-1">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: group.color }}
-                    />
-                    <span>{group.name}</span>
-                  </div>
-                )}
-                <div className="text-slate-300 flex items-center gap-1">
-                  <span className="text-slate-400">Masa:</span> {table.label}
-                </div>
-                <div className="text-slate-300 flex items-center gap-1">
-                  <Users className="w-3 h-3" />
-                  <span>{staffCount} Personel</span>
-                </div>
-              </>
-            )}
-
-            {/* Step 2 - Takımsız grup */}
-            {viewMode === "step2" && !team && group && (
-              <>
-                <div className="font-semibold text-sm text-amber-400">
-                  ⚠ Takıma Atanmamış
-                </div>
-                <div className="text-slate-300 mt-1 flex items-center gap-1">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: group.color }}
-                  />
-                  <span>{group.name}</span>
-                </div>
-                <div className="text-slate-300 flex items-center gap-1">
-                  <span className="text-slate-400">Masa:</span> {table.label}
-                </div>
-              </>
-            )}
-
-            {/* Default veya grupsuz masa */}
-            {(viewMode === "default" || !group) && (
-              <>
-                <div className="font-semibold text-cyan-300 text-sm">
-                  {table.label}
-                </div>
-                <div className="text-slate-300 mt-0.5">{table.typeName}</div>
-                <div className="text-slate-400">{table.capacity} Kişilik</div>
-              </>
-            )}
-          </div>
-        </Html>
-      )}
-
-      {/* Selection indicator */}
+      {/* Selection indicator - sadece halka göster, popup yok */}
       {isSelected && (
         <>
           <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -595,13 +491,6 @@ function PathLine({
           <meshBasicMaterial color="#22d3ee" />
         </mesh>
       </group>
-
-      {/* Mesafe etiketi */}
-      <Html position={[midX, midY + 0.2, midZ]} center>
-        <div className="bg-cyan-600/90 text-white text-xs px-2 py-1 rounded font-mono whitespace-nowrap">
-          {Math.round(distance / scale)}px
-        </div>
-      </Html>
     </group>
   );
 }
@@ -928,6 +817,31 @@ export function Canvas3DPreview({
     }
   }, [selectedTableIds]);
 
+  // Masa seçildiğinde kamerayı o masaya odakla
+  useEffect(() => {
+    if (selectedTableId && controlsRef.current) {
+      const table = limitedTables.find((t) => t.id === selectedTableId);
+      if (table) {
+        const tableX = table.x * SCALE;
+        const tableZ = table.y * SCALE;
+
+        // Kamerayı masanın önüne (sahne tarafından bakacak şekilde) konumlandır
+        // Masanın biraz arkasından ve yukarıdan bak
+        const camera = controlsRef.current.object;
+        const target = controlsRef.current.target;
+
+        // Hedef: Masanın kendisi
+        target.set(tableX, 0.3, tableZ);
+
+        // Kamera: Masanın arkasından (sahneye doğru bakacak şekilde)
+        // Z ekseni boyunca masanın arkasına, biraz yukarıdan
+        camera.position.set(tableX, 2.5, tableZ + 3);
+
+        controlsRef.current.update();
+      }
+    }
+  }, [selectedTableId, limitedTables]);
+
   // localStorage'dan intro durumunu kontrol et
   useEffect(() => {
     const seen = localStorage.getItem("3d-preview-intro-seen");
@@ -1088,6 +1002,19 @@ export function Canvas3DPreview({
           </button>
         )}
       </div>
+
+      {/* Seçili Masa Numarası - Üstte ortada göster */}
+      {selectedTableId && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
+          <div className="bg-cyan-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
+            <MapPin className="w-6 h-6" />
+            <span className="text-2xl font-bold">
+              MASA{" "}
+              {limitedTables.find((t) => t.id === selectedTableId)?.label || ""}
+            </span>
+          </div>
+        </div>
+      )}
 
       <Canvas
         shadows

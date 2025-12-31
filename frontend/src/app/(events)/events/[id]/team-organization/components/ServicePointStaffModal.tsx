@@ -150,6 +150,31 @@ export function ServicePointStaffModal({
               pos.includes("bartender")
             );
           }
+          if (roleConfig.value === "captain") {
+            return (
+              pos.includes("captain") ||
+              pos.includes("kaptan") ||
+              pos.includes("şef") ||
+              pos.includes("chef") ||
+              pos.includes("head waiter")
+            );
+          }
+          if (roleConfig.value === "waiter") {
+            return (
+              pos.includes("waiter") ||
+              pos.includes("waitress") ||
+              pos.includes("garson") ||
+              pos.includes("servis")
+            );
+          }
+          if (roleConfig.value === "comis") {
+            return (
+              pos.includes("comis") ||
+              pos.includes("commis") ||
+              pos.includes("komi") ||
+              pos.includes("runner")
+            );
+          }
           if (roleConfig.value === "hostes") {
             return (
               pos.includes("hostes") ||
