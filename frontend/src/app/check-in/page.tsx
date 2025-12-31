@@ -16,10 +16,13 @@ import {
   Volume2,
   VolumeX,
   ArrowLeft,
+  LogOut,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useCheckInStore } from "@/store/check-in-store";
+import { useAuthStore } from "@/store/auth-store";
 import { usePWA } from "@/hooks/usePWA";
 import { EventSelectorModal } from "@/components/check-in/EventSelectorModal";
 import { EventStatsDashboard } from "@/components/check-in/EventStatsDashboard";
@@ -45,9 +48,13 @@ const TABS: { id: TabType; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function CheckInPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("scanner");
   const [showEventSelector, setShowEventSelector] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  const { user, logout } = useAuthStore();
+  const isController = user?.role === "controller";
 
   const {
     selectedEventId,
@@ -193,15 +200,34 @@ export default function CheckInPage() {
           <div className="flex items-center justify-between">
             {/* Back & Title */}
             <div className="flex items-center gap-3">
-              <Link
-                href="/select-module"
-                className="p-2 -ml-2 rounded-lg hover:bg-slate-700 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-400" />
-              </Link>
+              {isController ? (
+                // Controller için logout butonu (select-module'e gidemez)
+                <button
+                  onClick={() => {
+                    logout();
+                    router.push("/login");
+                  }}
+                  className="p-2 -ml-2 rounded-lg hover:bg-slate-700 transition-colors"
+                  title="Çıkış Yap"
+                >
+                  <LogOut className="w-5 h-5 text-slate-400" />
+                </button>
+              ) : (
+                // Diğer roller için geri butonu
+                <Link
+                  href="/select-module"
+                  className="p-2 -ml-2 rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5 text-slate-400" />
+                </Link>
+              )}
               <div>
                 <h1 className="text-lg font-semibold text-white">Check-in</h1>
-                <p className="text-xs text-slate-400">Giriş Kontrolü</p>
+                <p className="text-xs text-slate-400">
+                  {isController
+                    ? `${user?.fullName || "Controller"}`
+                    : "Giriş Kontrolü"}
+                </p>
               </div>
             </div>
 
