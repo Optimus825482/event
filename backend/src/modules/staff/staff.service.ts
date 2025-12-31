@@ -1044,6 +1044,10 @@ export class StaffService {
       const tableGroupRepo = manager.getRepository(TableGroup);
       const eventStaffRepo = manager.getRepository(EventStaffAssignment);
 
+      // UUID regex - geçerli UUID kontrolü için
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
       // Mevcut grupları sil
       await tableGroupRepo.delete({ eventId });
 
@@ -1052,25 +1056,38 @@ export class StaffService {
       }
 
       // Bulk insert için entity'leri hazırla
-      const groupEntities = groups.map((groupData, i) =>
-        tableGroupRepo.create({
+      const groupEntities = groups.map((groupData, i) => {
+        // assignedTeamId UUID değilse null yap
+        const validTeamId =
+          groupData.assignedTeamId && uuidRegex.test(groupData.assignedTeamId)
+            ? groupData.assignedTeamId
+            : null;
+
+        // assignedSupervisorId UUID değilse null yap
+        const validSupervisorId =
+          groupData.assignedSupervisorId &&
+          uuidRegex.test(groupData.assignedSupervisorId)
+            ? groupData.assignedSupervisorId
+            : null;
+
+        return tableGroupRepo.create({
           eventId,
           name: groupData.name,
           color: groupData.color,
           tableIds: groupData.tableIds,
           groupType: groupData.groupType || "standard",
-          assignedTeamId: groupData.assignedTeamId,
-          assignedSupervisorId: groupData.assignedSupervisorId,
+          assignedTeamId: validTeamId,
+          assignedSupervisorId: validSupervisorId,
           notes: groupData.notes,
           sortOrder: groupData.sortOrder ?? i,
-        })
-      );
+        });
+      });
 
       // Tek seferde kaydet
       await tableGroupRepo.save(groupEntities);
 
       // Takım atamalarını senkronize et (batch işlem)
-      const groupsWithTeam = groups.filter(
+      const groupsWithTeam = groupEntities.filter(
         (g) => g.assignedTeamId && g.tableIds.length > 0
       );
 
@@ -1082,24 +1099,20 @@ export class StaffService {
 
         // Her grup için güncelleme yap
         const updatedAssignments: EventStaffAssignment[] = [];
-        for (const groupData of groupsWithTeam) {
-          const uuidRegex =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (!uuidRegex.test(groupData.assignedTeamId!)) continue;
-
+        for (const groupEntity of groupsWithTeam) {
           for (const assignment of assignments) {
             if (!assignment.tableIds || assignment.tableIds.length === 0)
               continue;
 
             const hasMatchingTable = assignment.tableIds.some((tid) =>
-              groupData.tableIds.includes(tid)
+              groupEntity.tableIds.includes(tid)
             );
 
             if (
               hasMatchingTable &&
-              assignment.teamId !== groupData.assignedTeamId
+              assignment.teamId !== groupEntity.assignedTeamId
             ) {
-              assignment.teamId = groupData.assignedTeamId!;
+              assignment.teamId = groupEntity.assignedTeamId!;
               updatedAssignments.push(assignment);
             }
           }

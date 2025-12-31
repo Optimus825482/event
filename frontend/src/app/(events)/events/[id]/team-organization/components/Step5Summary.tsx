@@ -746,6 +746,10 @@ function exportToPDF(
     tableGroups.some((g) => g.assignedTeamId === team.id)
   );
 
+  // Merit logoları - base64 encoded (küçük boyutlu placeholder, gerçek logolar için URL kullanılacak)
+  const meritRoyalLogo = "/images/merit-royal-logo.png";
+  const meritInternationalLogo = "/images/merit-international-logo.png";
+
   let content = `
 <!DOCTYPE html>
 <html>
@@ -763,48 +767,83 @@ function exportToPDF(
       padding: 0;
     }
     .header { 
-      text-align: center; 
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 15px;
-      border-bottom: 2px solid #333;
-      padding-bottom: 8px;
+      border-bottom: 3px solid #1a365d;
+      padding-bottom: 12px;
+      background: linear-gradient(to right, #f8f9fa, #ffffff, #f8f9fa);
+      padding: 10px 15px;
+      border-radius: 5px;
     }
-    .header h1 { 
+    .header-logo {
+      width: 80px;
+      height: auto;
+      object-fit: contain;
+    }
+    .header-logo-left {
+      width: 70px;
+      height: auto;
+    }
+    .header-logo-right {
+      width: 90px;
+      height: auto;
+    }
+    .header-center {
+      text-align: center;
+      flex: 1;
+      padding: 0 20px;
+    }
+    .header-center h1 { 
       margin: 0 0 4px 0; 
-      font-size: 16px;
-      color: #1a1a1a;
+      font-size: 18px;
+      color: #1a365d;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
-    .header p { 
+    .header-center p { 
       margin: 0; 
       color: #666;
-      font-size: 10px;
+      font-size: 11px;
+    }
+    .header-divider {
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(to right, #d4af37, #1a365d, #d4af37);
+      margin: 10px 0;
     }
     .section-title {
-      background: #333;
+      background: linear-gradient(135deg, #1a365d 0%, #2d4a6f 100%);
       color: white;
-      padding: 6px 10px;
+      padding: 8px 12px;
       font-size: 11px;
       font-weight: bold;
       margin: 15px 0 10px 0;
-      border-radius: 3px;
+      border-radius: 4px;
+      border-left: 4px solid #d4af37;
     }
     .team-section { 
       margin-bottom: 15px;
       page-break-inside: avoid;
     }
     .team-header { 
-      background: #f0f0f0; 
-      padding: 6px 10px;
-      border-radius: 3px;
+      background: linear-gradient(to right, #f0f0f0, #fafafa);
+      padding: 8px 12px;
+      border-radius: 4px;
       margin-bottom: 8px;
       display: flex;
       align-items: center;
       gap: 8px;
+      border-left: 4px solid;
     }
     .team-color { 
-      width: 10px; 
-      height: 10px; 
+      width: 12px; 
+      height: 12px; 
       border-radius: 50%;
       flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
     .service-point-color {
       width: 10px;
@@ -814,12 +853,16 @@ function exportToPDF(
     }
     .team-name { 
       font-weight: bold; 
-      font-size: 11px;
+      font-size: 12px;
+      color: #1a365d;
     }
     .team-stats {
       margin-left: auto;
-      font-size: 8px;
+      font-size: 9px;
       color: #666;
+      background: #e8e8e8;
+      padding: 2px 8px;
+      border-radius: 10px;
     }
     .point-type {
       background: #e0f7fa;
@@ -833,21 +876,24 @@ function exportToPDF(
       border-collapse: collapse;
       margin-bottom: 10px;
       font-size: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     th { 
-      background: #e0e0e0; 
-      padding: 5px 6px;
+      background: linear-gradient(to bottom, #1a365d, #2d4a6f);
+      color: white;
+      padding: 6px 8px;
       text-align: left;
       font-weight: 600;
-      font-size: 8px;
-      border: 1px solid #ccc;
+      font-size: 9px;
+      border: 1px solid #1a365d;
     }
     td { 
-      padding: 4px 6px;
+      padding: 5px 8px;
       border: 1px solid #ddd;
       vertical-align: top;
     }
-    tr:nth-child(even) { background: #fafafa; }
+    tr:nth-child(even) { background: #f8f9fa; }
+    tr:hover { background: #f0f4f8; }
     .role-badge {
       display: inline-flex;
       align-items: center;
@@ -864,12 +910,24 @@ function exportToPDF(
       font-size: 8px;
     }
     .footer {
-      margin-top: 15px;
+      margin-top: 20px;
       text-align: center;
       font-size: 8px;
-      color: #999;
-      border-top: 1px solid #eee;
-      padding-top: 8px;
+      color: #666;
+      border-top: 2px solid #1a365d;
+      padding-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-logo {
+      width: 50px;
+      height: auto;
+      opacity: 0.7;
+    }
+    .footer-text {
+      flex: 1;
+      text-align: center;
     }
     .no-staff {
       color: #999;
@@ -878,22 +936,31 @@ function exportToPDF(
       text-align: center;
       font-size: 9px;
     }
+    .gold-accent {
+      color: #d4af37;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>${eventName || "Etkinlik"} - Personel Organizasyonu</h1>
-    <p>${
-      eventDate
-        ? new Date(eventDate).toLocaleDateString("tr-TR", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
-        : new Date().toLocaleDateString("tr-TR")
-    }</p>
+    <img src="${meritInternationalLogo}" alt="Merit International" class="header-logo header-logo-left" onerror="this.style.display='none'">
+    <div class="header-center">
+      <h1>${eventName || "Etkinlik"}</h1>
+      <p>Personel Organizasyonu</p>
+      <p style="margin-top: 4px; font-size: 10px; color: #1a365d;">${
+        eventDate
+          ? new Date(eventDate).toLocaleDateString("tr-TR", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
+          : new Date().toLocaleDateString("tr-TR")
+      }</p>
+    </div>
+    <img src="${meritRoyalLogo}" alt="Merit Royal" class="header-logo header-logo-right" onerror="this.style.display='none'">
   </div>
+  <div class="header-divider"></div>
 `;
 
   // Takımlar Bölümü
@@ -1098,7 +1165,14 @@ function exportToPDF(
 
   content += `
   <div class="footer">
-    Oluşturulma Tarihi: ${new Date().toLocaleString("tr-TR")} | EventFlow PRO
+    <img src="${meritInternationalLogo}" alt="Merit" class="footer-logo" onerror="this.style.display='none'">
+    <div class="footer-text">
+      <span class="gold-accent">★</span> Oluşturulma: ${new Date().toLocaleString(
+        "tr-TR"
+      )} <span class="gold-accent">★</span><br>
+      <span style="color: #1a365d; font-weight: bold;">EventFlow PRO</span> - Merit Royal Hotel & Casino & SPA
+    </div>
+    <img src="${meritRoyalLogo}" alt="Merit Royal" class="footer-logo" onerror="this.style.display='none'">
   </div>
 </body>
 </html>
