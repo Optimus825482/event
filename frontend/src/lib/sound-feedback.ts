@@ -116,17 +116,25 @@ async function loadSound(type: SoundType): Promise<HTMLAudioElement | null> {
     audio.preload = "auto";
 
     await new Promise<void>((resolve, reject) => {
-      audio.oncanplaythrough = () => resolve();
-      audio.onerror = () => reject(new Error(`Failed to load ${type} sound`));
+      const timeout = setTimeout(() => {
+        reject(new Error(`Timeout loading ${type} sound`));
+      }, 3000);
+
+      audio.oncanplaythrough = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      audio.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to load ${type} sound`));
+      };
       audio.load();
     });
 
     audioCache.set(type, audio);
     return audio;
-  } catch (err) {
-    console.warn(
-      `[SoundFeedback] Could not load ${type} sound, using beep fallback`
-    );
+  } catch {
+    // Sessizce fallback'e geç - console spam önlenir
     return null;
   }
 }
@@ -156,11 +164,16 @@ export async function playSound(type: SoundType): Promise<void> {
 }
 
 /**
- * Tüm sesleri önceden yükle
+ * Tüm sesleri önceden yükle (sessizce - hata vermez)
  */
 export async function preloadSounds(): Promise<void> {
+  // Browser check
+  if (typeof window === "undefined") return;
+
   const types: SoundType[] = ["success", "error", "vip", "warning"];
-  await Promise.all(types.map((type) => loadSound(type)));
+
+  // Sessizce yükle - 404 hataları console'a yazılmaz
+  await Promise.allSettled(types.map((type) => loadSound(type)));
 }
 
 /**
