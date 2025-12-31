@@ -64,7 +64,13 @@ interface User {
   fullName: string;
   email?: string;
   phone?: string;
-  role: "admin" | "organizer" | "leader" | "staff" | "venue_owner";
+  role:
+    | "admin"
+    | "organizer"
+    | "leader"
+    | "staff"
+    | "venue_owner"
+    | "controller";
   position?: string;
   color?: string;
   avatar?: string;
@@ -123,6 +129,11 @@ const roleConfig: Record<string, { label: string; color: string; bg: string }> =
       color: "text-purple-400",
       bg: "bg-purple-500/20 border-purple-500/30",
     },
+    controller: {
+      label: "Controller",
+      color: "text-orange-400",
+      bg: "bg-orange-500/20 border-orange-500/30",
+    },
   };
 
 type SortField =
@@ -135,7 +146,13 @@ type SortField =
   | "createdAt";
 type SortDirection = "asc" | "desc";
 
-type UserRole = "admin" | "organizer" | "leader" | "staff" | "venue_owner";
+type UserRole =
+  | "admin"
+  | "organizer"
+  | "leader"
+  | "staff"
+  | "venue_owner"
+  | "controller";
 
 interface FormData {
   username: string;
@@ -586,6 +603,7 @@ export default function AdminUsersPage() {
               <SelectItem value="leader">Lider</SelectItem>
               <SelectItem value="staff">Personel</SelectItem>
               <SelectItem value="venue_owner">Mekan Sahibi</SelectItem>
+              <SelectItem value="controller">Controller</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -986,6 +1004,7 @@ export default function AdminUsersPage() {
                       <SelectItem value="leader">Lider</SelectItem>
                       <SelectItem value="staff">Personel</SelectItem>
                       <SelectItem value="venue_owner">Mekan Sahibi</SelectItem>
+                      <SelectItem value="controller">Controller</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

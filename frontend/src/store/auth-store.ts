@@ -42,7 +42,7 @@ export const MODULES: Record<ModuleType, ModuleInfo> = {
     description: "QR kod okutma ve giriş kontrolü",
     icon: "QrCode",
     path: "/check-in",
-    roles: ["admin", "organizer", "staff", "leader"],
+    roles: ["admin", "organizer", "staff", "leader", "controller"],
   },
   admin: {
     id: "admin",
@@ -66,7 +66,13 @@ export interface User {
   id: string;
   username: string;
   fullName: string;
-  role: "admin" | "organizer" | "leader" | "staff" | "venue_owner";
+  role:
+    | "admin"
+    | "organizer"
+    | "leader"
+    | "staff"
+    | "venue_owner"
+    | "controller";
   allowedModules: ModuleType[];
   avatar?: string;
   email?: string;

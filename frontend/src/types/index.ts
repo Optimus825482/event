@@ -234,7 +234,13 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
-  role: "admin" | "organizer" | "staff" | "venue_owner";
+  role:
+    | "admin"
+    | "organizer"
+    | "staff"
+    | "venue_owner"
+    | "leader"
+    | "controller";
   avatar?: string;
   color?: string;
 }

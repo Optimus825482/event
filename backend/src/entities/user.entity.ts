@@ -16,6 +16,7 @@ export enum UserRole {
   LEADER = "leader",
   STAFF = "staff",
   VENUE_OWNER = "venue_owner",
+  CONTROLLER = "controller", // Sadece check-in modülüne erişim
 }
 
 // Personel görev tanımları - Artık dinamik, staff_roles tablosundan geliyor

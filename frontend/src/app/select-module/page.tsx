@@ -91,6 +91,12 @@ export default function SelectModulePage() {
       router.push("/leader");
       return;
     }
+
+    // Controller kullanıcıları direkt check-in'e yönlendir (sadece bu modüle erişebilirler)
+    if (user?.role === "controller") {
+      router.push("/check-in");
+      return;
+    }
   }, [isHydrated, isAuthenticated, user, router]);
 
   // Hydration beklerken loading göster
