@@ -67,7 +67,7 @@ export function EventSelectorModal({
   // Yerleşim planı görünümüne git
   const handleViewLayout = (eventId: string) => {
     onClose();
-    router.push(`/events/${eventId}/check-in`);
+    router.push(`/check-in/${eventId}/layout`);
   };
 
   const formatDate = (dateStr: string) => {

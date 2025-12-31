@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Search,
   X,
@@ -9,16 +9,14 @@ import {
   Box,
   Users,
   MapPin,
-  Maximize2,
-  Minimize2,
   ZoomIn,
   ZoomOut,
   RotateCcw,
   Calendar,
   Clock,
+  ArrowLeft,
 } from "lucide-react";
 import { eventsApi } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Canvas3DPreview } from "@/components/canvas/Canvas3DPreview";
 import { VenueLayout, CanvasTable, Zone } from "@/types";
@@ -71,9 +69,10 @@ const CANVAS_WIDTH = 1050;
 const CANVAS_HEIGHT = 680;
 
 // ==================== MAIN COMPONENT ====================
-export default function CheckInPage() {
+export default function CheckInLayoutPage() {
   const params = useParams();
-  const eventId = params.id as string;
+  const router = useRouter();
+  const eventId = params.eventId as string;
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,7 +81,6 @@ export default function CheckInPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
-  const [isFullscreen, setIsFullscreen] = useState(true); // Default fullscreen
   const [zoom, setZoom] = useState(1.2);
   const [highlightedTableId, setHighlightedTableId] = useState<string | null>(
     null
@@ -134,7 +132,6 @@ export default function CheckInPage() {
   // Search results
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
-
     const query = searchQuery.toLowerCase().trim();
 
     return placedTables
@@ -146,7 +143,6 @@ export default function CheckInPage() {
         return false;
       })
       .sort((a, b) => {
-        // Exact match first
         if (a.tableNumber.toString() === query) return -1;
         if (b.tableNumber.toString() === query) return 1;
         return a.tableNumber - b.tableNumber;
@@ -160,7 +156,6 @@ export default function CheckInPage() {
       setHighlightedTableId(table.id);
       setSearchQuery("");
 
-      // Center view on selected table
       if (viewMode === "2d" && canvasContainerRef.current) {
         const containerWidth = canvasContainerRef.current.clientWidth;
         const containerHeight = canvasContainerRef.current.clientHeight;
@@ -169,18 +164,14 @@ export default function CheckInPage() {
         setPanOffset({ x: targetX, y: targetY });
       }
 
-      // Clear highlight after 8 seconds
-      setTimeout(() => {
-        setHighlightedTableId(null);
-      }, 8000);
+      setTimeout(() => setHighlightedTableId(null), 8000);
     },
     [viewMode, zoom]
   );
 
-  // Direct search - find exact match
+  // Direct search
   const handleDirectSearch = useCallback(() => {
     if (!searchQuery.trim()) return;
-
     const query = searchQuery.trim();
     const exactMatch = placedTables.find(
       (t) => t.tableNumber.toString() === query || t.locaName === query
@@ -258,37 +249,20 @@ export default function CheckInPage() {
     const tables = placedTables.filter((t) => !t.isLoca);
     const locas = placedTables.filter((t) => t.isLoca);
     const totalCapacity = placedTables.reduce((sum, t) => sum + t.capacity, 0);
-    const vipCount = placedTables.filter((t) => t.type === "vip").length;
-    const premiumCount = placedTables.filter(
-      (t) => t.type === "premium"
-    ).length;
-
-    return {
-      tables: tables.length,
-      locas: locas.length,
-      totalCapacity,
-      vipCount,
-      premiumCount,
-    };
+    return { tables: tables.length, locas: locas.length, totalCapacity };
   }, [placedTables]);
 
-  // Format date
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("tr-TR", {
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString("tr-TR", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
-  };
-
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString("tr-TR", {
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
 
   if (loading) {
     return (
@@ -306,8 +280,14 @@ export default function CheckInPage() {
       {/* Header */}
       <header className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700 px-6 py-3 flex-shrink-0">
         <div className="flex items-center justify-between gap-6">
-          {/* Left: Event Info */}
+          {/* Left: Back + Event Info */}
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push("/check-in")}
+              className="p-2 rounded-lg hover:bg-slate-700 transition-colors"
+            >
+              <ArrowLeft className="w-6 h-6 text-slate-400" />
+            </button>
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
               <MapPin className="w-6 h-6 text-white" />
             </div>
@@ -351,7 +331,7 @@ export default function CheckInPage() {
               )}
             </div>
 
-            {/* Search Results Dropdown */}
+            {/* Search Results */}
             {searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
                 {searchResults.map((table) => (
@@ -365,9 +345,6 @@ export default function CheckInPage() {
                       style={{
                         backgroundColor:
                           TABLE_TYPE_CONFIG[table.type]?.color || "#6b7280",
-                        boxShadow: `0 0 15px ${
-                          TABLE_TYPE_CONFIG[table.type]?.color || "#6b7280"
-                        }50`,
                       }}
                     >
                       {table.isLoca ? table.locaName : table.tableNumber}
@@ -392,7 +369,6 @@ export default function CheckInPage() {
               </div>
             )}
 
-            {/* No results */}
             {searchQuery && searchResults.length === 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 p-6 text-center">
                 <p className="text-slate-400 text-lg">
@@ -404,7 +380,6 @@ export default function CheckInPage() {
 
           {/* Right: Controls */}
           <div className="flex items-center gap-3">
-            {/* Stats */}
             <div className="hidden lg:flex items-center gap-4 px-4 py-2 bg-slate-800/50 rounded-lg border border-slate-700">
               <div className="text-center">
                 <p className="text-2xl font-bold text-white">{stats.tables}</p>
@@ -426,7 +401,6 @@ export default function CheckInPage() {
               </div>
             </div>
 
-            {/* View Mode Toggle */}
             <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
               <button
                 onClick={() => setViewMode("2d")}
@@ -452,7 +426,6 @@ export default function CheckInPage() {
               </button>
             </div>
 
-            {/* Zoom Controls (2D only) */}
             {viewMode === "2d" && (
               <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
                 <button
@@ -492,7 +465,6 @@ export default function CheckInPage() {
         }}
       >
         {viewMode === "2d" ? (
-          /* 2D View */
           <div
             className="min-w-full min-h-full flex items-center justify-center p-8"
             style={{
@@ -506,19 +478,14 @@ export default function CheckInPage() {
                 height: CANVAS_HEIGHT * zoom,
               }}
             >
-              {/* Grid Background */}
               <div
                 className="absolute inset-0 rounded-2xl overflow-hidden"
                 style={{
-                  backgroundImage: `
-                    linear-gradient(to right, rgba(71, 85, 105, 0.2) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(71, 85, 105, 0.2) 1px, transparent 1px)
-                  `,
+                  backgroundImage: `linear-gradient(to right, rgba(71, 85, 105, 0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(71, 85, 105, 0.2) 1px, transparent 1px)`,
                   backgroundSize: `${38 * zoom}px ${38 * zoom}px`,
                 }}
               />
 
-              {/* Stage Elements */}
               {stageElements.map((element) => (
                 <div
                   key={element.id}
@@ -541,7 +508,6 @@ export default function CheckInPage() {
                 </div>
               ))}
 
-              {/* Tables */}
               {placedTables
                 .filter((t) => !t.isLoca)
                 .map((table) => {
@@ -550,7 +516,6 @@ export default function CheckInPage() {
                     TABLE_TYPE_CONFIG[table.type] ||
                     TABLE_TYPE_CONFIG.unassigned;
                   const size = 32 * zoom;
-
                   return (
                     <div
                       key={table.id}
@@ -566,7 +531,7 @@ export default function CheckInPage() {
                         border: `2px solid ${config.borderColor}`,
                         fontSize: Math.max(8, 11 * zoom),
                         boxShadow: isHighlighted
-                          ? `0 0 0 4px rgba(34, 211, 238, 0.8), 0 0 30px rgba(34, 211, 238, 0.6), 0 0 60px rgba(34, 211, 238, 0.4)`
+                          ? `0 0 0 4px rgba(34, 211, 238, 0.8), 0 0 30px rgba(34, 211, 238, 0.6)`
                           : `0 4px 12px ${config.color}40`,
                         transform: isHighlighted ? "scale(1.5)" : "scale(1)",
                         animation: isHighlighted ? "pulse 1s infinite" : "none",
@@ -578,14 +543,12 @@ export default function CheckInPage() {
                   );
                 })}
 
-              {/* Locas */}
               {placedTables
                 .filter((t) => t.isLoca)
                 .map((loca) => {
                   const isHighlighted = highlightedTableId === loca.id;
                   const width = 48 * zoom;
                   const height = 24 * zoom;
-
                   return (
                     <div
                       key={loca.id}
@@ -613,7 +576,6 @@ export default function CheckInPage() {
                   );
                 })}
 
-              {/* Highlighted Table Indicator */}
               {highlightedTableId && (
                 <div
                   className="absolute top-4 left-1/2 -translate-x-1/2 z-40"
@@ -639,7 +601,6 @@ export default function CheckInPage() {
             </div>
           </div>
         ) : (
-          /* 3D View */
           <div className="w-full h-full">
             <Canvas3DPreview
               layout={venueLayout}
@@ -654,7 +615,7 @@ export default function CheckInPage() {
         )}
       </div>
 
-      {/* Legend - Bottom Left */}
+      {/* Legend */}
       <div className="fixed bottom-4 left-4 bg-slate-800/95 border border-slate-700 rounded-xl p-4 z-40 backdrop-blur-sm">
         <p className="text-xs text-slate-400 mb-3 font-medium">MASA TİPLERİ</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -673,7 +634,6 @@ export default function CheckInPage() {
         </div>
       </div>
 
-      {/* Keyboard Shortcut Hint */}
       <div className="fixed bottom-4 right-4 bg-slate-800/95 border border-slate-700 rounded-xl px-4 py-2 z-40 backdrop-blur-sm">
         <p className="text-xs text-slate-500">
           <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">
@@ -691,7 +651,6 @@ export default function CheckInPage() {
         </p>
       </div>
 
-      {/* CSS for pulse animation */}
       <style jsx global>{`
         @keyframes pulse {
           0%,
