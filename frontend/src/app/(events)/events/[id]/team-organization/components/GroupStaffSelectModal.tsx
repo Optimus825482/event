@@ -188,8 +188,6 @@ export function GroupStaffSelectModal({
 
   // Mevcut atamaları yükle (normal ve ekstra personeller dahil)
   // Modal açıldığında VEYA groupId değiştiğinde yeniden yükle
-  // NOT: existingAssignments dependency'den çıkarıldı çünkü her render'da yeni referans alıyor
-  // ve bu selectedStaff'ı sıfırlıyordu
   useEffect(() => {
     if (!open) return; // Modal kapalıysa işlem yapma
 
@@ -197,6 +195,13 @@ export function GroupStaffSelectModal({
       groupId,
       groupName,
       existingAssignmentsCount: existingAssignments.length,
+      existingAssignments: existingAssignments.map((a) => ({
+        id: a.id,
+        staffId: a.staffId,
+        staffName: a.staffName,
+        role: a.role,
+        isExtra: a.isExtra,
+      })),
       tableLabels,
     });
 
@@ -221,15 +226,31 @@ export function GroupStaffSelectModal({
           isExtra: isExtra,
         };
       });
-      console.log("📋 Mevcut atamalar yüklendi:", rows.length, "personel");
+      console.log(
+        "📋 Mevcut atamalar yüklendi:",
+        rows.length,
+        "personel",
+        rows.map((r) => ({
+          name: r.staffName,
+          isExtra: r.isExtra,
+          role: r.role,
+        }))
+      );
       setSelectedStaff(rows);
     } else {
       // Mevcut atama yoksa state'i sıfırla
       console.log("📋 Mevcut atama yok, state sıfırlandı");
       setSelectedStaff([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, groupId]); // existingAssignments ve allStaff dependency'den çıkarıldı
+  }, [
+    open,
+    groupId,
+    existingAssignments,
+    allStaff,
+    normalizeRole,
+    groupName,
+    tableLabels,
+  ]);
 
   // Personelleri kategorilere göre grupla
   const staffByCategory = useMemo(() => {
@@ -245,7 +266,7 @@ export function GroupStaffSelectModal({
     return result;
   }, [allStaff]);
 
-  // Bu grubun masalarına atanmış ekstra personeller
+  // Bu grubun masalarına veya doğrudan gruba atanmış ekstra personeller
   const relevantExtraStaff = useMemo(() => {
     if (!extraStaffList || extraStaffList.length === 0) {
       console.log("⚠️ relevantExtraStaff: extraStaffList boş");
@@ -255,23 +276,68 @@ export function GroupStaffSelectModal({
     // Grubun masa numaralarını al
     const groupTableLabels = new Set(tableLabels.map((l) => l.toString()));
     console.log("🔍 relevantExtraStaff hesaplanıyor:", {
+      groupId,
       extraStaffCount: extraStaffList.length,
       groupTableLabels: Array.from(groupTableLabels),
+      extraStaffSample: extraStaffList.slice(0, 3).map((es) => ({
+        fullName: es.fullName,
+        assignedTables: es.assignedTables,
+        assignedGroups: (es as any).assignedGroups,
+      })),
     });
 
-    // Ekstra personellerin assignedTables'ı ile eşleştir
+    // Ekstra personellerin assignedTables veya assignedGroups ile eşleştir
     const filtered = extraStaffList.filter((es) => {
-      if (!es.assignedTables || es.assignedTables.length === 0) return false;
+      const esAny = es as any;
+
+      // 1. Önce assignedGroups kontrolü - doğrudan gruba atanmış mı?
+      if (esAny.assignedGroups && Array.isArray(esAny.assignedGroups)) {
+        const groupsArray = esAny.assignedGroups as string[];
+        if (groupsArray.includes(groupId)) {
+          console.log(
+            "✅ Gruba doğrudan atanmış ekstra personel:",
+            es.fullName,
+            "gruplar:",
+            groupsArray
+          );
+          return true;
+        }
+      }
+
+      // 2. assignedTables kontrolü - masalara atanmış mı?
+      if (!es.assignedTables) {
+        console.log(`⏭️ ${es.fullName}: assignedTables ve assignedGroups yok`);
+        return false;
+      }
+
+      // assignedTables string ise array'e çevir
+      let tablesArray: string[] = [];
+      if (typeof es.assignedTables === "string") {
+        // Virgülle ayrılmış string ise parse et
+        tablesArray = (es.assignedTables as string)
+          .split(",")
+          .map((t) => t.trim());
+      } else if (Array.isArray(es.assignedTables)) {
+        tablesArray = es.assignedTables;
+      }
+
+      if (tablesArray.length === 0) {
+        console.log(`⏭️ ${es.fullName}: assignedTables boş array`);
+        return false;
+      }
+
       // Herhangi bir masa eşleşiyorsa göster
-      const matches = es.assignedTables.some((t) =>
+      const matches = tablesArray.some((t) =>
         groupTableLabels.has(t.toString())
       );
       if (matches) {
         console.log(
-          "✅ Eşleşen ekstra personel:",
+          "✅ Masalar üzerinden eşleşen ekstra personel:",
           es.fullName,
           "masalar:",
-          es.assignedTables
+          tablesArray,
+          "grup masaları:",
+          Array.from(groupTableLabels)
         );
       }
       return matches;
@@ -279,7 +345,7 @@ export function GroupStaffSelectModal({
 
     console.log("📋 relevantExtraStaff sonuç:", filtered.length, "personel");
     return filtered;
-  }, [extraStaffList, tableLabels]);
+  }, [extraStaffList, tableLabels, groupId]);
 
   // Arama filtresi
   const filteredStaffByCategory = useMemo(() => {

@@ -386,6 +386,10 @@ function TableMesh({
   // Renk: Grup varsa grup rengi, yoksa masa rengi
   const color = group?.color || table.color || "#3b82f6";
 
+  // Görevli isimleri
+  const staffNames =
+    group?.staffAssignments?.map((a) => a.staffName || "Personel") || [];
+
   return (
     <group
       position={[x, 0, z]}
@@ -394,7 +398,7 @@ function TableMesh({
         onSelect();
       }}
     >
-      {/* Selection indicator - sadece halka göster, popup yok */}
+      {/* Selection indicator ve Info popup */}
       {isSelected && (
         <>
           <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -411,6 +415,75 @@ function TableMesh({
             <sphereGeometry args={[0.06, 16, 16]} />
             <meshBasicMaterial color="#22d3ee" />
           </mesh>
+
+          {/* Grup ve Görevli Bilgisi Popup */}
+          {group && (
+            <Html position={[0, 1.4, 0]} center distanceFactor={8}>
+              <div
+                className="bg-slate-900/95 text-white text-xs px-4 py-3 rounded-xl shadow-2xl whitespace-nowrap border-2 pointer-events-none animate-in fade-in zoom-in duration-200 min-w-[160px]"
+                style={{ borderColor: group.color }}
+              >
+                {/* Grup Adı */}
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: group.color }}
+                  />
+                  <span className="font-bold text-sm">{group.name}</span>
+                </div>
+
+                {/* Takım Bilgisi */}
+                {team && (
+                  <div
+                    className="mb-2 px-2 py-1.5 rounded-lg"
+                    style={{ backgroundColor: `${team.color}20` }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Users
+                        className="w-3.5 h-3.5"
+                        style={{ color: team.color }}
+                      />
+                      <span
+                        className="font-medium"
+                        style={{ color: team.color }}
+                      >
+                        {team.name}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Görevliler */}
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+                    Görevliler
+                  </p>
+                  {staffNames.length > 0 ? (
+                    <div className="space-y-1 max-h-20 overflow-y-auto">
+                      {staffNames.slice(0, 5).map((name, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-1.5 bg-slate-800 px-2 py-1 rounded text-[11px]"
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          {name}
+                        </div>
+                      ))}
+                      {staffNames.length > 5 && (
+                        <div className="text-[10px] text-slate-400 text-center">
+                          +{staffNames.length - 5} kişi daha
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500 italic">
+                      Görevli atanmamış
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Html>
+          )}
         </>
       )}
 
@@ -824,14 +897,35 @@ function Scene({
   const cameraY = camDist * 0.7;
   const cameraZ = centerZ + camDist * 0.3;
 
-  // Masa -> Grup map'i
+  // Masa -> Grup map'i (table.label ile eşleştir, table.id değil!)
   const tableToGroupMap = useMemo(() => {
     const map = new Map<string, TableGroup>();
-    tableGroups.forEach((group) => {
-      group.tableIds.forEach((tableId) => map.set(tableId, group));
+
+    // Her masa için label'a göre grup bul
+    tables.forEach((table) => {
+      const tableLabel = table.label; // "1", "2", "96", "L1" gibi
+
+      // Bu label'ı içeren grubu bul
+      const matchingGroup = tableGroups.find((group) =>
+        group.tableIds.some((tid) => {
+          // Direkt eşleşme
+          if (tid === tableLabel) return true;
+          // Sayısal eşleşme (örn: "1" === "1")
+          if (tid === tableLabel.toString()) return true;
+          // Loca için "L" prefix'i olmadan eşleşme
+          if (tableLabel.startsWith("L") && tid === tableLabel.substring(1))
+            return true;
+          return false;
+        })
+      );
+
+      if (matchingGroup) {
+        map.set(table.id, matchingGroup);
+      }
     });
+
     return map;
-  }, [tableGroups]);
+  }, [tableGroups, tables]);
 
   // Grup -> Takım map'i
   const groupToTeamMap = useMemo(() => {

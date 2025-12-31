@@ -1200,6 +1200,28 @@ export default function CheckInLayoutPage() {
             <Canvas3DPreview
               layout={venueLayout}
               tables={canvasTables}
+              tableGroups={
+                showGroupView
+                  ? tableGroups.map((g, index) => ({
+                      id: g.id,
+                      name: g.name,
+                      color:
+                        g.color || GROUP_COLORS[index % GROUP_COLORS.length],
+                      tableIds: g.tableIds,
+                      staffAssignments: staffAssignments
+                        .filter((a) =>
+                          a.tableIds.some((tid) => g.tableIds.includes(tid))
+                        )
+                        .map((a) => ({
+                          id: a.id,
+                          staffId: a.staffId,
+                          staffName: a.staffName,
+                          role: "staff",
+                        })),
+                    }))
+                  : []
+              }
+              viewMode={showGroupView ? "step2" : "default"}
               selectedTableIds={highlightedTableId ? [highlightedTableId] : []}
               onTableClick={(tableId) => {
                 setHighlightedTableId(tableId);

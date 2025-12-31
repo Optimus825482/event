@@ -780,6 +780,13 @@ export class StaffController {
       }>;
     }
   ) {
+    console.log("🔵 [Controller] saveEventTableGroups called");
+    console.log("🔵 [Controller] eventId:", eventId);
+    console.log("🔵 [Controller] groups count:", dto?.groups?.length);
+    console.log(
+      "🔵 [Controller] first group:",
+      JSON.stringify(dto?.groups?.[0], null, 2)
+    );
     return this.staffService.saveEventTableGroups(eventId, dto.groups);
   }
 

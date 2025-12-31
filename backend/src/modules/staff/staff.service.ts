@@ -718,46 +718,67 @@ export class StaffService {
     savedCount: number;
     teams: Array<{ id: string; name: string; originalId?: string }>;
   }> {
-    return this.dataSource.transaction(async (manager) => {
-      const teamRepo = manager.getRepository(ServiceTeam);
+    console.log(
+      "📦 saveEventTeams çağrıldı:",
+      JSON.stringify({ eventId, teamCount: teams?.length }, null, 2)
+    );
 
-      // Mevcut ekipleri sil
-      await teamRepo.delete({ eventId });
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const teamRepo = manager.getRepository(ServiceTeam);
 
-      if (teams.length === 0) {
-        return { success: true, savedCount: 0, teams: [] };
-      }
+        // Mevcut ekipleri sil
+        await teamRepo.delete({ eventId });
+        console.log("🗑️ Mevcut ekipler silindi");
 
-      // Bulk insert için entity'leri hazırla
-      // originalId'yi metadata olarak sakla (frontend ID eşleştirmesi için)
-      const teamEntities = teams.map((teamData) =>
-        teamRepo.create({
-          eventId,
-          name: teamData.name,
-          color: teamData.color,
-          members: teamData.members,
-          leaders: teamData.leaders || [],
-          leaderId: teamData.leaderId,
-          tableIds: teamData.tableIds,
-        })
-      );
+        if (!teams || teams.length === 0) {
+          return { success: true, savedCount: 0, teams: [] };
+        }
 
-      // Tek seferde kaydet
-      const savedTeams = await teamRepo.save(teamEntities);
+        // Bulk insert için entity'leri hazırla
+        // originalId'yi metadata olarak sakla (frontend ID eşleştirmesi için)
+        const teamEntities = teams.map((teamData, index) => {
+          console.log(`📝 Team ${index + 1}:`, {
+            name: teamData.name,
+            membersCount: teamData.members?.length || 0,
+            leadersCount: teamData.leaders?.length || 0,
+            tableIdsCount: teamData.tableIds?.length || 0,
+          });
 
-      // Frontend ID -> Backend ID eşleştirmesi için döndür
-      const teamMapping = savedTeams.map((saved, index) => ({
-        id: saved.id,
-        name: saved.name,
-        originalId: teams[index].id, // Frontend'den gelen orijinal ID
-      }));
+          return teamRepo.create({
+            eventId,
+            name: teamData.name || `Takım ${index + 1}`,
+            color: teamData.color || "#3b82f6",
+            members: teamData.members || [],
+            leaders: teamData.leaders || [],
+            leaderId: teamData.leaderId,
+            tableIds: teamData.tableIds || [],
+          });
+        });
 
-      return {
-        success: true,
-        savedCount: teamEntities.length,
-        teams: teamMapping,
-      };
-    });
+        // Tek seferde kaydet
+        const savedTeams = await teamRepo.save(teamEntities);
+        console.log("✅ Ekipler kaydedildi:", savedTeams.length);
+
+        // Frontend ID -> Backend ID eşleştirmesi için döndür
+        const teamMapping = savedTeams.map((saved, index) => ({
+          id: saved.id,
+          name: saved.name,
+          originalId: teams[index].id, // Frontend'den gelen orijinal ID
+        }));
+
+        return {
+          success: true,
+          savedCount: teamEntities.length,
+          teams: teamMapping,
+        };
+      });
+    } catch (error) {
+      console.error("❌ saveEventTeams error:", error);
+      console.error("❌ Error stack:", error.stack);
+      console.error("❌ Teams data:", JSON.stringify(teams, null, 2));
+      throw error;
+    }
   }
 
   // ==================== TABLE GROUP METODLARI ====================
@@ -1048,94 +1069,94 @@ export class StaffService {
       sortOrder?: number;
     }>
   ): Promise<{ success: boolean; savedCount: number }> {
-    return this.dataSource.transaction(async (manager) => {
-      const tableGroupRepo = manager.getRepository(TableGroup);
-      const eventStaffRepo = manager.getRepository(EventStaffAssignment);
+    console.log(
+      "📦 saveEventTableGroups çağrıldı:",
+      JSON.stringify({ eventId, groupCount: groups?.length }, null, 2)
+    );
 
-      // UUID regex - geçerli UUID kontrolü için
-      const uuidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    // Input validasyonu
+    if (!eventId) {
+      throw new BadRequestException("eventId gerekli");
+    }
 
-      // Mevcut grupları sil
-      await tableGroupRepo.delete({ eventId });
-
-      if (groups.length === 0) {
-        return { success: true, savedCount: 0 };
-      }
-
-      // Bulk insert için entity'leri hazırla
-      const groupEntities: TableGroup[] = groups.map((groupData, i) => {
-        // assignedTeamId UUID değilse null yap
-        const validTeamId =
-          groupData.assignedTeamId && uuidRegex.test(groupData.assignedTeamId)
-            ? groupData.assignedTeamId
-            : null;
-
-        // assignedSupervisorId UUID değilse null yap
-        const validSupervisorId =
-          groupData.assignedSupervisorId &&
-          uuidRegex.test(groupData.assignedSupervisorId)
-            ? groupData.assignedSupervisorId
-            : null;
-
-        const entity = new TableGroup();
-        entity.eventId = eventId;
-        entity.name = groupData.name;
-        entity.color = groupData.color;
-        entity.tableIds = groupData.tableIds;
-        entity.groupType = groupData.groupType || "standard";
-        entity.assignedTeamId = validTeamId ?? undefined;
-        entity.assignedSupervisorId = validSupervisorId ?? undefined;
-        entity.notes = groupData.notes;
-        entity.sortOrder = groupData.sortOrder ?? i;
-        return entity;
-      });
-
-      // Tek seferde kaydet
-      await tableGroupRepo.save(groupEntities);
-
-      // Takım atamalarını senkronize et (batch işlem)
-      const groupsWithTeam = groupEntities.filter(
-        (g) => g.assignedTeamId && g.tableIds.length > 0
+    if (!groups || !Array.isArray(groups)) {
+      console.log(
+        "⚠️ groups undefined veya array değil, boş array olarak işleniyor"
       );
+      return { success: true, savedCount: 0 };
+    }
 
-      if (groupsWithTeam.length > 0) {
-        // Tüm assignment'ları tek sorguda al
-        const assignments = await eventStaffRepo.find({
-          where: { eventId, isActive: true },
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const tableGroupRepo = manager.getRepository(TableGroup);
+        const eventStaffRepo = manager.getRepository(EventStaffAssignment);
+
+        // UUID regex - geçerli UUID kontrolü için
+        const uuidRegex =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+        // Mevcut grupları sil
+        await tableGroupRepo.delete({ eventId });
+        console.log("🗑️ Mevcut gruplar silindi");
+
+        if (groups.length === 0) {
+          return { success: true, savedCount: 0 };
+        }
+
+        // Bulk insert için entity'leri hazırla
+        const groupEntities: TableGroup[] = groups.map((groupData, i) => {
+          // Null/undefined kontrolü
+          const safeTableIds = Array.isArray(groupData.tableIds)
+            ? groupData.tableIds
+            : [];
+          const safeName = groupData.name || `Grup ${i + 1}`;
+          const safeColor = groupData.color || "#3b82f6";
+
+          // assignedTeamId UUID değilse null yap
+          const validTeamId =
+            groupData.assignedTeamId && uuidRegex.test(groupData.assignedTeamId)
+              ? groupData.assignedTeamId
+              : null;
+
+          // assignedSupervisorId UUID değilse null yap
+          const validSupervisorId =
+            groupData.assignedSupervisorId &&
+            uuidRegex.test(groupData.assignedSupervisorId)
+              ? groupData.assignedSupervisorId
+              : null;
+
+          const entity = new TableGroup();
+          entity.eventId = eventId;
+          entity.name = safeName;
+          entity.color = safeColor;
+          entity.tableIds = safeTableIds;
+          entity.groupType = groupData.groupType || "standard";
+          entity.assignedTeamId = validTeamId ?? undefined;
+          entity.assignedSupervisorId = validSupervisorId ?? undefined;
+          entity.notes = groupData.notes || undefined;
+          entity.sortOrder = groupData.sortOrder ?? i;
+          return entity;
         });
 
-        // Her grup için güncelleme yap
-        const updatedAssignments: EventStaffAssignment[] = [];
-        for (const groupEntity of groupsWithTeam) {
-          for (const assignment of assignments) {
-            if (!assignment.tableIds || assignment.tableIds.length === 0)
-              continue;
+        console.log("📝 Entity'ler hazırlandı:", groupEntities.length);
 
-            const hasMatchingTable = assignment.tableIds.some((tid) =>
-              groupEntity.tableIds.includes(tid)
-            );
+        // Tek seferde kaydet
+        await tableGroupRepo.save(groupEntities);
+        console.log("✅ Gruplar kaydedildi");
 
-            if (
-              hasMatchingTable &&
-              assignment.teamId !== groupEntity.assignedTeamId
-            ) {
-              assignment.teamId = groupEntity.assignedTeamId!;
-              updatedAssignments.push(assignment);
-            }
-          }
-        }
+        // NOT: EventStaffAssignment.teamId güncelleme kaldırıldı
+        // Çünkü saveEventTeams yeni ID'ler oluşturuyor ve eski ID'ler geçersiz oluyor
+        // Takım bilgisi table_groups.assignedTeamId ve service_teams'de tutuluyor
 
-        // Güncellenmiş assignment'ları tek seferde kaydet
-        if (updatedAssignments.length > 0) {
-          await eventStaffRepo.save(updatedAssignments);
-        }
-      }
-
-      return { success: true, savedCount: groupEntities.length };
-    });
+        return { success: true, savedCount: groupEntities.length };
+      });
+    } catch (error) {
+      console.error("❌ saveEventTableGroups error:", error);
+      console.error("❌ Error stack:", error.stack);
+      console.error("❌ Groups data:", JSON.stringify(groups, null, 2));
+      throw error;
+    }
   }
-
   // Süpervizörleri getir (pozisyon = supervizor veya sef)
   async getSupervisors(): Promise<User[]> {
     return this.userRepository.find({

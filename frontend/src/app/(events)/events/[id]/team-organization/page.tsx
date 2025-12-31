@@ -264,6 +264,10 @@ export default function TeamOrganizationPage() {
             onAssignGroupToTeam={wizard.assignGroupToTeam}
             onUnassignGroupFromTeam={wizard.unassignGroupFromTeam}
             onAssignStaffToGroup={wizard.assignStaffToGroup}
+            onUpdateExtraStaff={(updatedList) => {
+              setExtraStaffList(updatedList);
+              wizard.setHasChanges(true);
+            }}
             onLoadFromTemplate={(groups, teams) => {
               // DEBUG: Gelen grupları logla
               console.log(
@@ -341,6 +345,7 @@ export default function TeamOrganizationPage() {
             allStaff={[...allStaff, ...extraStaffList] as Staff[]}
             tables={tables}
             servicePoints={servicePoints}
+            extraStaff={extraStaffList}
             eventId={eventId}
             eventName={event?.name}
             eventDate={event?.eventDate}

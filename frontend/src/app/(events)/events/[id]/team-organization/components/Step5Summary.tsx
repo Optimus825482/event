@@ -45,12 +45,30 @@ import {
 } from "../types";
 import { cn } from "@/lib/utils";
 
+// Ekstra personel tipi (useOrganizationData'dan import edilebilir)
+interface ExtraStaff {
+  id: string;
+  fullName: string;
+  position?: string;
+  role?: string;
+  shiftStart?: string;
+  shiftEnd?: string;
+  color?: string;
+  notes?: string;
+  assignedGroups?: string[];
+  assignedTables?: string[];
+  sortOrder?: number;
+  isActive?: boolean;
+  workLocation?: string;
+}
+
 interface Step5SummaryProps {
   tableGroups: TableGroup[];
   teams: TeamDefinition[];
   allStaff: Staff[];
   tables?: TableData[];
   servicePoints?: ServicePoint[];
+  extraStaff?: ExtraStaff[];
   eventId?: string;
   eventName?: string;
   eventDate?: string;
@@ -146,6 +164,7 @@ interface TeamBreakdownProps {
   groups: TableGroup[];
   allStaff: Staff[];
   tables?: TableData[];
+  extraStaff?: ExtraStaff[];
   isExpanded: boolean;
   onToggle: () => void;
 }
@@ -155,12 +174,35 @@ const TeamBreakdown = memo(function TeamBreakdown({
   groups,
   allStaff,
   tables = [],
+  extraStaff = [],
   isExpanded,
   onToggle,
 }: TeamBreakdownProps) {
   const totalTables = groups.reduce((sum, g) => sum + g.tableIds.length, 0);
   const allAssignments = groups.flatMap((g) => g.staffAssignments || []);
-  const totalAssigned = allAssignments.length;
+
+  // Bu takıma ait gruplara atanmış ekstra personel sayısını hesapla
+  const teamExtraStaffCount = useMemo(() => {
+    let count = 0;
+    groups.forEach((group) => {
+      extraStaff.forEach((es) => {
+        if (es.assignedGroups?.includes(group.id)) {
+          count++;
+        } else if (es.assignedTables && es.assignedTables.length > 0) {
+          if (
+            es.assignedTables.some((tableId) =>
+              group.tableIds.includes(tableId)
+            )
+          ) {
+            count++;
+          }
+        }
+      });
+    });
+    return count;
+  }, [groups, extraStaff]);
+
+  const totalAssigned = allAssignments.length + teamExtraStaffCount;
 
   // Personel listesi - grup, masa numaraları/loca adları, rol, vardiya, görev yeri ve unvan bilgisiyle
   const staffList = useMemo(() => {
@@ -176,6 +218,7 @@ const TeamBreakdown = memo(function TeamBreakdown({
       groupName: string;
       groupColor: string;
       tableNumbers: string;
+      isExtra?: boolean;
     }> = [];
 
     groups.forEach((group) => {
@@ -206,6 +249,7 @@ const TeamBreakdown = memo(function TeamBreakdown({
         })
         .join(", ");
 
+      // Normal personeller
       assignments.forEach((a) => {
         // Önce assignment'taki staffName'i kontrol et, yoksa allStaff'tan bul
         const staff = allStaff.find((s) => s.id === a.staffId);
@@ -223,12 +267,41 @@ const TeamBreakdown = memo(function TeamBreakdown({
           groupName: group.name,
           groupColor: group.color,
           tableNumbers: tableLabels,
+          isExtra: false,
         });
+      });
+
+      // Bu gruba atanmış ekstra personeller
+      extraStaff.forEach((es) => {
+        const isAssignedToGroup = es.assignedGroups?.includes(group.id);
+        const isAssignedToTable =
+          es.assignedTables &&
+          es.assignedTables.length > 0 &&
+          es.assignedTables.some((tableId) => group.tableIds.includes(tableId));
+
+        if (isAssignedToGroup || isAssignedToTable) {
+          const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
+          list.push({
+            id: es.id,
+            name: es.fullName,
+            role:
+              (roleInfo?.label || es.role || es.position || "Garson") + " ★",
+            roleColor: roleInfo?.color || es.color || "#f59e0b",
+            position: es.position || "-",
+            workLocation: es.workLocation || "Ekstra Personel",
+            shiftStart: es.shiftStart || "17:00",
+            shiftEnd: es.shiftEnd || "04:00",
+            groupName: group.name,
+            groupColor: group.color,
+            tableNumbers: tableLabels,
+            isExtra: true,
+          });
+        }
       });
     });
 
     return list;
-  }, [groups, allStaff, tables]);
+  }, [groups, allStaff, tables, extraStaff]);
 
   return (
     <div className="border border-slate-700 rounded-lg overflow-hidden">
@@ -329,7 +402,12 @@ const TeamBreakdown = memo(function TeamBreakdown({
                       {staffList.map((staff) => (
                         <tr
                           key={staff.id}
-                          className="hover:bg-slate-700/20 transition-colors"
+                          className={cn(
+                            "transition-colors",
+                            staff.isExtra
+                              ? "bg-amber-500/10 hover:bg-amber-500/20"
+                              : "hover:bg-slate-700/20"
+                          )}
                         >
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2">
@@ -337,12 +415,25 @@ const TeamBreakdown = memo(function TeamBreakdown({
                                 className="w-2 h-2 rounded-full"
                                 style={{ backgroundColor: staff.roleColor }}
                               />
-                              <span className="text-slate-300">
+                              <span
+                                className={
+                                  staff.isExtra
+                                    ? "text-amber-300"
+                                    : "text-slate-300"
+                                }
+                              >
                                 {staff.role}
                               </span>
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-white">{staff.name}</td>
+                          <td
+                            className={cn(
+                              "px-3 py-2",
+                              staff.isExtra ? "text-amber-200" : "text-white"
+                            )}
+                          >
+                            {staff.name}
+                          </td>
                           <td className="px-3 py-2">
                             <div className="flex flex-col gap-0.5">
                               <div className="flex items-center gap-1.5">
@@ -573,6 +664,7 @@ async function exportToExcel(
   allStaff: Staff[],
   tables: TableData[],
   servicePoints: ServicePoint[],
+  extraStaff: ExtraStaff[],
   eventName?: string
 ) {
   // Dynamic import - xlsx sadece gerektiğinde yüklenir
@@ -611,7 +703,19 @@ async function exportToExcel(
       // Masa numaralarını veya loca adlarını çıkar
       const tableLabels = group.tableIds
         .map((id) => {
-          const table = tables.find((t) => t.id === id);
+          // Önce ID ile eşleştir
+          let table = tables.find((t) => t.id === id);
+
+          // Bulunamadıysa label ile eşleştir
+          if (!table) {
+            table = tables.find((t) => t.label === id);
+          }
+
+          // Hala bulunamadıysa locaName ile eşleştir
+          if (!table) {
+            table = tables.find((t) => t.locaName === id);
+          }
+
           // Loca ise loca adını veya label'ı göster
           if (table?.isLoca) {
             return table.locaName || table.label || id;
@@ -620,8 +724,8 @@ async function exportToExcel(
           if (table?.label) {
             return table.label;
           }
-          const match = id.match(/-(\d+)$/);
-          return match ? match[1] : id;
+          // Hiçbiri bulunamadıysa direkt ID'yi döndür (muhtemelen masa numarası)
+          return id;
         })
         .sort((a, b) => {
           const numA = parseInt(a);
@@ -631,7 +735,20 @@ async function exportToExcel(
         })
         .join(", ");
 
-      if (assignments.length === 0) {
+      // Bu gruba atanmış ekstra personelleri bul
+      const groupExtraStaff = extraStaff.filter((es) => {
+        // Grup ID'si ile eşleşme
+        if (es.assignedGroups?.includes(group.id)) return true;
+        // Masa ID'leri ile eşleşme
+        if (es.assignedTables && es.assignedTables.length > 0) {
+          return es.assignedTables.some((tableId) =>
+            group.tableIds.includes(tableId)
+          );
+        }
+        return false;
+      });
+
+      if (assignments.length === 0 && groupExtraStaff.length === 0) {
         data.push({
           Bölüm: "Takım",
           "Takım/Nokta": team.name,
@@ -645,6 +762,7 @@ async function exportToExcel(
           "Vardiya Bitiş": "-",
         });
       } else {
+        // Normal personeller
         assignments.forEach((a) => {
           const staff = allStaff.find((s) => s.id === a.staffId);
           const roleInfo = STAFF_ROLES.find((r) => r.value === a.role);
@@ -661,6 +779,23 @@ async function exportToExcel(
             "Görev Yeri": staff?.workLocation || "-",
             "Vardiya Başlangıç": a.shiftStart,
             "Vardiya Bitiş": a.shiftEnd,
+          });
+        });
+
+        // Ekstra personeller (aynı gruba dahil)
+        groupExtraStaff.forEach((es) => {
+          const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
+          data.push({
+            Bölüm: "Takım",
+            "Takım/Nokta": team.name,
+            Grup: group.name,
+            Masalar: tableLabels,
+            Görev: (roleInfo?.label || es.role || es.position || "-") + " ★",
+            "Ad Soyad": es.fullName,
+            Unvan: es.position || "-",
+            "Görev Yeri": es.workLocation || "Ekstra Personel",
+            "Vardiya Başlangıç": es.shiftStart || "-",
+            "Vardiya Bitiş": es.shiftEnd || "-",
           });
         });
       }
@@ -707,6 +842,45 @@ async function exportToExcel(
     }
   });
 
+  // Ekstra Personeller
+  if (extraStaff && extraStaff.length > 0) {
+    extraStaff.forEach((es) => {
+      // Atandığı grupları bul
+      const assignedGroupNames = (es.assignedGroups || [])
+        .map((groupId) => {
+          const group = tableGroups.find((g) => g.id === groupId);
+          return group?.name || groupId;
+        })
+        .join(", ");
+
+      // Atandığı masaları bul
+      const assignedTableLabels = (es.assignedTables || [])
+        .map((tableId) => {
+          const table = tables.find((t) => t.id === tableId);
+          if (table?.isLoca) {
+            return table.locaName || table.label || tableId;
+          }
+          return table?.label || tableId;
+        })
+        .join(", ");
+
+      const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
+
+      data.push({
+        Bölüm: "Ekstra Personel",
+        "Takım/Nokta": "-",
+        Grup: assignedGroupNames || "-",
+        Masalar: assignedTableLabels || "-",
+        Görev: roleInfo?.label || es.role || es.position || "-",
+        "Ad Soyad": es.fullName,
+        Unvan: es.position || "-",
+        "Görev Yeri": es.workLocation || "Ekstra Personel",
+        "Vardiya Başlangıç": es.shiftStart || "-",
+        "Vardiya Bitiş": es.shiftEnd || "-",
+      });
+    });
+  }
+
   // Worksheet oluştur
   const ws = XLSX.utils.json_to_sheet(data);
 
@@ -739,6 +913,7 @@ function exportToPDF(
   allStaff: Staff[],
   tables: TableData[],
   servicePoints: ServicePoint[],
+  extraStaff: ExtraStaff[],
   eventName?: string,
   eventDate?: string
 ) {
@@ -1049,7 +1224,19 @@ function exportToPDF(
           // Masa numaralarını veya loca adlarını çıkar
           const tableLabels = group.tableIds
             .map((id) => {
-              const table = tables.find((t) => t.id === id);
+              // Önce ID ile eşleştir
+              let table = tables.find((t) => t.id === id);
+
+              // Bulunamadıysa label ile eşleştir
+              if (!table) {
+                table = tables.find((t) => t.label === id);
+              }
+
+              // Hala bulunamadıysa locaName ile eşleştir
+              if (!table) {
+                table = tables.find((t) => t.locaName === id);
+              }
+
               // Loca ise loca adını veya label'ı göster
               if (table?.isLoca) {
                 return table.locaName || table.label || id;
@@ -1058,8 +1245,8 @@ function exportToPDF(
               if (table?.label) {
                 return table.label;
               }
-              const match = id.match(/-(\d+)$/);
-              return match ? match[1] : id;
+              // Hiçbiri bulunamadıysa direkt ID'yi döndür (muhtemelen masa numarası)
+              return id;
             })
             .sort((a, b) => {
               const numA = parseInt(a);
@@ -1069,12 +1256,43 @@ function exportToPDF(
             })
             .join(", ");
 
-          assignments.forEach((a, idx) => {
+          // Bu gruba atanmış ekstra personelleri bul
+          const groupExtraStaff = extraStaff.filter((es) => {
+            // Grup ID'si ile eşleşme
+            if (es.assignedGroups?.includes(group.id)) return true;
+            // Masa ID'leri ile eşleşme
+            if (es.assignedTables && es.assignedTables.length > 0) {
+              return es.assignedTables.some((tableId) =>
+                group.tableIds.includes(tableId)
+              );
+            }
+            return false;
+          });
+
+          // Tüm personelleri birleştir (normal + ekstra)
+          const allGroupAssignments = [
+            ...assignments.map((a) => ({
+              ...a,
+              isExtra: false,
+            })),
+            ...groupExtraStaff.map((es) => ({
+              id: es.id,
+              staffId: es.id,
+              staffName: es.fullName,
+              role: es.role || es.position || "garson",
+              shiftStart: es.shiftStart || "17:00",
+              shiftEnd: es.shiftEnd || "04:00",
+              isExtra: true,
+            })),
+          ];
+
+          allGroupAssignments.forEach((a, idx) => {
             const staff = allStaff.find((s) => s.id === a.staffId);
             const roleInfo = STAFF_ROLES.find((r) => r.value === a.role);
+            const isExtra = "isExtra" in a && a.isExtra;
 
             content += `
-        <tr>
+        <tr${isExtra ? ' style="background: #fffbeb;"' : ""}>
           <td>${idx === 0 ? group.name : ""}</td>
           <td style="font-family: monospace; font-size: 7px;">${
             idx === 0 ? tableLabels : ""
@@ -1084,7 +1302,7 @@ function exportToPDF(
               <span class="role-dot" style="background: ${
                 roleInfo?.color || "#666"
               }"></span>
-              ${roleInfo?.label || a.role}
+              ${roleInfo?.label || a.role}${isExtra ? " ★" : ""}
             </span>
           </td>
           <td>${a.staffName || staff?.fullName || "Bilinmeyen"}</td>
@@ -1174,6 +1392,80 @@ function exportToPDF(
     });
   }
 
+  // Ekstra Personeller Bölümü
+  if (extraStaff && extraStaff.length > 0) {
+    content += `<div class="section-title">👥 Ekstra Personeller</div>`;
+
+    content += `
+  <div class="team-section">
+    <div class="team-header" style="border-left-color: #f59e0b">
+      <div class="team-color" style="background: #f59e0b"></div>
+      <span class="team-name">Ekstra Personel Listesi</span>
+      <span class="team-stats">${extraStaff.length} personel</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 25%">Ad Soyad</th>
+          <th style="width: 15%">Görev</th>
+          <th style="width: 20%">Atandığı Gruplar</th>
+          <th style="width: 20%">Atandığı Masalar</th>
+          <th style="width: 10%">Başlangıç</th>
+          <th style="width: 10%">Bitiş</th>
+        </tr>
+      </thead>
+      <tbody>
+`;
+
+    extraStaff.forEach((es) => {
+      // Atandığı grupları bul
+      const assignedGroupNames = (es.assignedGroups || [])
+        .map((groupId) => {
+          const group = tableGroups.find((g) => g.id === groupId);
+          return group?.name || groupId;
+        })
+        .join(", ");
+
+      // Atandığı masaları bul
+      const assignedTableLabels = (es.assignedTables || [])
+        .map((tableId) => {
+          const table = tables.find((t) => t.id === tableId);
+          if (table?.isLoca) {
+            return table.locaName || table.label || tableId;
+          }
+          return table?.label || tableId;
+        })
+        .join(", ");
+
+      const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
+
+      content += `
+        <tr>
+          <td>${es.fullName}</td>
+          <td>
+            <span class="role-badge">
+              <span class="role-dot" style="background: ${
+                roleInfo?.color || es.color || "#f59e0b"
+              }"></span>
+              ${roleInfo?.label || es.role || es.position || "-"}
+            </span>
+          </td>
+          <td style="font-size: 7px;">${assignedGroupNames || "-"}</td>
+          <td style="font-family: monospace; font-size: 7px;">${
+            assignedTableLabels || "-"
+          }</td>
+          <td class="shift-time">${es.shiftStart || "-"}</td>
+          <td class="shift-time">${es.shiftEnd || "-"}</td>
+        </tr>
+`;
+    });
+
+    content += `
+      </tbody>
+    </table>
+  </div>`;
+  }
+
   content += `
   <div class="footer">
     <img src="${meritInternationalLogo}" alt="Merit" class="footer-logo" onerror="this.style.display='none'">
@@ -1207,6 +1499,7 @@ export function Step5Summary({
   allStaff,
   tables = [],
   servicePoints = [],
+  extraStaff = [],
   eventId,
   eventName,
   eventDate,
@@ -1257,6 +1550,7 @@ export function Step5Summary({
       allStaff,
       tables,
       servicePoints,
+      extraStaff,
       eventName
     );
     onExportExcel?.();
@@ -1266,6 +1560,7 @@ export function Step5Summary({
     allStaff,
     tables,
     servicePoints,
+    extraStaff,
     eventName,
     onExportExcel,
   ]);
@@ -1277,6 +1572,7 @@ export function Step5Summary({
       allStaff,
       tables,
       servicePoints,
+      extraStaff,
       eventName,
       eventDate
     );
@@ -1287,6 +1583,7 @@ export function Step5Summary({
     allStaff,
     tables,
     servicePoints,
+    extraStaff,
     eventName,
     eventDate,
     onExportPDF,
@@ -1583,6 +1880,7 @@ export function Step5Summary({
                 groups={groupsByTeam.get(team.id) || []}
                 allStaff={allStaff}
                 tables={tables}
+                extraStaff={extraStaff}
                 isExpanded={expandedTeams.has(team.id)}
                 onToggle={() => toggleTeam(team.id)}
               />

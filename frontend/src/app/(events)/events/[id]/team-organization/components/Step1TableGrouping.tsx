@@ -114,6 +114,7 @@ interface ExtraStaffItem {
   shiftEnd?: string;
   color?: string;
   assignedTables?: string[];
+  assignedGroups?: string[];
   workLocation?: string;
 }
 
@@ -139,6 +140,8 @@ interface Step1TableGroupingProps {
     groupId: string,
     assignments: GroupStaffAssignment[]
   ) => void;
+  // Ekstra personel güncelleme callback'i
+  onUpdateExtraStaff?: (updatedExtraStaff: ExtraStaffItem[]) => void;
   // Service Points callbacks
   onAddServicePoint?: (data: {
     name: string;
@@ -194,6 +197,7 @@ export function Step1TableGrouping({
   onUnassignGroupFromTeam,
   onLoadFromTemplate,
   onAssignStaffToGroup,
+  onUpdateExtraStaff,
   onAddServicePoint,
   onUpdateServicePoint,
   onDeleteServicePoint,
@@ -480,20 +484,58 @@ export function Step1TableGrouping({
       if (!newlyCreatedGroup) return;
 
       // Grubun mevcut personel atamalarını güncelle (yeni atamalarla değiştir)
-      // onAssignStaffToGroup mevcut atamaları koruyup yenilerini ekliyor
-      // Biz tüm atamaları değiştirmek istiyoruz, bu yüzden önce grubu güncelliyoruz
       if (onAssignStaffToGroup) {
-        // Önce mevcut atamaları temizle, sonra yenilerini ekle
         onUpdateGroup(newlyCreatedGroup.id, { staffAssignments: assignments });
       }
 
-      // Ekstra personelleri de kaydet (API çağrısı gerekebilir)
-      // TODO: extraStaff için API çağrısı
+      // Ekstra personellerin assignedGroups alanını güncelle
+      // Modal'dan seçilen ekstra personelleri bul ve assignedGroups'a bu grubu ekle
+      if (onUpdateExtraStaff && extraStaffList.length > 0) {
+        const extraStaffIdsInAssignments = assignments
+          .filter((a) => a.isExtra && a.staffId)
+          .map((a) => a.staffId);
+
+        if (extraStaffIdsInAssignments.length > 0) {
+          const updatedExtraStaff = extraStaffList.map((es) => {
+            // Bu ekstra personel bu gruba atandı mı?
+            if (extraStaffIdsInAssignments.includes(es.id)) {
+              // assignedGroups'a bu grubu ekle (yoksa oluştur)
+              const currentGroups = (es as any).assignedGroups || [];
+              const newGroups = currentGroups.includes(newlyCreatedGroup.id)
+                ? currentGroups
+                : [...currentGroups, newlyCreatedGroup.id];
+
+              console.log(
+                "✅ Ekstra personel gruba atandı:",
+                es.fullName,
+                "->",
+                newlyCreatedGroup.name,
+                "assignedGroups:",
+                newGroups
+              );
+
+              return {
+                ...es,
+                assignedGroups: newGroups,
+              };
+            }
+            return es;
+          });
+
+          onUpdateExtraStaff(updatedExtraStaff);
+        }
+      }
 
       setShowStaffSelectModal(false);
       setNewlyCreatedGroup(null);
     },
-    [newlyCreatedGroup, onAssignStaffToGroup, onUpdateGroup]
+    [
+      newlyCreatedGroup,
+      onAssignStaffToGroup,
+      onUpdateGroup,
+      onUpdateExtraStaff,
+      extraStaffList,
+    ]
   );
 
   // Personel modalını kapat (atama yapmadan)
