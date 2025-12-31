@@ -6,7 +6,16 @@
  */
 
 import { useState, useEffect } from "react";
-import { Calendar, Users, CheckCircle, Loader2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Calendar,
+  Users,
+  CheckCircle,
+  Loader2,
+  X,
+  MapPin,
+  Eye,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { checkInApi } from "@/lib/api";
 import type { ActiveEvent } from "@/store/check-in-store";
@@ -24,6 +33,7 @@ export function EventSelectorModal({
   onSelect,
   currentEventId,
 }: EventSelectorModalProps) {
+  const router = useRouter();
   const [events, setEvents] = useState<ActiveEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +62,12 @@ export function EventSelectorModal({
   const handleSelect = (eventId: string) => {
     onSelect(eventId);
     onClose();
+  };
+
+  // Yerleşim planı görünümüne git
+  const handleViewLayout = (eventId: string) => {
+    onClose();
+    router.push(`/events/${eventId}/check-in`);
   };
 
   const formatDate = (dateStr: string) => {
@@ -127,13 +143,12 @@ export function EventSelectorModal({
                     : 0;
 
                 return (
-                  <button
+                  <div
                     key={event.id}
-                    onClick={() => handleSelect(event.id)}
-                    className={`w-full p-4 rounded-xl border transition-all text-left ${
+                    className={`w-full p-4 rounded-xl border transition-all ${
                       isSelected
                         ? "bg-blue-600/20 border-blue-500"
-                        : "bg-slate-700/50 border-slate-600 hover:border-slate-500 hover:bg-slate-700"
+                        : "bg-slate-700/50 border-slate-600 hover:border-slate-500"
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
@@ -154,7 +169,7 @@ export function EventSelectorModal({
                     </div>
 
                     {/* Progress */}
-                    <div className="space-y-1">
+                    <div className="space-y-1 mb-3">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-400 flex items-center gap-1">
                           <Users className="w-3 h-3" />
@@ -169,7 +184,25 @@ export function EventSelectorModal({
                         />
                       </div>
                     </div>
-                  </button>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSelect(event.id)}
+                        className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        QR/Arama
+                      </button>
+                      <button
+                        onClick={() => handleViewLayout(event.id)}
+                        className="flex-1 py-2 px-3 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        Yerleşim Planı
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
