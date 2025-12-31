@@ -16,8 +16,9 @@ import {
   User,
   Check,
   Crosshair,
+  Users,
 } from "lucide-react";
-import { eventsApi } from "@/lib/api";
+import { eventsApi, staffApi } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Canvas3DPreview } from "@/components/canvas/Canvas3DPreview";
 import { VenueLayout, CanvasTable, Zone } from "@/types";
@@ -53,6 +54,20 @@ interface Event {
   };
 }
 
+interface TableGroup {
+  id: string;
+  name: string;
+  tableIds: string[];
+  color?: string;
+}
+
+interface StaffAssignment {
+  id: string;
+  staffId: string;
+  staffName: string;
+  tableIds: string[];
+}
+
 const TABLE_TYPE_CONFIG: Record<
   string,
   { label: string; color: string; borderColor: string }
@@ -66,6 +81,25 @@ const TABLE_TYPE_CONFIG: Record<
 
 const CANVAS_WIDTH = 1050;
 const CANVAS_HEIGHT = 680;
+
+// Grup renkleri palette
+const GROUP_COLORS = [
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#d946ef",
+  "#ec4899",
+  "#f43f5e",
+  "#84cc16",
+  "#10b981",
+  "#0ea5e9",
+  "#6366f1",
+];
 
 export default function CheckInLayoutPage() {
   const params = useParams();
@@ -94,6 +128,16 @@ export default function CheckInLayoutPage() {
   );
   const [isSettingPosition, setIsSettingPosition] = useState(false);
 
+  // Grup görünümü
+  const [showGroupView, setShowGroupView] = useState(false);
+  const [tableGroups, setTableGroups] = useState<TableGroup[]>([]);
+  const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>(
+    []
+  );
+
+  // Kamera sabit kalma ayarı
+  const [lockCamera, setLockCamera] = useState(true);
+
   // localStorage'dan konumu yükle
   useEffect(() => {
     const savedPosition = localStorage.getItem(`myPosition_${eventId}`);
@@ -109,12 +153,43 @@ export default function CheckInLayoutPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await eventsApi.getOne(eventId);
-        setEvent(res.data);
-        if (res.data?.venueLayout) {
-          const layout = res.data.venueLayout;
+        const [eventRes, groupsRes, assignmentsRes] = await Promise.all([
+          eventsApi.getOne(eventId),
+          staffApi.getEventTableGroups(eventId).catch(() => ({ data: [] })),
+          staffApi
+            .getEventStaffAssignments(eventId)
+            .catch(() => ({ data: [] })),
+        ]);
+
+        setEvent(eventRes.data);
+        if (eventRes.data?.venueLayout) {
+          const layout = eventRes.data.venueLayout;
           if (layout.placedTables) setPlacedTables(layout.placedTables);
           if (layout.stageElements) setStageElements(layout.stageElements);
+        }
+
+        // Grupları ayarla
+        if (groupsRes.data) {
+          setTableGroups(
+            groupsRes.data.map((g: any) => ({
+              id: g.id,
+              name: g.name,
+              tableIds: g.tableIds || [],
+              color: g.color,
+            }))
+          );
+        }
+
+        // Staff atamalarını ayarla
+        if (assignmentsRes.data) {
+          setStaffAssignments(
+            assignmentsRes.data.map((a: any) => ({
+              id: a.id,
+              staffId: a.staffId,
+              staffName: a.staffName || a.staff?.fullName || "Personel",
+              tableIds: a.tableIds || [],
+            }))
+          );
         }
       } catch (error) {
         console.error("Event fetch error:", error);
@@ -163,7 +238,9 @@ export default function CheckInLayoutPage() {
     (table: PlacedTable) => {
       setHighlightedTableId(table.id);
       setSearchQuery("");
-      if (viewMode === "2d" && canvasContainerRef.current) {
+
+      // Kamera kilidi kapalıysa hareket ettir
+      if (!lockCamera && viewMode === "2d" && canvasContainerRef.current) {
         const containerWidth = canvasContainerRef.current.clientWidth;
         const containerHeight = canvasContainerRef.current.clientHeight;
         const targetX = -(table.x * zoom - containerWidth / 2);
@@ -172,7 +249,7 @@ export default function CheckInLayoutPage() {
       }
       setTimeout(() => setHighlightedTableId(null), 8000);
     },
-    [viewMode, zoom]
+    [viewMode, zoom, lockCamera]
   );
 
   const handleDirectSearch = useCallback(() => {
@@ -219,23 +296,79 @@ export default function CheckInLayoutPage() {
     };
   }, [stageElements]);
 
+  // Masa -> Grup eşleştirmesi (canvasTables'dan önce tanımlanmalı)
+  const tableToGroupMap = useMemo(() => {
+    const map: Record<
+      string,
+      { groupName: string; groupColor: string; staffNames: string[] }
+    > = {};
+
+    tableGroups.forEach((group, index) => {
+      const groupColor =
+        group.color || GROUP_COLORS[index % GROUP_COLORS.length];
+
+      // Grup içindeki masalara atanmış personelleri bul
+      const staffForGroup: string[] = [];
+      staffAssignments.forEach((assignment) => {
+        const hasCommonTable = assignment.tableIds.some((tid) =>
+          group.tableIds.includes(tid)
+        );
+        if (hasCommonTable && !staffForGroup.includes(assignment.staffName)) {
+          staffForGroup.push(assignment.staffName);
+        }
+      });
+
+      group.tableIds.forEach((tableLabel) => {
+        // tableLabel "114", "115" gibi string olabilir
+        const matchingTable = placedTables.find(
+          (t) =>
+            t.tableNumber.toString() === tableLabel ||
+            t.locaName === tableLabel ||
+            t.id === tableLabel
+        );
+        if (matchingTable) {
+          map[matchingTable.id] = {
+            groupName: group.name,
+            groupColor,
+            staffNames: staffForGroup,
+          };
+        }
+      });
+    });
+
+    return map;
+  }, [tableGroups, staffAssignments, placedTables]);
+
   const canvasTables: CanvasTable[] = useMemo(() => {
-    return placedTables.map((table) => ({
-      id: table.id,
-      label: table.isLoca
-        ? table.locaName || `L${table.tableNumber}`
-        : `${table.tableNumber}`,
-      x: table.x,
-      y: table.y,
-      capacity: table.capacity,
-      type: table.type,
-      typeId: table.type,
-      typeName: TABLE_TYPE_CONFIG[table.type]?.label || table.type,
-      color: TABLE_TYPE_CONFIG[table.type]?.color || "#6b7280",
-      rotation: 0,
-      shape: table.isLoca ? "rectangle" : "round",
-    }));
-  }, [placedTables]);
+    return placedTables.map((table) => {
+      const groupInfo = tableToGroupMap[table.id];
+
+      // Grup görünümü açıksa grup rengini kullan
+      const displayColor =
+        showGroupView && groupInfo
+          ? groupInfo.groupColor
+          : TABLE_TYPE_CONFIG[table.type]?.color || "#6b7280";
+
+      return {
+        id: table.id,
+        label: table.isLoca
+          ? table.locaName || `L${table.tableNumber}`
+          : `${table.tableNumber}`,
+        x: table.x,
+        y: table.y,
+        capacity: table.capacity,
+        type: table.type,
+        typeId: table.type,
+        typeName: TABLE_TYPE_CONFIG[table.type]?.label || table.type,
+        color: displayColor,
+        rotation: 0,
+        shape: table.isLoca ? "rectangle" : "round",
+        // Grup bilgisi (3D için)
+        staffColor:
+          showGroupView && groupInfo ? groupInfo.groupColor : undefined,
+      };
+    });
+  }, [placedTables, showGroupView, tableToGroupMap]);
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.2, 3));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.2, 0.5));
@@ -493,6 +626,20 @@ export default function CheckInLayoutPage() {
                 </>
               )}
             </button>
+
+            {/* Grup Görünümü Butonu */}
+            <button
+              onClick={() => setShowGroupView(!showGroupView)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                showGroupView
+                  ? "bg-purple-600 text-white border-purple-500"
+                  : "bg-slate-800 text-slate-400 border-slate-600 hover:text-white hover:bg-slate-700"
+              }`}
+              title="Grupları ve görevlileri göster"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Gruplar
+            </button>
           </div>
 
           {/* Right: Stats */}
@@ -583,14 +730,26 @@ export default function CheckInLayoutPage() {
                 .filter((t) => !t.isLoca)
                 .map((table) => {
                   const isHighlighted = highlightedTableId === table.id;
+                  const groupInfo = tableToGroupMap[table.id];
                   const config =
                     TABLE_TYPE_CONFIG[table.type] ||
                     TABLE_TYPE_CONFIG.unassigned;
                   const size = 32 * zoom;
+
+                  // Grup görünümü açıksa grup rengini kullan
+                  const displayColor =
+                    showGroupView && groupInfo
+                      ? groupInfo.groupColor
+                      : config.color;
+                  const displayBorder =
+                    showGroupView && groupInfo
+                      ? groupInfo.groupColor
+                      : config.borderColor;
+
                   return (
                     <div
                       key={table.id}
-                      className={`absolute flex items-center justify-center rounded-full text-white font-bold transition-all duration-500 cursor-pointer hover:scale-110 ${
+                      className={`absolute flex flex-col items-center justify-center rounded-full text-white font-bold transition-all duration-500 cursor-pointer hover:scale-110 ${
                         isHighlighted ? "z-30" : "z-10"
                       }`}
                       style={{
@@ -598,18 +757,35 @@ export default function CheckInLayoutPage() {
                         top: table.y * zoom,
                         width: size,
                         height: size,
-                        backgroundColor: config.color,
-                        border: `2px solid ${config.borderColor}`,
+                        backgroundColor: displayColor,
+                        border: `2px solid ${displayBorder}`,
                         fontSize: Math.max(8, 11 * zoom),
                         boxShadow: isHighlighted
                           ? `0 0 0 4px rgba(34, 211, 238, 0.8), 0 0 30px rgba(34, 211, 238, 0.6)`
-                          : `0 4px 12px ${config.color}40`,
+                          : `0 4px 12px ${displayColor}40`,
                         transform: isHighlighted ? "scale(1.5)" : "scale(1)",
                         animation: isHighlighted ? "pulse 1s infinite" : "none",
                       }}
                       onClick={() => handleTableSelect(table)}
                     >
                       {table.tableNumber}
+
+                      {/* Grup görünümünde görevli isimlerini göster */}
+                      {showGroupView &&
+                        groupInfo &&
+                        groupInfo.staffNames.length > 0 && (
+                          <div
+                            className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 text-white text-[8px] px-1.5 py-0.5 rounded-full"
+                            style={{ fontSize: Math.max(6, 8 * zoom) }}
+                          >
+                            {groupInfo.staffNames
+                              .slice(0, 2)
+                              .map((n) => n.split(" ")[0])
+                              .join(", ")}
+                            {groupInfo.staffNames.length > 2 &&
+                              `+${groupInfo.staffNames.length - 2}`}
+                          </div>
+                        )}
                     </div>
                   );
                 })}
@@ -618,12 +794,24 @@ export default function CheckInLayoutPage() {
                 .filter((t) => t.isLoca)
                 .map((loca) => {
                   const isHighlighted = highlightedTableId === loca.id;
+                  const groupInfo = tableToGroupMap[loca.id];
                   const width = 48 * zoom;
                   const height = 24 * zoom;
+
+                  // Grup görünümü açıksa grup rengini kullan
+                  const displayColor =
+                    showGroupView && groupInfo
+                      ? groupInfo.groupColor
+                      : TABLE_TYPE_CONFIG.loca.color;
+                  const displayBorder =
+                    showGroupView && groupInfo
+                      ? groupInfo.groupColor
+                      : TABLE_TYPE_CONFIG.loca.borderColor;
+
                   return (
                     <div
                       key={loca.id}
-                      className={`absolute flex items-center justify-center rounded-lg text-white font-bold transition-all duration-500 cursor-pointer hover:scale-110 ${
+                      className={`absolute flex flex-col items-center justify-center rounded-lg text-white font-bold transition-all duration-500 cursor-pointer hover:scale-110 ${
                         isHighlighted ? "z-30" : "z-10"
                       }`}
                       style={{
@@ -631,18 +819,35 @@ export default function CheckInLayoutPage() {
                         top: loca.y * zoom,
                         width,
                         height,
-                        backgroundColor: TABLE_TYPE_CONFIG.loca.color,
-                        border: `2px solid ${TABLE_TYPE_CONFIG.loca.borderColor}`,
+                        backgroundColor: displayColor,
+                        border: `2px solid ${displayBorder}`,
                         fontSize: Math.max(7, 9 * zoom),
                         boxShadow: isHighlighted
                           ? `0 0 0 4px rgba(34, 211, 238, 0.8), 0 0 30px rgba(34, 211, 238, 0.6)`
-                          : `0 4px 12px ${TABLE_TYPE_CONFIG.loca.color}40`,
+                          : `0 4px 12px ${displayColor}40`,
                         transform: isHighlighted ? "scale(1.5)" : "scale(1)",
                         animation: isHighlighted ? "pulse 1s infinite" : "none",
                       }}
                       onClick={() => handleTableSelect(loca)}
                     >
                       {loca.locaName}
+
+                      {/* Grup görünümünde görevli isimlerini göster */}
+                      {showGroupView &&
+                        groupInfo &&
+                        groupInfo.staffNames.length > 0 && (
+                          <div
+                            className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 text-white text-[8px] px-1.5 py-0.5 rounded-full"
+                            style={{ fontSize: Math.max(6, 8 * zoom) }}
+                          >
+                            {groupInfo.staffNames
+                              .slice(0, 2)
+                              .map((n) => n.split(" ")[0])
+                              .join(", ")}
+                            {groupInfo.staffNames.length > 2 &&
+                              `+${groupInfo.staffNames.length - 2}`}
+                          </div>
+                        )}
                     </div>
                   );
                 })}
@@ -725,18 +930,66 @@ export default function CheckInLayoutPage() {
 
       {/* Legend */}
       <div className="fixed bottom-4 left-4 bg-slate-800/95 border border-slate-700 rounded-xl p-3 z-40 backdrop-blur-sm">
-        <p className="text-xs text-slate-400 mb-2 font-medium">MASA TİPLERİ</p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-          {Object.entries(TABLE_TYPE_CONFIG).map(([key, config]) => (
-            <div key={key} className="flex items-center gap-2">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: config.color }}
-              />
-              <span className="text-xs text-slate-300">{config.label}</span>
+        {showGroupView ? (
+          <>
+            <p className="text-xs text-slate-400 mb-2 font-medium">
+              GRUPLAR & GÖREVLİLER
+            </p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {tableGroups.map((group, index) => {
+                const groupColor =
+                  group.color || GROUP_COLORS[index % GROUP_COLORS.length];
+                const staffForGroup = staffAssignments
+                  .filter((a) =>
+                    a.tableIds.some((tid) => group.tableIds.includes(tid))
+                  )
+                  .map((a) => a.staffName);
+                const uniqueStaff = [...new Set(staffForGroup)];
+
+                return (
+                  <div key={group.id} className="flex items-start gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full mt-0.5 flex-shrink-0"
+                      style={{ backgroundColor: groupColor }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs text-white font-medium">
+                        {group.name}
+                      </span>
+                      {uniqueStaff.length > 0 && (
+                        <p className="text-[10px] text-slate-400 truncate">
+                          {uniqueStaff.slice(0, 3).join(", ")}
+                          {uniqueStaff.length > 3 &&
+                            ` +${uniqueStaff.length - 3}`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {tableGroups.length === 0 && (
+                <p className="text-xs text-slate-500">Grup tanımlanmamış</p>
+              )}
             </div>
-          ))}
-        </div>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-400 mb-2 font-medium">
+              MASA TİPLERİ
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              {Object.entries(TABLE_TYPE_CONFIG).map(([key, config]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: config.color }}
+                  />
+                  <span className="text-xs text-slate-300">{config.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <style jsx global>{`
