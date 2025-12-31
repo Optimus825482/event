@@ -191,23 +191,35 @@ export function useWizardState(options?: UseWizardStateOptions) {
 
   // Team Operations
   const addTeam = useCallback(
-    (name: string, color?: string) => {
-      const newTeam: TeamDefinition = {
+    (
+      name: string,
+      color?: string,
+      leaders?: Array<{ staffId: string; staffName: string; role: string }>
+    ) => {
+      const newTeam: TeamDefinition & {
+        leaders?: Array<{ staffId: string; staffName: string; role: string }>;
+      } = {
         id: `team-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         name,
         color: color || DEFAULT_COLORS[teams.length % DEFAULT_COLORS.length],
         requiredStaff: [],
         assignedGroupIds: [],
+        leaders: leaders || [],
       };
-      setTeams((prev) => [...prev, newTeam]);
+      setTeams((prev) => [...prev, newTeam as TeamDefinition]);
       setHasChanges(true);
-      return newTeam;
+      return newTeam as TeamDefinition;
     },
     [teams.length]
   );
 
   const updateTeam = useCallback(
-    (teamId: string, updates: Partial<TeamDefinition>) => {
+    (
+      teamId: string,
+      updates: Partial<TeamDefinition> & {
+        leaders?: Array<{ staffId: string; staffName: string; role: string }>;
+      }
+    ) => {
       setTeams((prev) =>
         prev.map((t) => (t.id === teamId ? { ...t, ...updates } : t))
       );

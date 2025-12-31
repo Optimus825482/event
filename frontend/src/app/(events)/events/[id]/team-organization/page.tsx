@@ -323,6 +323,7 @@ export default function TeamOrganizationPage() {
             teams={wizard.teams}
             stageElements={stageElements}
             servicePoints={servicePoints}
+            allStaff={allStaff}
             viewMode={viewMode}
             onAddTeam={wizard.addTeam}
             onUpdateTeam={wizard.updateTeam}

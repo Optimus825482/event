@@ -10,6 +10,9 @@ import {
   AlertCircle,
   Link,
   Unlink,
+  Crown,
+  UserPlus,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +25,13 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   TableData,
@@ -30,6 +40,9 @@ import {
   DEFAULT_COLORS,
   StageElement,
   ServicePoint,
+  Staff,
+  STAFF_ROLES,
+  StaffRole,
 } from "../types";
 import {
   useCanvasInteraction,
@@ -38,15 +51,30 @@ import {
 import { CanvasRenderer } from "./CanvasRenderer";
 import { cn } from "@/lib/utils";
 
+// Takım Lideri/Kaptan tipi
+interface TeamLeader {
+  staffId: string;
+  staffName: string;
+  role: StaffRole;
+}
+
 interface Step2TeamAssignmentProps {
   tables: TableData[];
   tableGroups: TableGroup[];
   teams: TeamDefinition[];
   stageElements?: StageElement[];
   servicePoints?: ServicePoint[];
+  allStaff?: Staff[];
   viewMode?: "2d" | "3d";
-  onAddTeam: (name: string, color?: string) => TeamDefinition;
-  onUpdateTeam?: (teamId: string, updates: Partial<TeamDefinition>) => void;
+  onAddTeam: (
+    name: string,
+    color?: string,
+    leaders?: TeamLeader[]
+  ) => TeamDefinition;
+  onUpdateTeam?: (
+    teamId: string,
+    updates: Partial<TeamDefinition> & { leaders?: TeamLeader[] }
+  ) => void;
   onDeleteTeam?: (teamId: string) => void;
   onAssignGroupToTeam: (groupId: string, teamId: string) => void;
   onUnassignGroupFromTeam: (groupId: string) => void;
@@ -67,6 +95,7 @@ export function Step2TeamAssignment({
   teams,
   stageElements = [],
   servicePoints = [],
+  allStaff = [],
   viewMode = "2d",
   onAddTeam,
   onUpdateTeam,
@@ -107,6 +136,10 @@ export function Step2TeamAssignment({
   const [editingTeam, setEditingTeam] = useState<TeamDefinition | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
+  // Kaptan/Lider seçimi state
+  const [teamLeaders, setTeamLeaders] = useState<TeamLeader[]>([]);
+  const [leaderSearchQuery, setLeaderSearchQuery] = useState("");
+
   // Stable refs for callbacks
   const handlersRef = useRef({
     onZoomIn: handleZoomIn,
@@ -143,14 +176,27 @@ export function Step2TeamAssignment({
     }
   }, [zoom, activeTool]);
 
-  // Table -> Group map
+  // Table label -> Table ID map (masa numarası -> UUID)
+  const labelToIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    tables.forEach((t) => map.set(t.label, t.id));
+    return map;
+  }, [tables]);
+
+  // Table -> Group map (UUID bazlı)
   const tableToGroupMap = useMemo(() => {
     const map = new Map<string, TableGroup>();
     tableGroups.forEach((group) => {
-      group.tableIds.forEach((tableId) => map.set(tableId, group));
+      group.tableIds.forEach((tableLabel) => {
+        // tableLabel masa numarası ("1", "2", "3"), UUID'ye çevir
+        const tableId = labelToIdMap.get(tableLabel);
+        if (tableId) {
+          map.set(tableId, group);
+        }
+      });
     });
     return map;
-  }, [tableGroups]);
+  }, [tableGroups, labelToIdMap]);
 
   // Get table group helper
   const getTableGroup = useCallback(
@@ -175,11 +221,75 @@ export function Step2TeamAssignment({
     return map;
   }, [teams, tableGroups]);
 
+  // Kaptan/Süpervizör olabilecek personeller (pozisyona göre filtrele)
+  const leaderCandidates = useMemo(() => {
+    return allStaff.filter((s) => {
+      const pos = s.position?.toLowerCase() || "";
+      return (
+        pos.includes("kaptan") ||
+        pos.includes("captain") ||
+        pos.includes("şef") ||
+        pos.includes("süpervizör") ||
+        pos.includes("supervisor") ||
+        pos.includes("sef")
+      );
+    });
+  }, [allStaff]);
+
+  // Arama ile filtrelenmiş personeller
+  const filteredLeaderCandidates = useMemo(() => {
+    if (!leaderSearchQuery.trim()) return leaderCandidates;
+    const query = leaderSearchQuery.toLowerCase();
+    return leaderCandidates.filter(
+      (s) =>
+        s.fullName.toLowerCase().includes(query) ||
+        s.position?.toLowerCase().includes(query)
+    );
+  }, [leaderCandidates, leaderSearchQuery]);
+
+  // Kaptan ekle
+  const handleAddLeader = useCallback(
+    (staff: Staff) => {
+      if (teamLeaders.some((l) => l.staffId === staff.id)) return;
+
+      // Pozisyona göre rol belirle
+      const pos = staff.position?.toLowerCase() || "";
+      let role: StaffRole = "captain";
+      if (pos.includes("süpervizör") || pos.includes("supervisor")) {
+        role = "supervisor";
+      }
+
+      setTeamLeaders((prev) => [
+        ...prev,
+        { staffId: staff.id, staffName: staff.fullName, role },
+      ]);
+    },
+    [teamLeaders]
+  );
+
+  // Kaptan kaldır
+  const handleRemoveLeader = useCallback((staffId: string) => {
+    setTeamLeaders((prev) => prev.filter((l) => l.staffId !== staffId));
+  }, []);
+
+  // Helper: Convert table labels to UUIDs
+  const getTableIdsByLabels = useCallback(
+    (labels: string[]): string[] => {
+      return labels
+        .map((label) => labelToIdMap.get(label))
+        .filter((id): id is string => id !== undefined);
+    },
+    [labelToIdMap]
+  );
+
   // Handle table click - select group
   const handleTableClickWithGroup = useCallback(
     (tableId: string, e: React.MouseEvent) => {
       const group = getTableGroup(tableId);
       if (group) {
+        // group.tableIds masa numaralarını içeriyor, UUID'lere çevir
+        const groupTableUUIDs = getTableIdsByLabels(group.tableIds);
+
         if (e.ctrlKey || e.metaKey) {
           setSelectedGroupIds((prev) =>
             prev.includes(group.id)
@@ -187,18 +297,18 @@ export function Step2TeamAssignment({
               : [...prev, group.id]
           );
           setSelectedTableIds((prev) => {
-            if (prev.some((id) => group.tableIds.includes(id))) {
-              return prev.filter((id) => !group.tableIds.includes(id));
+            if (prev.some((id) => groupTableUUIDs.includes(id))) {
+              return prev.filter((id) => !groupTableUUIDs.includes(id));
             }
-            return [...new Set([...prev, ...group.tableIds])];
+            return [...new Set([...prev, ...groupTableUUIDs])];
           });
         } else {
           setSelectedGroupIds([group.id]);
-          setSelectedTableIds(group.tableIds);
+          setSelectedTableIds(groupTableUUIDs);
         }
       }
     },
-    [getTableGroup, setSelectedTableIds]
+    [getTableGroup, setSelectedTableIds, getTableIdsByLabels]
   );
 
   // Open team modal for create
@@ -206,16 +316,23 @@ export function Step2TeamAssignment({
     setEditingTeam(null);
     setNewTeamName(`Takım ${teams.length + 1}`);
     setNewTeamColor(DEFAULT_COLORS[teams.length % DEFAULT_COLORS.length]);
+    setTeamLeaders([]);
+    setLeaderSearchQuery("");
     setShowTeamModal(true);
   }, [teams.length]);
 
   // Open team modal for edit
-  const handleEditTeam = useCallback((team: TeamDefinition) => {
-    setEditingTeam(team);
-    setNewTeamName(team.name);
-    setNewTeamColor(team.color);
-    setShowTeamModal(true);
-  }, []);
+  const handleEditTeam = useCallback(
+    (team: TeamDefinition & { leaders?: TeamLeader[] }) => {
+      setEditingTeam(team);
+      setNewTeamName(team.name);
+      setNewTeamColor(team.color);
+      setTeamLeaders(team.leaders || []);
+      setLeaderSearchQuery("");
+      setShowTeamModal(true);
+    },
+    []
+  );
 
   // Save team
   const handleSaveTeam = useCallback(() => {
@@ -225,9 +342,10 @@ export function Step2TeamAssignment({
       onUpdateTeam(editingTeam.id, {
         name: newTeamName.trim(),
         color: newTeamColor,
+        leaders: teamLeaders,
       });
     } else {
-      const newTeam = onAddTeam(newTeamName.trim(), newTeamColor);
+      const newTeam = onAddTeam(newTeamName.trim(), newTeamColor, teamLeaders);
       // Seçili grupları yeni takıma ata
       if (selectedGroupIds.length > 0) {
         selectedGroupIds.forEach((groupId) => {
@@ -240,9 +358,11 @@ export function Step2TeamAssignment({
 
     setShowTeamModal(false);
     setEditingTeam(null);
+    setTeamLeaders([]);
   }, [
     newTeamName,
     newTeamColor,
+    teamLeaders,
     editingTeam,
     onAddTeam,
     onUpdateTeam,
@@ -324,7 +444,9 @@ export function Step2TeamAssignment({
                       key={group.id}
                       onClick={() => {
                         setSelectedGroupIds([group.id]);
-                        setSelectedTableIds(group.tableIds);
+                        setSelectedTableIds(
+                          getTableIdsByLabels(group.tableIds)
+                        );
                       }}
                       className={cn(
                         "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all",
@@ -379,8 +501,13 @@ export function Step2TeamAssignment({
                   >
                     {/* Team Header */}
                     <div
-                      className="flex items-center justify-between px-3 py-2"
+                      className="flex items-center justify-between px-3 py-2 cursor-pointer hover:opacity-90"
                       style={{ backgroundColor: `${team.color}20` }}
+                      onClick={() =>
+                        handleEditTeam(
+                          team as TeamDefinition & { leaders?: TeamLeader[] }
+                        )
+                      }
                     >
                       <div className="flex items-center gap-2">
                         <div
@@ -409,7 +536,10 @@ export function Step2TeamAssignment({
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => onDeleteTeam(team.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteTeam(team.id);
+                            }}
                             className="h-5 w-5 text-red-400 hover:text-red-300 hover:bg-red-500/20"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -417,6 +547,24 @@ export function Step2TeamAssignment({
                         )}
                       </div>
                     </div>
+
+                    {/* Team Leaders */}
+                    {(team as any).leaders &&
+                      (team as any).leaders.length > 0 && (
+                        <div className="px-3 py-1.5 bg-amber-500/10 border-b border-slate-700/50">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Crown className="w-3 h-3 text-amber-400" />
+                            {(team as any).leaders.map((leader: TeamLeader) => (
+                              <Badge
+                                key={leader.staffId}
+                                className="text-[10px] bg-amber-500/20 text-amber-300"
+                              >
+                                {leader.staffName}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                     {/* Team Groups */}
                     <div className="p-2 space-y-1 bg-slate-800/30">
@@ -430,7 +578,9 @@ export function Step2TeamAssignment({
                             key={group.id}
                             onClick={() => {
                               setSelectedGroupIds([group.id]);
-                              setSelectedTableIds(group.tableIds);
+                              setSelectedTableIds(
+                                getTableIdsByLabels(group.tableIds)
+                              );
                             }}
                             className={cn(
                               "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-all",
@@ -608,7 +758,7 @@ export function Step2TeamAssignment({
 
         {/* Team Modal */}
         <Dialog open={showTeamModal} onOpenChange={setShowTeamModal}>
-          <DialogContent className="bg-slate-800 border-slate-700">
+          <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-400" />
@@ -622,37 +772,147 @@ export function Step2TeamAssignment({
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              <div>
-                <label className="text-sm text-slate-400 mb-1 block">
-                  Takım Adı
-                </label>
-                <Input
-                  value={newTeamName}
-                  onChange={(e) => setNewTeamName(e.target.value)}
-                  placeholder="Örn: A Takımı"
-                  className="bg-slate-700 border-slate-600"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="text-sm text-slate-400 mb-2 block">
-                  Renk Seçin
-                </label>
-                <div className="grid grid-cols-8 gap-2">
-                  {DEFAULT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      className={cn(
-                        "w-7 h-7 rounded-full border-2 transition-transform hover:scale-110",
-                        newTeamColor === color
-                          ? "border-white scale-110"
-                          : "border-transparent"
-                      )}
-                      style={{ backgroundColor: color }}
-                      onClick={() => setNewTeamColor(color)}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Sol: Takım Adı ve Renk */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm text-slate-400 mb-1 block">
+                      Takım Adı
+                    </label>
+                    <Input
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      placeholder="Örn: A Takımı"
+                      className="bg-slate-700 border-slate-600"
+                      autoFocus
                     />
-                  ))}
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-slate-400 mb-2 block">
+                      Renk Seçin
+                    </label>
+                    <div className="grid grid-cols-8 gap-2">
+                      {DEFAULT_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          className={cn(
+                            "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
+                            newTeamColor === color
+                              ? "border-white scale-110"
+                              : "border-transparent"
+                          )}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setNewTeamColor(color)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sağ: Kaptan/Lider Seçimi */}
+                <div className="space-y-2">
+                  <label className="text-sm text-slate-400 flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    Takım Kaptanları / Süpervizörler
+                  </label>
+
+                  {/* Seçilen Kaptanlar */}
+                  {teamLeaders.length > 0 && (
+                    <div className="space-y-1 mb-2">
+                      {teamLeaders.map((leader) => {
+                        const roleConfig = STAFF_ROLES.find(
+                          (r) => r.value === leader.role
+                        );
+                        return (
+                          <div
+                            key={leader.staffId}
+                            className="flex items-center justify-between px-2 py-1.5 bg-slate-700/50 rounded-lg"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Crown
+                                className="w-3 h-3"
+                                style={{
+                                  color: roleConfig?.color || "#f59e0b",
+                                }}
+                              />
+                              <span className="text-sm text-white">
+                                {leader.staffName}
+                              </span>
+                              <Badge
+                                className="text-[10px]"
+                                style={{
+                                  backgroundColor: `${roleConfig?.color}30`,
+                                  color: roleConfig?.color,
+                                }}
+                              >
+                                {roleConfig?.label || leader.role}
+                              </Badge>
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleRemoveLeader(leader.staffId)}
+                              className="h-5 w-5 text-red-400 hover:text-red-300"
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Kaptan Arama */}
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      placeholder="Kaptan/Süpervizör ara..."
+                      value={leaderSearchQuery}
+                      onChange={(e) => setLeaderSearchQuery(e.target.value)}
+                      className="pl-8 h-8 text-sm bg-slate-700 border-slate-600"
+                    />
+                  </div>
+
+                  {/* Kaptan Listesi */}
+                  <div className="max-h-32 overflow-y-auto space-y-1 border border-slate-600 rounded-lg p-1">
+                    {filteredLeaderCandidates.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-2">
+                        {leaderSearchQuery
+                          ? "Sonuç bulunamadı"
+                          : "Kaptan/Süpervizör pozisyonunda personel yok"}
+                      </p>
+                    ) : (
+                      filteredLeaderCandidates.map((staff) => {
+                        const isSelected = teamLeaders.some(
+                          (l) => l.staffId === staff.id
+                        );
+                        return (
+                          <button
+                            key={staff.id}
+                            onClick={() => handleAddLeader(staff)}
+                            disabled={isSelected}
+                            className={cn(
+                              "w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors",
+                              isSelected
+                                ? "bg-slate-600/30 opacity-50 cursor-not-allowed"
+                                : "hover:bg-slate-700/50 cursor-pointer"
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <UserPlus className="w-3 h-3 text-slate-400" />
+                              <span className="text-xs text-white">
+                                {staff.fullName}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500">
+                              {staff.position}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
