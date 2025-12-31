@@ -610,6 +610,8 @@ export default function CheckInLayoutPage() {
                 setHighlightedTableId(tableId);
                 setTimeout(() => setHighlightedTableId(null), 8000);
               }}
+              entrancePosition={{ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 50 }}
+              showPath={!!highlightedTableId}
             />
           </div>
         )}

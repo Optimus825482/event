@@ -8,12 +8,13 @@ import {
   useCallback,
   useEffect,
 } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import {
   OrbitControls,
   PerspectiveCamera,
   Text,
   Html,
+  Line,
 } from "@react-three/drei";
 import {
   Loader2,
@@ -22,11 +23,16 @@ import {
   MousePointer,
   Move,
   ZoomIn,
+  ZoomOut,
+  RotateCcw,
   Camera,
   MousePointerClick,
   Users,
+  Navigation,
+  MapPin,
 } from "lucide-react";
 import { VenueLayout, CanvasTable, Zone } from "@/types";
+import * as THREE from "three";
 
 // ServicePoint tipi
 interface ServicePoint {
@@ -451,6 +457,155 @@ function ServicePointMesh({
   );
 }
 
+// ==================== ENTRANCE MARKER ====================
+function EntranceMarker({
+  position,
+  scale,
+}: {
+  position: { x: number; y: number };
+  scale: number;
+}) {
+  const x = position.x * scale;
+  const z = position.y * scale;
+  const pulseRef = useRef<THREE.Mesh>(null);
+
+  // Pulse animasyonu
+  useFrame((state) => {
+    if (pulseRef.current) {
+      const pulse = Math.sin(state.clock.elapsedTime * 3) * 0.1 + 1;
+      pulseRef.current.scale.setScalar(pulse);
+    }
+  });
+
+  return (
+    <group position={[x, 0, z]}>
+      {/* Base circle */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <circleGeometry args={[0.25, 32]} />
+        <meshBasicMaterial color="#10b981" transparent opacity={0.8} />
+      </mesh>
+
+      {/* Pulse ring */}
+      <mesh
+        ref={pulseRef}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.03, 0]}
+      >
+        <ringGeometry args={[0.25, 0.35, 32]} />
+        <meshBasicMaterial color="#34d399" transparent opacity={0.5} />
+      </mesh>
+
+      {/* Person icon - cylinder body */}
+      <mesh position={[0, 0.25, 0]}>
+        <cylinderGeometry args={[0.08, 0.1, 0.3, 16]} />
+        <meshStandardMaterial color="#10b981" />
+      </mesh>
+
+      {/* Person head */}
+      <mesh position={[0, 0.5, 0]}>
+        <sphereGeometry args={[0.1, 16, 16]} />
+        <meshStandardMaterial color="#10b981" />
+      </mesh>
+
+      {/* Label */}
+      <Html position={[0, 0.8, 0]} center>
+        <div className="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold whitespace-nowrap shadow-lg animate-pulse">
+          📍 SİZ BURADASINIZ
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+// ==================== PATH LINE ====================
+function PathLine({
+  start,
+  end,
+  scale,
+  isActive,
+}: {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  scale: number;
+  isActive: boolean;
+}) {
+  const lineRef = useRef<any>(null);
+  const arrowRef = useRef<THREE.Group>(null);
+  const [dashOffset, setDashOffset] = useState(0);
+
+  // Animasyonlu dash offset
+  useFrame((state) => {
+    if (isActive) {
+      setDashOffset(state.clock.elapsedTime * 2);
+    }
+  });
+
+  if (!isActive) return null;
+
+  const startPos: [number, number, number] = [
+    start.x * scale,
+    0.1,
+    start.y * scale,
+  ];
+  const endPos: [number, number, number] = [end.x * scale, 0.1, end.y * scale];
+
+  // Yön vektörü
+  const dx = endPos[0] - startPos[0];
+  const dz = endPos[2] - startPos[2];
+  const distance = Math.sqrt(dx * dx + dz * dz);
+  const angle = Math.atan2(dx, dz);
+
+  // Ara noktalar (eğri için)
+  const midX = (startPos[0] + endPos[0]) / 2;
+  const midZ = (startPos[2] + endPos[2]) / 2;
+  const midY = 0.3; // Ortada yüksel
+
+  const points: [number, number, number][] = [
+    startPos,
+    [midX, midY, midZ],
+    endPos,
+  ];
+
+  return (
+    <group>
+      {/* Ana yol çizgisi */}
+      <Line
+        points={points}
+        color="#22d3ee"
+        lineWidth={4}
+        dashed
+        dashScale={10}
+        dashSize={0.3}
+        dashOffset={dashOffset}
+      />
+
+      {/* Glow effect */}
+      <Line
+        points={points}
+        color="#06b6d4"
+        lineWidth={8}
+        transparent
+        opacity={0.3}
+      />
+
+      {/* Ok başı - hedef noktada */}
+      <group position={endPos} rotation={[0, -angle, 0]}>
+        <mesh position={[0, 0, -0.15]} rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.1, 0.2, 8]} />
+          <meshBasicMaterial color="#22d3ee" />
+        </mesh>
+      </group>
+
+      {/* Mesafe etiketi */}
+      <Html position={[midX, midY + 0.2, midZ]} center>
+        <div className="bg-cyan-600/90 text-white text-xs px-2 py-1 rounded font-mono whitespace-nowrap">
+          {Math.round(distance / scale)}px
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 // ==================== SCENE ====================
 function Scene({
   layout,
@@ -465,6 +620,8 @@ function Scene({
   onServicePointSelect,
   controlsRef,
   onTableClick,
+  entrancePosition,
+  showPath,
 }: {
   layout: VenueLayout;
   tables: CanvasTable[];
@@ -478,6 +635,8 @@ function Scene({
   onServicePointSelect: (id: string | null) => void;
   controlsRef: React.RefObject<any>;
   onTableClick?: (tableId: string) => void;
+  entrancePosition?: { x: number; y: number };
+  showPath?: boolean;
 }) {
   const width = layout.width * SCALE;
   const height = layout.height * SCALE;
@@ -600,6 +759,28 @@ function Scene({
         );
       })}
 
+      {/* Entrance Marker - Personel konumu */}
+      {entrancePosition && (
+        <EntranceMarker position={entrancePosition} scale={SCALE} />
+      )}
+
+      {/* Path Line - Hedef masaya yol */}
+      {entrancePosition &&
+        selectedTableId &&
+        showPath &&
+        (() => {
+          const targetTable = tables.find((t) => t.id === selectedTableId);
+          if (!targetTable) return null;
+          return (
+            <PathLine
+              start={entrancePosition}
+              end={{ x: targetTable.x, y: targetTable.y }}
+              scale={SCALE}
+              isActive={true}
+            />
+          );
+        })()}
+
       <OrbitControls
         ref={controlsRef}
         makeDefault
@@ -705,6 +886,8 @@ interface Canvas3DPreviewProps {
   selectedTableIds?: string[];
   onClose?: () => void;
   onTableClick?: (tableId: string) => void;
+  entrancePosition?: { x: number; y: number };
+  showPath?: boolean;
 }
 
 export function Canvas3DPreview({
@@ -717,6 +900,8 @@ export function Canvas3DPreview({
   selectedTableIds = [],
   onClose,
   onTableClick,
+  entrancePosition,
+  showPath = true,
 }: Canvas3DPreviewProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -759,9 +944,7 @@ export function Canvas3DPreview({
   // Kamerayı merkeze sıfırla
   const resetCamera = useCallback(() => {
     if (controlsRef.current) {
-      // Target'ı merkeze ayarla
       controlsRef.current.target.set(centerX, 0, centerZ);
-      // Kamera pozisyonunu ayarla - üstten, hafif arkadan
       controlsRef.current.object.position.set(
         centerX,
         camDist * 0.7,
@@ -770,6 +953,32 @@ export function Canvas3DPreview({
       controlsRef.current.update();
     }
   }, [centerX, centerZ, camDist]);
+
+  // 3D Zoom In
+  const zoomIn = useCallback(() => {
+    if (controlsRef.current) {
+      const camera = controlsRef.current.object;
+      const target = controlsRef.current.target;
+      const direction = new THREE.Vector3()
+        .subVectors(target, camera.position)
+        .normalize();
+      camera.position.addScaledVector(direction, 1);
+      controlsRef.current.update();
+    }
+  }, []);
+
+  // 3D Zoom Out
+  const zoomOut = useCallback(() => {
+    if (controlsRef.current) {
+      const camera = controlsRef.current.object;
+      const target = controlsRef.current.target;
+      const direction = new THREE.Vector3()
+        .subVectors(target, camera.position)
+        .normalize();
+      camera.position.addScaledVector(direction, -1);
+      controlsRef.current.update();
+    }
+  }, []);
 
   // Ekran görüntüsü al
   const takeScreenshot = useCallback(() => {
@@ -828,8 +1037,33 @@ export function Canvas3DPreview({
         </div>
       </div>
 
-      {/* Sağ üst: Screenshot + Home + Kapat butonları */}
+      {/* Sağ üst: Zoom + Screenshot + Home + Kapat butonları */}
       <div className="absolute top-3 right-3 z-20 flex gap-2">
+        {/* Zoom Controls */}
+        <div className="flex items-center gap-1 bg-slate-800/90 rounded-lg p-1 border border-slate-700">
+          <button
+            onClick={zoomOut}
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors"
+            title="Uzaklaştır"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={zoomIn}
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors"
+            title="Yakınlaştır"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            onClick={resetCamera}
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded border-l border-slate-600 transition-colors"
+            title="Sıfırla"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+
         <button
           onClick={takeScreenshot}
           className="p-2 rounded-lg bg-emerald-600/80 text-white hover:bg-emerald-500 transition-colors"
@@ -887,6 +1121,8 @@ export function Canvas3DPreview({
             onServicePointSelect={setSelectedServicePointId}
             controlsRef={controlsRef}
             onTableClick={onTableClick}
+            entrancePosition={entrancePosition}
+            showPath={showPath}
           />
         </Suspense>
       </Canvas>
