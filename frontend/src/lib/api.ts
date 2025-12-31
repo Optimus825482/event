@@ -423,6 +423,10 @@ export const venuesApi = {
     clearApiCache("venues");
     return api.delete(`/venues/${id}`);
   },
+  incrementUsage: async (id: string) => {
+    clearApiCache("venues");
+    return api.post(`/venues/${id}/use`);
+  },
 };
 
 // Staff pozisyon tipleri

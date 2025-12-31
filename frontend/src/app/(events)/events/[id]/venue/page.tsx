@@ -738,6 +738,24 @@ export default function VenuePlannerPage() {
   // Lasso ref
   const lassoJustFinishedRef = useRef(false);
 
+  // Performance refs - state yerine ref kullanarak re-render'ları önle
+  const placedTablesRef = useRef<PlacedTable[]>([]);
+  const stageElementsRef = useRef<StageElement[]>([]);
+  const selectedItemsRef = useRef<string[]>([]);
+
+  // Ref'leri state ile senkronize tut
+  useEffect(() => {
+    placedTablesRef.current = placedTables;
+  }, [placedTables]);
+
+  useEffect(() => {
+    stageElementsRef.current = stageElements;
+  }, [stageElements]);
+
+  useEffect(() => {
+    selectedItemsRef.current = selectedItems;
+  }, [selectedItems]);
+
   // Layout step'e ilk geçişte tutorial modal'ı göster
   useEffect(() => {
     if (currentStep === "layout") {
@@ -1466,7 +1484,7 @@ export default function VenuePlannerPage() {
         return;
       }
 
-      // Lasso selection
+      // Lasso selection - ref kullanarak performans artışı
       if (isLassoSelecting && canvasRef.current) {
         const canvasRect = canvasRef.current.getBoundingClientRect();
         const x = (e.clientX - canvasRect.left - canvasOffset.x) / zoom;
@@ -1478,7 +1496,8 @@ export default function VenuePlannerPage() {
         const minY = Math.min(lassoStart.y, y);
         const maxY = Math.max(lassoStart.y, y);
 
-        const selectedTableIds = placedTables
+        // Ref kullanarak dependency'yi kaldır
+        const selectedTableIds = placedTablesRef.current
           .filter((t) => {
             const tableCenter = {
               x: t.x + TABLE_RADIUS,
@@ -1497,8 +1516,12 @@ export default function VenuePlannerPage() {
         return;
       }
 
-      // Multi-drag
-      if (isMultiDragging && canvasRef.current && selectedItems.length > 1) {
+      // Multi-drag - ref kullanarak performans artışı
+      if (
+        isMultiDragging &&
+        canvasRef.current &&
+        selectedItemsRef.current.length > 1
+      ) {
         const canvasRect = canvasRef.current.getBoundingClientRect();
         const currentX = (e.clientX - canvasRect.left - canvasOffset.x) / zoom;
         const currentY = (e.clientY - canvasRect.top - canvasOffset.y) / zoom;
@@ -1507,9 +1530,10 @@ export default function VenuePlannerPage() {
         const deltaY = snapToGrid(currentY - multiDragStart.y);
 
         if (deltaX !== 0 || deltaY !== 0) {
+          const currentSelectedItems = selectedItemsRef.current;
           setPlacedTables((prev) =>
             prev.map((t) =>
-              selectedItems.includes(t.id) && !t.isLocked
+              currentSelectedItems.includes(t.id) && !t.isLocked
                 ? {
                     ...t,
                     x: snapToGrid(t.x + deltaX),
@@ -1606,8 +1630,6 @@ export default function VenuePlannerPage() {
       panStart,
       lassoStart,
       multiDragStart,
-      placedTables,
-      selectedItems,
       resizingStage,
     ]
   );
@@ -1851,10 +1873,8 @@ export default function VenuePlannerPage() {
       ]);
       setHistoryIndex(0);
 
-      // Kullanım sayısını artır
-      await venuesApi.update(template.id, {
-        usageCount: template.usageCount + 1,
-      });
+      // Kullanım sayısını artır (dedicated endpoint kullan)
+      await venuesApi.incrementUsage(template.id);
 
       toast.success(`"${template.name}" şablonu yüklendi`);
       setLoadTemplateModalOpen(false);
