@@ -216,10 +216,10 @@ export const LocaElement = memo(
         onMouseLeave={() => setShowTooltip(false)}
       >
         <div
-          className="w-[70px] h-[28px] rounded flex items-center justify-center text-white shadow-lg border-2"
+          className="w-[48px] h-[24px] rounded flex items-center justify-center text-white shadow-lg border-2"
           style={boxStyle}
         >
-          <span className="text-[9px] font-bold">{loca.locaName}</span>
+          <span className="text-[8px] font-bold">{loca.locaName}</span>
         </div>
 
         {/* Tooltip - Kapasite bilgisi */}

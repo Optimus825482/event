@@ -48,8 +48,8 @@ import { Canvas3DPreview } from "@/components/canvas/Canvas3DPreview";
 
 // ==================== CONSTANTS ====================
 const TABLE_SIZE = 32;
-const LOCA_WIDTH = 56;
-const LOCA_HEIGHT = 32;
+const LOCA_WIDTH = 48;
+const LOCA_HEIGHT = 24;
 
 // ==================== MEMOIZED TABLE COMPONENT ====================
 interface TableItemProps {

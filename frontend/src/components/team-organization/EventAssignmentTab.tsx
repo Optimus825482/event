@@ -74,8 +74,8 @@ import {
 const CANVAS_WIDTH = 900;
 const CANVAS_HEIGHT = 680;
 const TABLE_SIZE = 32; // w-8 h-8 = 32px (venue ile aynı)
-const LOCA_WIDTH = 56;
-const LOCA_HEIGHT = 32;
+const LOCA_WIDTH = 48;
+const LOCA_HEIGHT = 24;
 
 const getAvatarUrl = (avatar?: string): string | undefined => {
   if (!avatar) return undefined;
