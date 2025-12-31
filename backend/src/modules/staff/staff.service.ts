@@ -703,6 +703,13 @@ export class StaffService {
       name: string;
       color: string;
       members: TeamMember[];
+      leaders?: Array<{
+        staffId: string;
+        staffName: string;
+        role: string;
+        shiftStart?: string;
+        shiftEnd?: string;
+      }>;
       leaderId?: string;
       tableIds: string[];
     }>
@@ -729,6 +736,7 @@ export class StaffService {
           name: teamData.name,
           color: teamData.color,
           members: teamData.members,
+          leaders: teamData.leaders || [],
           leaderId: teamData.leaderId,
           tableIds: teamData.tableIds,
         })

@@ -81,7 +81,7 @@ export interface TeamDefinition {
 export interface TeamLeader {
   staffId: string;
   staffName: string;
-  role: StaffRole;
+  role: string; // StaffRole veya custom string
   shiftStart?: string;
   shiftEnd?: string;
 }

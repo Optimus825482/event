@@ -35,6 +35,7 @@ import {
   TeamDefinition,
   TeamLeader,
   Staff,
+  StaffRole,
   STAFF_ROLES,
   GroupStaffAssignment,
   ServicePoint,
@@ -978,12 +979,30 @@ function exportToPDF(
       const allAssignments = teamGroups.flatMap(
         (g) => g.staffAssignments || []
       );
-      // Takım kaptanları
-      const teamLeaders: TeamLeader[] = team.leaders || [];
+
+      // Takım kaptanları - önce team.leaders'dan, yoksa staffAssignments'tan captain/supervisor rolündeki kişileri al
+      let teamLeaders: TeamLeader[] = team.leaders || [];
+
+      // Eğer leaders boşsa, staffAssignments'tan kaptanları çıkar
+      if (teamLeaders.length === 0) {
+        const captainAssignments = allAssignments.filter(
+          (a) => a.role === "captain" || a.role === "supervisor"
+        );
+        teamLeaders = captainAssignments.map((a) => ({
+          staffId: a.staffId,
+          staffName:
+            a.staffName ||
+            allStaff.find((s) => s.id === a.staffId)?.fullName ||
+            "Bilinmeyen",
+          role: a.role as StaffRole,
+          shiftStart: a.shiftStart,
+          shiftEnd: a.shiftEnd,
+        }));
+      }
 
       content += `
   <div class="team-section">
-    <div class="team-header">
+    <div class="team-header" style="border-left-color: ${team.color}">
       <div class="team-color" style="background: ${team.color}"></div>
       <span class="team-name">${team.name}</span>
       <span class="team-stats">${teamGroups.length} grup | ${totalTables} masa | ${allAssignments.length} personel</span>
@@ -1014,14 +1033,12 @@ function exportToPDF(
     <table>
       <thead>
         <tr>
-          <th style="width: 10%">Grup</th>
-          <th style="width: 12%">Masalar</th>
-          <th style="width: 10%">Görev</th>
-          <th style="width: 18%">Ad Soyad</th>
-          <th style="width: 14%">Unvan</th>
-          <th style="width: 14%">Görev Yeri</th>
-          <th style="width: 8%">Başlangıç</th>
-          <th style="width: 8%">Bitiş</th>
+          <th style="width: 15%">Grup</th>
+          <th style="width: 20%">Masalar</th>
+          <th style="width: 15%">Görev</th>
+          <th style="width: 30%">Ad Soyad</th>
+          <th style="width: 10%">Başlangıç</th>
+          <th style="width: 10%">Bitiş</th>
         </tr>
       </thead>
       <tbody>
@@ -1071,8 +1088,6 @@ function exportToPDF(
             </span>
           </td>
           <td>${a.staffName || staff?.fullName || "Bilinmeyen"}</td>
-          <td>${staff?.position || "-"}</td>
-          <td>${staff?.workLocation || "-"}</td>
           <td class="shift-time">${a.shiftStart}</td>
           <td class="shift-time">${a.shiftEnd}</td>
         </tr>
@@ -1119,12 +1134,10 @@ function exportToPDF(
     <table>
       <thead>
         <tr>
-          <th style="width: 15%">Görev</th>
-          <th style="width: 25%">Ad Soyad</th>
-          <th style="width: 20%">Unvan</th>
-          <th style="width: 20%">Görev Yeri</th>
-          <th style="width: 10%">Başlangıç</th>
-          <th style="width: 10%">Bitiş</th>
+          <th style="width: 20%">Görev</th>
+          <th style="width: 40%">Ad Soyad</th>
+          <th style="width: 20%">Başlangıç</th>
+          <th style="width: 20%">Bitiş</th>
         </tr>
       </thead>
       <tbody>
@@ -1145,8 +1158,6 @@ function exportToPDF(
             </span>
           </td>
           <td>${staff?.fullName || "Bilinmeyen"}</td>
-          <td>${staff?.position || "-"}</td>
-          <td>${staff?.workLocation || "-"}</td>
           <td class="shift-time">${a.shiftStart || "-"}</td>
           <td class="shift-time">${a.shiftEnd || "-"}</td>
         </tr>

@@ -20,6 +20,15 @@ export interface TeamMember {
   avatar?: string;
 }
 
+// Takım Lideri/Kaptan yapısı
+export interface TeamLeader {
+  staffId: string;
+  staffName: string;
+  role: string;
+  shiftStart?: string;
+  shiftEnd?: string;
+}
+
 @Entity("service_teams")
 @Index("IDX_service_team_event", ["eventId"]) // Performans: Event bazlı sorgular
 // GIN indeksler (tableIds, members) migration'da oluşturulur - TypeORM dekoratörü desteklemez
@@ -47,7 +56,11 @@ export class ServiceTeam {
   @Column({ type: "jsonb", default: "[]" })
   members: TeamMember[];
 
-  // Şef/Lider ID'si
+  // Takım Liderleri/Kaptanları (JSON olarak saklanıyor)
+  @Column({ type: "jsonb", default: "[]" })
+  leaders: TeamLeader[];
+
+  // Şef/Lider ID'si (eski alan - geriye uyumluluk için)
   @Column({ nullable: true })
   leaderId?: string;
 
