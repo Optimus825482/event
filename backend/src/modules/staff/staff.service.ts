@@ -1056,7 +1056,7 @@ export class StaffService {
       }
 
       // Bulk insert için entity'leri hazırla
-      const groupEntities = groups.map((groupData, i) => {
+      const groupEntities: TableGroup[] = groups.map((groupData, i) => {
         // assignedTeamId UUID değilse null yap
         const validTeamId =
           groupData.assignedTeamId && uuidRegex.test(groupData.assignedTeamId)
@@ -1070,17 +1070,17 @@ export class StaffService {
             ? groupData.assignedSupervisorId
             : null;
 
-        return tableGroupRepo.create({
-          eventId,
-          name: groupData.name,
-          color: groupData.color,
-          tableIds: groupData.tableIds,
-          groupType: groupData.groupType || "standard",
-          assignedTeamId: validTeamId,
-          assignedSupervisorId: validSupervisorId,
-          notes: groupData.notes,
-          sortOrder: groupData.sortOrder ?? i,
-        });
+        const entity = new TableGroup();
+        entity.eventId = eventId;
+        entity.name = groupData.name;
+        entity.color = groupData.color;
+        entity.tableIds = groupData.tableIds;
+        entity.groupType = groupData.groupType || "standard";
+        entity.assignedTeamId = validTeamId ?? undefined;
+        entity.assignedSupervisorId = validSupervisorId ?? undefined;
+        entity.notes = groupData.notes;
+        entity.sortOrder = groupData.sortOrder ?? i;
+        return entity;
       });
 
       // Tek seferde kaydet
