@@ -221,15 +221,26 @@ const generateDefaultLayout = (
   const tables: PlacedTable[] = [];
   const stages: StageElement[] = [];
 
-  // Merit Royal Diamond Ballroom ölçüleri
-  const spacing = 43; // Grid spacing
-  const centerX = CANVAS_WIDTH / 2;
-  const startY = 15;
+  // Grid ve spacing ayarları
+  const spacing = 38; // Masa arası mesafe
+  const tableSize = 32; // Masa boyutu
+  const startX = 30; // Sol kenar boşluğu
+  const startY = 20; // Üst kenar boşluğu
 
-  // ===== SAHNE (7 masa genişlik x 2 masa yükseklik) =====
-  const stageWidth = 7 * spacing;
+  // Canvas merkezi
+  const centerX = CANVAS_WIDTH / 2;
+
+  // Toplam 15 sütun genişliğinde layout
+  const totalCols = 15;
+  const layoutWidth = totalCols * spacing;
+  const layoutStartX = centerX - layoutWidth / 2;
+
+  // ===== SAHNE (Ortada, 5 sütun genişliğinde) =====
+  const stageColStart = 5; // 6. sütundan başla (0-indexed: 5)
+  const stageColEnd = 9; // 10. sütuna kadar (5 sütun)
+  const stageWidth = 5 * spacing;
   const stageHeight = 2 * spacing;
-  const stageX = centerX - stageWidth / 2;
+  const stageX = layoutStartX + stageColStart * spacing;
   const stageY = startY;
 
   stages.push({
@@ -243,11 +254,11 @@ const generateDefaultLayout = (
     isLocked: false,
   });
 
-  // ===== CATWALK-1 (Dikey - sahnenin altında) =====
-  const catwalk1Width = 2 * spacing;
+  // ===== CATWALK-1 (Dikey - sahnenin altında, 1 sütun genişliğinde) =====
+  const catwalk1Width = spacing;
   const catwalk1Height = 2 * spacing;
   const catwalk1X = centerX - catwalk1Width / 2;
-  const catwalk1Y = stageY + stageHeight + 5;
+  const catwalk1Y = stageY + stageHeight;
 
   if (stageConfig === "full" || stageConfig === "no_catwalk2") {
     stages.push({
@@ -262,11 +273,11 @@ const generateDefaultLayout = (
     });
   }
 
-  // ===== CATWALK-2 (Yatay T - catwalk1'in altında) =====
-  const catwalk2Width = 7 * spacing;
-  const catwalk2Height = spacing;
+  // ===== CATWALK-2 (Yatay T - catwalk1'in altında, 5 sütun genişliğinde) =====
+  const catwalk2Width = 5 * spacing;
+  const catwalk2Height = spacing * 0.8;
   const catwalk2X = centerX - catwalk2Width / 2;
-  const catwalk2Y = catwalk1Y + catwalk1Height + 5;
+  const catwalk2Y = catwalk1Y + catwalk1Height;
 
   if (stageConfig === "full") {
     stages.push({
@@ -281,45 +292,34 @@ const generateDefaultLayout = (
     });
   }
 
-  // ===== MASA YERLEŞİMİ - Merit Royal Diamond Ballroom Referansı =====
-  // Numaralandırma: Sol üstten başlayıp satır satır sağa doğru
-
   let tableNum = 1;
 
-  // ----- BÖLGE 1: SAHNE YANLARI (Satır 1-2) -----
-  // Sol taraf: 5 masa x 2 satır = 10 masa (1-10)
-  // Sağ taraf: 5 masa x 2 satır = 10 masa (11-20)
-
-  const stageLeftStartX = stageX - 5 * spacing - 10;
-  const stageRightStartX = stageX + stageWidth + 10;
-
-  // Sol taraf masaları (1-10)
-  for (let row = 0; row < 2; row++) {
+  // ===== SATIR 1-3: SAHNE YANLARI (Sol 5 + Sağ 5) =====
+  // 3 satır x 5 sütun = 15 masa her tarafta
+  for (let row = 0; row < 3; row++) {
+    // Sol taraf (1-5, 11-15, 21-25)
     for (let col = 0; col < 5; col++) {
       tables.push({
-        id: `stage-left-${tableNum}`,
+        id: `row${row + 1}-left-${col}`,
         tableNumber: tableNum,
         type: "unassigned",
         capacity: 12,
-        x: stageLeftStartX + col * spacing,
-        y: stageY + row * spacing,
+        x: layoutStartX + col * spacing,
+        y: startY + row * spacing,
         isLoca: false,
         isLocked: false,
       });
       tableNum++;
     }
-  }
-
-  // Sağ taraf masaları (11-20)
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 5; col++) {
+    // Sağ taraf (6-10, 16-20, 26-30)
+    for (let col = 10; col < 15; col++) {
       tables.push({
-        id: `stage-right-${tableNum}`,
+        id: `row${row + 1}-right-${col}`,
         tableNumber: tableNum,
         type: "unassigned",
         capacity: 12,
-        x: stageRightStartX + col * spacing,
-        y: stageY + row * spacing,
+        x: layoutStartX + col * spacing,
+        y: startY + row * spacing,
         isLoca: false,
         isLocked: false,
       });
@@ -327,40 +327,32 @@ const generateDefaultLayout = (
     }
   }
 
-  // ----- BÖLGE 2: CATWALK-1 YANLARI (Satır 3-4) -----
-  // Sol taraf: 7 masa x 2 satır = 14 masa (21-34)
-  // Sağ taraf: 7 masa x 2 satır = 14 masa (35-48)
-
-  const catwalk1LeftStartX = catwalk1X - 7 * spacing - 10;
-  const catwalk1RightStartX = catwalk1X + catwalk1Width + 10;
-
-  // Sol taraf (21-34)
+  // ===== SATIR 4-5: CATWALK-1 YANLARI (Sol 7 + Sağ 7) =====
+  const catwalk1RowY = stageY + stageHeight;
   for (let row = 0; row < 2; row++) {
+    // Sol taraf (7 masa)
     for (let col = 0; col < 7; col++) {
       tables.push({
-        id: `catwalk1-left-${tableNum}`,
+        id: `catwalk1-row${row}-left-${col}`,
         tableNumber: tableNum,
         type: "unassigned",
         capacity: 12,
-        x: catwalk1LeftStartX + col * spacing,
-        y: catwalk1Y + row * spacing,
+        x: layoutStartX + col * spacing,
+        y: catwalk1RowY + row * spacing,
         isLoca: false,
         isLocked: false,
       });
       tableNum++;
     }
-  }
-
-  // Sağ taraf (35-48)
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 7; col++) {
+    // Sağ taraf (7 masa)
+    for (let col = 8; col < 15; col++) {
       tables.push({
-        id: `catwalk1-right-${tableNum}`,
+        id: `catwalk1-row${row}-right-${col}`,
         tableNumber: tableNum,
         type: "unassigned",
         capacity: 12,
-        x: catwalk1RightStartX + col * spacing,
-        y: catwalk1Y + row * spacing,
+        x: layoutStartX + col * spacing,
+        y: catwalk1RowY + row * spacing,
         isLoca: false,
         isLocked: false,
       });
@@ -368,63 +360,48 @@ const generateDefaultLayout = (
     }
   }
 
-  // ----- BÖLGE 3: CATWALK-2 YANLARI (Satır 5-6) -----
-  // Sol taraf: 6 masa x 2 satır = 12 masa
-  // Sağ taraf: 6 masa x 2 satır = 12 masa
-
-  const catwalk2LeftStartX = catwalk2X - 6 * spacing - 10;
-  const catwalk2RightStartX = catwalk2X + catwalk2Width + 10;
-
-  // Sol taraf - 2 satır
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 6; col++) {
-      tables.push({
-        id: `catwalk2-left-r${row}-${tableNum}`,
-        tableNumber: tableNum,
-        type: "unassigned",
-        capacity: 12,
-        x: catwalk2LeftStartX + col * spacing,
-        y: catwalk2Y + row * spacing,
-        isLoca: false,
-        isLocked: false,
-      });
-      tableNum++;
-    }
+  // ===== SATIR 6: CATWALK-2 YANLARI (Sol 5 + Sağ 5) =====
+  const catwalk2RowY = catwalk1Y + catwalk1Height;
+  // Sol taraf (5 masa)
+  for (let col = 0; col < 5; col++) {
+    tables.push({
+      id: `catwalk2-left-${col}`,
+      tableNumber: tableNum,
+      type: "unassigned",
+      capacity: 12,
+      x: layoutStartX + col * spacing,
+      y: catwalk2RowY,
+      isLoca: false,
+      isLocked: false,
+    });
+    tableNum++;
+  }
+  // Sağ taraf (5 masa)
+  for (let col = 10; col < 15; col++) {
+    tables.push({
+      id: `catwalk2-right-${col}`,
+      tableNumber: tableNum,
+      type: "unassigned",
+      capacity: 12,
+      x: layoutStartX + col * spacing,
+      y: catwalk2RowY,
+      isLoca: false,
+      isLocked: false,
+    });
+    tableNum++;
   }
 
-  // Sağ taraf - 2 satır
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 6; col++) {
-      tables.push({
-        id: `catwalk2-right-r${row}-${tableNum}`,
-        tableNumber: tableNum,
-        type: "unassigned",
-        capacity: 12,
-        x: catwalk2RightStartX + col * spacing,
-        y: catwalk2Y + row * spacing,
-        isLoca: false,
-        isLocked: false,
-      });
-      tableNum++;
-    }
-  }
-
-  // ----- BÖLGE 4: ARKA ALAN (Satır 6-10) -----
-  // 15 masa genişliğinde, 5 satır
-
-  const backStartY = catwalk2Y + catwalk2Height + 15;
-  const backStartX = centerX - (15 * spacing) / 2;
-
-  // Satır 6-9: 15'li tam satırlar (61-120)
-  for (let row = 0; row < 4; row++) {
+  // ===== SATIR 7-12: TAM 15'Lİ SATIRLAR =====
+  const fullRowStartY = catwalk2Y + catwalk2Height + 10;
+  for (let row = 0; row < 6; row++) {
     for (let col = 0; col < 15; col++) {
       tables.push({
-        id: `back-row${row}-${tableNum}`,
+        id: `full-row${row}-col${col}`,
         tableNumber: tableNum,
         type: "unassigned",
         capacity: 12,
-        x: backStartX + col * spacing,
-        y: backStartY + row * spacing,
+        x: layoutStartX + col * spacing,
+        y: fullRowStartY + row * spacing,
         isLoca: false,
         isLocked: false,
       });
@@ -432,170 +409,71 @@ const generateDefaultLayout = (
     }
   }
 
-  // ----- BÖLGE 5: SYSTEM KONTROL SATIRI (Satır 10) -----
-  // Sol 6 masa + System Kontrol + Sağ 6 masa
-
-  const row10Y = backStartY + 4 * spacing;
-  const systemControlWidth = 3 * spacing;
-  const systemControlHeight = spacing;
+  // ===== SATIR 13: SYSTEM KONTROL SATIRI =====
+  const systemRowY = fullRowStartY + 6 * spacing;
+  const systemControlWidth = 4 * spacing;
+  const systemControlHeight = spacing * 0.8;
   const systemControlX = centerX - systemControlWidth / 2;
 
-  // System Control
   stages.push({
     id: "system-control",
     type: "system_control",
     x: systemControlX,
-    y: row10Y,
+    y: systemRowY,
     width: systemControlWidth,
     height: systemControlHeight,
     label: "SYSTEM KONTROL",
     isLocked: false,
   });
 
-  // Sol 6 masa (121-126)
-  for (let col = 0; col < 6; col++) {
-    tables.push({
-      id: `back-row10-left-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: backStartX + col * spacing,
-      y: row10Y,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
-  }
-
-  // Sağ 6 masa (127-132)
-  for (let col = 0; col < 6; col++) {
-    tables.push({
-      id: `back-row10-right-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: backStartX + (9 + col) * spacing,
-      y: row10Y,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
-  }
-
-  // ----- BÖLGE 6: LOCA ÖNÜ SATIRI (Satır 11) -----
-  // Sol 3 masa + Orta 9 masa + Sağ 3 masa = 15 masa
-
-  const row11Y = backStartY + 5 * spacing;
-
-  // Tam satır - 15 masa (ortadaki boşluk da dolu)
-  for (let col = 0; col < 15; col++) {
-    tables.push({
-      id: `back-row11-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: backStartX + col * spacing,
-      y: row11Y,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
-  }
-
-  // ----- BÖLGE 7: KENAR MASALARI (Sol ve Sağ Duvar) -----
-  // Sol ve sağ kenarlara daha fazla masa
-
-  // Sol kenar masaları - Dikey sıra (6 masa)
-  const leftEdgeX = 15;
-  const leftEdgeStartY = catwalk2Y;
-  for (let i = 0; i < 6; i++) {
-    tables.push({
-      id: `left-edge-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: leftEdgeX,
-      y: leftEdgeStartY + i * spacing,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
-  }
-
-  // Sağ kenar masaları - Dikey sıra (6 masa)
-  const rightEdgeX = CANVAS_WIDTH - 55;
-  const rightEdgeStartY = catwalk2Y;
-  for (let i = 0; i < 6; i++) {
-    tables.push({
-      id: `right-edge-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned",
-      capacity: 12,
-      x: rightEdgeX,
-      y: rightEdgeStartY + i * spacing,
-      isLoca: false,
-      isLocked: false,
-    });
-    tableNum++;
-  }
-
-  // ----- BÖLGE 8: EK MASALAR (Sahne yanları 3. satır) -----
-  // Sahne yanlarına 3. satır ekle
-
-  // Sol taraf 3. satır (5 masa)
+  // Sol taraf (5 masa)
   for (let col = 0; col < 5; col++) {
     tables.push({
-      id: `stage-left-extra-${tableNum}`,
+      id: `system-row-left-${col}`,
       tableNumber: tableNum,
       type: "unassigned",
       capacity: 12,
-      x: stageLeftStartX + col * spacing,
-      y: stageY + 2 * spacing,
+      x: layoutStartX + col * spacing,
+      y: systemRowY,
       isLoca: false,
       isLocked: false,
     });
     tableNum++;
   }
-
-  // Sağ taraf 3. satır (5 masa)
-  for (let col = 0; col < 5; col++) {
+  // Sağ taraf (5 masa)
+  for (let col = 10; col < 15; col++) {
     tables.push({
-      id: `stage-right-extra-${tableNum}`,
+      id: `system-row-right-${col}`,
       tableNumber: tableNum,
       type: "unassigned",
       capacity: 12,
-      x: stageRightStartX + col * spacing,
-      y: stageY + 2 * spacing,
+      x: layoutStartX + col * spacing,
+      y: systemRowY,
       isLoca: false,
       isLocked: false,
     });
     tableNum++;
   }
 
-  // ----- BÖLGE 9: VIP MASALARI -----
-  // VIP masaları - Ortada özel konumda - Kullanıcı atayacak (3 masa)
-  const vipY = row11Y;
-  const vipStartX = centerX - 1.5 * spacing;
-
-  for (let i = 0; i < 3; i++) {
+  // ===== KENAR MASALARI (Sarı - Premium/VIP için) =====
+  // Sol kenar (6 masa dikey)
+  const edgeStartY = catwalk1RowY;
+  for (let i = 0; i < 6; i++) {
     tables.push({
-      id: `vip-${tableNum}`,
-      tableNumber: tableNum,
-      type: "unassigned", // Kullanıcı kendisi atayacak
+      id: `left-edge-${i}`,
+      tableNumber: 161 + i,
+      type: "unassigned",
       capacity: 12,
-      x: vipStartX + i * spacing,
-      y: vipY,
+      x: layoutStartX + 15 * spacing + 15,
+      y: edgeStartY + i * spacing,
       isLoca: false,
       isLocked: false,
     });
-    tableNum++;
   }
 
-  // ----- BÖLGE 10: LOCALAR (12 adet) -----
-  // Localar en altta, yan yana sıralı
-
-  const locaY = row11Y + spacing + 15;
-  const locaTotalWidth = CANVAS_WIDTH - 80;
+  // ===== LOCALAR (12 adet) =====
+  const locaY = systemRowY + spacing + 15;
+  const locaTotalWidth = CANVAS_WIDTH - 60;
   const locaSpacing = locaTotalWidth / 12;
 
   for (let i = 0; i < 12; i++) {
@@ -604,7 +482,7 @@ const generateDefaultLayout = (
       tableNumber: 1000 + i,
       type: "loca",
       capacity: 6,
-      x: 40 + i * locaSpacing,
+      x: 30 + i * locaSpacing,
       y: locaY,
       isLoca: true,
       locaName: LOCA_NAMES[i],
