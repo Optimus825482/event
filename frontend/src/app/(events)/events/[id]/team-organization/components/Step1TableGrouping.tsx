@@ -378,8 +378,14 @@ export function Step1TableGrouping({
       const group = getTableGroup(tableId);
 
       // Eğer Ctrl/Meta tuşu basılı değilse ve masa bir gruba aitse
-      // Personel atama modalını aç
+      // Personel atama modalını aç ve tüm gruptaki masaları seç
       if (group && !e.ctrlKey && !e.metaKey) {
+        // Gruptaki tüm masaları seç (label -> UUID dönüşümü)
+        const tableUUIDs = group.tableIds
+          .map((label) => labelToIdMap.get(label))
+          .filter((uuid): uuid is string => uuid !== undefined);
+        setSelectedTableIds(tableUUIDs);
+
         setNewlyCreatedGroup(group);
         setShowStaffSelectModal(true);
         setSelectedGroupIds([group.id]);
@@ -426,7 +432,7 @@ export function Step1TableGrouping({
         }
       }
     },
-    [handleTableClick, getTableGroup]
+    [handleTableClick, getTableGroup, labelToIdMap, setSelectedTableIds]
   );
 
   // Create new group from selection
@@ -449,9 +455,19 @@ export function Step1TableGrouping({
   const handleConfirmCreateGroup = useCallback(() => {
     if (!newGroupName.trim() || selectedTableIds.length === 0) return;
 
+    // UUID'leri masa numaralarına (label) çevir - tableToGroupMap bu formatı bekliyor
+    const tableLabels = selectedTableIds
+      .map((uuid) => idToLabelMap.get(uuid))
+      .filter((label): label is string => label !== undefined);
+
+    if (tableLabels.length === 0) {
+      console.error("❌ Seçili masalar için label bulunamadı");
+      return;
+    }
+
     const newGroup = onAddGroup(
       newGroupName.trim(),
-      selectedTableIds,
+      tableLabels,
       newGroupColor
     );
     setShowGroupModal(false);
@@ -468,6 +484,7 @@ export function Step1TableGrouping({
     newGroupColor,
     onAddGroup,
     handleClearSelection,
+    idToLabelMap,
   ]);
 
   // Personel seçimi kaydet
@@ -548,10 +565,16 @@ export function Step1TableGrouping({
   const handleAddToGroup = useCallback(
     (groupId: string) => {
       if (selectedTableIds.length === 0) return;
-      onAddTablesToGroup(groupId, selectedTableIds);
+      // UUID'leri masa numaralarına (label) çevir
+      const tableLabels = selectedTableIds
+        .map((uuid) => idToLabelMap.get(uuid))
+        .filter((label): label is string => label !== undefined);
+      if (tableLabels.length > 0) {
+        onAddTablesToGroup(groupId, tableLabels);
+      }
       handleClearSelection();
     },
-    [selectedTableIds, onAddTablesToGroup, handleClearSelection]
+    [selectedTableIds, onAddTablesToGroup, handleClearSelection, idToLabelMap]
   );
 
   // Auto-group by proximity (simple algorithm)
@@ -570,17 +593,18 @@ export function Step1TableGrouping({
       if (!groups.has(key)) {
         groups.set(key, []);
       }
-      groups.get(key)!.push(table.id);
+      // UUID yerine label kullan
+      groups.get(key)!.push(table.label);
     });
 
     // Create groups for cells with multiple tables
     let groupIndex = tableGroups.length + 1;
-    groups.forEach((tableIds, key) => {
-      if (tableIds.length >= 2) {
+    groups.forEach((tableLabels, key) => {
+      if (tableLabels.length >= 2) {
         // Only create groups with 2+ tables
         const name = `Grup-${groupIndex}`;
         const color = DEFAULT_COLORS[(groupIndex - 1) % DEFAULT_COLORS.length];
-        onAddGroup(name, tableIds, color);
+        onAddGroup(name, tableLabels, color);
         groupIndex++;
       }
     });
