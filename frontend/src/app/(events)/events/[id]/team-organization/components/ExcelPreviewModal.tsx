@@ -182,7 +182,7 @@ function CollapsibleSection({
   children,
 }: {
   title: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   count: number;
   color: string;
   defaultOpen?: boolean;
@@ -817,7 +817,7 @@ function SummaryCard({
   value,
   color,
 }: {
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   color: string;
