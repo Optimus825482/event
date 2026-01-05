@@ -536,7 +536,7 @@ export function ReservationViewCanvas({
             return {
               id: t.id,
               typeId: t.type || "standard",
-              typeName: t.typeName || "Masa",
+              typeName: isLoca ? "Loca" : t.typeName || "Masa",
               x: t.x,
               y: t.y,
               rotation: t.rotation || 0,
@@ -544,6 +544,7 @@ export function ReservationViewCanvas({
               color: getTableColorFor3D(t.id),
               shape: isLoca ? "square" : "round",
               label: displayLabel,
+              floor: isLoca ? 2 : 1,
             };
           })}
           servicePoints={[]}

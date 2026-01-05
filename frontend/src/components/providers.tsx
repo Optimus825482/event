@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./error-boundary";
 import { SmartGuide } from "./ui/SmartGuide";
 import { OfflineIndicator, InstallBanner, UpdatePrompt } from "./pwa";
 import { ToastProvider } from "./ui/toast-notification";
+import { SessionTimeoutModal } from "./session-timeout-modal";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -32,6 +33,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <OfflineIndicator />
           <InstallBanner />
           <UpdatePrompt />
+
+          {/* Session Timeout Modal */}
+          <SessionTimeoutModal />
 
           {children}
           <SmartGuide />

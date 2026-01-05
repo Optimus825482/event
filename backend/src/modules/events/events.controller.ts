@@ -18,6 +18,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from "@nestjs/swagger";
+import { SkipThrottle } from "@nestjs/throttler";
 import { EventsService } from "./events.service";
 import {
   CreateEventDto,
@@ -41,16 +42,18 @@ const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 @ApiBearerAuth("JWT-auth")
 @Controller("events")
 @UseGuards(JwtAuthGuard)
+@SkipThrottle() // Events modülü için rate limiting devre dışı
 export class EventsController {
   constructor(private eventsService: EventsService) {}
 
   /**
-   * Bugünün aktif etkinliklerini getir - Check-in modülü için
+   * Check-in modülü için etkinlikleri getir
+   * Personel ataması veya rezervasyonu olan TÜM etkinlikleri döndürür
    * Public: Kiosk/tablet modunda auth gerekmez
    */
   @Public()
   @Get("active/today")
-  @ApiOperation({ summary: "Bugünün aktif etkinlikleri (Public)" })
+  @ApiOperation({ summary: "Check-in için planlı etkinlikler (Public)" })
   getActiveEventsToday() {
     return this.eventsService.getActiveEventsToday();
   }

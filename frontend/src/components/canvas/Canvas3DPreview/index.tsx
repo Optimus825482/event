@@ -361,6 +361,469 @@ function FloorLightStrip({
   );
 }
 
+// ==================== SECOND FLOOR BALCONY ====================
+// Localar için ARKA DUVARA yaslanmış balkon
+function SecondFloorPlatform({
+  tables,
+  scale,
+  centerX,
+  centerZ,
+}: {
+  tables: CanvasTable[];
+  scale: number;
+  centerX: number;
+  centerZ: number;
+}) {
+  // 2. kattaki masaları bul (floor=2 veya loca label'ı olanlar)
+  const secondFloorTables = useMemo(() => {
+    return tables.filter((t) => {
+      const isLoca =
+        t.label?.toUpperCase().startsWith("L") ||
+        t.typeName?.toLowerCase().includes("loca");
+      return t.floor === 2 || isLoca;
+    });
+  }, [tables]);
+
+  // 2. katta masa yoksa balkon gösterme
+  if (secondFloorTables.length === 0) return null;
+
+  // Sadece NORMAL masaların (loca olmayanların) sınırlarını hesapla
+  const venueBounds = useMemo(() => {
+    const normalTables = tables.filter((t) => {
+      const isLoca =
+        t.label?.toUpperCase().startsWith("L") ||
+        t.typeName?.toLowerCase().includes("loca") ||
+        t.floor === 2;
+      return !isLoca;
+    });
+
+    if (normalTables.length === 0) return null;
+
+    let minX = Infinity,
+      maxX = -Infinity;
+    let minZ = Infinity,
+      maxZ = -Infinity;
+    normalTables.forEach((t) => {
+      const x = t.x * scale;
+      const z = t.y * scale;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    });
+    return { minX, maxX, minZ, maxZ };
+  }, [tables, scale]);
+
+  if (!venueBounds) return null;
+
+  const FLOOR_HEIGHT = 1.8; // Balkon yüksekliği
+  const RAILING_HEIGHT = 0.4; // Korkuluk yüksekliği
+  const BALCONY_DEPTH = 1.4; // Balkon derinliği
+  const WALL_DISTANCE = 2.5; // Duvarların masalardan uzaklığı - ARTIRILDI
+
+  // Balkon genişliği: Sadece loca sayısına göre hesapla
+  const locaCount = secondFloorTables.length;
+  const LOCA_WIDTH = 0.65; // Her loca booth genişliği
+  const LOCA_GAP = 0.25; // Localar arası boşluk
+  // Balkon genişliği = loca sayısı * (loca genişliği + boşluk) + kenar payları
+  const balconyWidth = Math.max(locaCount * (LOCA_WIDTH + LOCA_GAP) + 0.4, 2.5);
+
+  // Balkon X pozisyonu: Venue'nun ortasında + sağa offset
+  const venueWidth = venueBounds.maxX - venueBounds.minX;
+  const balconyX = venueBounds.minX + venueWidth / 2 - 0.6; // Sağa kaydırıldı (azaltıldı)
+
+  // Balkon Z pozisyonu: ARKA DUVARA yaslanıyor (maxZ tarafı - sahnenin KARŞISI)
+  const backWallZ = venueBounds.maxZ + WALL_DISTANCE;
+  const balconyZ = backWallZ - BALCONY_DEPTH / 2;
+
+  return (
+    <group>
+      {/* Balkon - 180° döndürülmüş, localar sahneye bakıyor */}
+      <group position={[balconyX, 0, balconyZ]} rotation={[0, Math.PI, 0]}>
+        {/* ==================== BALKON ZEMİNİ ==================== */}
+        <mesh position={[0, FLOOR_HEIGHT - 0.05, 0]} receiveShadow castShadow>
+          <boxGeometry args={[balconyWidth, 0.15, BALCONY_DEPTH]} />
+          <meshStandardMaterial
+            color="#1a1a2e"
+            metalness={0.3}
+            roughness={0.7}
+          />
+        </mesh>
+
+        {/* Zemin üst yüzey - şık parke görünümü */}
+        <mesh position={[0, FLOOR_HEIGHT + 0.01, 0]} receiveShadow>
+          <boxGeometry args={[balconyWidth - 0.1, 0.02, BALCONY_DEPTH - 0.1]} />
+          <meshStandardMaterial
+            color="#2d2d44"
+            metalness={0.1}
+            roughness={0.9}
+          />
+        </mesh>
+
+        {/* ==================== CAM KORKULUK (ÖN TARAF - salona bakan) ==================== */}
+        <mesh
+          position={[
+            0,
+            FLOOR_HEIGHT + RAILING_HEIGHT / 2,
+            -BALCONY_DEPTH / 2 + 0.02,
+          ]}
+        >
+          <boxGeometry args={[balconyWidth - 0.2, RAILING_HEIGHT, 0.03]} />
+          <meshPhysicalMaterial
+            color="#88ccff"
+            transparent
+            opacity={0.25}
+            roughness={0.05}
+            metalness={0.1}
+            clearcoat={1}
+          />
+        </mesh>
+
+        {/* Korkuluk üst tutamak - altın */}
+        <mesh
+          position={[
+            0,
+            FLOOR_HEIGHT + RAILING_HEIGHT,
+            -BALCONY_DEPTH / 2 + 0.05,
+          ]}
+        >
+          <boxGeometry args={[balconyWidth, 0.06, 0.08]} />
+          <meshStandardMaterial
+            color="#d4af37"
+            metalness={0.85}
+            roughness={0.15}
+          />
+        </mesh>
+
+        {/* Korkuluk alt çerçeve - altın */}
+        <mesh position={[0, FLOOR_HEIGHT + 0.03, -BALCONY_DEPTH / 2 + 0.05]}>
+          <boxGeometry args={[balconyWidth, 0.04, 0.06]} />
+          <meshStandardMaterial
+            color="#d4af37"
+            metalness={0.85}
+            roughness={0.15}
+          />
+        </mesh>
+
+        {/* ==================== YAN KORKULUKLAR ==================== */}
+        <mesh
+          position={[
+            -balconyWidth / 2 + 0.05,
+            FLOOR_HEIGHT + RAILING_HEIGHT / 2,
+            0,
+          ]}
+        >
+          <boxGeometry args={[0.03, RAILING_HEIGHT, BALCONY_DEPTH - 0.2]} />
+          <meshPhysicalMaterial
+            color="#88ccff"
+            transparent
+            opacity={0.25}
+            roughness={0.05}
+            metalness={0.1}
+            clearcoat={1}
+          />
+        </mesh>
+        <mesh
+          position={[
+            balconyWidth / 2 - 0.05,
+            FLOOR_HEIGHT + RAILING_HEIGHT / 2,
+            0,
+          ]}
+        >
+          <boxGeometry args={[0.03, RAILING_HEIGHT, BALCONY_DEPTH - 0.2]} />
+          <meshPhysicalMaterial
+            color="#88ccff"
+            transparent
+            opacity={0.25}
+            roughness={0.05}
+            metalness={0.1}
+            clearcoat={1}
+          />
+        </mesh>
+
+        {/* ==================== AYDINLATMA ==================== */}
+        <mesh position={[0, FLOOR_HEIGHT - 0.2, -BALCONY_DEPTH / 2 + 0.1]}>
+          <boxGeometry args={[balconyWidth - 0.5, 0.03, 0.03]} />
+          <meshBasicMaterial color="#ffd700" />
+        </mesh>
+        <pointLight
+          position={[0, FLOOR_HEIGHT - 0.3, -BALCONY_DEPTH / 2]}
+          color="#ffd700"
+          intensity={0.4}
+          distance={4}
+        />
+        <pointLight
+          position={[-balconyWidth / 3, FLOOR_HEIGHT + 1.5, 0]}
+          color="#ffffff"
+          intensity={0.3}
+          distance={3}
+        />
+        <pointLight
+          position={[balconyWidth / 3, FLOOR_HEIGHT + 1.5, 0]}
+          color="#ffffff"
+          intensity={0.3}
+          distance={3}
+        />
+
+        {/* ==================== LOCA ETİKETİ ==================== */}
+        <Text
+          position={[
+            0,
+            FLOOR_HEIGHT + RAILING_HEIGHT + 0.2,
+            -BALCONY_DEPTH / 2,
+          ]}
+          fontSize={0.25}
+          color="#d4af37"
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.015}
+          outlineColor="#000000"
+        >
+          ★ VIP LOCA ★
+        </Text>
+
+        {/* ==================== LOCALAR - Balkon içinde yan yana ==================== */}
+        {secondFloorTables.map((table, index) => {
+          // Locaları balkon içinde ortalanmış şekilde yan yana diz
+          const totalWidth = locaCount * (LOCA_WIDTH + LOCA_GAP) - LOCA_GAP;
+          const startX = -totalWidth / 2 + LOCA_WIDTH / 2;
+          const locaX = startX + index * (LOCA_WIDTH + LOCA_GAP);
+
+          return (
+            <group key={table.id} position={[locaX, FLOOR_HEIGHT, 0]}>
+              {/* VIP Loca Booth - rotation=0 çünkü balkon zaten 180° döndürülmüş */}
+              <group rotation={[0, 0, 0]} position={[0, 0, 0]}>
+                {/* ===== BALKON AYIRICI DUVARLAR ===== */}
+                <mesh position={[-LOCA_WIDTH / 2 + 0.03, 0.3, 0]} castShadow>
+                  <boxGeometry args={[0.06, 0.6, 0.7]} />
+                  <meshStandardMaterial
+                    color="#0a0a14"
+                    metalness={0.4}
+                    roughness={0.6}
+                  />
+                </mesh>
+                <mesh position={[LOCA_WIDTH / 2 - 0.03, 0.3, 0]} castShadow>
+                  <boxGeometry args={[0.06, 0.6, 0.7]} />
+                  <meshStandardMaterial
+                    color="#0a0a14"
+                    metalness={0.4}
+                    roughness={0.6}
+                  />
+                </mesh>
+
+                {/* ===== BOOTH ARKA DUVAR ===== */}
+                <mesh position={[0, 0.3, -0.32]} castShadow>
+                  <boxGeometry args={[LOCA_WIDTH - 0.08, 0.6, 0.05]} />
+                  <meshStandardMaterial
+                    color="#0f172a"
+                    metalness={0.3}
+                    roughness={0.7}
+                  />
+                </mesh>
+
+                {/* ===== BOOTH ZEMİN ===== */}
+                <mesh position={[0, 0.02, 0]} receiveShadow>
+                  <boxGeometry args={[LOCA_WIDTH - 0.08, 0.04, 0.65]} />
+                  <meshStandardMaterial
+                    color="#1e293b"
+                    metalness={0.2}
+                    roughness={0.8}
+                  />
+                </mesh>
+
+                {/* ===== 2'Lİ VIP KANEPE ===== */}
+                {/* Kanepe gövdesi */}
+                <mesh position={[0, 0.16, -0.15]} castShadow>
+                  <boxGeometry args={[LOCA_WIDTH - 0.2, 0.28, 0.16]} />
+                  <meshStandardMaterial
+                    color="#1a1a2e"
+                    metalness={0.4}
+                    roughness={0.6}
+                  />
+                </mesh>
+                {/* Kanepe sırtlık */}
+                <mesh
+                  position={[0, 0.32, -0.22]}
+                  rotation={[-0.15, 0, 0]}
+                  castShadow
+                >
+                  <boxGeometry args={[LOCA_WIDTH - 0.24, 0.28, 0.05]} />
+                  <meshStandardMaterial
+                    color="#0f172a"
+                    metalness={0.3}
+                    roughness={0.7}
+                  />
+                </mesh>
+                {/* Oturma yeri */}
+                <mesh position={[0, 0.22, -0.08]} castShadow>
+                  <boxGeometry args={[LOCA_WIDTH - 0.28, 0.06, 0.28]} />
+                  <meshStandardMaterial
+                    color="#1e3a5f"
+                    metalness={0.1}
+                    roughness={0.9}
+                  />
+                </mesh>
+                {/* Sol kol dayama */}
+                <mesh
+                  position={[-(LOCA_WIDTH / 2 - 0.14), 0.2, -0.08]}
+                  castShadow
+                >
+                  <boxGeometry args={[0.08, 0.34, 0.28]} />
+                  <meshStandardMaterial
+                    color="#1a1a2e"
+                    metalness={0.4}
+                    roughness={0.6}
+                  />
+                </mesh>
+                {/* Sağ kol dayama */}
+                <mesh position={[LOCA_WIDTH / 2 - 0.14, 0.2, -0.08]} castShadow>
+                  <boxGeometry args={[0.08, 0.34, 0.28]} />
+                  <meshStandardMaterial
+                    color="#1a1a2e"
+                    metalness={0.4}
+                    roughness={0.6}
+                  />
+                </mesh>
+
+                {/* ===== NEON KENARLAR ===== */}
+                <mesh position={[0, 0.58, -0.3]}>
+                  <boxGeometry args={[LOCA_WIDTH - 0.08, 0.02, 0.02]} />
+                  <meshBasicMaterial color="#22d3ee" />
+                </mesh>
+                <mesh position={[-(LOCA_WIDTH / 2 - 0.05), 0.3, -0.3]}>
+                  <boxGeometry args={[0.02, 0.56, 0.02]} />
+                  <meshBasicMaterial color="#22d3ee" />
+                </mesh>
+                <mesh position={[LOCA_WIDTH / 2 - 0.05, 0.3, -0.3]}>
+                  <boxGeometry args={[0.02, 0.56, 0.02]} />
+                  <meshBasicMaterial color="#22d3ee" />
+                </mesh>
+                <mesh position={[0, 0.46, -0.2]}>
+                  <boxGeometry args={[LOCA_WIDTH - 0.24, 0.015, 0.015]} />
+                  <meshBasicMaterial color="#22d3ee" />
+                </mesh>
+                {/* Kol neonları */}
+                <mesh position={[-(LOCA_WIDTH / 2 - 0.14), 0.38, -0.08]}>
+                  <boxGeometry args={[0.09, 0.015, 0.28]} />
+                  <meshBasicMaterial color="#22d3ee" />
+                </mesh>
+                <mesh position={[LOCA_WIDTH / 2 - 0.14, 0.38, -0.08]}>
+                  <boxGeometry args={[0.09, 0.015, 0.28]} />
+                  <meshBasicMaterial color="#22d3ee" />
+                </mesh>
+
+                <pointLight
+                  position={[0, 0.4, 0]}
+                  color="#22d3ee"
+                  intensity={0.3}
+                  distance={0.8}
+                />
+              </group>
+
+              {/* Loca Label - Ön tarafa bakacak şekilde (balkon 180° döndürülmüş) */}
+              <Text
+                position={[0, 0.7, 0.4]}
+                fontSize={0.14}
+                color="#ffffff"
+                anchorX="center"
+                anchorY="middle"
+                outlineWidth={0.012}
+                outlineColor="#000000"
+              >
+                {table.label || `L${index + 1}`}
+              </Text>
+            </group>
+          );
+        })}
+
+        {/* Dekoratif kenar ışıkları */}
+        <Line
+          points={[
+            [-balconyWidth / 2, FLOOR_HEIGHT + 0.02, -BALCONY_DEPTH / 2 + 0.1],
+            [balconyWidth / 2, FLOOR_HEIGHT + 0.02, -BALCONY_DEPTH / 2 + 0.1],
+          ]}
+          color="#d4af37"
+          lineWidth={2}
+          transparent
+          opacity={0.8}
+        />
+      </group>
+
+      {/* ==================== DESTEK KOLONLARI (ÖN TARAFTA - grup dışında) ==================== */}
+      <BalconyPillar
+        position={[
+          balconyX - balconyWidth / 2 + 0.15,
+          0,
+          balconyZ - BALCONY_DEPTH / 2 + 0.15,
+        ]}
+        height={FLOOR_HEIGHT}
+      />
+      <BalconyPillar
+        position={[
+          balconyX + balconyWidth / 2 - 0.15,
+          0,
+          balconyZ - BALCONY_DEPTH / 2 + 0.15,
+        ]}
+        height={FLOOR_HEIGHT}
+      />
+      {balconyWidth > 3 && (
+        <>
+          <BalconyPillar
+            position={[
+              balconyX - balconyWidth / 4,
+              0,
+              balconyZ - BALCONY_DEPTH / 2 + 0.15,
+            ]}
+            height={FLOOR_HEIGHT}
+          />
+          <BalconyPillar
+            position={[
+              balconyX + balconyWidth / 4,
+              0,
+              balconyZ - BALCONY_DEPTH / 2 + 0.15,
+            ]}
+            height={FLOOR_HEIGHT}
+          />
+        </>
+      )}
+    </group>
+  );
+}
+
+// ==================== BALCONY PILLAR ====================
+function BalconyPillar({
+  position,
+  height,
+}: {
+  position: [number, number, number];
+  height: number;
+}) {
+  return (
+    <group position={position}>
+      {/* Ana kolon - kare kesit, şık görünüm */}
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[0.12, height, 0.12]} />
+        <meshStandardMaterial color="#334155" metalness={0.4} roughness={0.6} />
+      </mesh>
+      {/* Kolon tabanı */}
+      <mesh position={[0, 0.05, 0]}>
+        <boxGeometry args={[0.18, 0.1, 0.18]} />
+        <meshStandardMaterial color="#1e293b" metalness={0.3} roughness={0.7} />
+      </mesh>
+      {/* Kolon başlığı */}
+      <mesh position={[0, height - 0.05, 0]}>
+        <boxGeometry args={[0.16, 0.1, 0.16]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+      </mesh>
+      {/* Dekoratif halka */}
+      <mesh position={[0, height * 0.7, 0]}>
+        <boxGeometry args={[0.14, 0.04, 0.14]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+      </mesh>
+    </group>
+  );
+}
+
 // ==================== TABLE MESH ====================
 function TableMesh({
   table,
@@ -379,9 +842,22 @@ function TableMesh({
   team?: TeamDefinition;
   viewMode: ViewMode;
 }) {
+  // Loca kontrolü - ÖNCELİKLE tanımlanmalı (diğer hesaplamalarda kullanılıyor)
+  const isLoca =
+    table.label?.toUpperCase().startsWith("L") ||
+    table.typeName?.toLowerCase().includes("loca");
+
   // Masa pozisyonunu direkt kullan
-  const x = table.x * scale;
+  // Localar için daha geniş spacing - her loca ayrı balkon bölmesi
+  const LOCA_SPACING_MULTIPLIER = 1.8; // Localar arası boşluk için çarpan (artırıldı)
+  const x = table.x * scale * (isLoca ? LOCA_SPACING_MULTIPLIER : 1);
   const z = table.y * scale;
+
+  // Kat yüksekliği: floor=2 ise 2. kat (localar), floor=1 veya undefined ise zemin kat
+  const floorLevel = table.floor || (isLoca ? 2 : 1);
+  const FLOOR_HEIGHT = 1.8; // Balkon yüksekliği - alçaltıldı
+  // Balkon zemini FLOOR_HEIGHT - 0.05 pozisyonunda, masalar bunun üstüne oturmalı
+  const baseY = floorLevel === 1 ? 0 : FLOOR_HEIGHT;
 
   // Renk: Grup varsa grup rengi, yoksa masa rengi
   const color = group?.color || table.color || "#3b82f6";
@@ -392,7 +868,7 @@ function TableMesh({
 
   return (
     <group
-      position={[x, 0, z]}
+      position={[x, baseY, z]}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -407,7 +883,7 @@ function TableMesh({
             />
             <meshBasicMaterial color="#22d3ee" transparent opacity={0.8} />
           </mesh>
-          <mesh position={[0, 0.6, 0]}>
+          <mesh position={[0, 0.8, 0]}>
             <cylinderGeometry args={[0.015, 0.015, 0.8, 8]} />
             <meshBasicMaterial color="#06b6d4" transparent opacity={0.7} />
           </mesh>
@@ -487,33 +963,58 @@ function TableMesh({
         </>
       )}
 
-      {/* Table cloth */}
-      <mesh position={[0, 0.38, 0]} castShadow>
-        <cylinderGeometry
-          args={[TABLE_RADIUS, TABLE_RADIUS + 0.01, 0.02, 20]}
-        />
-        <meshStandardMaterial color={color} />
-      </mesh>
+      {/* LOCA ve Normal Masalar */}
+      {isLoca ? null : ( // Localar SecondFloorPlatform içinde render ediliyor - burada skip
+        <>
+          {/* Normal Masa */}
+          <mesh position={[0, 0.38, 0]} castShadow>
+            <cylinderGeometry
+              args={[TABLE_RADIUS + 0.01, TABLE_RADIUS + 0.02, 0.025, 16]}
+            />
+            <meshStandardMaterial
+              color={color}
+              metalness={0.1}
+              roughness={0.8}
+            />
+          </mesh>
 
-      {/* Table top */}
-      <mesh position={[0, 0.36, 0]} castShadow>
-        <cylinderGeometry
-          args={[TABLE_RADIUS - 0.01, TABLE_RADIUS - 0.01, 0.02, 20]}
-        />
-        <meshStandardMaterial color="#f1f5f9" />
-      </mesh>
+          <mesh position={[0, 0.355, 0]} castShadow>
+            <cylinderGeometry args={[TABLE_RADIUS, TABLE_RADIUS, 0.03, 16]} />
+            <meshStandardMaterial
+              color="#f8fafc"
+              metalness={0.2}
+              roughness={0.5}
+            />
+          </mesh>
 
-      {/* Table leg */}
-      <mesh position={[0, 0.18, 0]}>
-        <cylinderGeometry args={[0.02, 0.03, 0.34, 8]} />
-        <meshStandardMaterial color="#475569" metalness={0.3} roughness={0.7} />
-      </mesh>
+          <mesh position={[0, 0.18, 0]}>
+            <cylinderGeometry args={[0.025, 0.035, 0.32, 8]} />
+            <meshStandardMaterial
+              color="#374151"
+              metalness={0.6}
+              roughness={0.4}
+            />
+          </mesh>
 
-      {/* Base */}
-      <mesh position={[0, 0.01, 0]}>
-        <cylinderGeometry args={[0.05, 0.05, 0.02, 12]} />
-        <meshStandardMaterial color="#334155" />
-      </mesh>
+          <mesh position={[0, 0.015, 0]}>
+            <cylinderGeometry args={[0.08, 0.08, 0.03, 12]} />
+            <meshStandardMaterial
+              color="#1f2937"
+              metalness={0.5}
+              roughness={0.5}
+            />
+          </mesh>
+
+          <mesh position={[0, 0.395, 0]}>
+            <cylinderGeometry args={[0.05, 0.045, 0.006, 12]} />
+            <meshStandardMaterial
+              color="#ffffff"
+              metalness={0.3}
+              roughness={0.4}
+            />
+          </mesh>
+        </>
+      )}
     </group>
   );
 }
@@ -597,7 +1098,7 @@ function ServicePointMesh({
 }) {
   const x = servicePoint.x * scale;
   const z = servicePoint.y * scale;
-  const color = servicePoint.color || "#06b6d4";
+  const color = servicePoint.color || "#0625d4ff";
   const assignedCount =
     servicePoint.staffAssignments?.length ||
     servicePoint.assignedStaffCount ||
@@ -605,10 +1106,10 @@ function ServicePointMesh({
   const requiredCount = servicePoint.requiredStaffCount;
   const isComplete = assignedCount >= requiredCount;
 
-  // Hizmet noktası tipi için yükseklik
-  const baseHeight = 0.6;
-  const counterWidth = 0.4;
-  const counterDepth = 0.2;
+  // Hizmet noktası tipi için yükseklik - BÜYÜTÜLDÜ
+  const baseHeight = 1.0;
+  const counterWidth = 0.7;
+  const counterDepth = 0.35;
 
   return (
     <group
@@ -682,15 +1183,16 @@ function ServicePointMesh({
         <meshBasicMaterial color={color} />
       </mesh>
 
-      {/* İsim etiketi */}
+      {/* İsim etiketi - ÖN TARAFA ALINDI */}
       <Text
-        position={[0, baseHeight + 0.15, counterDepth / 2 + 0.05]}
-        fontSize={0.06}
+        position={[0, baseHeight + 0.2, -counterDepth / 2 - 0.08]}
+        fontSize={0.16}
         color={color}
         anchorX="center"
         anchorY="middle"
-        outlineWidth={0.003}
+        outlineWidth={0.005}
         outlineColor="#000000"
+        rotation={[0, Math.PI, 0]}
       >
         {servicePoint.name}
       </Text>
@@ -897,12 +1399,100 @@ function Scene({
   const cameraY = camDist * 0.7;
   const cameraZ = centerZ + camDist * 0.3;
 
+  // Sadece NORMAL masaların (loca olmayanların) sınırlarını hesapla - arka duvar pozisyonu için
+  const venueBounds = useMemo(() => {
+    const normalTables = tables.filter((t) => {
+      const isLoca =
+        t.label?.toUpperCase().startsWith("L") ||
+        t.typeName?.toLowerCase().includes("loca") ||
+        t.floor === 2;
+      return !isLoca;
+    });
+
+    if (normalTables.length === 0) return null;
+
+    let minX = Infinity,
+      maxX = -Infinity;
+    let minZ = Infinity,
+      maxZ = -Infinity;
+    normalTables.forEach((t) => {
+      const x = t.x * SCALE;
+      const z = t.y * SCALE;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    });
+    return { minX, maxX, minZ, maxZ };
+  }, [tables]);
+
+  // LOCA masalarının pozisyonlarını ARKA DUVARA taşı (maxZ tarafı - sahnenin KARŞISI)
+  const processedTables = useMemo(() => {
+    if (!venueBounds) return tables;
+
+    const WALL_DISTANCE = 2.5; // Balkon ile aynı mesafe - ARTIRILDI
+    const BALCONY_DEPTH = 1.4;
+    // maxZ tarafı - sahnenin karşısı, arka duvar
+    const backWallZ = venueBounds.maxZ + WALL_DISTANCE;
+    // Balkon merkezi
+    const balconyZ = backWallZ - BALCONY_DEPTH / 2;
+
+    // Loca masalarını bul
+    const locaTables = tables.filter((t) => {
+      const isLoca =
+        t.label?.toUpperCase().startsWith("L") ||
+        t.typeName?.toLowerCase().includes("loca");
+      return t.floor === 2 || isLoca;
+    });
+
+    // Loca sayısına göre X pozisyonlarını hesapla - balkon genişliğine göre
+    const locaCount = locaTables.length;
+    const LOCA_WIDTH = 0.65;
+    const LOCA_GAP = 0.25;
+    const balconyWidth = Math.max(
+      locaCount * (LOCA_WIDTH + LOCA_GAP) + 0.4,
+      2.5
+    );
+
+    // Venue ortası
+    const venueWidth = venueBounds.maxX - venueBounds.minX;
+    const venueCenterX = venueBounds.minX + venueWidth / 2;
+
+    // Balkon başlangıç X pozisyonu (ortadan başla)
+    const balconyStartX = venueCenterX - balconyWidth / 2;
+    const spacing = balconyWidth / (locaCount + 1);
+
+    // Locaları sırala (label'a göre)
+    const sortedLocas = [...locaTables].sort((a, b) => {
+      const aNum = parseInt(a.label?.replace(/\D/g, "") || "0");
+      const bNum = parseInt(b.label?.replace(/\D/g, "") || "0");
+      return aNum - bNum;
+    });
+
+    // Loca ID -> yeni pozisyon map'i
+    const locaPositions = new Map<string, { x: number; y: number }>();
+    sortedLocas.forEach((loca, index) => {
+      const newX = (balconyStartX + spacing * (index + 1)) / SCALE;
+      const newZ = balconyZ / SCALE;
+      locaPositions.set(loca.id, { x: newX, y: newZ });
+    });
+
+    // Tüm masaları işle - locaların pozisyonunu override et
+    return tables.map((table) => {
+      const newPos = locaPositions.get(table.id);
+      if (newPos) {
+        return { ...table, x: newPos.x, y: newPos.y };
+      }
+      return table;
+    });
+  }, [tables, venueBounds]);
+
   // Masa -> Grup map'i (table.label ile eşleştir, table.id değil!)
   const tableToGroupMap = useMemo(() => {
     const map = new Map<string, TableGroup>();
 
     // Her masa için label'a göre grup bul
-    tables.forEach((table) => {
+    processedTables.forEach((table) => {
       const tableLabel = table.label; // "1", "2", "96", "L1" gibi
 
       // Bu label'ı içeren grubu bul
@@ -925,7 +1515,7 @@ function Scene({
     });
 
     return map;
-  }, [tableGroups, tables]);
+  }, [tableGroups, processedTables]);
 
   // Grup -> Takım map'i
   const groupToTeamMap = useMemo(() => {
@@ -950,7 +1540,6 @@ function Scene({
         position={[centerX, cameraY, cameraZ]}
         fov={50}
       />
-
       <ambientLight intensity={0.5} />
       <directionalLight
         position={[centerX + 5, 10, centerZ - 5]}
@@ -961,7 +1550,6 @@ function Scene({
         position={[centerX - 5, 8, centerZ + 5]}
         intensity={0.3}
       />
-
       {/* Floor - click to deselect */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
@@ -986,7 +1574,6 @@ function Scene({
         args={[Math.max(width, height) * 1.1, 25, "#334155", "#1e293b"]}
         position={[centerX, 0.002, centerZ]}
       />
-
       {/* Venue Walls - Şeffaf cam duvarlar ve logolar */}
       <Suspense fallback={null}>
         <VenueWalls
@@ -996,11 +1583,9 @@ function Scene({
           centerZ={centerZ}
         />
       </Suspense>
-
       {layout.zones?.map((zone) => (
         <ZoneMesh key={zone.id} zone={zone} scale={SCALE} />
       ))}
-
       {/* Service Points */}
       {servicePoints.map((sp) => (
         <ServicePointMesh
@@ -1014,8 +1599,7 @@ function Scene({
           }}
         />
       ))}
-
-      {tables.map((table) => {
+      {processedTables.map((table) => {
         const group = tableToGroupMap.get(table.id);
         const team = group ? groupToTeamMap.get(group.id) : undefined;
 
@@ -1036,18 +1620,25 @@ function Scene({
           />
         );
       })}
-
       {/* Entrance Marker - Personel konumu */}
       {entrancePosition && (
         <EntranceMarker position={entrancePosition} scale={SCALE} />
-      )}
-
+      )}{" "}
+      {/* 2. Kat Platformu - Localar için */}
+      <SecondFloorPlatform
+        tables={processedTables}
+        scale={SCALE}
+        centerX={centerX}
+        centerZ={centerZ}
+      />
       {/* Path Line - Hedef masaya yol */}
       {entrancePosition &&
         selectedTableId &&
         showPath &&
         (() => {
-          const targetTable = tables.find((t) => t.id === selectedTableId);
+          const targetTable = processedTables.find(
+            (t) => t.id === selectedTableId
+          );
           if (!targetTable) return null;
           return (
             <PathLine
@@ -1058,7 +1649,6 @@ function Scene({
             />
           );
         })()}
-
       <OrbitControls
         ref={controlsRef}
         makeDefault

@@ -19,6 +19,7 @@ export interface TableInstance {
   color: string;
   shape: string;
   label: string;
+  floor?: number; // Kat numarası (1: zemin, 2: üst kat/loca)
   reservationId?: string;
   staffId?: string;
   staffColor?: string;

@@ -16,6 +16,7 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { extname } from "path";
+import { SkipThrottle } from "@nestjs/throttler";
 import { StaffService } from "./staff.service";
 import { StaffPosition } from "../../entities/user.entity";
 import { Staff, Gender, StaffStatus } from "../../entities/staff.entity";
@@ -57,6 +58,7 @@ interface BulkAssignDto {
 }
 
 @Controller("staff")
+@SkipThrottle() // Staff modülü için rate limiting devre dışı - team-organization çok fazla istek yapıyor
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
@@ -780,13 +782,6 @@ export class StaffController {
       }>;
     }
   ) {
-    console.log("🔵 [Controller] saveEventTableGroups called");
-    console.log("🔵 [Controller] eventId:", eventId);
-    console.log("🔵 [Controller] groups count:", dto?.groups?.length);
-    console.log(
-      "🔵 [Controller] first group:",
-      JSON.stringify(dto?.groups?.[0], null, 2)
-    );
     return this.staffService.saveEventTableGroups(eventId, dto.groups);
   }
 

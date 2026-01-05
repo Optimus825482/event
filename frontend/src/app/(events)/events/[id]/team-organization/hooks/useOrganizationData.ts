@@ -148,15 +148,18 @@ export function useOrganizationData(
       setLoading(true);
       setError(null);
 
-      // Paralel yükleme - event, staff, shifts, service points ve extra staff
-      const [eventRes, staffRes, shiftsRes, servicePointsRes, extraStaffRes] =
-        await Promise.all([
-          eventsApi.getOne(eventId),
-          staffApi.getPersonnel({ isActive: true }, true),
-          staffApi.getEventShifts(eventId).catch(() => ({ data: [] })),
-          servicePointsApi.getAll(eventId).catch(() => ({ data: [] })),
-          eventExtraStaffApi.getAll(eventId).catch(() => ({ data: [] })),
-        ]);
+      // Önce kritik verileri yükle (event + staff)
+      const [eventRes, staffRes] = await Promise.all([
+        eventsApi.getOne(eventId),
+        staffApi.getPersonnel({ isActive: true }, true),
+      ]);
+
+      // Sonra event'e bağlı verileri yükle (rate limiting'i önlemek için)
+      const [shiftsRes, servicePointsRes, extraStaffRes] = await Promise.all([
+        staffApi.getEventShifts(eventId).catch(() => ({ data: [] })),
+        servicePointsApi.getAll(eventId).catch(() => ({ data: [] })),
+        eventExtraStaffApi.getAll(eventId).catch(() => ({ data: [] })),
+      ]);
 
       setEvent(eventRes.data);
       setAllStaff(staffRes.data || []);
@@ -182,7 +185,6 @@ export function useOrganizationData(
         })
       );
       setExtraStaffList(loadedExtraStaff);
-      console.log("📋 Ekstra personeller yüklendi:", loadedExtraStaff.length);
 
       // Mevcut grupları, takımları ve personel atamalarını yükle
       try {
@@ -209,11 +211,6 @@ export function useOrganizationData(
         });
 
         // Backend'den gelen grupları dönüştür ve staffAssignments ekle
-        console.log(
-          "🔍 Backend'den gelen gruplar:",
-          groupsRes.data?.length || 0,
-          groupsRes.data
-        );
         const groups: TableGroup[] = (groupsRes.data || []).map((g: any) => {
           // Bu grubun masalarına atanmış personelleri bul
           const groupStaffAssignments: any[] = [];
@@ -284,10 +281,6 @@ export function useOrganizationData(
           };
         });
         setExistingGroups(groups);
-        console.log(
-          "📦 Gruplar yüklendi (staffAssignments dahil):",
-          groups.length
-        );
 
         // Backend'den gelen takımları dönüştür
         // tableIds -> assignedGroupIds eşleştirmesi yap
@@ -321,15 +314,6 @@ export function useOrganizationData(
         // Grupları tekrar set et (assignedTeamId güncellenmiş haliyle)
         setExistingGroups([...groups]);
         setExistingTeams(teams);
-
-        console.log(
-          "📦 Takımlar yüklendi:",
-          teams.length,
-          teams.map((t) => ({
-            name: t.name,
-            groupCount: t.assignedGroupIds.length,
-          }))
-        );
       } catch {
         // Mevcut veri yoksa boş başla
         setExistingGroups([]);
@@ -356,27 +340,6 @@ export function useOrganizationData(
       extraStaff?: ExtraStaff[]
     ): Promise<boolean> => {
       try {
-        // Detaylı debug log
-        console.log("💾 saveOrganization called:", {
-          groupsCount: groups.length,
-          teamsCount: teams.length,
-          groupsWithStaff: groups.filter(
-            (g) => g.staffAssignments && g.staffAssignments.length > 0
-          ).length,
-          extraStaffCount: extraStaff?.length || extraStaffList.length,
-        });
-
-        // Her grubun staffAssignments'ını logla
-        groups.forEach((g, idx) => {
-          console.log(`📦 Grup ${idx + 1} (${g.name}):`, {
-            id: g.id,
-            tableIds: g.tableIds,
-            assignedTeamId: g.assignedTeamId,
-            staffAssignmentsCount: g.staffAssignments?.length || 0,
-            staffAssignments: g.staffAssignments,
-          });
-        });
-
         // 1. Önce takımları kaydet ve yeni ID'leri al
         const teamsResponse = await staffApi.saveEventTeams(
           eventId,
@@ -406,7 +369,6 @@ export function useOrganizationData(
               .flatMap((g) => g.tableIds),
           }))
         );
-        console.log("✅ Takımlar kaydedildi:", teamsResponse.data);
 
         // Frontend ID -> Backend ID eşleştirme map'i oluştur
         const teamIdMap = new Map<string, string>();
@@ -419,7 +381,6 @@ export function useOrganizationData(
             }
           );
         }
-        console.log("🔄 Team ID mapping:", Object.fromEntries(teamIdMap));
 
         // 2. Grupları kaydet - assignedTeamId'leri yeni ID'lerle değiştir
         await staffApi.saveEventTableGroups(
@@ -443,7 +404,6 @@ export function useOrganizationData(
             };
           })
         );
-        console.log("✅ Gruplar kaydedildi");
 
         // 3. Personel atamalarını kaydet (staffAssignments)
         // NOT: teamId UUID formatında olmalı, frontend'den gelen custom ID'ler geçersiz
@@ -459,7 +419,6 @@ export function useOrganizationData(
             group.staffAssignments.forEach((assignment) => {
               // Ekstra personelleri atla (backend'e kaydedilemez)
               if (assignment.staffId.startsWith("extra-")) {
-                console.log("⏭️ Ekstra personel atlandı:", assignment.staffId);
                 return;
               }
 
@@ -485,12 +444,9 @@ export function useOrganizationData(
           }
         });
 
-        console.log("📋 Personel atamaları:", allAssignments.length);
-
         // Eğer atama varsa kaydet
         if (allAssignments.length > 0) {
           await staffApi.saveEventStaffAssignments(eventId, allAssignments);
-          console.log("✅ Personel atamaları kaydedildi");
         }
 
         // 4. Ekstra personelleri kaydet
@@ -511,14 +467,9 @@ export function useOrganizationData(
           }));
 
           await eventExtraStaffApi.saveBulk(eventId, extraStaffData);
-          console.log(
-            "✅ Ekstra personeller kaydedildi:",
-            extraStaffData.length
-          );
         } else {
           // Ekstra personel yoksa mevcut olanları temizle
           await eventExtraStaffApi.saveBulk(eventId, []);
-          console.log("✅ Ekstra personeller temizlendi");
         }
 
         // Events cache'ini temizle - dashboard'da güncel veri gösterilsin
@@ -567,7 +518,6 @@ export function useOrganizationData(
         };
 
         setServicePoints((prev) => [...prev, newServicePoint]);
-        console.log("✅ Hizmet noktası eklendi:", newServicePoint.name);
         return newServicePoint;
       } catch (err: any) {
         console.error("❌ Hizmet noktası eklenemedi:", err);
@@ -586,7 +536,6 @@ export function useOrganizationData(
         setServicePoints((prev) =>
           prev.map((sp) => (sp.id === id ? { ...sp, ...data } : sp))
         );
-        console.log("✅ Hizmet noktası güncellendi:", id);
         return true;
       } catch (err: any) {
         console.error("❌ Hizmet noktası güncellenemedi:", err);
@@ -603,7 +552,6 @@ export function useOrganizationData(
         await servicePointsApi.delete(eventId, id);
 
         setServicePoints((prev) => prev.filter((sp) => sp.id !== id));
-        console.log("✅ Hizmet noktası silindi:", id);
         return true;
       } catch (err: any) {
         console.error("❌ Hizmet noktası silinemedi:", err);
@@ -671,7 +619,6 @@ export function useOrganizationData(
             return sp;
           })
         );
-        console.log("✅ Hizmet noktasına personel atandı:", staffId);
         return true;
       } catch (err: any) {
         console.error("❌ Hizmet noktasına personel atanamadı:", err);
@@ -705,7 +652,6 @@ export function useOrganizationData(
             return sp;
           })
         );
-        console.log("✅ Hizmet noktasından personel kaldırıldı:", assignmentId);
         return true;
       } catch (err: any) {
         console.error("❌ Hizmet noktasından personel kaldırılamadı:", err);

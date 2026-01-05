@@ -718,33 +718,19 @@ export class StaffService {
     savedCount: number;
     teams: Array<{ id: string; name: string; originalId?: string }>;
   }> {
-    console.log(
-      "📦 saveEventTeams çağrıldı:",
-      JSON.stringify({ eventId, teamCount: teams?.length }, null, 2)
-    );
-
     try {
       return await this.dataSource.transaction(async (manager) => {
         const teamRepo = manager.getRepository(ServiceTeam);
 
         // Mevcut ekipleri sil
         await teamRepo.delete({ eventId });
-        console.log("🗑️ Mevcut ekipler silindi");
 
         if (!teams || teams.length === 0) {
           return { success: true, savedCount: 0, teams: [] };
         }
 
         // Bulk insert için entity'leri hazırla
-        // originalId'yi metadata olarak sakla (frontend ID eşleştirmesi için)
         const teamEntities = teams.map((teamData, index) => {
-          console.log(`📝 Team ${index + 1}:`, {
-            name: teamData.name,
-            membersCount: teamData.members?.length || 0,
-            leadersCount: teamData.leaders?.length || 0,
-            tableIdsCount: teamData.tableIds?.length || 0,
-          });
-
           return teamRepo.create({
             eventId,
             name: teamData.name || `Takım ${index + 1}`,
@@ -758,7 +744,6 @@ export class StaffService {
 
         // Tek seferde kaydet
         const savedTeams = await teamRepo.save(teamEntities);
-        console.log("✅ Ekipler kaydedildi:", savedTeams.length);
 
         // Frontend ID -> Backend ID eşleştirmesi için döndür
         const teamMapping = savedTeams.map((saved, index) => ({
@@ -1069,20 +1054,12 @@ export class StaffService {
       sortOrder?: number;
     }>
   ): Promise<{ success: boolean; savedCount: number }> {
-    console.log(
-      "📦 saveEventTableGroups çağrıldı:",
-      JSON.stringify({ eventId, groupCount: groups?.length }, null, 2)
-    );
-
     // Input validasyonu
     if (!eventId) {
       throw new BadRequestException("eventId gerekli");
     }
 
     if (!groups || !Array.isArray(groups)) {
-      console.log(
-        "⚠️ groups undefined veya array değil, boş array olarak işleniyor"
-      );
       return { success: true, savedCount: 0 };
     }
 
@@ -1097,7 +1074,6 @@ export class StaffService {
 
         // Mevcut grupları sil
         await tableGroupRepo.delete({ eventId });
-        console.log("🗑️ Mevcut gruplar silindi");
 
         if (groups.length === 0) {
           return { success: true, savedCount: 0 };
@@ -1138,11 +1114,8 @@ export class StaffService {
           return entity;
         });
 
-        console.log("📝 Entity'ler hazırlandı:", groupEntities.length);
-
         // Tek seferde kaydet
         await tableGroupRepo.save(groupEntities);
-        console.log("✅ Gruplar kaydedildi");
 
         // NOT: EventStaffAssignment.teamId güncelleme kaldırıldı
         // Çünkü saveEventTeams yeni ID'ler oluşturuyor ve eski ID'ler geçersiz oluyor

@@ -1008,7 +1008,7 @@ function VenuePreviewModal({
               tables={tables.map((t: any) => ({
                 id: t.id,
                 typeId: t.type || "standard",
-                typeName: t.typeName || "Masa",
+                typeName: t.isLoca ? "Loca" : t.typeName || "Masa",
                 x: t.x,
                 y: t.y,
                 rotation: 0,
@@ -1018,11 +1018,14 @@ function VenuePreviewModal({
                     ? "#f59e0b"
                     : t.type === "premium"
                     ? "#8b5cf6"
-                    : t.type === "loca"
+                    : t.isLoca || t.type === "loca"
                     ? "#ec4899"
                     : "#3b82f6",
                 shape: t.isLoca ? "square" : "round",
-                label: t.isLoca ? t.locaName : t.tableNumber?.toString(),
+                label: t.isLoca
+                  ? t.locaName || `L${t.tableNumber}`
+                  : t.tableNumber?.toString(),
+                floor: t.isLoca ? 2 : 1,
               }))}
               servicePoints={[]}
               tableGroups={[]}
@@ -1225,14 +1228,22 @@ function TeamPreviewModal({
                 return {
                   id: t.id,
                   typeId: t.type || "standard",
-                  typeName: group?.name || t.typeName || "Masa",
+                  typeName: t.isLoca
+                    ? "Loca"
+                    : group?.name || t.typeName || "Masa",
                   x: t.x,
                   y: t.y,
                   rotation: 0,
                   capacity: t.capacity || 12,
-                  color: team?.color || group?.color || "#475569",
+                  color:
+                    team?.color ||
+                    group?.color ||
+                    (t.isLoca ? "#ec4899" : "#475569"),
                   shape: t.isLoca ? "square" : "round",
-                  label: t.isLoca ? t.locaName : t.tableNumber?.toString(),
+                  label: t.isLoca
+                    ? t.locaName || `L${t.tableNumber}`
+                    : t.tableNumber?.toString(),
+                  floor: t.isLoca ? 2 : 1,
                 };
               })}
               servicePoints={servicePoints.map((sp) => ({

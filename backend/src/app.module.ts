@@ -60,6 +60,7 @@ import { LeaderModule } from "./modules/leader/leader.module";
 import { HealthModule } from "./modules/health/health.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { ExcelImportModule } from "./modules/excel-import/excel-import.module";
 
 @Module({
   imports: [
@@ -185,6 +186,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
     HealthModule,
     AdminModule,
     NotificationsModule,
+    ExcelImportModule,
   ],
   providers: [
     // Global Rate Limiting Guard

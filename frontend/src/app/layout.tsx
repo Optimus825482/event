@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import {
+  Geist,
+  Geist_Mono,
+  Roboto,
+  Playfair_Display,
+  Oswald,
+} from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -11,6 +17,24 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const roboto = Roboto({
+  variable: "--font-roboto",
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+});
+
+const oswald = Oswald({
+  variable: "--font-oswald",
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
 });
 
 const APP_NAME = "EventFlow PRO";
@@ -83,7 +107,7 @@ export default function RootLayout({
   return (
     <html lang="tr" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-900 text-white`}
+        className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} ${playfair.variable} ${oswald.variable} antialiased bg-slate-900 text-white`}
       >
         <Providers>{children}</Providers>
       </body>

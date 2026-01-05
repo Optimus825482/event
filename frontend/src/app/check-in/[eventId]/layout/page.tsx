@@ -489,10 +489,13 @@ export default function CheckInLayoutPage() {
         capacity: table.capacity,
         type: table.type,
         typeId: table.type,
-        typeName: TABLE_TYPE_CONFIG[table.type]?.label || table.type,
+        typeName: table.isLoca
+          ? "Loca"
+          : TABLE_TYPE_CONFIG[table.type]?.label || table.type,
         color: displayColor,
         rotation: 0,
         shape: table.isLoca ? "rectangle" : "round",
+        floor: table.isLoca ? 2 : 1,
         // Grup bilgisi (3D için)
         staffColor:
           showGroupView && groupInfo ? groupInfo.groupColor : undefined,

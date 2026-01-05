@@ -620,7 +620,7 @@ export function TableSelectionCanvas({
               return {
                 id: t.id,
                 typeId: t.type || "standard",
-                typeName: t.typeName || "Masa",
+                typeName: isLoca ? "Loca" : t.typeName || "Masa",
                 x: t.x,
                 y: t.y,
                 rotation: t.rotation || 0,
@@ -628,6 +628,7 @@ export function TableSelectionCanvas({
                 color: color,
                 shape: isLoca ? "square" : "round",
                 label: displayLabel,
+                floor: isLoca ? 2 : 1,
               };
             })}
             servicePoints={[]}

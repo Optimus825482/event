@@ -28,7 +28,7 @@ const sanitizeInput = (value: string): string => {
     .trim();
 };
 
-// Geçmiş tarih kontrolü için custom validator
+// Geçmiş tarih kontrolü için custom validator (saat dahil)
 function IsFutureDate(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {
     registerDecorator({
@@ -40,12 +40,14 @@ function IsFutureDate(validationOptions?: ValidationOptions) {
         validate(value: any) {
           if (!value) return true; // Optional alanlar için
           const inputDate = new Date(value);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          return inputDate >= today;
+          const now = new Date();
+          // Etkinlik tarihi şu anki zamandan en az 1 saat sonra olmalı
+          // Bu sayede bugün + geçmiş saat kabul edilmez
+          now.setMinutes(now.getMinutes() - 30); // 30 dakika tolerans
+          return inputDate >= now;
         },
         defaultMessage(args: ValidationArguments) {
-          return `${args.property} geçmiş bir tarih olamaz`;
+          return `${args.property} geçmiş bir tarih/saat olamaz`;
         },
       },
     });
@@ -81,6 +83,22 @@ export class PlacedTableDto {
 
   @IsBoolean()
   isLocked: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  size?: number;
+
+  @IsOptional()
+  @IsString()
+  gridCol?: string;
+
+  @IsOptional()
+  @IsNumber()
+  gridRow?: number;
+
+  @IsOptional()
+  @IsNumber()
+  floor?: number;
 }
 
 export class StageElementDto {
@@ -107,6 +125,46 @@ export class StageElementDto {
 
   @IsBoolean()
   isLocked: boolean;
+
+  @IsOptional()
+  @IsString()
+  displayText?: string;
+
+  @IsOptional()
+  @IsString()
+  gridCol?: string;
+
+  @IsOptional()
+  @IsNumber()
+  gridRow?: number;
+
+  @IsOptional()
+  @IsString()
+  color?: string;
+
+  @IsOptional()
+  @IsString()
+  borderColor?: string;
+
+  @IsOptional()
+  @IsNumber()
+  borderWidth?: number;
+
+  @IsOptional()
+  @IsString()
+  iconId?: string;
+
+  @IsOptional()
+  @IsString()
+  fontSize?: string;
+
+  @IsOptional()
+  @IsString()
+  fontFamily?: string;
+
+  @IsOptional()
+  @IsString()
+  textDirection?: string;
 }
 
 export class DrawnLineDto {

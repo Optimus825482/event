@@ -128,7 +128,7 @@ export function EventSelectorModal({
                 <Calendar className="w-6 h-6 text-slate-500" />
               </div>
               <p className="text-slate-400 text-sm text-center">
-                Bugün için aktif etkinlik bulunamadı
+                Personel ataması veya rezervasyonu olan etkinlik bulunamadı
               </p>
             </div>
           ) : (

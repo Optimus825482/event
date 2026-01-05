@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { ServicePointsService } from "./service-points.service";
 import {
@@ -20,6 +21,7 @@ import {
 
 @Controller("events/:eventId/service-points")
 @UseGuards(JwtAuthGuard)
+@SkipThrottle() // Rate limiting devre dışı - team-organization paralel istekler yapıyor
 export class ServicePointsController {
   constructor(private readonly servicePointsService: ServicePointsService) {}
 

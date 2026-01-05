@@ -187,6 +187,8 @@ const LocaItem = memo(function LocaItem({
   assignedStaff,
   onClick,
 }: LocaItemProps) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -195,50 +197,140 @@ const LocaItem = memo(function LocaItem({
     [loca.id, onClick]
   );
 
+  const locaColor = group?.color || "#8b5cf6";
+  const boothWidth = 56;
+  const boothHeight = 40;
+
   return (
     <div
       data-table-id={loca.id}
       className={cn(
-        "absolute select-none transition-transform cursor-pointer",
-        isSelected &&
-          "ring-2 ring-white ring-offset-2 ring-offset-slate-900 z-10"
+        "absolute select-none transition-all cursor-pointer",
+        isSelected && "z-10 scale-105"
       )}
       style={{
-        left: loca.x,
-        top: loca.y,
+        left: loca.x - (boothWidth - LOCA_WIDTH) / 2,
+        top: loca.y - (boothHeight - LOCA_HEIGHT) / 2,
+        width: boothWidth,
+        height: boothHeight,
       }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={handleClick}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
     >
+      {/* Tooltip */}
+      {showTooltip && (
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap z-50 pointer-events-none shadow-xl bg-slate-900 border border-slate-600">
+          <span style={{ color: locaColor }}>
+            {loca.locaName || loca.label} {group ? `• ${group.name}` : ""}
+          </span>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-slate-900" />
+        </div>
+      )}
+
+      {/* VIP Booth çerçevesi */}
       <div
-        className="flex items-center justify-center text-white shadow-lg border-2 rounded-lg relative"
+        className={cn(
+          "absolute inset-0 rounded-lg transition-all",
+          isSelected &&
+            "ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900"
+        )}
         style={{
-          width: LOCA_WIDTH,
-          height: LOCA_HEIGHT,
-          backgroundColor: group?.color || "#6b7280",
-          borderColor: isSelected
-            ? "#fbbf24"
-            : assignedStaff
-            ? "#10b981"
-            : "#9ca3af",
+          background: "linear-gradient(135deg, #1a1a2e 0%, #0f172a 100%)",
+          border: `2px solid ${locaColor}`,
+          boxShadow: isSelected
+            ? `0 0 16px ${locaColor}60, inset 0 0 8px ${locaColor}20`
+            : `0 0 8px ${locaColor}30`,
+        }}
+      />
+
+      {/* Arka duvar (sırtlık) */}
+      <div
+        className="absolute top-1 left-1/2 -translate-x-1/2 rounded-t-sm"
+        style={{
+          width: boothWidth - 8,
+          height: boothHeight * 0.28,
+          background: "linear-gradient(180deg, #2d1f4e 0%, #1a1a2e 100%)",
+          borderBottom: `1px solid ${locaColor}40`,
+        }}
+      />
+
+      {/* Kanepe oturma yeri */}
+      <div
+        className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-sm"
+        style={{
+          width: boothWidth - 12,
+          height: boothHeight * 0.32,
+          background: "linear-gradient(180deg, #3b2d5f 0%, #2d1f4e 100%)",
+          border: `1px solid ${locaColor}60`,
+        }}
+      />
+
+      {/* Sol kol dayama */}
+      <div
+        className="absolute left-1 top-1/2 -translate-y-1/2 rounded-sm"
+        style={{
+          width: 4,
+          height: boothHeight * 0.45,
+          background: `linear-gradient(90deg, ${locaColor}40 0%, #1a1a2e 100%)`,
+        }}
+      />
+
+      {/* Sağ kol dayama */}
+      <div
+        className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm"
+        style={{
+          width: 4,
+          height: boothHeight * 0.45,
+          background: `linear-gradient(270deg, ${locaColor}40 0%, #1a1a2e 100%)`,
+        }}
+      />
+
+      {/* Neon alt kenar */}
+      <div
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-b-lg"
+        style={{
+          width: boothWidth - 4,
+          height: 2,
+          backgroundColor: locaColor,
+          boxShadow: `0 0 6px ${locaColor}, 0 0 12px ${locaColor}60`,
+        }}
+      />
+
+      {/* Loca ismi */}
+      <div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-bold text-white text-center"
+        style={{
+          textShadow: `0 0 6px ${locaColor}, 0 1px 2px rgba(0,0,0,0.8)`,
         }}
       >
-        <Sofa className="w-3 h-3 mr-1" />
-        <span className="text-[8px] font-bold truncate max-w-[36px]">
-          {loca.locaName || loca.label}
-        </span>
-
-        {assignedStaff && (
-          <div
-            className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border border-white flex items-center justify-center"
-            title={assignedStaff.fullName}
-          >
-            <span className="text-[6px] font-bold text-white">
-              {assignedStaff.fullName.charAt(0)}
-            </span>
-          </div>
-        )}
+        {loca.locaName || loca.label}
       </div>
+
+      {/* VIP badge */}
+      <div
+        className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded text-[7px] font-bold"
+        style={{
+          backgroundColor: locaColor,
+          color: "#fff",
+          boxShadow: `0 0 4px ${locaColor}`,
+        }}
+      >
+        VIP
+      </div>
+
+      {/* Atanmış personel göstergesi */}
+      {assignedStaff && (
+        <div
+          className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-slate-900 flex items-center justify-center"
+          title={assignedStaff.fullName}
+        >
+          <span className="text-[7px] font-bold text-white">
+            {assignedStaff.fullName.charAt(0)}
+          </span>
+        </div>
+      )}
     </div>
   );
 });
@@ -860,17 +952,22 @@ export const CanvasRenderer = forwardRef<HTMLDivElement, CanvasRendererProps>(
               }}
               tables={tables.map((t) => {
                 const group = tableToGroupMap.get(t.id);
+                const isLoca = t.isLoca || t.locaName;
                 return {
                   id: t.id,
                   typeId: t.type || "standard",
-                  typeName: group?.name || t.typeName || "Masa",
+                  typeName: isLoca
+                    ? "Loca"
+                    : group?.name || t.typeName || "Masa",
                   x: t.x + TABLE_SIZE / 2,
                   y: t.y + TABLE_SIZE / 2,
                   rotation: 0,
                   capacity: t.capacity || 12,
-                  color: group?.color || t.color || "#3b82f6",
-                  shape: "round",
-                  label: t.label,
+                  color:
+                    group?.color || t.color || (isLoca ? "#ec4899" : "#3b82f6"),
+                  shape: isLoca ? "square" : "round",
+                  label: isLoca ? t.locaName || t.label : t.label,
+                  floor: isLoca ? 2 : 1,
                 };
               })}
               servicePoints={servicePoints}

@@ -57,7 +57,6 @@ export function useWizardState(options?: UseWizardStateOptions) {
         };
         localStorage.setItem("team-organization-draft", JSON.stringify(draft));
         setLastDraftSave(new Date());
-        console.log("📝 Taslak kaydedildi:", new Date().toLocaleTimeString());
       }, AUTO_SAVE_INTERVAL);
     }
 
@@ -499,12 +498,6 @@ export function useWizardState(options?: UseWizardStateOptions) {
 
   const loadFromTemplate = useCallback(
     (groups: TableGroup[], teamDefs: TeamDefinition[]) => {
-      console.log("📦 loadFromTemplate called:", {
-        groupsCount: groups.length,
-        teamsCount: teamDefs.length,
-        currentStep,
-      });
-
       const uniqueGroups = groups.map((g, index) => ({
         ...g,
         id:

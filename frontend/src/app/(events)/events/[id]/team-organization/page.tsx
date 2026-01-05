@@ -11,6 +11,7 @@ import {
   Save,
   Loader2,
   RotateCcw,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -389,6 +390,17 @@ export default function TeamOrganizationPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                asChild
+                className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/10"
+              >
+                <Link href={`/events/${eventId}/excel-import`}>
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Excel'den Yükle
+                </Link>
+              </Button>
               <Button
                 size="sm"
                 variant="outline"

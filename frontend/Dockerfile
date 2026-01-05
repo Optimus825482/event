@@ -31,6 +31,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOSTNAME="0.0.0.0"
+ENV PORT=3003
 
 # Don't run as root
 RUN addgroup --system --gid 1001 nodejs
@@ -43,6 +44,6 @@ COPY --from=builder /app/public ./public
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 3003
 
 CMD ["node", "server.js"]

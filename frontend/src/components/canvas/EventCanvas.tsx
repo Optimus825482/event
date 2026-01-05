@@ -374,7 +374,7 @@ export function EventCanvas({
       // Loca masaları dikdörtgen, diğerleri yuvarlak
       const isLoca =
         table.typeName?.toLowerCase() === "loca" || table.typeId === "loca";
-      const size = isLoca ? 50 : 36; // Büyütülmüş boyut
+      const size = isLoca ? 56 : 36; // Loca için biraz daha büyük
 
       // Rezervasyon bilgisi al (Requirements 8.1, 8.3)
       const reservation = tableReservations[table.id];
@@ -411,18 +411,98 @@ export function EventCanvas({
           listening={true}
         >
           {isLoca ? (
-            // Loca masaları - dikdörtgen
-            <Rect
-              width={size}
-              height={size * 0.7}
-              offsetX={size / 2}
-              offsetY={(size * 0.7) / 2}
-              fill={fillColor}
-              stroke={isSelected ? "#fff" : "#dc2626"}
-              strokeWidth={isSelected ? 3 : 2}
-              cornerRadius={6}
-              perfectDrawEnabled={false}
-            />
+            // Futuristik VIP Koltuk Tasarımı - 3D ile uyumlu
+            <>
+              {/* Ana gövde - koyu arka plan */}
+              <Rect
+                width={size}
+                height={size * 0.65}
+                offsetX={size / 2}
+                offsetY={(size * 0.65) / 2}
+                fill="#1a1a2e"
+                stroke={isSelected ? "#22d3ee" : "#334155"}
+                strokeWidth={isSelected ? 3 : 2}
+                cornerRadius={6}
+                perfectDrawEnabled={false}
+              />
+              {/* İç döşeme - koyu mavi veya grup rengi */}
+              <Rect
+                width={size - 8}
+                height={size * 0.65 - 8}
+                offsetX={(size - 8) / 2}
+                offsetY={(size * 0.65 - 8) / 2}
+                fill={isReserved ? fillColor : table.staffColor || "#1e3a5f"}
+                cornerRadius={4}
+                perfectDrawEnabled={false}
+              />
+              {/* Neon kenar - üst */}
+              <Line
+                points={[
+                  -size / 2 + 4,
+                  -size * 0.325 + 1,
+                  size / 2 - 4,
+                  -size * 0.325 + 1,
+                ]}
+                stroke="#22d3ee"
+                strokeWidth={2}
+                perfectDrawEnabled={false}
+              />
+              {/* Neon kenar - alt */}
+              <Line
+                points={[
+                  -size / 2 + 4,
+                  size * 0.325 - 1,
+                  size / 2 - 4,
+                  size * 0.325 - 1,
+                ]}
+                stroke="#22d3ee"
+                strokeWidth={2}
+                perfectDrawEnabled={false}
+              />
+              {/* Neon kenar - sol */}
+              <Line
+                points={[
+                  -size / 2 + 1,
+                  -size * 0.325 + 4,
+                  -size / 2 + 1,
+                  size * 0.325 - 4,
+                ]}
+                stroke="#22d3ee"
+                strokeWidth={2}
+                perfectDrawEnabled={false}
+              />
+              {/* Neon kenar - sağ */}
+              <Line
+                points={[
+                  size / 2 - 1,
+                  -size * 0.325 + 4,
+                  size / 2 - 1,
+                  size * 0.325 - 4,
+                ]}
+                stroke="#22d3ee"
+                strokeWidth={2}
+                perfectDrawEnabled={false}
+              />
+              {/* VIP Badge */}
+              <Rect
+                x={-size / 2 - 2}
+                y={-size * 0.325 - 8}
+                width={20}
+                height={10}
+                fill="#f59e0b"
+                cornerRadius={2}
+                perfectDrawEnabled={false}
+              />
+              <Text
+                text="VIP"
+                x={-size / 2}
+                y={-size * 0.325 - 7}
+                fontSize={7}
+                fontStyle="bold"
+                fill="#fff"
+                perfectDrawEnabled={false}
+              />
+            </>
           ) : (
             // Normal masalar - yuvarlak (büyütülmüş)
             <Circle
@@ -437,9 +517,15 @@ export function EventCanvas({
           {/* Masa etiketi */}
           <Text
             text={table.label}
-            fontSize={isLoca ? 12 : 11}
+            fontSize={isLoca ? 11 : 11}
             fontStyle="bold"
-            fill={isReserved || isCheckedIn ? "#fff" : "#1e3a5f"}
+            fill={
+              isLoca
+                ? "#22d3ee"
+                : isReserved || isCheckedIn
+                ? "#fff"
+                : "#1e3a5f"
+            }
             align="center"
             verticalAlign="middle"
             offsetX={table.label.length * (isLoca ? 3.5 : 3)}
@@ -467,7 +553,7 @@ export function EventCanvas({
               {/* Kişi sayısı badge */}
               <Circle
                 x={isLoca ? size / 2 - 5 : size / 2 - 3}
-                y={isLoca ? -size * 0.35 + 5 : -size / 2 + 3}
+                y={isLoca ? -size * 0.325 + 5 : -size / 2 + 3}
                 radius={7}
                 fill={isCheckedIn ? "#16a34a" : "#dc2626"}
                 perfectDrawEnabled={false}
@@ -478,7 +564,7 @@ export function EventCanvas({
                 fontStyle="bold"
                 fill="#fff"
                 x={isLoca ? size / 2 - 8 : size / 2 - 6}
-                y={isLoca ? -size * 0.35 + 2 : -size / 2}
+                y={isLoca ? -size * 0.325 + 2 : -size / 2}
                 perfectDrawEnabled={false}
               />
             </>

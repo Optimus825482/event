@@ -16,6 +16,7 @@ import {
   Wine,
   MapPin,
   Trash2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ import { CanvasRenderer } from "./CanvasRenderer";
 import { GroupCard } from "./GroupCard";
 import { GroupStaffSelectModal } from "./GroupStaffSelectModal";
 import { ServicePointStaffModal } from "./ServicePointStaffModal";
+import { ExcelPreviewModal } from "./ExcelPreviewModal";
 import { cn } from "@/lib/utils";
 
 // Ekip Şablonu tipi (Staff bölümündeki takımlar)
@@ -239,6 +241,7 @@ export function Step1TableGrouping({
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
   const [showServicePointModal, setShowServicePointModal] = useState(false);
   const [showStaffSelectModal, setShowStaffSelectModal] = useState(false);
   const [showServicePointStaffModal, setShowServicePointStaffModal] =
@@ -634,6 +637,69 @@ export function Step1TableGrouping({
     setShowTemplateModal(true);
   }, [loadOrganizationTemplates]);
 
+  // Excel import'tan gelen grupları işle
+  const handleExcelImportComplete = useCallback(
+    (
+      groups: Array<{
+        name: string;
+        color: string;
+        tableIds: string[];
+        groupType: "standard" | "loca";
+        assignments: Array<{
+          staffName: string;
+          staffId?: string;
+          tableIds: string[];
+          shiftStart: string;
+          shiftEnd: string;
+          groupName: string;
+          groupColor: string;
+          matchConfidence: number;
+          matchedStaff?: { id: string; fullName: string };
+        }>;
+      }>
+    ) => {
+      console.log("📥 Excel'den gruplar yükleniyor:", groups.length, "grup");
+
+      // Her grup için yeni grup oluştur
+      groups.forEach((excelGroup) => {
+        // Grup oluştur
+        const newGroup = onAddGroup(
+          excelGroup.name,
+          excelGroup.tableIds,
+          excelGroup.color
+        );
+
+        // Eğer grup oluşturulduysa ve personel atamaları varsa
+        if (
+          newGroup &&
+          excelGroup.assignments.length > 0 &&
+          onAssignStaffToGroup
+        ) {
+          const staffAssignments: GroupStaffAssignment[] =
+            excelGroup.assignments
+              .filter((a) => a.matchedStaff) // Sadece eşleşen personelleri al
+              .map((a, index) => ({
+                id: `excel-${newGroup.id}-${index}`, // Unique ID oluştur
+                staffId: a.matchedStaff!.id,
+                staffName: a.matchedStaff!.fullName,
+                role: "waiter" as const, // Default rol - garson
+                shiftStart: a.shiftStart,
+                shiftEnd: a.shiftEnd,
+                isExtra: false,
+              }));
+
+          if (staffAssignments.length > 0) {
+            onUpdateGroup(newGroup.id, { staffAssignments });
+          }
+        }
+      });
+
+      // Modal'ı kapat
+      setShowExcelImportModal(false);
+    },
+    [onAddGroup, onAssignStaffToGroup, onUpdateGroup]
+  );
+
   // Şablon seçimini toggle et
   const toggleTemplateSelection = useCallback((templateId: string) => {
     setSelectedTemplateId((prev) => (prev === templateId ? null : templateId));
@@ -971,6 +1037,18 @@ export function Step1TableGrouping({
                 Masa Grupları
               </h3>
               <div className="flex items-center gap-1">
+                {eventId && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowExcelImportModal(true)}
+                    className="h-7 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-600/20"
+                    title="Excel'den Yükle"
+                  >
+                    <FileSpreadsheet className="w-3 h-3 mr-1" />
+                    Excel
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1866,6 +1944,16 @@ export function Step1TableGrouping({
               }
             />
           )}
+
+        {/* Excel Preview Modal - Büyük Önizleme */}
+        {eventId && (
+          <ExcelPreviewModal
+            isOpen={showExcelImportModal}
+            onClose={() => setShowExcelImportModal(false)}
+            eventId={eventId}
+            onImportComplete={handleExcelImportComplete}
+          />
+        )}
 
         {/* Service Point Modal */}
         <Dialog

@@ -355,8 +355,9 @@ export class EventsService {
   }
 
   /**
-   * Bugünün aktif etkinliklerini getir - Check-in modülü için
-   * Bugün veya bugünden sonraki etkinlikleri döndürür
+   * Check-in modülü için etkinlikleri getir
+   * TÜM DRAFT ve PUBLISHED etkinlikleri döndürür
+   * Tarih kısıtlaması YOK - tüm etkinlikler görünür
    */
   async getActiveEventsToday(): Promise<
     Array<{
@@ -366,37 +367,31 @@ export class EventsService {
       totalCapacity: number;
       checkedInCount: number;
       venueLayout: any;
+      hasStaffAssignments: boolean;
+      hasReservations: boolean;
     }>
   > {
-    // Bugünün başlangıcı
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Bugünün sonu
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Bugünkü etkinlikleri getir
+    // Tüm DRAFT ve PUBLISHED etkinlikleri getir
     const events = await this.eventRepository
       .createQueryBuilder("event")
       .leftJoinAndSelect("event.reservations", "reservation")
-      .where("event.eventDate >= :today", { today })
-      .andWhere("event.eventDate < :tomorrow", { tomorrow })
-      .andWhere("event.status IN (:...statuses)", {
+      .leftJoinAndSelect("event.staffAssignments", "staffAssignment")
+      .where("event.status IN (:...statuses)", {
         statuses: [EventStatus.DRAFT, EventStatus.PUBLISHED],
       })
-      .orderBy("event.eventDate", "ASC")
+      .orderBy("event.eventDate", "DESC") // En yeni etkinlikler önce
       .getMany();
 
     // Her etkinlik için istatistikleri hesapla
     return events.map((event) => {
       const reservations = event.reservations || [];
+      const staffAssignments = event.staffAssignments || [];
       const checkedInCount = reservations.filter(
         (r) => r.status === "checked_in"
       ).length;
       const totalCapacity =
         event.venueLayout?.tables?.reduce(
-          (sum, t) => sum + (t.capacity || 0),
+          (sum: number, t: any) => sum + (t.capacity || 0),
           0
         ) || 0;
 
@@ -407,6 +402,8 @@ export class EventsService {
         totalCapacity,
         checkedInCount,
         venueLayout: event.venueLayout,
+        hasStaffAssignments: staffAssignments.length > 0,
+        hasReservations: reservations.length > 0,
       };
     });
   }

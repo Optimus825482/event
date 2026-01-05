@@ -17,6 +17,7 @@ import {
   Mail,
   Plus,
   Trash2,
+  AlertCircle,
 } from "lucide-react";
 import { eventsApi, venuesApi, staffApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
 // Etkinlik türleri
@@ -108,6 +118,10 @@ export default function NewEventPage() {
   const [venues, setVenues] = useState<VenueTemplate[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(false);
 
+  // Hata modal state'leri
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [errorMessages, setErrorMessages] = useState<string[]>([]);
+
   // Vardiya state'leri
   const [eventShifts, setEventShifts] = useState<EventShift[]>([]);
   const [newShift, setNewShift] = useState({
@@ -173,7 +187,8 @@ export default function NewEventPage() {
   // Adım 1: Temel bilgileri kaydet
   const handleStep1Submit = async () => {
     if (!formData.name || !formData.eventDate) {
-      alert("Lütfen etkinlik adı ve tarih giriniz");
+      setErrorMessages(["Lütfen etkinlik adı ve tarih giriniz"]);
+      setErrorModalOpen(true);
       return;
     }
 
@@ -212,9 +227,33 @@ export default function NewEventPage() {
       }
 
       setCurrentStep(2);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Etkinlik oluşturma hatası:", error);
-      alert("Etkinlik oluşturulurken bir hata oluştu");
+
+      // Backend'den gelen hata mesajlarını parse et
+      const messages: string[] = [];
+
+      if (error.response?.data?.message) {
+        const backendMessage = error.response.data.message;
+
+        // Array ise her birini ekle
+        if (Array.isArray(backendMessage)) {
+          messages.push(...backendMessage);
+        } else {
+          messages.push(backendMessage);
+        }
+      } else if (error.response?.status === 400) {
+        // Genel 400 hatası için olası nedenleri göster
+        messages.push("Etkinlik oluşturulamadı. Olası nedenler:");
+        messages.push("• Etkinlik tarihi geçmiş bir tarih olamaz");
+        messages.push("• Etkinlik adı en fazla 200 karakter olabilir");
+        messages.push("• Açıklama en fazla 2000 karakter olabilir");
+      } else {
+        messages.push("Etkinlik oluşturulurken beklenmeyen bir hata oluştu");
+      }
+
+      setErrorMessages(messages);
+      setErrorModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -896,6 +935,55 @@ export default function NewEventPage() {
           )}
         </Card>
       </div>
+
+      {/* Hata Modal */}
+      <AlertDialog open={errorModalOpen} onOpenChange={setErrorModalOpen}>
+        <AlertDialogContent className="bg-slate-800 border-slate-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-500" />
+              Etkinlik Oluşturulamadı
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-slate-400">
+                  Etkinlik oluşturulurken aşağıdaki hatalar tespit edildi:
+                </p>
+                <div className="p-4 rounded-lg bg-red-900/20 border border-red-700/50">
+                  <ul className="space-y-2">
+                    {errorMessages.map((msg, idx) => (
+                      <li
+                        key={idx}
+                        className="text-red-300 text-sm flex items-start gap-2"
+                      >
+                        {msg.startsWith("•") ? (
+                          <span>{msg}</span>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>{msg}</span>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <p className="text-slate-500 text-sm">
+                  Lütfen bilgileri kontrol edip tekrar deneyin.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setErrorModalOpen(false)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Anladım
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

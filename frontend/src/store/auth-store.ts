@@ -93,6 +93,7 @@ interface AuthState {
   setActiveModule: (module: ModuleType) => void;
   clearActiveModule: () => void;
   getAllowedModules: () => ModuleInfo[];
+  setTokens: (accessToken: string, refreshToken?: string) => void;
 }
 
 /**
@@ -198,6 +199,13 @@ export const useAuthStore = create<AuthState>()(
         return user.allowedModules
           .map((moduleId) => MODULES[moduleId])
           .filter(Boolean);
+      },
+
+      setTokens: (accessToken: string, refreshToken?: string) => {
+        set((state) => ({
+          token: accessToken,
+          refreshToken: refreshToken ?? state.refreshToken,
+        }));
       },
     }),
     {

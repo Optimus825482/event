@@ -416,22 +416,30 @@ export default function EventsPage() {
 
   // ==================== COMPUTED VALUES ====================
   const now = new Date();
+  // Bugünün başlangıcı (gece yarısı) - bugünkü etkinlikler "tamamlanan"a gitmemeli
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
 
   const planningEvents = events.filter((e) => {
     const eventDate = new Date(e.eventDate);
     const hasVenue = e.hasVenueLayout ?? false;
     const hasTeam = e.hasTeamAssignment ?? false;
-    return eventDate >= now && (!hasVenue || !hasTeam);
+    // Bugün veya gelecek + hazırlıkları tamamlanmamış
+    return eventDate >= todayStart && (!hasVenue || !hasTeam);
   });
 
   const upcomingEvents = events.filter((e) => {
     const eventDate = new Date(e.eventDate);
     const hasVenue = e.hasVenueLayout ?? false;
     const hasTeam = e.hasTeamAssignment ?? false;
-    return eventDate >= now && hasVenue && hasTeam;
+    // Bugün veya gelecek + hazırlıkları tamamlanmış
+    return eventDate >= todayStart && hasVenue && hasTeam;
   });
 
-  const completedEvents = events.filter((e) => new Date(e.eventDate) < now);
+  // Tamamlanan: Sadece dünden önceki etkinlikler (bugünkü etkinlikler dahil değil)
+  const completedEvents = events.filter(
+    (e) => new Date(e.eventDate) < todayStart
+  );
 
   const getFilteredEvents = () => {
     switch (activeTab) {

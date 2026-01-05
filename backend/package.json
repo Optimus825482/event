@@ -24,6 +24,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@mistralai/mistralai": "^1.11.0",
     "@nestjs/common": "^11.1.9",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.9",
@@ -57,7 +58,9 @@
     "sharp": "^0.34.5",
     "socket.io": "^4.8.1",
     "typeorm": "^0.3.27",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "xlsx": "^0.18.5",
+    "xlsx-renderer": "^2.4.7"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.9",

@@ -41,6 +41,6 @@ RUN chown -R node:node /app/uploads
 
 USER node
 
-EXPOSE 4000
+EXPOSE 4004
 
 CMD ["node", "dist/main.js"]

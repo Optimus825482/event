@@ -751,8 +751,6 @@ export const useCheckInStore = create<CheckInState>()(
 
         // Listen for check-in updates from other devices
         socketService.onGuestCheckedIn((data: CheckInData) => {
-          console.log("[CheckInStore] Real-time check-in received:", data);
-
           // Add to history if not already there
           const { checkInHistory } = get();
           const exists = checkInHistory.some(
@@ -773,8 +771,6 @@ export const useCheckInStore = create<CheckInState>()(
 
         // Listen for live stats updates
         socketService.onLiveStats((data: LiveStatsData) => {
-          console.log("[CheckInStore] Real-time stats received:", data);
-
           set({
             eventStats: {
               totalExpected: data.totalExpected,
@@ -789,18 +785,12 @@ export const useCheckInStore = create<CheckInState>()(
             },
           });
         });
-
-        console.log(
-          "[CheckInStore] Subscribed to real-time updates for event:",
-          eventId
-        );
       },
 
       unsubscribeFromUpdates: () => {
         // Remove listeners but keep socket connected for other features
         socketService.getSocket()?.off("guestCheckedIn");
         socketService.getSocket()?.off("liveStats");
-        console.log("[CheckInStore] Unsubscribed from real-time updates");
       },
     }),
     {

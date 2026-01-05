@@ -67,26 +67,15 @@ api.interceptors.request.use((config) => {
         const parsed = JSON.parse(authStorage);
         const token = parsed?.state?.token;
 
-        // DEBUG: Token kontrolü
-        console.log(
-          "[API Interceptor] Token exists:",
-          !!token,
-          "Token length:",
-          token?.length || 0
-        );
-
+        // DEBUG: Token kontrolü - Production'da kaldırılmalı
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
-        } else {
-          console.warn(
-            "[API Interceptor] Token is null/undefined in auth-storage"
-          );
         }
       } catch (e) {
-        console.error("[API Interceptor] JSON parse error:", e);
+        // JSON parse error - skip
       }
     } else {
-      console.warn("[API Interceptor] No auth-storage in localStorage");
+      // No auth-storage in localStorage
     }
   }
   return config;
@@ -155,8 +144,6 @@ api.interceptors.response.use(
         }
         localStorage.setItem("auth-storage", JSON.stringify(parsed));
 
-        console.log("[API] Token refreshed successfully");
-
         // Bekleyen istekleri işle
         processQueue(null, accessToken);
 
@@ -178,7 +165,6 @@ api.interceptors.response.use(
             parsed.state.isAuthenticated = false;
             parsed.state.user = null;
             localStorage.setItem("auth-storage", JSON.stringify(parsed));
-            console.log("[API] Auth state cleared - refresh failed");
           } catch (e) {
             // JSON parse hatası - storage'ı tamamen temizle
             localStorage.removeItem("auth-storage");
@@ -1690,7 +1676,7 @@ export const eventExtraStaffApi = {
 // ==================== CHECK-IN API ====================
 // Check-in modülü için özel API fonksiyonları
 export const checkInApi = {
-  // Bugünün aktif etkinliklerini getir
+  // Personel ataması veya rezervasyonu olan tüm etkinlikleri getir
   getActiveEvents: () => api.get("/events/active/today"),
 
   // Check-in için etkinlik detayları ve rezervasyonları getir
