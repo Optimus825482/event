@@ -238,13 +238,24 @@ export function Step2TeamAssignment({
 
   const labelToIdMap = useMemo(() => {
     const map = new Map<string, string>();
-    tables.forEach((t) => map.set(t.label, t.id));
+    tables.forEach((t) => {
+      map.set(t.label, t.id);
+      if (t.isLoca && t.locaName) {
+        map.set(t.locaName, t.id);
+      }
+    });
     return map;
   }, [tables]);
 
   const idToLabelMap = useMemo(() => {
     const map = new Map<string, string>();
-    tables.forEach((t) => map.set(t.id, t.label));
+    tables.forEach((t) => {
+      if (t.isLoca && t.locaName) {
+        map.set(t.id, t.locaName);
+      } else {
+        map.set(t.id, t.label);
+      }
+    });
     return map;
   }, [tables]);
 

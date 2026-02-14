@@ -92,7 +92,7 @@ interface StaffGroupMember {
 
 interface StaffGroup {
   groupNumber: number;
-  groupName: string; // "Grup 1", "Grup 2"
+  groupName: string; // "Masa 45, 46" veya "Loca L1, L2"
   tableIds: string[];
   tableLabels: string[];
   isLoca: boolean;
@@ -347,7 +347,9 @@ function computeStaffGroups(
 
     groups.push({
       groupNumber: groupNum,
-      groupName: isLoca ? `Loca ${labels.join(", ")}` : `Grup ${groupNum}`,
+      groupName: isLoca
+        ? `Loca ${labels.join(", ")}`
+        : `Masa ${labels.join(", ")}`,
       tableIds: entry.tableIds,
       tableLabels: labels,
       isLoca,
@@ -483,12 +485,9 @@ const GroupBreakdown = memo(function GroupBreakdown({
             )}
           >
             {group.isLoca
-              ? `Loca · ${group.tableLabels.length} alan`
+              ? `${group.tableLabels.length} alan`
               : `${group.tableLabels.length} masa`}
           </Badge>
-          <span className="text-xs text-slate-500 font-mono max-w-[200px] truncate">
-            {group.tableLabels.join(", ")}
-          </span>
         </div>
         <div className="flex items-center gap-2 ml-auto">
           <Badge
@@ -751,14 +750,13 @@ async function exportToExcel(
 
   // Grup bazlı personel listesi
   staffGroups.forEach((group) => {
-    const grupLabel = group.isLoca
-      ? `${group.groupName} (LOCA)`
-      : group.groupName;
+    const masaLabel = group.isLoca
+      ? `Loca ${group.tableLabels.join(", ")}`
+      : group.tableLabels.join(", ");
 
     if (group.staff.length === 0) {
       data.push({
-        Grup: grupLabel,
-        Masalar: group.tableLabels.join(", "),
+        Masalar: masaLabel,
         Görev: "-",
         "Ad Soyad": "-",
         Unvan: "-",
@@ -769,8 +767,7 @@ async function exportToExcel(
     } else {
       group.staff.forEach((s, idx) => {
         data.push({
-          Grup: idx === 0 ? grupLabel : "",
-          Masalar: idx === 0 ? group.tableLabels.join(", ") : "",
+          Masalar: idx === 0 ? masaLabel : "",
           Görev: s.roleLabel,
           "Ad Soyad": s.name,
           Unvan: s.position,
@@ -786,7 +783,6 @@ async function exportToExcel(
   if (servicePoints.length > 0) {
     // Boş satır ayırıcı
     data.push({
-      Grup: "",
       Masalar: "",
       Görev: "",
       "Ad Soyad": "",
@@ -804,8 +800,7 @@ async function exportToExcel(
 
       if (assignments.length === 0) {
         data.push({
-          Grup: `📍 ${sp.name}`,
-          Masalar: pointTypeInfo?.label || sp.pointType,
+          Masalar: `📍 ${sp.name} (${pointTypeInfo?.label || sp.pointType})`,
           Görev: "-",
           "Ad Soyad": "-",
           Unvan: "-",
@@ -818,8 +813,10 @@ async function exportToExcel(
           const staff = a.staff || allStaff.find((s) => s.id === a.staffId);
           const roleInfo = SERVICE_POINT_ROLES.find((r) => r.value === a.role);
           data.push({
-            Grup: idx === 0 ? `📍 ${sp.name}` : "",
-            Masalar: idx === 0 ? pointTypeInfo?.label || sp.pointType : "",
+            Masalar:
+              idx === 0
+                ? `📍 ${sp.name} (${pointTypeInfo?.label || sp.pointType})`
+                : "",
             Görev: roleInfo?.label || a.role,
             "Ad Soyad": staff?.fullName || "Bilinmeyen",
             Unvan: staff?.position || "-",
@@ -834,7 +831,6 @@ async function exportToExcel(
 
   const ws = XLSX.utils.json_to_sheet(data);
   ws["!cols"] = [
-    { wch: 12 }, // Grup
     { wch: 30 }, // Masalar
     { wch: 14 }, // Görev
     { wch: 25 }, // Ad Soyad
@@ -948,7 +944,7 @@ function exportToPDF(
 
   // Gruplar Bölümü
   if (staffGroups.length > 0) {
-    content += `<div class="section-title">📋 Personel Grupları (${staffGroups.length} Grup)</div>`;
+    content += `<div class="section-title">📋 Personel Atamaları (${staffGroups.length} Bölüm)</div>`;
 
     staffGroups.forEach((group) => {
       const bgColor = group.isLoca ? "#a855f7" : "#3b82f6";
@@ -957,12 +953,16 @@ function exportToPDF(
         ? `<span style="background: #a855f7; color: white; padding: 1px 6px; border-radius: 3px; font-size: 8px; margin-left: 6px;">LOCA</span>`
         : "";
 
+      // Grup ismi yerine sadece masa numaralarını göster
+      const displayTitle = group.isLoca
+        ? `Loca ${group.tableLabels.join(", ")}`
+        : `Masa ${group.tableLabels.join(", ")}`;
+
       content += `
   <div class="group-section">
     <div class="group-header" style="border-left-color: ${borderColor}">
       <div class="group-number" style="background: ${bgColor}">${group.groupNumber}</div>
-      <span class="group-name">${group.groupName}</span>${locaBadge}
-      <span class="group-tables">${group.tableLabels.join(", ")}</span>
+      <span class="group-name">${displayTitle}</span>${locaBadge}
       <span class="group-stats">${group.staff.length} personel</span>
     </div>
 `;
