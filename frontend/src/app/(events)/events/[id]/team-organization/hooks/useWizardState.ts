@@ -13,8 +13,8 @@ import {
 } from "../types";
 
 const STEP_ORDER: WizardStep[] = [
-  "table-grouping",
   "team-assignment",
+  "staff-assignment",
   "summary",
 ];
 
@@ -30,13 +30,13 @@ export function useWizardState(options?: UseWizardStateOptions) {
 
   // initialStep parametresi öncelikli, sonra initialState.currentStep, en son default
   const [currentStep, setCurrentStep] = useState<WizardStep>(
-    initialStep || initialState?.currentStep || "table-grouping"
+    initialStep || initialState?.currentStep || "team-assignment",
   );
   const [tableGroups, setTableGroups] = useState<TableGroup[]>(
-    initialState?.tableGroups || []
+    initialState?.tableGroups || [],
   );
   const [teams, setTeams] = useState<TeamDefinition[]>(
-    initialState?.teams || []
+    initialState?.teams || [],
   );
   const [hasChanges, setHasChanges] = useState(false);
   const [lastDraftSave, setLastDraftSave] = useState<Date | null>(null);
@@ -70,22 +70,17 @@ export function useWizardState(options?: UseWizardStateOptions) {
   // Step Navigation
   const currentStepIndex = useMemo(
     () => STEP_ORDER.indexOf(currentStep),
-    [currentStep]
+    [currentStep],
   );
 
   const canGoNext = useMemo(() => {
     switch (currentStep) {
-      case "table-grouping":
-        // Gruplar varsa ve personel atanmışsa İleri butonu aktif
-        return (
-          tableGroups.length > 0 &&
-          tableGroups.some(
-            (g) => g.staffAssignments && g.staffAssignments.length > 0
-          )
-        );
       case "team-assignment":
-        // Takımlar oluşturulmuş ve gruplar atanmışsa
-        return teams.length > 0 && tableGroups.some((g) => g.assignedTeamId);
+        // En az 1 personel ataması yapılmışsa (grup'ta staffAssignment olmalı)
+        return tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0);
+      case "staff-assignment":
+        // Personel ataması yapılmışsa (en az 1 grup'ta staffAssignment olmalı)
+        return tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0);
       case "summary":
         return false;
       default:
@@ -131,17 +126,17 @@ export function useWizardState(options?: UseWizardStateOptions) {
       setHasChanges(true);
       return newGroup;
     },
-    [tableGroups.length]
+    [tableGroups.length],
   );
 
   const updateTableGroup = useCallback(
     (groupId: string, updates: Partial<TableGroup>) => {
       setTableGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, ...updates } : g))
+        prev.map((g) => (g.id === groupId ? { ...g, ...updates } : g)),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const deleteTableGroup = useCallback((groupId: string) => {
@@ -150,7 +145,7 @@ export function useWizardState(options?: UseWizardStateOptions) {
       prev.map((t) => ({
         ...t,
         assignedGroupIds: t.assignedGroupIds.filter((id) => id !== groupId),
-      }))
+      })),
     );
     setHasChanges(true);
   }, []);
@@ -164,11 +159,11 @@ export function useWizardState(options?: UseWizardStateOptions) {
             g.id === groupId
               ? [...new Set([...g.tableIds, ...tableIds])]
               : g.tableIds.filter((id) => !tableIds.includes(id)),
-        }))
+        })),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const removeTablesFromGroup = useCallback(
@@ -180,12 +175,12 @@ export function useWizardState(options?: UseWizardStateOptions) {
                 ...g,
                 tableIds: g.tableIds.filter((id) => !tableIds.includes(id)),
               }
-            : g
-        )
+            : g,
+        ),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   // Team Operations
@@ -193,7 +188,7 @@ export function useWizardState(options?: UseWizardStateOptions) {
     (
       name: string,
       color?: string,
-      leaders?: Array<{ staffId: string; staffName: string; role: string }>
+      leaders?: Array<{ staffId: string; staffName: string; role: string }>,
     ) => {
       const newTeam: TeamDefinition & {
         leaders?: Array<{ staffId: string; staffName: string; role: string }>;
@@ -209,7 +204,7 @@ export function useWizardState(options?: UseWizardStateOptions) {
       setHasChanges(true);
       return newTeam as TeamDefinition;
     },
-    [teams.length]
+    [teams.length],
   );
 
   const updateTeam = useCallback(
@@ -217,22 +212,22 @@ export function useWizardState(options?: UseWizardStateOptions) {
       teamId: string,
       updates: Partial<TeamDefinition> & {
         leaders?: Array<{ staffId: string; staffName: string; role: string }>;
-      }
+      },
     ) => {
       setTeams((prev) =>
-        prev.map((t) => (t.id === teamId ? { ...t, ...updates } : t))
+        prev.map((t) => (t.id === teamId ? { ...t, ...updates } : t)),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const deleteTeam = useCallback((teamId: string) => {
     setTeams((prev) => prev.filter((t) => t.id !== teamId));
     setTableGroups((prev) =>
       prev.map((g) =>
-        g.assignedTeamId === teamId ? { ...g, assignedTeamId: undefined } : g
-      )
+        g.assignedTeamId === teamId ? { ...g, assignedTeamId: undefined } : g,
+      ),
     );
     setHasChanges(true);
   }, []);
@@ -248,7 +243,7 @@ export function useWizardState(options?: UseWizardStateOptions) {
             return {
               ...t,
               requiredStaff: t.requiredStaff.map((r) =>
-                r.role === role ? { ...r, count } : r
+                r.role === role ? { ...r, count } : r,
               ),
             };
           }
@@ -259,11 +254,11 @@ export function useWizardState(options?: UseWizardStateOptions) {
               { role, count, assignedStaffIds: [] },
             ],
           };
-        })
+        }),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const removeStaffRequirement = useCallback(
@@ -275,12 +270,12 @@ export function useWizardState(options?: UseWizardStateOptions) {
                 ...t,
                 requiredStaff: t.requiredStaff.filter((r) => r.role !== role),
               }
-            : t
-        )
+            : t,
+        ),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const applyRequirementsToAllTeams = useCallback(
@@ -298,17 +293,19 @@ export function useWizardState(options?: UseWizardStateOptions) {
               assignedStaffIds: [],
             })),
           };
-        })
+        }),
       );
       setHasChanges(true);
     },
-    [teams]
+    [teams],
   );
 
   // Group-Team Assignment
   const assignGroupToTeam = useCallback((groupId: string, teamId: string) => {
     setTableGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, assignedTeamId: teamId } : g))
+      prev.map((g) =>
+        g.id === groupId ? { ...g, assignedTeamId: teamId } : g,
+      ),
     );
     setTeams((prev) =>
       prev.map((t) => {
@@ -322,7 +319,7 @@ export function useWizardState(options?: UseWizardStateOptions) {
           ...t,
           assignedGroupIds: t.assignedGroupIds.filter((id) => id !== groupId),
         };
-      })
+      }),
     );
     setHasChanges(true);
   }, []);
@@ -330,14 +327,14 @@ export function useWizardState(options?: UseWizardStateOptions) {
   const unassignGroupFromTeam = useCallback((groupId: string) => {
     setTableGroups((prev) =>
       prev.map((g) =>
-        g.id === groupId ? { ...g, assignedTeamId: undefined } : g
-      )
+        g.id === groupId ? { ...g, assignedTeamId: undefined } : g,
+      ),
     );
     setTeams((prev) =>
       prev.map((t) => ({
         ...t,
         assignedGroupIds: t.assignedGroupIds.filter((id) => id !== groupId),
-      }))
+      })),
     );
     setHasChanges(true);
   }, []);
@@ -347,8 +344,8 @@ export function useWizardState(options?: UseWizardStateOptions) {
     (groupIds: string[], teamId: string) => {
       setTableGroups((prev) =>
         prev.map((g) =>
-          groupIds.includes(g.id) ? { ...g, assignedTeamId: teamId } : g
-        )
+          groupIds.includes(g.id) ? { ...g, assignedTeamId: teamId } : g,
+        ),
       );
       setTeams((prev) =>
         prev.map((t) => {
@@ -363,14 +360,14 @@ export function useWizardState(options?: UseWizardStateOptions) {
           return {
             ...t,
             assignedGroupIds: t.assignedGroupIds.filter(
-              (id) => !groupIds.includes(id)
+              (id) => !groupIds.includes(id),
             ),
           };
-        })
+        }),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   // Staff Assignment to Group
@@ -386,12 +383,12 @@ export function useWizardState(options?: UseWizardStateOptions) {
                   ...assignments,
                 ],
               }
-            : g
-        )
+            : g,
+        ),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const removeStaffFromGroup = useCallback(
@@ -402,22 +399,22 @@ export function useWizardState(options?: UseWizardStateOptions) {
             ? {
                 ...g,
                 staffAssignments: (g.staffAssignments || []).filter(
-                  (a) => a.id !== assignmentId
+                  (a) => a.id !== assignmentId,
                 ),
               }
-            : g
-        )
+            : g,
+        ),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const updateStaffAssignment = useCallback(
     (
       groupId: string,
       assignmentId: string,
-      updates: Partial<GroupStaffAssignment>
+      updates: Partial<GroupStaffAssignment>,
     ) => {
       setTableGroups((prev) =>
         prev.map((g) =>
@@ -425,15 +422,15 @@ export function useWizardState(options?: UseWizardStateOptions) {
             ? {
                 ...g,
                 staffAssignments: (g.staffAssignments || []).map((a) =>
-                  a.id === assignmentId ? { ...a, ...updates } : a
+                  a.id === assignmentId ? { ...a, ...updates } : a,
                 ),
               }
-            : g
-        )
+            : g,
+        ),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   // Legacy Staff Assignment
@@ -452,14 +449,14 @@ export function useWizardState(options?: UseWizardStateOptions) {
                       ...new Set([...r.assignedStaffIds, staffId]),
                     ],
                   }
-                : r
+                : r,
             ),
           };
-        })
+        }),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const unassignStaffFromTeam = useCallback(
@@ -474,24 +471,24 @@ export function useWizardState(options?: UseWizardStateOptions) {
                 ? {
                     ...r,
                     assignedStaffIds: r.assignedStaffIds.filter(
-                      (id) => id !== staffId
+                      (id) => id !== staffId,
                     ),
                   }
-                : r
+                : r,
             ),
           };
-        })
+        }),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   // Bulk Operations
   const clearAll = useCallback(() => {
     setTableGroups([]);
     setTeams([]);
-    setCurrentStep("table-grouping");
+    setCurrentStep("team-assignment");
     setHasChanges(false);
     localStorage.removeItem("team-organization-draft");
   }, []);
@@ -520,7 +517,7 @@ export function useWizardState(options?: UseWizardStateOptions) {
       setIsInitialized(true);
       setHasChanges(false); // Yükleme sonrası değişiklik yok
     },
-    [currentStep]
+    [currentStep],
   );
 
   const loadDraft = useCallback(() => {
@@ -530,7 +527,7 @@ export function useWizardState(options?: UseWizardStateOptions) {
         const parsed = JSON.parse(draft);
         setTableGroups(parsed.tableGroups || []);
         setTeams(parsed.teams || []);
-        setCurrentStep(parsed.currentStep || "table-grouping");
+        setCurrentStep(parsed.currentStep || "team-assignment");
         return true;
       } catch (e) {
         console.error("Draft yüklenemedi:", e);
@@ -544,12 +541,12 @@ export function useWizardState(options?: UseWizardStateOptions) {
   const stats = useMemo(() => {
     const totalTables = tableGroups.reduce(
       (sum, g) => sum + g.tableIds.length,
-      0
+      0,
     );
     const assignedGroups = tableGroups.filter((g) => g.assignedTeamId).length;
     const totalStaffAssigned = tableGroups.reduce(
       (sum, g) => sum + (g.staffAssignments?.length || 0),
-      0
+      0,
     );
 
     return {

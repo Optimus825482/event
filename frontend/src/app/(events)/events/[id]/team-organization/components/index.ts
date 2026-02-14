@@ -11,6 +11,8 @@ export { GroupCard } from "./GroupCard";
 // Step Components
 export { Step1TableGrouping } from "./Step1TableGrouping";
 export { Step2TeamAssignment } from "./Step2TeamAssignment";
+export { StaffAssignmentStep } from "./StaffAssignmentStep";
+export { StaffAssignmentModal } from "./StaffAssignmentModal";
 
 // Legacy Step Components (backward compatibility)
 export { Step2TeamDefinition } from "./Step2TeamDefinition";

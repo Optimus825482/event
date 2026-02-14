@@ -18,10 +18,11 @@ import {
   Unlock,
   Trash2,
   ArrowLeftRight,
+  Crown,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { CanvasTool, TableType, PlacedTable } from "../types";
-import { TABLE_TYPE_CONFIG } from "../constants";
+import type { CanvasTool, PlacedTable } from "../types";
 
 interface VenueToolbarProps {
   activeTool: CanvasTool;
@@ -41,13 +42,10 @@ interface VenueToolbarProps {
   showGuideLines: boolean;
   onToggleGuideLines: () => void;
   onAutoAlign: () => void;
-  selectedAssignType: TableType;
-  setSelectedAssignType: (type: TableType) => void;
   selectedItems: string[];
-  onAssignSelectedType: (type: TableType) => void;
   tableStats: {
-    stats: Record<TableType, { count: number; capacity: number }>;
     totalCapacity: number;
+    vipCount: number;
   };
   placedTables: PlacedTable[];
   // Çoklu seçim işlemleri
@@ -55,6 +53,7 @@ interface VenueToolbarProps {
   onUnlockSelected?: () => void;
   onDeleteSelected?: () => void;
   onSpacingSelected?: () => void;
+  onSnapAllToCenter?: () => void;
 }
 
 export function VenueToolbar({
@@ -75,16 +74,14 @@ export function VenueToolbar({
   showGuideLines,
   onToggleGuideLines,
   onAutoAlign,
-  selectedAssignType,
-  setSelectedAssignType,
   selectedItems,
-  onAssignSelectedType,
   tableStats,
   placedTables,
   onLockSelected,
   onUnlockSelected,
   onDeleteSelected,
   onSpacingSelected,
+  onSnapAllToCenter,
 }: VenueToolbarProps) {
   return (
     <div className="w-64 space-y-4">
@@ -119,6 +116,8 @@ export function VenueToolbar({
           >
             <Hand className="w-4 h-4" />
           </Button>
+        </div>
+        <div className="grid grid-cols-4 gap-2 mt-2">
           <Button
             size="sm"
             variant="outline"
@@ -129,8 +128,6 @@ export function VenueToolbar({
           >
             <Undo2 className="w-4 h-4" />
           </Button>
-        </div>
-        <div className="grid grid-cols-4 gap-2 mt-2">
           <Button
             size="sm"
             variant="outline"
@@ -218,6 +215,17 @@ export function VenueToolbar({
             ? `Seçilileri Hizala (${selectedItems.length})`
             : "Otomatik Hizala"}
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onSnapAllToCenter}
+          disabled={placedTables.length === 0}
+          className="w-full mt-1 text-xs"
+          title="Tüm masaları grid hücre merkezine hizala"
+        >
+          <Grid3X3 className="w-3 h-3 mr-1" />
+          Merkezle
+        </Button>
       </div>
 
       {/* Selection Actions - Seçili element varsa göster */}
@@ -274,7 +282,19 @@ export function VenueToolbar({
         </div>
       )}
 
-      {/* Stats - ÜST */}
+      {/* Bilgi: Masa gruplama ekip organizasyonunda yapılır */}
+      <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+        <h3 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-blue-400" />
+          Masa Gruplama
+        </h3>
+        <p className="text-xs text-slate-400">
+          Masa gruplama işlemi, ekip organizasyonu sayfasında personel ataması
+          yapılırken otomatik olarak gerçekleşir.
+        </p>
+      </div>
+
+      {/* Stats */}
       <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
         <h3 className="text-sm font-medium text-white mb-3">İstatistikler</h3>
         <div className="space-y-2 text-sm">
@@ -296,55 +316,16 @@ export function VenueToolbar({
               {tableStats.totalCapacity}
             </span>
           </div>
-          <div className="flex justify-between text-amber-400">
-            <span>Atanmamış:</span>
-            <span className="font-medium">
-              {tableStats.stats.unassigned.count}
-            </span>
-          </div>
+          {tableStats.vipCount > 0 && (
+            <div className="flex justify-between text-amber-400">
+              <span className="flex items-center gap-1">
+                <Crown className="w-3 h-3" />
+                VIP:
+              </span>
+              <span className="font-medium">{tableStats.vipCount}</span>
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Quick Type Assignment - ALT */}
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
-        <h3 className="text-sm font-medium text-white mb-3">Hızlı Tip Atama</h3>
-        <div className="space-y-2">
-          {(
-            Object.entries(TABLE_TYPE_CONFIG) as [
-              TableType,
-              typeof TABLE_TYPE_CONFIG.vip
-            ][]
-          )
-            .filter(([key]) => key !== "unassigned")
-            .map(([type, config]) => (
-              <button
-                key={type}
-                onClick={() => {
-                  setSelectedAssignType(type);
-                  if (selectedItems.length > 0) onAssignSelectedType(type);
-                }}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
-                  selectedAssignType === type
-                    ? "bg-slate-700 ring-2 ring-blue-500"
-                    : "bg-slate-700/50 hover:bg-slate-700"
-                }`}
-              >
-                <div
-                  className="w-4 h-4 rounded-full"
-                  style={{ backgroundColor: config.color }}
-                />
-                <span className="text-white">{config.label}</span>
-                <span className="ml-auto text-slate-400 text-xs">
-                  {tableStats.stats[type].count}
-                </span>
-              </button>
-            ))}
-        </div>
-        {selectedItems.length > 0 && (
-          <p className="text-xs text-slate-400 mt-2 text-center">
-            {selectedItems.length} element seçili - tıklayarak ata
-          </p>
-        )}
       </div>
     </div>
   );

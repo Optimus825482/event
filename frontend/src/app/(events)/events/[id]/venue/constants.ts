@@ -21,35 +21,71 @@ export const CANVAS_WIDTH = GRID_COLS * CELL_SIZE;
 export const CANVAS_HEIGHT = GRID_ROWS * CELL_SIZE;
 export const HEADER_SIZE = 24;
 export const DEFAULT_TABLE_SIZE = 40;
-export const MAX_TABLE_COUNT = 100; // Maksimum masa sayısı
+export const MAX_TABLE_COUNT = 144; // Maksimum masa sayısı
 
 export const COLUMN_LETTERS = Array.from({ length: 26 }, (_, i) =>
-  String.fromCharCode(65 + i)
+  String.fromCharCode(65 + i),
 );
 
 // ==================== TABLE TYPE CONFIG ====================
+// Geriye dönük uyumluluk için korunuyor (eski veriler standard/premium/vip tipinde olabilir)
 export const TABLE_TYPE_CONFIG = {
   unassigned: {
-    label: "Atanmamış",
+    label: "Masa",
     icon: Circle,
     color: "#6b7280",
     borderColor: "#9ca3af",
   },
   standard: {
-    label: "Standart",
-    icon: Square,
+    label: "Masa",
+    icon: Circle,
     color: "#3b82f6",
     borderColor: "#60a5fa",
   },
   premium: {
-    label: "Premium",
-    icon: Star,
+    label: "Masa",
+    icon: Circle,
     color: "#8b5cf6",
     borderColor: "#a78bfa",
   },
   vip: { label: "VIP", icon: Crown, color: "#f59e0b", borderColor: "#fbbf24" },
   loca: { label: "Loca", icon: Sofa, color: "#ec4899", borderColor: "#f472b6" },
 } as const;
+
+// ==================== CAPACITY COLOR MAP ====================
+// Kişi sayısına göre masa renkleri
+export const CAPACITY_COLOR_MAP: Record<
+  string,
+  { color: string; borderColor: string; label: string }
+> = {
+  "4": { color: "#22c55e", borderColor: "#4ade80", label: "4 Kişilik" },
+  "6": { color: "#3b82f6", borderColor: "#60a5fa", label: "6 Kişilik" },
+  "8": { color: "#6366f1", borderColor: "#818cf8", label: "8 Kişilik" },
+  "10": { color: "#8b5cf6", borderColor: "#a78bfa", label: "10 Kişilik" },
+  "12": { color: "#a855f7", borderColor: "#c084fc", label: "12 Kişilik" },
+  "14": { color: "#d946ef", borderColor: "#e879f9", label: "14 Kişilik" },
+  "16": { color: "#ec4899", borderColor: "#f472b6", label: "16 Kişilik" },
+  "20": { color: "#f43f5e", borderColor: "#fb7185", label: "20 Kişilik" },
+};
+
+// Kapasite için en yakın rengi bul
+export const getCapacityColor = (
+  capacity: number,
+): { color: string; borderColor: string } => {
+  const exact = CAPACITY_COLOR_MAP[String(capacity)];
+  if (exact) return exact;
+  // En yakın kapasiteyi bul
+  const caps = Object.keys(CAPACITY_COLOR_MAP)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const closest = caps.reduce((prev, curr) =>
+    Math.abs(curr - capacity) < Math.abs(prev - capacity) ? curr : prev,
+  );
+  return CAPACITY_COLOR_MAP[String(closest)];
+};
+
+// VIP renkleri
+export const VIP_COLOR = { color: "#f59e0b", borderColor: "#fbbf24" };
 
 // ==================== AREA COLORS ====================
 export const AREA_COLORS = [
@@ -184,9 +220,10 @@ export const pixelToGrid = (x: number, y: number) => {
 
 export const getGridCellCenter = (col: string, row: number) => {
   const { x, y } = gridToPixel(col, row);
+  const halfTable = DEFAULT_TABLE_SIZE / 2;
   return {
-    x: x + CELL_SIZE / 2 - 16,
-    y: y + CELL_SIZE / 2 - 16,
+    x: x + CELL_SIZE / 2 - halfTable,
+    y: y + CELL_SIZE / 2 - halfTable,
   };
 };
 
@@ -209,7 +246,7 @@ export const DEFAULT_AREA_EDIT = {
 export const DEFAULT_ADD_WIZARD = {
   isOpen: false,
   elementType: null as "table" | "loca" | null,
-  step: 1 as 1 | 2 | 3 | 4,
+  step: 1 as 1 | 2 | 3,
   count: 1,
   tableType: "standard" as const,
   capacity: 10,

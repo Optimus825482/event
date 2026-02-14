@@ -29,8 +29,8 @@ const toast = {
 import {
   WizardStepper,
   WizardNavigation,
-  Step1TableGrouping,
   Step2TeamAssignment,
+  StaffAssignmentStep,
   Step5Summary,
   TutorialModal,
 } from "./components";
@@ -61,7 +61,7 @@ export default function TeamOrganizationPage() {
 
   const [saving, setSaving] = useState(false);
   const [canvasToolbar, setCanvasToolbar] = useState<CanvasToolbarState | null>(
-    null
+    null,
   );
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
 
@@ -93,12 +93,12 @@ export default function TeamOrganizationPage() {
 
   // Başlangıç step'ini hesapla - loading bitmeden önce URL'den al
   const validSteps: WizardStep[] = [
-    "table-grouping",
     "team-assignment",
+    "staff-assignment",
     "summary",
   ];
   const computedInitialStep: WizardStep =
-    urlStep && validSteps.includes(urlStep) ? urlStep : "table-grouping";
+    urlStep && validSteps.includes(urlStep) ? urlStep : "team-assignment";
 
   // Wizard State Hook - initialStep ile başlat
   const wizard = useWizardState({ initialStep: computedInitialStep });
@@ -133,11 +133,9 @@ export default function TeamOrganizationPage() {
     setDataLoaded(true);
   }, [loading, dataLoaded, existingGroups, existingTeams]);
 
-  // Canvas toolbar'ı Step 1 ve Step 2'de göster
+  // Canvas toolbar'ı Step 1'de göster
   const showCanvasToolbar =
-    (wizard.currentStep === "table-grouping" ||
-      wizard.currentStep === "team-assignment") &&
-    canvasToolbar;
+    wizard.currentStep === "team-assignment" && canvasToolbar;
 
   // Kaydet
   const handleSave = useCallback(async () => {
@@ -146,7 +144,7 @@ export default function TeamOrganizationPage() {
       const success = await saveOrganization(
         wizard.tableGroups,
         wizard.teams,
-        extraStaffList
+        extraStaffList,
       );
       if (success) {
         toast.success("Organizasyon kaydedildi");
@@ -245,81 +243,6 @@ export default function TeamOrganizationPage() {
   // Render current step
   const renderStep = () => {
     switch (wizard.currentStep) {
-      case "table-grouping":
-        return (
-          <Step1TableGrouping
-            tables={tables}
-            tableGroups={wizard.tableGroups}
-            teams={wizard.teams}
-            stageElements={stageElements}
-            allStaff={allStaff}
-            extraStaffList={extraStaffList}
-            workShifts={eventShifts}
-            eventId={eventId}
-            viewMode={viewMode}
-            onAddGroup={wizard.addTableGroup}
-            onUpdateGroup={wizard.updateTableGroup}
-            onDeleteGroup={wizard.deleteTableGroup}
-            onAddTablesToGroup={wizard.addTablesToGroup}
-            onAddTeam={wizard.addTeam}
-            onAssignGroupToTeam={wizard.assignGroupToTeam}
-            onUnassignGroupFromTeam={wizard.unassignGroupFromTeam}
-            onAssignStaffToGroup={wizard.assignStaffToGroup}
-            onUpdateExtraStaff={(updatedList) => {
-              setExtraStaffList(updatedList);
-              wizard.setHasChanges(true);
-            }}
-            onLoadFromTemplate={(groups, teams) => {
-              // DEBUG: Gelen grupları logla
-              console.log(
-                "📥 page.tsx onLoadFromTemplate - Gelen gruplar:",
-                groups.map((g) => ({
-                  id: g.id,
-                  name: g.name,
-                  staffAssignmentsCount: g.staffAssignments?.length || 0,
-                }))
-              );
-
-              // Mevcut grupları temizle ve yenilerini yükle
-              wizard.clearAll();
-              wizard.loadFromTemplate(groups, teams);
-              wizard.setHasChanges(true);
-            }}
-            onCanvasStateChange={setCanvasToolbar}
-            servicePoints={servicePoints}
-            onAddServicePoint={async (data) => {
-              const result = await addServicePoint(data);
-              if (result) {
-                wizard.setHasChanges(true);
-              }
-            }}
-            onUpdateServicePoint={async (id, data) => {
-              const result = await updateServicePoint(id, data);
-              if (result) {
-                wizard.setHasChanges(true);
-              }
-            }}
-            onDeleteServicePoint={async (id) => {
-              const result = await deleteServicePoint(id);
-              if (result) {
-                wizard.setHasChanges(true);
-              }
-            }}
-            onSaveServicePointStaffAssignments={async (
-              servicePointId,
-              assignments
-            ) => {
-              const result = await saveServicePointStaffAssignments(
-                servicePointId,
-                assignments
-              );
-              if (result) {
-                wizard.setHasChanges(true);
-              }
-              return result;
-            }}
-          />
-        );
       case "team-assignment":
         return (
           <Step2TeamAssignment
@@ -333,9 +256,25 @@ export default function TeamOrganizationPage() {
             onAddTeam={wizard.addTeam}
             onUpdateTeam={wizard.updateTeam}
             onDeleteTeam={wizard.deleteTeam}
+            onAddTableGroup={wizard.addTableGroup}
+            onDeleteTableGroup={wizard.deleteTableGroup}
             onAssignGroupToTeam={wizard.assignGroupToTeam}
             onUnassignGroupFromTeam={wizard.unassignGroupFromTeam}
+            onAssignStaffToGroup={wizard.assignStaffToGroup}
             onCanvasStateChange={setCanvasToolbar}
+          />
+        );
+      case "staff-assignment":
+        return (
+          <StaffAssignmentStep
+            tables={tables}
+            tableGroups={wizard.tableGroups}
+            allStaff={allStaff}
+            onUpdateTableGroup={wizard.updateTableGroup}
+            onAssignStaffToGroup={wizard.assignStaffToGroup}
+            onRemoveStaffFromGroup={wizard.removeStaffFromGroup}
+            onUpdateStaffAssignment={wizard.updateStaffAssignment}
+            onAddTableGroup={wizard.addTableGroup}
           />
         );
       case "summary":
@@ -467,26 +406,18 @@ export default function TeamOrganizationPage() {
 
 // Helper: Tamamlanan adımları hesapla
 function getCompletedSteps(
-  wizard: ReturnType<typeof useWizardState>
+  wizard: ReturnType<typeof useWizardState>,
 ): WizardStep[] {
   const completed: WizardStep[] = [];
 
-  // Step 1: Masa grupları oluşturulmuş ve personel atanmış
-  if (
-    wizard.tableGroups.length > 0 &&
-    wizard.tableGroups.some(
-      (g) => g.staffAssignments && g.staffAssignments.length > 0
-    )
-  ) {
-    completed.push("table-grouping");
+  // Step 1: En az 1 personel ataması yapılmış
+  if (wizard.tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0)) {
+    completed.push("team-assignment");
   }
 
-  // Step 2: Takımlar oluşturulmuş ve gruplar atanmış
-  if (
-    wizard.teams.length > 0 &&
-    wizard.tableGroups.some((g) => g.assignedTeamId)
-  ) {
-    completed.push("team-assignment");
+  // Step 2: En az bir gruba personel atanmış
+  if (wizard.tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0)) {
+    completed.push("staff-assignment");
   }
 
   return completed;

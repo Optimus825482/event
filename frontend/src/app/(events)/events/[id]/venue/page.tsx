@@ -13,6 +13,7 @@ import type {
   DragState,
   ResizingState,
   PlacedTable,
+  CanvasTool,
 } from "./types";
 import {
   GRID_COLS,
@@ -22,9 +23,10 @@ import {
   CANVAS_HEIGHT,
   HEADER_SIZE,
   COLUMN_LETTERS,
-  TABLE_TYPE_CONFIG,
   pixelToGrid,
   DEFAULT_TABLE_SIZE,
+  getCapacityColor,
+  VIP_COLOR,
 } from "./constants";
 import { useVenueState, useVenueHistory } from "./hooks";
 import {
@@ -36,8 +38,10 @@ import {
   VenueToolbar,
   AddElementWizard,
   TableResizeModal,
+  CapacityEditModal,
   SpacingModal,
   Venue3DView,
+  GroupLineRenderer,
 } from "./components";
 
 export default function VenuePlannerPage() {
@@ -77,7 +81,7 @@ export default function VenuePlannerPage() {
     venue.placedTables,
     venue.stageElements,
     venue.setPlacedTables,
-    venue.setStageElements
+    venue.setStageElements,
   );
 
   // Drag & Resize state
@@ -103,9 +107,10 @@ export default function VenuePlannerPage() {
           } else {
             venue.setPlacedTables(data.venueLayout.placedTables || []);
             venue.setStageElements(data.venueLayout.stageElements || []);
+            venue.setGroupLines((data.venueLayout as any).groupLines || []);
             history.initHistory(
               data.venueLayout.placedTables || [],
-              data.venueLayout.stageElements || []
+              data.venueLayout.stageElements || [],
             );
           }
         } else if (draftInfo.hasDraft) {
@@ -125,28 +130,80 @@ export default function VenuePlannerPage() {
       }
     };
     fetchEvent();
+    // Masa gruplarını yükle
+    venue.loadTableGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  // Save layout
+  // Save layout - DTO'ya uygun sanitize edilmiş veri gönder
   const saveLayout = async () => {
     setSaving(true);
     try {
+      // Backend DTO'sundaki alanlara göre sanitize et (forbidNonWhitelisted koruması)
+      const sanitizedTables = venue.placedTables.map((t) => ({
+        id: t.id,
+        tableNumber: t.tableNumber,
+        type: t.type,
+        capacity: t.capacity,
+        x: t.x,
+        y: t.y,
+        isLoca: t.isLoca,
+        ...(t.locaName !== undefined && { locaName: t.locaName }),
+        isLocked: t.isLocked,
+        ...(t.isVip !== undefined && { isVip: t.isVip }),
+        ...(t.size !== undefined && { size: t.size }),
+        ...(t.gridCol !== undefined && { gridCol: t.gridCol }),
+        ...(t.gridRow !== undefined && { gridRow: t.gridRow }),
+        ...(t.floor !== undefined && { floor: t.floor }),
+      }));
+      const sanitizedStages = venue.stageElements.map((s) => ({
+        id: s.id,
+        type: s.type,
+        x: s.x,
+        y: s.y,
+        width: s.width,
+        height: s.height,
+        label: s.label,
+        isLocked: s.isLocked,
+        ...(s.displayText !== undefined && { displayText: s.displayText }),
+        ...(s.gridCol !== undefined && { gridCol: s.gridCol }),
+        ...(s.gridRow !== undefined && { gridRow: s.gridRow }),
+        ...(s.color !== undefined && { color: s.color }),
+        ...(s.borderColor !== undefined && { borderColor: s.borderColor }),
+        ...(s.borderWidth !== undefined && { borderWidth: s.borderWidth }),
+        ...(s.iconId !== undefined && { iconId: s.iconId }),
+        ...(s.fontSize !== undefined && { fontSize: s.fontSize }),
+        ...(s.fontFamily !== undefined && { fontFamily: s.fontFamily }),
+        ...(s.textDirection !== undefined && {
+          textDirection: s.textDirection,
+        }),
+      }));
+
       await eventsApi.updateLayout(eventId, {
         venueLayout: {
-          placedTables: venue.placedTables,
-          stageElements: venue.stageElements,
+          placedTables: sanitizedTables,
+          stageElements: sanitizedStages,
+          groupLines: venue.groupLines,
           dimensions: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
         },
       });
+      venue.clearDraft();
       toast.success("Yerleşim kaydedildi");
     } catch (error: any) {
+      console.error("[Layout Save] Error:", error?.response?.data);
       if (error?.response?.status === 401) {
         toast.error("Oturum süresi doldu, lütfen tekrar giriş yapın");
         router.push("/login");
         return;
       }
-      toast.error("Kaydetme başarısız");
+      const details = error?.response?.data?.error?.details;
+      if (details) {
+        toast.error(
+          `Kaydetme: ${details.map((d: any) => d.message).join(", ")}`,
+        );
+      } else {
+        toast.error("Kaydetme başarısız");
+      }
     } finally {
       setSaving(false);
     }
@@ -228,7 +285,7 @@ export default function VenuePlannerPage() {
       setShowLoadTemplateModal(false);
       toast.success(`"${template.name}" şablonu yüklendi`);
     },
-    [history, venue, toast]
+    [history, venue, toast],
   );
 
   // Şablon sil (API)
@@ -242,7 +299,7 @@ export default function VenuePlannerPage() {
         toast.error(e?.response?.data?.message || "Şablon silinemedi");
       }
     },
-    [toast]
+    [toast],
   );
 
   // Şablon modal açıldığında şablonları yükle
@@ -262,7 +319,7 @@ export default function VenuePlannerPage() {
       const { col, row } = pixelToGrid(x, y);
       return { x, y, col, row };
     },
-    [venue.zoom]
+    [venue.zoom],
   );
 
   // Context menu handler
@@ -282,7 +339,7 @@ export default function VenuePlannerPage() {
         targetType: "canvas",
       });
     },
-    [getCanvasPosition, venue]
+    [getCanvasPosition, venue],
   );
 
   // Context menu actions
@@ -303,7 +360,7 @@ export default function VenuePlannerPage() {
         venue.closeContextMenu();
       }
     },
-    [venue, history]
+    [venue, history],
   );
 
   // Stage mouse handlers
@@ -326,10 +383,10 @@ export default function VenuePlannerPage() {
       if (!e.shiftKey) venue.setSelectedItems([id]);
       else
         venue.setSelectedItems((prev) =>
-          prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+          prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
         );
     },
-    [venue, getCanvasPosition, history]
+    [venue, getCanvasPosition, history],
   );
 
   const handleStageContextMenu = useCallback(
@@ -348,7 +405,7 @@ export default function VenuePlannerPage() {
         targetType: "stage",
       });
     },
-    [venue]
+    [venue],
   );
 
   const handleResizeMouseDown = useCallback(
@@ -368,7 +425,7 @@ export default function VenuePlannerPage() {
         startPosY: stage.y,
       });
     },
-    [venue.stageElements, history]
+    [venue.stageElements, history],
   );
 
   // Table mouse handlers
@@ -406,11 +463,11 @@ export default function VenuePlannerPage() {
       // Ctrl+Click ile çoklu seçim toggle
       if (e.ctrlKey || e.metaKey) {
         venue.setSelectedItems((prev) =>
-          prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+          prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
         );
       } else if (e.shiftKey) {
         venue.setSelectedItems((prev) =>
-          prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+          prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
         );
       } else if (!isAlreadySelected) {
         // Seçili değilse sadece bu masayı seç
@@ -418,7 +475,7 @@ export default function VenuePlannerPage() {
       }
       // Eğer zaten seçili ise, seçimi değiştirme (çoklu taşıma için)
     },
-    [venue, getCanvasPosition, history]
+    [venue, getCanvasPosition, history],
   );
 
   const handleTableContextMenu = useCallback(
@@ -437,7 +494,7 @@ export default function VenuePlannerPage() {
         targetType: "table",
       });
     },
-    [venue]
+    [venue],
   );
 
   // Canvas mouse move - Çoklu taşıma ve canvas sınırları
@@ -455,8 +512,28 @@ export default function VenuePlannerPage() {
         let newY = y - dragging.offsetY;
 
         if (venue.gridSnap) {
-          newX = Math.round(newX / CELL_SIZE) * CELL_SIZE;
-          newY = Math.round(newY / CELL_SIZE) * CELL_SIZE;
+          if (dragging.type === "stage") {
+            // Stage elementleri hücre köşesine snap
+            newX = Math.round(newX / CELL_SIZE) * CELL_SIZE;
+            newY = Math.round(newY / CELL_SIZE) * CELL_SIZE;
+          } else {
+            // Masalar hücre ortasına snap
+            const tableSize =
+              venue.placedTables.find((t) => t.id === dragging.id)?.size ||
+              DEFAULT_TABLE_SIZE;
+            const halfSize = tableSize / 2;
+            // Masanın merkezini en yakın hücre merkezine snap et, sonra sol üst köşeyi hesapla
+            const centerX = newX + halfSize;
+            const centerY = newY + halfSize;
+            const snappedCenterX =
+              Math.round((centerX - CELL_SIZE / 2) / CELL_SIZE) * CELL_SIZE +
+              CELL_SIZE / 2;
+            const snappedCenterY =
+              Math.round((centerY - CELL_SIZE / 2) / CELL_SIZE) * CELL_SIZE +
+              CELL_SIZE / 2;
+            newX = snappedCenterX - halfSize;
+            newY = snappedCenterY - halfSize;
+          }
         }
 
         if (dragging.type === "stage") {
@@ -468,13 +545,13 @@ export default function VenuePlannerPage() {
           }
           venue.setStageElements((prev) =>
             prev.map((s) =>
-              s.id === dragging.id ? { ...s, x: newX, y: newY } : s
-            )
+              s.id === dragging.id ? { ...s, x: newX, y: newY } : s,
+            ),
           );
         } else {
           // Masa taşıma - çoklu seçim desteği + collision detection
           const draggedTable = venue.placedTables.find(
-            (t) => t.id === dragging.id
+            (t) => t.id === dragging.id,
           );
           if (!draggedTable) return;
 
@@ -506,7 +583,7 @@ export default function VenuePlannerPage() {
             tx: number,
             ty: number,
             tSize: number,
-            allTables: typeof venue.placedTables
+            allTables: typeof venue.placedTables,
           ): boolean => {
             const padding = 2;
 
@@ -638,7 +715,7 @@ export default function VenuePlannerPage() {
             }
 
             return { ...s, x, y, width, height };
-          })
+          }),
         );
       }
 
@@ -649,7 +726,7 @@ export default function VenuePlannerPage() {
         setPanStart({ x: e.clientX, y: e.clientY });
       }
     },
-    [dragging, resizing, isPanning, panStart, venue, getCanvasPosition]
+    [dragging, resizing, isPanning, panStart, venue, getCanvasPosition],
   );
 
   const handleCanvasMouseUp = useCallback(() => {
@@ -657,10 +734,30 @@ export default function VenuePlannerPage() {
     if (venue.lasso.isActive) {
       venue.endLasso();
     }
+
+    // Sürükleme bittiğinde canvas dışına çıkmış masaları sınırlar içine çek
+    if (dragging) {
+      venue.setPlacedTables((prev) =>
+        prev.map((t) => {
+          const size = t.size || 32;
+          const maxX = CANVAS_WIDTH - size;
+          const maxY = CANVAS_HEIGHT - size;
+          if (t.x < 0 || t.x > maxX || t.y < 0 || t.y > maxY) {
+            return {
+              ...t,
+              x: Math.max(0, Math.min(t.x, maxX)),
+              y: Math.max(0, Math.min(t.y, maxY)),
+            };
+          }
+          return t;
+        }),
+      );
+    }
+
     setDragging(null);
     setResizing(null);
     setIsPanning(false);
-  }, [venue]);
+  }, [venue, dragging]);
 
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -678,7 +775,7 @@ export default function VenuePlannerPage() {
       }
       venue.closeContextMenu();
     },
-    [venue, getCanvasPosition]
+    [venue, getCanvasPosition],
   );
 
   // Keyboard shortcuts - Ok tuşları ile hareket eklendi
@@ -693,6 +790,7 @@ export default function VenuePlannerPage() {
       if (e.key === "v") venue.setActiveTool("select");
       if (e.key === "h") venue.setActiveTool("pan");
       if (e.key === "l") venue.setActiveTool("lasso");
+      // g/G tuşları artık kullanılmıyor (gruplama ekip organizasyonuna taşındı)
 
       // Ok tuşları ile seçili elementleri hareket ettir (masa, loca, sahne, alan)
       const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
@@ -718,7 +816,7 @@ export default function VenuePlannerPage() {
             const newX = Math.max(0, Math.min(t.x + dx, CANVAS_WIDTH - size));
             const newY = Math.max(0, Math.min(t.y + dy, CANVAS_HEIGHT - size));
             return { ...t, x: newX, y: newY };
-          })
+          }),
         );
 
         // Stage elementlerini (sahne, alan) hareket ettir
@@ -728,25 +826,27 @@ export default function VenuePlannerPage() {
             // Canvas sınırları
             const newX = Math.max(
               0,
-              Math.min(s.x + dx, CANVAS_WIDTH - s.width)
+              Math.min(s.x + dx, CANVAS_WIDTH - s.width),
             );
             const newY = Math.max(
               0,
-              Math.min(s.y + dy, CANVAS_HEIGHT - s.height)
+              Math.min(s.y + dy, CANVAS_HEIGHT - s.height),
             );
             return { ...s, x: newX, y: newY };
-          })
+          }),
         );
       }
 
       if (e.key === "Delete" && venue.selectedItems.length > 0) {
         history.saveToHistory();
-        venue.selectedItems.forEach((id) => {
-          if (venue.stageElements.find((s) => s.id === id))
-            venue.deleteStageElement(id);
-          else if (venue.placedTables.find((t) => t.id === id))
-            venue.deleteTable(id);
-        });
+        const stageIds = venue.selectedItems.filter((id) =>
+          venue.stageElements.find((s) => s.id === id),
+        );
+        const tableIds = venue.selectedItems.filter((id) =>
+          venue.placedTables.find((t) => t.id === id),
+        );
+        stageIds.forEach((id) => venue.deleteStageElement(id));
+        if (tableIds.length > 0) venue.deleteTable(tableIds);
         venue.setSelectedItems([]);
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
@@ -798,7 +898,7 @@ export default function VenuePlannerPage() {
 
     // Hizalanmayacak masalar (sabit kalacaklar + seçili olmayanlar)
     const fixedTables = venue.placedTables.filter(
-      (t) => !tableIdsToAlign.includes(t.id) || t.isLocked
+      (t) => !tableIdsToAlign.includes(t.id) || t.isLocked,
     );
 
     // Stage elementleri de engel olarak say
@@ -820,7 +920,7 @@ export default function VenuePlannerPage() {
       x: number,
       y: number,
       size: number,
-      placedPositions: Array<{ x: number; y: number; size: number }>
+      placedPositions: Array<{ x: number; y: number; size: number }>,
     ) => {
       const padding = 4; // Masalar arası minimum boşluk
       // Engeller ile çakışma
@@ -924,14 +1024,14 @@ export default function VenuePlannerPage() {
           return { ...t, x: newPos.x, y: newPos.y };
         }
         return t;
-      })
+      }),
     );
 
     const count = tableIdsToAlign.length;
     toast.success(
       venue.selectedItems.length > 0
         ? `${count} seçili masa hizalandı (sabit masalar korundu)`
-        : `Tüm masalar hizalandı (${count}, sabitler hariç)`
+        : `Tüm masalar hizalandı (${count}, sabitler hariç)`,
     );
   }, [history, venue, toast]);
 
@@ -942,6 +1042,14 @@ export default function VenuePlannerPage() {
     venue.setZoom(1);
     venue.setCanvasOffset({ x: 0, y: 0 });
   };
+
+  // setActiveTool wrapper
+  const handleSetActiveTool = useCallback(
+    (tool: CanvasTool) => {
+      venue.setActiveTool(tool);
+    },
+    [venue],
+  );
 
   if (loading) {
     return (
@@ -1032,7 +1140,7 @@ export default function VenuePlannerPage() {
         <div className="p-4 overflow-y-auto">
           <VenueToolbar
             activeTool={venue.activeTool}
-            setActiveTool={venue.setActiveTool}
+            setActiveTool={handleSetActiveTool}
             canUndo={history.canUndo}
             canRedo={history.canRedo}
             onUndo={history.undo}
@@ -1052,16 +1160,14 @@ export default function VenuePlannerPage() {
               venue.setShowGuideLines(!venue.showGuideLines)
             }
             onAutoAlign={autoAlignTables}
-            selectedAssignType={venue.selectedAssignType}
-            setSelectedAssignType={venue.setSelectedAssignType}
             selectedItems={venue.selectedItems}
-            onAssignSelectedType={venue.assignSelectedTablesType}
             tableStats={venue.tableStats}
             placedTables={venue.placedTables}
             onLockSelected={venue.lockSelectedItems}
             onUnlockSelected={venue.unlockSelectedItems}
             onDeleteSelected={venue.deleteSelectedItems}
             onSpacingSelected={() => venue.openSpacing(venue.selectedItems)}
+            onSnapAllToCenter={venue.snapAllToCenter}
           />
         </div>
 
@@ -1128,8 +1234,24 @@ export default function VenuePlannerPage() {
                         y1={0}
                         x2={i * CELL_SIZE}
                         y2={CANVAS_HEIGHT}
-                        stroke="#334155"
-                        strokeWidth="1"
+                        stroke={
+                          venue.activeTool === "groupLineH" ||
+                          venue.activeTool === "groupLineV"
+                            ? "#475569"
+                            : "#334155"
+                        }
+                        strokeWidth={
+                          venue.activeTool === "groupLineH" ||
+                          venue.activeTool === "groupLineV"
+                            ? "1.5"
+                            : "1"
+                        }
+                        opacity={
+                          venue.activeTool === "groupLineH" ||
+                          venue.activeTool === "groupLineV"
+                            ? 0.8
+                            : 1
+                        }
                       />
                     ))}
                     {Array.from({ length: GRID_ROWS + 1 }, (_, i) => (
@@ -1139,10 +1261,41 @@ export default function VenuePlannerPage() {
                         y1={i * CELL_SIZE}
                         x2={CANVAS_WIDTH}
                         y2={i * CELL_SIZE}
-                        stroke="#334155"
-                        strokeWidth="1"
+                        stroke={
+                          venue.activeTool === "groupLineH" ||
+                          venue.activeTool === "groupLineV"
+                            ? "#475569"
+                            : "#334155"
+                        }
+                        strokeWidth={
+                          venue.activeTool === "groupLineH" ||
+                          venue.activeTool === "groupLineV"
+                            ? "1.5"
+                            : "1"
+                        }
+                        opacity={
+                          venue.activeTool === "groupLineH" ||
+                          venue.activeTool === "groupLineV"
+                            ? 0.8
+                            : 1
+                        }
                       />
                     ))}
+                    {/* Grid hücre merkezleri - groupLine tool aktifken göster */}
+                    {(venue.activeTool === "groupLineH" ||
+                      venue.activeTool === "groupLineV") &&
+                      Array.from({ length: GRID_COLS }, (_, col) =>
+                        Array.from({ length: GRID_ROWS }, (_, row) => (
+                          <circle
+                            key={`dot-${col}-${row}`}
+                            cx={col * CELL_SIZE + CELL_SIZE / 2}
+                            cy={row * CELL_SIZE + CELL_SIZE / 2}
+                            r={1.5}
+                            fill="#64748b"
+                            opacity={0.5}
+                          />
+                        )),
+                      )}
                   </svg>
                 )}
 
@@ -1169,8 +1322,17 @@ export default function VenuePlannerPage() {
                     activeTool={venue.activeTool}
                     onMouseDown={handleTableMouseDown}
                     onContextMenu={handleTableContextMenu}
+                    groupColor={venue.tableGroupColorMap.get(table.id)}
                   />
                 ))}
+
+                {/* Group Lines */}
+                <GroupLineRenderer
+                  groupLines={venue.groupLines}
+                  drawState={venue.groupLineDraw}
+                  onDeleteLine={venue.deleteGroupLine}
+                  activeTool={venue.activeTool}
+                />
 
                 {/* Lasso Selection Rectangle */}
                 {venue.lasso.isActive && (
@@ -1180,10 +1342,10 @@ export default function VenuePlannerPage() {
                       left: Math.min(venue.lasso.startX, venue.lasso.currentX),
                       top: Math.min(venue.lasso.startY, venue.lasso.currentY),
                       width: Math.abs(
-                        venue.lasso.currentX - venue.lasso.startX
+                        venue.lasso.currentX - venue.lasso.startX,
                       ),
                       height: Math.abs(
-                        venue.lasso.currentY - venue.lasso.startY
+                        venue.lasso.currentY - venue.lasso.startY,
                       ),
                     }}
                   />
@@ -1205,6 +1367,7 @@ export default function VenuePlannerPage() {
         stageElements={venue.stageElements}
         onCenterHorizontally={venue.centerStageHorizontally}
         onEdit={venue.openAreaEditModal}
+        onDuplicate={venue.duplicateStageElement}
         onToggleLock={venue.toggleStageLock}
         onDelete={venue.deleteStageElement}
         onClose={venue.closeContextMenu}
@@ -1213,10 +1376,11 @@ export default function VenuePlannerPage() {
         contextMenu={venue.contextMenu}
         placedTables={venue.placedTables}
         selectedItems={venue.selectedItems}
-        onAssignType={venue.assignTableType}
         onToggleLock={venue.toggleTableLock}
+        onToggleVip={venue.toggleVip}
         onDelete={venue.deleteTable}
         onResize={venue.openTableResize}
+        onChangeCapacity={venue.openCapacityEdit}
         onApplySizeToSameType={venue.applySizeToSameTypeTables}
         onSpacing={venue.openSpacing}
         onEditLocaName={venue.openLocaNameEdit}
@@ -1239,6 +1403,19 @@ export default function VenuePlannerPage() {
         }
         onApply={venue.applyTableResize}
         onClose={venue.closeTableResize}
+      />
+
+      {/* Capacity Edit Modal */}
+      <CapacityEditModal
+        capacityState={venue.capacityEdit}
+        onCapacityChange={(capacity) =>
+          venue.setCapacityEdit((prev) => ({
+            ...prev,
+            currentCapacity: capacity,
+          }))
+        }
+        onApply={venue.applyCapacityEdit}
+        onClose={venue.closeCapacityEdit}
       />
 
       {/* Spacing Modal */}
@@ -1342,7 +1519,10 @@ export default function VenuePlannerPage() {
                   if (event?.venueLayout) {
                     venue.setPlacedTables(event.venueLayout.placedTables || []);
                     venue.setStageElements(
-                      event.venueLayout.stageElements || []
+                      event.venueLayout.stageElements || [],
+                    );
+                    venue.setGroupLines(
+                      (event.venueLayout as any).groupLines || [],
                     );
                   }
                 }}
@@ -1522,7 +1702,7 @@ export default function VenuePlannerPage() {
                           </p>
                           <p className="text-xs text-slate-600">
                             {new Date(template.createdAt).toLocaleString(
-                              "tr-TR"
+                              "tr-TR",
                             )}
                           </p>
                         </div>
@@ -1581,9 +1761,10 @@ export default function VenuePlannerPage() {
 interface TableRendererProps {
   table: PlacedTable;
   isSelected: boolean;
-  activeTool: "select" | "pan" | "lasso";
+  activeTool: CanvasTool;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
   onContextMenu: (e: React.MouseEvent, id: string) => void;
+  groupColor?: string;
 }
 
 function TableRenderer({
@@ -1592,27 +1773,38 @@ function TableRenderer({
   activeTool,
   onMouseDown,
   onContextMenu,
+  groupColor,
 }: TableRendererProps) {
-  const config = TABLE_TYPE_CONFIG[table.type];
-  const Icon = config.icon;
   const size = table.size || DEFAULT_TABLE_SIZE;
+
+  // Kapasite bazlı renk (VIP ise VIP rengi)
+  const capacityColor = getCapacityColor(table.capacity);
+  const tableColor = table.isVip ? VIP_COLOR.color : capacityColor.color;
+  const tableBorderColor = table.isVip
+    ? VIP_COLOR.borderColor
+    : capacityColor.borderColor;
 
   // Font size based on table size
   const fontSize =
     size <= 28 ? "text-[8px]" : size <= 40 ? "text-xs" : "text-sm";
-  const iconSize = size <= 28 ? "w-3 h-3" : size <= 40 ? "w-4 h-4" : "w-5 h-5";
 
   // LOCA için özel VIP booth/kanepe görünümü (3D preview ile uyumlu)
   if (table.isLoca) {
     const boothWidth = size * 1.2;
     const boothHeight = size * 0.9;
 
+    // Loca renkleri
+    const locaColor = "#ec4899";
+    const locaBorderColor = "#f472b6";
+
     return (
       <div
         className={`absolute transition-all ${
           isSelected
             ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 z-10"
-            : ""
+            : groupColor
+              ? "ring-2 ring-offset-1 ring-offset-slate-900"
+              : ""
         } ${table.isLocked ? "opacity-80" : ""}`}
         style={{
           left: table.x - (boothWidth - size) / 2,
@@ -1622,8 +1814,11 @@ function TableRenderer({
           cursor: table.isLocked
             ? "not-allowed"
             : activeTool === "select"
-            ? "move"
-            : "default",
+              ? "move"
+              : "default",
+          ...(groupColor && !isSelected
+            ? { ["--tw-ring-color" as string]: groupColor }
+            : {}),
         }}
         onMouseDown={(e) => onMouseDown(e, table.id)}
         onContextMenu={(e) => onContextMenu(e, table.id)}
@@ -1636,8 +1831,8 @@ function TableRenderer({
           className="absolute inset-0 rounded-lg"
           style={{
             background: "linear-gradient(135deg, #1a1a2e 0%, #0f172a 100%)",
-            border: `2px solid ${config.color}`,
-            boxShadow: `0 0 12px ${config.color}40, inset 0 0 8px ${config.color}20`,
+            border: `2px solid ${locaColor}`,
+            boxShadow: `0 0 12px ${locaColor}40, inset 0 0 8px ${locaColor}20`,
           }}
         />
 
@@ -1648,7 +1843,7 @@ function TableRenderer({
             width: boothWidth - 8,
             height: boothHeight * 0.3,
             background: "linear-gradient(180deg, #2d1f4e 0%, #1a1a2e 100%)",
-            borderBottom: `1px solid ${config.color}60`,
+            borderBottom: `1px solid ${locaColor}60`,
           }}
         />
 
@@ -1659,7 +1854,7 @@ function TableRenderer({
             width: boothWidth - 12,
             height: boothHeight * 0.35,
             background: "linear-gradient(180deg, #3b2d5f 0%, #2d1f4e 100%)",
-            border: `1px solid ${config.color}80`,
+            border: `1px solid ${locaColor}80`,
             boxShadow: `0 2px 6px rgba(0,0,0,0.4)`,
           }}
         />
@@ -1671,7 +1866,7 @@ function TableRenderer({
             width: boothWidth * 0.08,
             height: boothHeight * 0.5,
             background: "linear-gradient(90deg, #2d1f4e 0%, #1a1a2e 100%)",
-            borderRight: `1px solid ${config.color}40`,
+            borderRight: `1px solid ${locaColor}40`,
           }}
         />
 
@@ -1682,7 +1877,7 @@ function TableRenderer({
             width: boothWidth * 0.08,
             height: boothHeight * 0.5,
             background: "linear-gradient(270deg, #2d1f4e 0%, #1a1a2e 100%)",
-            borderLeft: `1px solid ${config.color}40`,
+            borderLeft: `1px solid ${locaColor}40`,
           }}
         />
 
@@ -1692,8 +1887,8 @@ function TableRenderer({
           style={{
             width: boothWidth - 4,
             height: 3,
-            backgroundColor: config.color,
-            boxShadow: `0 0 8px ${config.color}, 0 0 16px ${config.color}60`,
+            backgroundColor: locaColor,
+            boxShadow: `0 0 8px ${locaColor}, 0 0 16px ${locaColor}60`,
           }}
         />
 
@@ -1701,7 +1896,7 @@ function TableRenderer({
         <div
           className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${fontSize} font-bold text-white text-center`}
           style={{
-            textShadow: `0 0 8px ${config.color}, 0 1px 2px rgba(0,0,0,0.8)`,
+            textShadow: `0 0 8px ${locaColor}, 0 1px 2px rgba(0,0,0,0.8)`,
             letterSpacing: "0.5px",
           }}
         >
@@ -1709,16 +1904,18 @@ function TableRenderer({
         </div>
 
         {/* VIP badge */}
-        <div
-          className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded text-[8px] font-bold"
-          style={{
-            backgroundColor: config.color,
-            color: "#fff",
-            boxShadow: `0 0 6px ${config.color}`,
-          }}
-        >
-          VIP
-        </div>
+        {table.isVip && (
+          <div
+            className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded text-[8px] font-bold"
+            style={{
+              backgroundColor: VIP_COLOR.color,
+              color: "#fff",
+              boxShadow: `0 0 6px ${VIP_COLOR.color}`,
+            }}
+          >
+            VIP
+          </div>
+        )}
 
         {table.isLocked && (
           <div className="absolute -top-1 -left-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
@@ -1735,30 +1932,51 @@ function TableRenderer({
       className={`absolute rounded-full flex items-center justify-center text-white ${fontSize} font-bold shadow-lg transition-all ${
         isSelected
           ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900"
-          : ""
+          : groupColor
+            ? "ring-2 ring-offset-1 ring-offset-slate-900"
+            : ""
       } ${table.isLocked ? "opacity-80" : ""}`}
       style={{
         left: table.x,
         top: table.y,
         width: size,
         height: size,
-        backgroundColor: config.color,
-        borderColor: config.borderColor,
+        backgroundColor: tableColor,
+        borderColor: tableBorderColor,
         borderWidth: 2,
         borderStyle: "solid",
         cursor: table.isLocked
           ? "not-allowed"
           : activeTool === "select"
-          ? "move"
-          : "default",
+            ? "move"
+            : "default",
+        ...(groupColor && !isSelected
+          ? { ["--tw-ring-color" as string]: groupColor }
+          : {}),
       }}
       onMouseDown={(e) => onMouseDown(e, table.id)}
       onContextMenu={(e) => onContextMenu(e, table.id)}
-      title={`Masa ${table.tableNumber} (${table.capacity} kişi)`}
+      title={`Masa ${table.tableNumber} (${table.capacity} kişi)${table.isVip ? " - VIP" : ""}`}
     >
       <span>{table.tableNumber}</span>
-      {table.isLocked && (
+      {table.isVip && (
+        <div
+          className="absolute -top-2 -right-2 w-4 h-4 rounded-full flex items-center justify-center"
+          style={{
+            backgroundColor: VIP_COLOR.color,
+            boxShadow: `0 0 6px ${VIP_COLOR.color}`,
+          }}
+        >
+          <span className="text-[7px]">👑</span>
+        </div>
+      )}
+      {table.isLocked && !table.isVip && (
         <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full flex items-center justify-center">
+          <span className="text-[8px]">🔒</span>
+        </div>
+      )}
+      {table.isLocked && table.isVip && (
+        <div className="absolute -top-1 -left-1 w-3 h-3 bg-amber-500 rounded-full flex items-center justify-center">
           <span className="text-[8px]">🔒</span>
         </div>
       )}

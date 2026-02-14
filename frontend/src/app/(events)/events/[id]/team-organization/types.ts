@@ -1,8 +1,8 @@
 // Team Organization Wizard Types
 
 export type WizardStep =
-  | "table-grouping" // Step 1: Masa gruplandırma + Personel görevlendirme
-  | "team-assignment" // Step 2: Grupları birleştirerek takım oluşturma
+  | "team-assignment" // Step 1: Grupları birleştirerek takım oluşturma
+  | "staff-assignment" // Step 2: Personel atama + otomatik masa gruplama
   | "summary"; // Step 3: Özet görüntüleme + Kaydetme
 
 export interface WizardStepConfig {
@@ -14,16 +14,16 @@ export interface WizardStepConfig {
 
 export const WIZARD_STEPS: WizardStepConfig[] = [
   {
-    id: "table-grouping",
-    title: "Masa Gruplama & Personel",
-    description: "Masaları gruplandırın ve personel atayın",
-    icon: "Grid3X3",
-  },
-  {
     id: "team-assignment",
     title: "Takım Oluşturma",
     description: "Grupları birleştirerek takım oluşturun",
     icon: "Users",
+  },
+  {
+    id: "staff-assignment",
+    title: "Personel Atama",
+    description: "Personel atayın, masalar otomatik gruplanır",
+    icon: "UserPlus",
   },
   {
     id: "summary",

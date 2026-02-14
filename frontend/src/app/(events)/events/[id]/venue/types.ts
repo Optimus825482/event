@@ -1,7 +1,14 @@
 // ==================== VENUE PLANNER TYPES ====================
 
 export type TableType = "standard" | "premium" | "vip" | "loca" | "unassigned";
-export type CanvasTool = "select" | "pan" | "lasso";
+// Kapasite bazlı renk kategorileri
+export type CapacityTier = "small" | "medium" | "large" | "xlarge";
+export type CanvasTool =
+  | "select"
+  | "pan"
+  | "lasso"
+  | "groupLineH"
+  | "groupLineV";
 export type ElementType = "stage" | "area" | "table" | "loca";
 export type TextDirection = "horizontal" | "vertical-down" | "vertical-up";
 
@@ -15,6 +22,7 @@ export interface PlacedTable {
   isLoca: boolean;
   locaName?: string;
   isLocked: boolean;
+  isVip: boolean; // VIP masa flag'i
   gridCol?: string;
   gridRow?: number;
   size?: number; // Masa boyutu (default: 32)
@@ -127,12 +135,19 @@ export interface DragState {
 export interface AddElementWizardState {
   isOpen: boolean;
   elementType: "table" | "loca" | null;
-  step: 1 | 2 | 3 | 4; // 1: Adet, 2: Tip (masa), 3: Kapasite, 4: Kat (loca)
+  step: 1 | 2 | 3; // Masa: 1: Kapasite, 2: Adet | Loca: 1: Adet, 2: Kat, 3: Kapasite
   count: number;
   tableType: TableType;
   capacity: number;
   floor: number; // Kat numarası (localar için)
   startPosition: { x: number; y: number; col: string; row: number };
+}
+
+// ==================== CAPACITY EDIT ====================
+export interface CapacityEditState {
+  isOpen: boolean;
+  targetIds: string[];
+  currentCapacity: number;
 }
 
 // ==================== SPACING ADJUSTMENT ====================
@@ -147,4 +162,23 @@ export interface LocaNameEditState {
   isOpen: boolean;
   locaId: string | null;
   locaName: string;
+}
+
+// ==================== GROUP LINES (Masa Gruplama Çizgileri) ====================
+export interface GroupLine {
+  id: string;
+  orientation: "horizontal" | "vertical";
+  /** Grid çizgisi indeksi: yatay için satır (0=üst kenar), dikey için sütun (0=sol kenar) */
+  gridIndex: number;
+  /** Segment başlangıç indeksi: yatay için sütun, dikey için satır */
+  segStart: number;
+  color: string;
+}
+
+export interface GroupLineDrawState {
+  isDrawing: boolean;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
 }

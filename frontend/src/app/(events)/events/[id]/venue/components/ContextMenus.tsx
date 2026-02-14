@@ -11,20 +11,17 @@ import {
   Copy,
   ArrowLeftRight,
   Edit3,
+  Crown,
+  Users,
 } from "lucide-react";
-import type {
-  ContextMenuState,
-  StageElement,
-  PlacedTable,
-  TableType,
-} from "../types";
-import { CONTEXT_MENU_ITEMS, TABLE_TYPE_CONFIG } from "../constants";
+import type { ContextMenuState, StageElement, PlacedTable } from "../types";
+import { CONTEXT_MENU_ITEMS } from "../constants";
 
 // Akıllı pozisyon hesaplama - ekran sınırlarına göre drop-up/drop-down
 function useSmartPosition(
   x: number,
   y: number,
-  visible: boolean
+  visible: boolean,
 ): { style: React.CSSProperties; isDropUp: boolean } {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuHeight, setMenuHeight] = useState(200);
@@ -72,7 +69,7 @@ export function CanvasContextMenu({
   const { style } = useSmartPosition(
     contextMenu.x,
     contextMenu.y,
-    contextMenu.visible && contextMenu.targetType === "canvas"
+    contextMenu.visible && contextMenu.targetType === "canvas",
   );
 
   if (!contextMenu.visible || contextMenu.targetType !== "canvas") return null;
@@ -117,6 +114,7 @@ interface StageContextMenuProps {
   stageElements: StageElement[];
   onCenterHorizontally: (id: string) => void;
   onEdit: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onToggleLock: (id: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
@@ -127,6 +125,7 @@ export function StageContextMenu({
   stageElements,
   onCenterHorizontally,
   onEdit,
+  onDuplicate,
   onToggleLock,
   onDelete,
   onClose,
@@ -135,7 +134,7 @@ export function StageContextMenu({
   const { style } = useSmartPosition(
     contextMenu.x,
     contextMenu.y,
-    contextMenu.visible && contextMenu.targetType === "stage"
+    contextMenu.visible && contextMenu.targetType === "stage",
   );
 
   if (
@@ -184,6 +183,17 @@ export function StageContextMenu({
 
       <button
         onClick={() => {
+          onDuplicate(contextMenu.targetId!);
+          onClose();
+        }}
+        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+      >
+        <Copy className="w-4 h-4 text-emerald-400" />
+        Kopya Oluştur
+      </button>
+
+      <button
+        onClick={() => {
           onToggleLock(contextMenu.targetId!);
           onClose();
         }}
@@ -222,10 +232,11 @@ interface TableContextMenuProps {
   contextMenu: ContextMenuState;
   placedTables: PlacedTable[];
   selectedItems: string[];
-  onAssignType: (id: string, type: TableType) => void;
-  onToggleLock: (id: string) => void;
-  onDelete: (id: string) => void;
+  onToggleLock: (ids: string[]) => void;
+  onToggleVip: (ids: string[]) => void;
+  onDelete: (ids: string[]) => void;
   onResize: (ids: string[]) => void;
+  onChangeCapacity: (ids: string[]) => void;
   onApplySizeToSameType: (id: string) => void;
   onSpacing: (ids: string[]) => void;
   onEditLocaName: (id: string) => void;
@@ -236,10 +247,11 @@ export function TableContextMenu({
   contextMenu,
   placedTables,
   selectedItems,
-  onAssignType,
   onToggleLock,
+  onToggleVip,
   onDelete,
   onResize,
+  onChangeCapacity,
   onApplySizeToSameType,
   onSpacing,
   onEditLocaName,
@@ -249,7 +261,7 @@ export function TableContextMenu({
   const { style } = useSmartPosition(
     contextMenu.x,
     contextMenu.y,
-    contextMenu.visible && contextMenu.targetType === "table"
+    contextMenu.visible && contextMenu.targetType === "table",
   );
 
   if (
@@ -282,8 +294,8 @@ export function TableContextMenu({
         {targetIds.length > 1
           ? `${targetIds.length} masa seçili`
           : table.isLoca
-          ? `Loca: ${table.locaName}`
-          : `Masa ${table.tableNumber}`}
+            ? `Loca: ${table.locaName}`
+            : `Masa ${table.tableNumber}`}
       </div>
 
       {/* Loca İsim Ver */}
@@ -310,6 +322,23 @@ export function TableContextMenu({
       >
         <Move className="w-4 h-4 text-cyan-400" />
         Boyutlandır
+      </button>
+
+      {/* Kişi Sayısı Değiştir */}
+      <button
+        onClick={() => {
+          onChangeCapacity(targetIds);
+          onClose();
+        }}
+        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+      >
+        <Users className="w-4 h-4 text-emerald-400" />
+        Kişi Sayısı Değiştir
+        {targetIds.length > 1 && (
+          <span className="ml-auto text-xs text-slate-500">
+            ({targetIds.length})
+          </span>
+        )}
       </button>
 
       {/* Aralık Ayarla - En az 2 masa seçili olmalı */}
@@ -340,35 +369,10 @@ export function TableContextMenu({
         </button>
       )}
 
-      <div className="px-3 py-1 text-xs text-slate-500 mt-1">Tip Ata:</div>
-      {(
-        Object.entries(TABLE_TYPE_CONFIG) as [
-          TableType,
-          typeof TABLE_TYPE_CONFIG.vip
-        ][]
-      )
-        .filter(([key]) => key !== "unassigned" && key !== "loca")
-        .map(([type, config]) => (
-          <button
-            key={type}
-            onClick={() => {
-              onAssignType(contextMenu.targetId!, type);
-              onClose();
-            }}
-            className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: config.color }}
-            />
-            {config.label}
-          </button>
-        ))}
-
       <div className="border-t border-slate-700 mt-1 pt-1">
         <button
           onClick={() => {
-            onToggleLock(contextMenu.targetId!);
+            onToggleLock(targetIds);
             onClose();
           }}
           className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
@@ -384,17 +388,49 @@ export function TableContextMenu({
               Sabitle
             </>
           )}
+          {targetIds.length > 1 && (
+            <span className="ml-auto text-xs text-slate-500">
+              ({targetIds.length})
+            </span>
+          )}
         </button>
 
         <button
           onClick={() => {
-            onDelete(contextMenu.targetId!);
+            onToggleVip(targetIds);
+            onClose();
+          }}
+          className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors ${
+            table.isVip
+              ? "text-amber-400 hover:bg-slate-700"
+              : "text-slate-200 hover:bg-slate-700"
+          }`}
+        >
+          <Crown
+            className={`w-4 h-4 ${table.isVip ? "text-amber-400" : "text-slate-400"}`}
+          />
+          {table.isVip ? "VIP Kaldır" : "VIP Yap"}
+          {targetIds.length > 1 && (
+            <span className="ml-auto text-xs text-slate-500">
+              ({targetIds.length})
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            onDelete(targetIds);
             onClose();
           }}
           className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
         >
           <Trash2 className="w-4 h-4" />
           Sil
+          {targetIds.length > 1 && (
+            <span className="ml-auto text-xs text-slate-500">
+              ({targetIds.length})
+            </span>
+          )}
         </button>
       </div>
     </div>

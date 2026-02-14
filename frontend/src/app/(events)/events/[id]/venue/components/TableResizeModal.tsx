@@ -14,8 +14,8 @@ interface TableResizeModalProps {
 
 const SIZE_OPTIONS = [
   { value: 24, label: "XS", desc: "24px" },
-  { value: 32, label: "S", desc: "32px (Varsayılan)" },
-  { value: 40, label: "M", desc: "40px" },
+  { value: 32, label: "S", desc: "32px" },
+  { value: 40, label: "M", desc: "40px (Varsayılan)" },
   { value: 48, label: "L", desc: "48px" },
   { value: 56, label: "XL", desc: "56px" },
   { value: 64, label: "XXL", desc: "64px" },

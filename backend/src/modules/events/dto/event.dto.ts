@@ -85,6 +85,10 @@ export class PlacedTableDto {
   isLocked: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  isVip?: boolean;
+
+  @IsOptional()
   @IsNumber()
   size?: number;
 
@@ -203,6 +207,21 @@ export class DimensionsDto {
   height: number;
 }
 
+export class GroupLineDto {
+  @IsString()
+  id: string;
+
+  @IsString()
+  orientation: string;
+
+  @IsNumber()
+  position: number;
+
+  @IsOptional()
+  @IsString()
+  color?: string;
+}
+
 // Yeni VenueLayout formatı
 export class VenueLayoutDto {
   @IsOptional()
@@ -237,6 +256,12 @@ export class VenueLayoutDto {
   @ValidateNested()
   @Type(() => DimensionsDto)
   dimensions?: DimensionsDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GroupLineDto)
+  groupLines?: GroupLineDto[];
 }
 
 export class CreateEventDto {

@@ -9,8 +9,11 @@ import type {
   AddElementWizardState,
   LassoState,
   TableResizeState,
+  CapacityEditState,
   SpacingState,
   LocaNameEditState,
+  GroupLine,
+  GroupLineDrawState,
 } from "../types";
 import {
   DEFAULT_AREA_EDIT,
@@ -24,6 +27,30 @@ import {
   DEFAULT_TABLE_SIZE,
 } from "../constants";
 import { useToast } from "@/components/ui/toast-notification";
+import { staffApi } from "@/lib/api";
+
+// ==================== TABLE GROUP (Venue) ====================
+export interface VenueTableGroup {
+  id: string;
+  name: string;
+  color: string;
+  tableIds: string[];
+}
+
+const DEFAULT_GROUP_COLORS = [
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#84cc16",
+  "#22c55e",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#a855f7",
+  "#d946ef",
+  "#ec4899",
+];
 
 // Default states
 const DEFAULT_LASSO: LassoState = {
@@ -38,6 +65,12 @@ const DEFAULT_TABLE_RESIZE: TableResizeState = {
   isOpen: false,
   targetIds: [],
   currentSize: DEFAULT_TABLE_SIZE,
+};
+
+const DEFAULT_CAPACITY_EDIT: CapacityEditState = {
+  isOpen: false,
+  targetIds: [],
+  currentCapacity: 12,
 };
 
 const DEFAULT_SPACING: SpacingState = {
@@ -89,13 +122,32 @@ export function useVenueState(eventId?: string) {
   const [tableResize, setTableResize] =
     useState<TableResizeState>(DEFAULT_TABLE_RESIZE);
 
+  // Capacity edit state
+  const [capacityEdit, setCapacityEdit] = useState<CapacityEditState>(
+    DEFAULT_CAPACITY_EDIT,
+  );
+
   // Spacing state
   const [spacing, setSpacing] = useState<SpacingState>(DEFAULT_SPACING);
 
   // Loca name edit state
   const [locaNameEdit, setLocaNameEdit] = useState<LocaNameEditState>(
-    DEFAULT_LOCA_NAME_EDIT
+    DEFAULT_LOCA_NAME_EDIT,
   );
+
+  // Group lines state (masa gruplama çizgileri)
+  const [groupLines, setGroupLines] = useState<GroupLine[]>([]);
+  const [groupLineDraw, setGroupLineDraw] = useState<GroupLineDrawState>({
+    isDrawing: false,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+  });
+
+  // Table groups state (masa grupları)
+  const [tableGroups, setTableGroups] = useState<VenueTableGroup[]>([]);
+  const [tableGroupsLoading, setTableGroupsLoading] = useState(false);
 
   // Modal state
   const [areaEdit, setAreaEdit] = useState<AreaEditState>(DEFAULT_AREA_EDIT);
@@ -239,7 +291,7 @@ export function useVenueState(eventId?: string) {
   // Computed
   const selectedItemsSet = useMemo(
     () => new Set(selectedItems),
-    [selectedItems]
+    [selectedItems],
   );
   const tableStats = useMemo(() => {
     const stats: Record<TableType, { count: number; capacity: number }> = {
@@ -250,14 +302,16 @@ export function useVenueState(eventId?: string) {
       loca: { count: 0, capacity: 0 },
     };
     let totalCapacity = 0;
+    let vipCount = 0;
     for (const table of placedTables) {
       if (stats[table.type]) {
         stats[table.type].count++;
         stats[table.type].capacity += table.capacity;
         totalCapacity += table.capacity;
       }
+      if (table.isVip) vipCount++;
     }
-    return { stats, totalCapacity };
+    return { stats, totalCapacity, vipCount };
   }, [placedTables]);
 
   // Add element functions
@@ -289,7 +343,7 @@ export function useVenueState(eventId?: string) {
       toast.success(`Sahne eklendi: ${gridCol}${gridRow}`);
       return newStage;
     },
-    [gridSnap, toast]
+    [gridSnap, toast],
   );
 
   const addArea = useCallback(
@@ -333,7 +387,7 @@ export function useVenueState(eventId?: string) {
       toast.success(`Alan eklendi: ${gridCol}${gridRow}`);
       return newArea;
     },
-    [gridSnap, toast]
+    [gridSnap, toast],
   );
 
   const addTable = useCallback(
@@ -343,17 +397,18 @@ export function useVenueState(eventId?: string) {
         : { x: canvasX - 16, y: canvasY - 16 };
       const maxNumber = Math.max(
         ...placedTables.filter((t) => !t.isLoca).map((t) => t.tableNumber),
-        0
+        0,
       );
       const newTable: PlacedTable = {
         id: `table-${Date.now()}`,
         tableNumber: maxNumber + 1,
-        type: "unassigned",
+        type: "standard",
         capacity: 12,
         x: center.x,
         y: center.y,
         isLoca: false,
         isLocked: false,
+        isVip: false,
         gridCol,
         gridRow,
       };
@@ -361,7 +416,7 @@ export function useVenueState(eventId?: string) {
       toast.success(`Masa ${maxNumber + 1} eklendi: ${gridCol}${gridRow}`);
       return newTable;
     },
-    [gridSnap, placedTables, toast]
+    [gridSnap, placedTables, toast],
   );
 
   const addLoca = useCallback(
@@ -379,6 +434,7 @@ export function useVenueState(eventId?: string) {
         isLoca: true,
         locaName: `L${locaCount + 1}`,
         isLocked: false,
+        isVip: false,
         gridCol,
         gridRow,
       };
@@ -386,7 +442,7 @@ export function useVenueState(eventId?: string) {
       toast.success(`Loca eklendi: ${gridCol}${gridRow}`);
       return newLoca;
     },
-    [gridSnap, placedTables, toast]
+    [gridSnap, placedTables, toast],
   );
 
   // Stage/Area actions
@@ -394,12 +450,31 @@ export function useVenueState(eventId?: string) {
     (stageId: string) => {
       setStageElements((prev) =>
         prev.map((el) =>
-          el.id === stageId ? { ...el, x: (CANVAS_WIDTH - el.width) / 2 } : el
-        )
+          el.id === stageId ? { ...el, x: (CANVAS_WIDTH - el.width) / 2 } : el,
+        ),
       );
       toast.success("Sahne yatay olarak ortalandı");
     },
-    [toast]
+    [toast],
+  );
+
+  const duplicateStageElement = useCallback(
+    (stageId: string) => {
+      const source = stageElements.find((el) => el.id === stageId);
+      if (!source) return;
+
+      const offset = CELL_SIZE; // Kopyayı 1 hücre sağa kaydır
+      const duplicate: StageElement = {
+        ...source,
+        id: `${source.type}-${Date.now()}`,
+        x: source.x + source.width + offset,
+        isLocked: false,
+        label: `${source.label} (Kopya)`,
+      };
+      setStageElements((prev) => [...prev, duplicate]);
+      toast.success("Kopya oluşturuldu");
+    },
+    [stageElements, toast],
   );
 
   const deleteStageElement = useCallback(
@@ -408,46 +483,72 @@ export function useVenueState(eventId?: string) {
       setSelectedItems((prev) => prev.filter((id) => id !== stageId));
       toast.success("Element silindi");
     },
-    [toast]
+    [toast],
   );
 
   const toggleStageLock = useCallback(
     (stageId: string) => {
       setStageElements((prev) =>
         prev.map((el) =>
-          el.id === stageId ? { ...el, isLocked: !el.isLocked } : el
-        )
+          el.id === stageId ? { ...el, isLocked: !el.isLocked } : el,
+        ),
       );
       const stage = stageElements.find((s) => s.id === stageId);
       toast.success(
-        stage?.isLocked ? "Kilit kaldırıldı" : "Element sabitlendi"
+        stage?.isLocked ? "Kilit kaldırıldı" : "Element sabitlendi",
       );
     },
-    [stageElements, toast]
+    [stageElements, toast],
   );
 
   const toggleTableLock = useCallback(
-    (tableId: string) => {
+    (tableIds: string[]) => {
+      const first = placedTables.find((t) => t.id === tableIds[0]);
+      const newLocked = !first?.isLocked;
       setPlacedTables((prev) =>
         prev.map((t) =>
-          t.id === tableId ? { ...t, isLocked: !t.isLocked } : t
-        )
+          tableIds.includes(t.id) ? { ...t, isLocked: newLocked } : t,
+        ),
       );
-      const table = placedTables.find((t) => t.id === tableId);
       toast.success(
-        table?.isLocked ? "Kilit kaldırıldı" : "Element sabitlendi"
+        newLocked
+          ? `${tableIds.length > 1 ? tableIds.length + " element" : "Element"} sabitlendi`
+          : `${tableIds.length > 1 ? tableIds.length + " elementin kilidi" : "Kilit"} kaldırıldı`,
       );
     },
-    [placedTables, toast]
+    [placedTables, toast],
+  );
+
+  // VIP toggle - tek masa veya çoklu seçim
+  const toggleVip = useCallback(
+    (tableIds: string[]) => {
+      setPlacedTables((prev) =>
+        prev.map((t) =>
+          tableIds.includes(t.id) ? { ...t, isVip: !t.isVip } : t,
+        ),
+      );
+      const first = placedTables.find((t) => t.id === tableIds[0]);
+      const newState = !first?.isVip;
+      toast.success(
+        newState
+          ? `${tableIds.length > 1 ? tableIds.length + " masa" : "Masa"} VIP olarak işaretlendi`
+          : `VIP işareti kaldırıldı`,
+      );
+    },
+    [placedTables, toast],
   );
 
   const deleteTable = useCallback(
-    (tableId: string) => {
-      setPlacedTables((prev) => prev.filter((t) => t.id !== tableId));
-      setSelectedItems((prev) => prev.filter((id) => id !== tableId));
-      toast.success("Element silindi");
+    (tableIds: string[]) => {
+      setPlacedTables((prev) => prev.filter((t) => !tableIds.includes(t.id)));
+      setSelectedItems((prev) => prev.filter((id) => !tableIds.includes(id)));
+      toast.success(
+        tableIds.length > 1
+          ? `${tableIds.length} element silindi`
+          : "Element silindi",
+      );
     },
-    [toast]
+    [toast],
   );
 
   // ==================== ÇOKLU SEÇİM İŞLEMLERİ ====================
@@ -456,13 +557,13 @@ export function useVenueState(eventId?: string) {
 
     setPlacedTables((prev) =>
       prev.map((t) =>
-        selectedItems.includes(t.id) ? { ...t, isLocked: true } : t
-      )
+        selectedItems.includes(t.id) ? { ...t, isLocked: true } : t,
+      ),
     );
     setStageElements((prev) =>
       prev.map((s) =>
-        selectedItems.includes(s.id) ? { ...s, isLocked: true } : s
-      )
+        selectedItems.includes(s.id) ? { ...s, isLocked: true } : s,
+      ),
     );
     toast.success(`${selectedItems.length} element sabitlendi`);
   }, [selectedItems, toast]);
@@ -472,13 +573,13 @@ export function useVenueState(eventId?: string) {
 
     setPlacedTables((prev) =>
       prev.map((t) =>
-        selectedItems.includes(t.id) ? { ...t, isLocked: false } : t
-      )
+        selectedItems.includes(t.id) ? { ...t, isLocked: false } : t,
+      ),
     );
     setStageElements((prev) =>
       prev.map((s) =>
-        selectedItems.includes(s.id) ? { ...s, isLocked: false } : s
-      )
+        selectedItems.includes(s.id) ? { ...s, isLocked: false } : s,
+      ),
     );
     toast.success(`${selectedItems.length} elementin kilidi açıldı`);
   }, [selectedItems, toast]);
@@ -488,10 +589,10 @@ export function useVenueState(eventId?: string) {
 
     const count = selectedItems.length;
     setPlacedTables((prev) =>
-      prev.filter((t) => !selectedItems.includes(t.id))
+      prev.filter((t) => !selectedItems.includes(t.id)),
     );
     setStageElements((prev) =>
-      prev.filter((s) => !selectedItems.includes(s.id))
+      prev.filter((s) => !selectedItems.includes(s.id)),
     );
     setSelectedItems([]);
     toast.success(`${count} element silindi`);
@@ -515,7 +616,7 @@ export function useVenueState(eventId?: string) {
         textDirection: stage.textDirection || "horizontal",
       });
     },
-    [stageElements]
+    [stageElements],
   );
 
   const saveAreaEdit = useCallback(() => {
@@ -535,8 +636,8 @@ export function useVenueState(eventId?: string) {
               fontFamily: areaEdit.fontFamily,
               textDirection: areaEdit.textDirection,
             }
-          : el
-      )
+          : el,
+      ),
     );
     setAreaEdit((prev) => ({ ...prev, isOpen: false }));
     toast.success("Güncellendi");
@@ -544,7 +645,7 @@ export function useVenueState(eventId?: string) {
 
   const assignTableType = useCallback((tableId: string, type: TableType) => {
     setPlacedTables((prev) =>
-      prev.map((t) => (t.id === tableId ? { ...t, type } : t))
+      prev.map((t) => (t.id === tableId ? { ...t, type } : t)),
     );
   }, []);
 
@@ -552,11 +653,11 @@ export function useVenueState(eventId?: string) {
     (type: TableType) => {
       if (selectedItems.length === 0) return;
       setPlacedTables((prev) =>
-        prev.map((t) => (selectedItems.includes(t.id) ? { ...t, type } : t))
+        prev.map((t) => (selectedItems.includes(t.id) ? { ...t, type } : t)),
       );
       toast.success(`${selectedItems.length} masa atandı`);
     },
-    [selectedItems, toast]
+    [selectedItems, toast],
   );
 
   const closeContextMenu = useCallback(() => {
@@ -570,7 +671,7 @@ export function useVenueState(eventId?: string) {
       canvasX: number,
       canvasY: number,
       gridCol: string,
-      gridRow: number
+      gridRow: number,
     ) => {
       setAddWizard({
         isOpen: true,
@@ -583,7 +684,7 @@ export function useVenueState(eventId?: string) {
         startPosition: { x: canvasX, y: canvasY, col: gridCol, row: gridRow },
       });
     },
-    []
+    [],
   );
 
   const closeAddWizard = useCallback(() => {
@@ -593,14 +694,14 @@ export function useVenueState(eventId?: string) {
   const nextWizardStep = useCallback(() => {
     setAddWizard((prev) => ({
       ...prev,
-      step: Math.min(prev.step + 1, 3) as 1 | 2 | 3 | 4,
+      step: Math.min(prev.step + 1, 3) as 1 | 2 | 3,
     }));
   }, []);
 
   const prevWizardStep = useCallback(() => {
     setAddWizard((prev) => ({
       ...prev,
-      step: Math.max(prev.step - 1, 1) as 1 | 2 | 3 | 4,
+      step: Math.max(prev.step - 1, 1) as 1 | 2 | 3,
     }));
   }, []);
 
@@ -611,8 +712,8 @@ export function useVenueState(eventId?: string) {
     if (!elementType || count < 1) return;
 
     const TABLE_SIZE = DEFAULT_TABLE_SIZE;
-    const PADDING = 16; // Yatay ve dikey boşluk
-    const ROW_GAP = TABLE_SIZE + PADDING; // Satırlar arası: masa boyutu + aralık
+    const PADDING = 16; // Masalar arası boşluk
+    const ROW_GAP = TABLE_SIZE + PADDING; // Satırlar arası mesafe
 
     // Tüm engelleri topla (sahne + alanlar + mevcut masalar)
     const obstacles: { x: number; y: number; width: number; height: number }[] =
@@ -637,10 +738,12 @@ export function useVenueState(eventId?: string) {
       });
     });
 
-    // A ve Z sütunları boş kalacak - B sütunundan başla, Y sütununda bitir
-    const startY = CELL_SIZE; // 1. satır
-    const startX = CELL_SIZE * 2; // B sütunu (A boş)
-    const maxX = CANVAS_WIDTH - CELL_SIZE * 2 - TABLE_SIZE; // Y sütunu sonu (Z boş)
+    // A sütunundan başla, Z sütununda bitir (tam genişlik kullan)
+    // Masaları grid hücrelerinin ortasına yerleştir
+    const halfSize = TABLE_SIZE / 2;
+    const startY = CELL_SIZE / 2 - halfSize; // İlk satır hücre merkezi
+    const startX = CELL_SIZE + CELL_SIZE / 2 - halfSize; // B sütunu hücre merkezi
+    const maxX = CANVAS_WIDTH - CELL_SIZE - TABLE_SIZE; // Z sütunu sonu
 
     const isBlocked = (x: number, y: number): boolean => {
       const testRect = { x, y, width: TABLE_SIZE, height: TABLE_SIZE };
@@ -651,13 +754,13 @@ export function useVenueState(eventId?: string) {
             testRect.x >= obs.x + obs.width ||
             testRect.y + testRect.height <= obs.y ||
             testRect.y >= obs.y + obs.height
-          )
+          ),
       );
     };
 
     const maxTableNum = Math.max(
       ...placedTables.filter((t) => !t.isLoca).map((t) => t.tableNumber),
-      0
+      0,
     );
     const maxLocaNum = placedTables.filter((t) => t.isLoca).length;
 
@@ -665,19 +768,19 @@ export function useVenueState(eventId?: string) {
     let currentX = startX;
     let currentY = startY;
     let placedCount = 0;
-    let maxIterations = count * 100; // 100 masa için artırıldı
+    let maxIterations = count * 200; // Engel atlama için yeterli iterasyon
 
     while (placedCount < count && maxIterations > 0) {
       maxIterations--;
 
       if (currentX > maxX) {
         currentX = startX;
-        currentY += ROW_GAP;
+        currentY += CELL_SIZE; // Grid satır merkezleri arasında ilerle
       }
 
       if (currentY > CANVAS_HEIGHT - CELL_SIZE) {
         toast.warning(
-          `Yeterli alan yok! ${placedCount}/${count} element yerleştirildi.`
+          `Yeterli alan yok! ${placedCount}/${count} element yerleştirildi.`,
         );
         break;
       }
@@ -694,21 +797,23 @@ export function useVenueState(eventId?: string) {
             isLoca: true,
             locaName: `L${maxLocaNum + placedCount + 1}`,
             isLocked: false,
+            isVip: false,
             size: DEFAULT_TABLE_SIZE,
-            floor: addWizard.floor, // Kat bilgisi
+            floor: addWizard.floor,
           });
         } else {
           newElements.push({
             id: `table-${Date.now()}-${placedCount}`,
             tableNumber: maxTableNum + placedCount + 1,
-            type: tableType,
+            type: "standard",
             capacity,
             x: currentX,
             y: currentY,
             isLoca: false,
             isLocked: false,
+            isVip: false,
             size: DEFAULT_TABLE_SIZE,
-            floor: 1, // Masalar zemin katta
+            floor: 1,
           });
         }
 
@@ -722,7 +827,7 @@ export function useVenueState(eventId?: string) {
         placedCount++;
       }
 
-      currentX += TABLE_SIZE + PADDING; // Masa boyutu + aralık
+      currentX += CELL_SIZE; // Grid hücre merkezleri arasında ilerle
     }
 
     if (newElements.length > 0) {
@@ -730,7 +835,7 @@ export function useVenueState(eventId?: string) {
       toast.success(
         `${newElements.length} ${
           elementType === "loca" ? "loca" : "masa"
-        } eklendi`
+        } eklendi`,
       );
     }
 
@@ -750,7 +855,7 @@ export function useVenueState(eventId?: string) {
 
   const updateLasso = useCallback((x: number, y: number) => {
     setLasso((prev) =>
-      prev.isActive ? { ...prev, currentX: x, currentY: y } : prev
+      prev.isActive ? { ...prev, currentX: x, currentY: y } : prev,
     );
   }, []);
 
@@ -800,7 +905,7 @@ export function useVenueState(eventId?: string) {
         currentSize: firstTable?.size || DEFAULT_TABLE_SIZE,
       });
     },
-    [placedTables]
+    [placedTables],
   );
 
   const closeTableResize = useCallback(() => {
@@ -811,13 +916,48 @@ export function useVenueState(eventId?: string) {
     (newSize: number) => {
       setPlacedTables((prev) =>
         prev.map((t) =>
-          tableResize.targetIds.includes(t.id) ? { ...t, size: newSize } : t
-        )
+          tableResize.targetIds.includes(t.id) ? { ...t, size: newSize } : t,
+        ),
       );
       toast.success(`${tableResize.targetIds.length} masa boyutlandırıldı`);
       closeTableResize();
     },
-    [tableResize.targetIds, toast, closeTableResize]
+    [tableResize.targetIds, toast, closeTableResize],
+  );
+
+  // ==================== CAPACITY EDIT ====================
+  const openCapacityEdit = useCallback(
+    (targetIds: string[]) => {
+      if (targetIds.length === 0) return;
+      const firstTable = placedTables.find((t) => t.id === targetIds[0]);
+      setCapacityEdit({
+        isOpen: true,
+        targetIds,
+        currentCapacity: firstTable?.capacity || 12,
+      });
+    },
+    [placedTables],
+  );
+
+  const closeCapacityEdit = useCallback(() => {
+    setCapacityEdit(DEFAULT_CAPACITY_EDIT);
+  }, []);
+
+  const applyCapacityEdit = useCallback(
+    (newCapacity: number) => {
+      setPlacedTables((prev) =>
+        prev.map((t) =>
+          capacityEdit.targetIds.includes(t.id)
+            ? { ...t, capacity: newCapacity }
+            : t,
+        ),
+      );
+      toast.success(
+        `${capacityEdit.targetIds.length} masa kapasitesi ${newCapacity} olarak güncellendi`,
+      );
+      closeCapacityEdit();
+    },
+    [capacityEdit.targetIds, toast, closeCapacityEdit],
   );
 
   // Aynı tip ve kapasitedeki tüm masaları aynı boyutta yap
@@ -828,20 +968,20 @@ export function useVenueState(eventId?: string) {
 
       const targetTables = placedTables.filter(
         (t) =>
-          t.type === sourceTable.type && t.capacity === sourceTable.capacity
+          t.type === sourceTable.type && t.capacity === sourceTable.capacity,
       );
 
       setPlacedTables((prev) =>
         prev.map((t) =>
           t.type === sourceTable.type && t.capacity === sourceTable.capacity
             ? { ...t, size: sourceTable.size || DEFAULT_TABLE_SIZE }
-            : t
-        )
+            : t,
+        ),
       );
 
       toast.success(`${targetTables.length} masa aynı boyuta getirildi`);
     },
-    [placedTables, toast]
+    [placedTables, toast],
   );
 
   // Ctrl+Click ile çoklu seçim toggle
@@ -851,13 +991,13 @@ export function useVenueState(eventId?: string) {
         setSelectedItems((prev) =>
           prev.includes(tableId)
             ? prev.filter((id) => id !== tableId)
-            : [...prev, tableId]
+            : [...prev, tableId],
         );
       } else {
         setSelectedItems([tableId]);
       }
     },
-    []
+    [],
   );
 
   // ==================== SPACING (ARALIK AYARLA) ====================
@@ -873,7 +1013,7 @@ export function useVenueState(eventId?: string) {
         currentSpacing: 16,
       });
     },
-    [toast]
+    [toast],
   );
 
   const closeSpacing = useCallback(() => {
@@ -1015,11 +1155,11 @@ export function useVenueState(eventId?: string) {
           return { ...t, x: newPos.x, y: newPos.y };
         }
         return t;
-      })
+      }),
     );
 
     toast.success(
-      `${selectedTables.length} masa arasındaki aralık ${gap}px olarak ayarlandı`
+      `${selectedTables.length} masa arasındaki aralık ${gap}px olarak ayarlandı`,
     );
     closeSpacing();
   }, [spacing, placedTables, stageElements, toast, closeSpacing]);
@@ -1035,7 +1175,7 @@ export function useVenueState(eventId?: string) {
         locaName: loca.locaName || "",
       });
     },
-    [placedTables]
+    [placedTables],
   );
 
   const closeLocaNameEdit = useCallback(() => {
@@ -1049,12 +1189,383 @@ export function useVenueState(eventId?: string) {
       prev.map((t) =>
         t.id === locaNameEdit.locaId
           ? { ...t, locaName: locaNameEdit.locaName.trim() }
-          : t
-      )
+          : t,
+      ),
     );
     toast.success(`Loca ismi güncellendi: ${locaNameEdit.locaName.trim()}`);
     closeLocaNameEdit();
   }, [locaNameEdit, toast, closeLocaNameEdit]);
+
+  // ==================== GROUP LINE METHODS ====================
+  const addGroupLine = useCallback(
+    (
+      orientation: "horizontal" | "vertical",
+      gridIndex: number,
+      segStart: number,
+    ) => {
+      const newLine: GroupLine = {
+        id: `gl-${Date.now()}-${orientation[0]}-${gridIndex}-${segStart}`,
+        orientation,
+        gridIndex,
+        segStart,
+        color: "#ef4444",
+      };
+      setGroupLines((prev) => [...prev, newLine]);
+    },
+    [],
+  );
+
+  const deleteGroupLine = useCallback(
+    (lineId: string) => {
+      setGroupLines((prev) => prev.filter((l) => l.id !== lineId));
+      toast.success("Çizgi silindi");
+    },
+    [toast],
+  );
+
+  const clearGroupLines = useCallback(() => {
+    setGroupLines([]);
+    toast.success("Tüm çizgiler temizlendi");
+  }, [toast]);
+
+  // Sürükleme sırasında eklenen grid çizgilerini takip et (aynı çizgiyi tekrar eklememek için)
+  const drawnGridLinesRef = useRef<Set<string>>(new Set());
+
+  /** Mouse pozisyonundan en yakın grid segment'ini hesapla */
+  const findNearestSegment = useCallback(
+    (
+      x: number,
+      y: number,
+      orientation: "horizontal" | "vertical",
+    ): { gridIndex: number; segStart: number } | null => {
+      const snapThreshold = CELL_SIZE * 0.4;
+
+      if (orientation === "horizontal") {
+        // En yakın yatay grid çizgisi (y = gridIndex * CELL_SIZE)
+        const gridIndex = Math.round(y / CELL_SIZE);
+        const gridY = gridIndex * CELL_SIZE;
+        if (
+          gridIndex <= 0 ||
+          gridIndex >= Math.round(CANVAS_HEIGHT / CELL_SIZE)
+        )
+          return null;
+        if (Math.abs(y - gridY) > snapThreshold) return null;
+        // Hangi sütun segmenti
+        const segStart = Math.floor(x / CELL_SIZE);
+        if (segStart < 0 || segStart >= Math.round(CANVAS_WIDTH / CELL_SIZE))
+          return null;
+        return { gridIndex, segStart };
+      } else {
+        // En yakın dikey grid çizgisi (x = gridIndex * CELL_SIZE)
+        const gridIndex = Math.round(x / CELL_SIZE);
+        const gridX = gridIndex * CELL_SIZE;
+        if (gridIndex <= 0 || gridIndex >= Math.round(CANVAS_WIDTH / CELL_SIZE))
+          return null;
+        if (Math.abs(x - gridX) > snapThreshold) return null;
+        // Hangi satır segmenti
+        const segStart = Math.floor(y / CELL_SIZE);
+        if (segStart < 0 || segStart >= Math.round(CANVAS_HEIGHT / CELL_SIZE))
+          return null;
+        return { gridIndex, segStart };
+      }
+    },
+    [],
+  );
+
+  /** Segment ekle (duplicate kontrolü ile) */
+  const addSegmentIfNew = useCallback(
+    (
+      orientation: "horizontal" | "vertical",
+      gridIndex: number,
+      segStart: number,
+    ) => {
+      const key = `${orientation[0]}-${gridIndex}-${segStart}`;
+      if (drawnGridLinesRef.current.has(key)) return;
+      drawnGridLinesRef.current.add(key);
+
+      setGroupLines((prevLines) => {
+        const exists = prevLines.some(
+          (l) =>
+            l.orientation === orientation &&
+            l.gridIndex === gridIndex &&
+            l.segStart === segStart,
+        );
+        if (exists) return prevLines;
+        return [
+          ...prevLines,
+          {
+            id: `gl-${Date.now()}-${key}`,
+            orientation,
+            gridIndex,
+            segStart,
+            color: "#ef4444",
+          },
+        ];
+      });
+    },
+    [],
+  );
+
+  const startGroupLineDraw = useCallback(
+    (x: number, y: number, orientation: "horizontal" | "vertical") => {
+      drawnGridLinesRef.current = new Set();
+      // İlk tıklamada hemen segment ekle
+      const seg = findNearestSegment(x, y, orientation);
+      if (seg) {
+        addSegmentIfNew(orientation, seg.gridIndex, seg.segStart);
+      }
+      setGroupLineDraw({
+        isDrawing: true,
+        startX: x,
+        startY: y,
+        currentX: x,
+        currentY: y,
+      });
+    },
+    [findNearestSegment, addSegmentIfNew],
+  );
+
+  const updateGroupLineDraw = useCallback(
+    (x: number, y: number, orientation: "horizontal" | "vertical") => {
+      setGroupLineDraw((prev) => {
+        if (!prev.isDrawing) return prev;
+
+        const seg = findNearestSegment(x, y, orientation);
+        if (seg) {
+          addSegmentIfNew(orientation, seg.gridIndex, seg.segStart);
+        }
+
+        return { ...prev, currentX: x, currentY: y };
+      });
+    },
+    [findNearestSegment, addSegmentIfNew],
+  );
+
+  const endGroupLineDraw = useCallback(() => {
+    if (!groupLineDraw.isDrawing) return;
+    drawnGridLinesRef.current = new Set();
+    setGroupLineDraw({
+      isDrawing: false,
+      startX: 0,
+      startY: 0,
+      currentX: 0,
+      currentY: 0,
+    });
+  }, [groupLineDraw]);
+
+  // ==================== SNAP ALL TO CENTER ====================
+  const snapAllToCenter = useCallback(() => {
+    setPlacedTables((prev) => {
+      // Önce canvas dışına çıkmış kilitli masaları zorla sınırlar içine çek
+      const clamped = prev.map((t) => {
+        if (!t.isLocked) return t;
+        const size = t.size || DEFAULT_TABLE_SIZE;
+        const maxX = CANVAS_WIDTH - size;
+        const maxY = CANVAS_HEIGHT - size;
+        if (t.x < 0 || t.x > maxX || t.y < 0 || t.y > maxY) {
+          return {
+            ...t,
+            x: Math.max(0, Math.min(t.x, maxX)),
+            y: Math.max(0, Math.min(t.y, maxY)),
+          };
+        }
+        return t;
+      });
+
+      // Kilitli masaların pozisyonlarını "dolu hücre" olarak işaretle
+      const occupied = new Set<string>();
+      clamped.forEach((t) => {
+        if (t.isLocked) {
+          const size = t.size || DEFAULT_TABLE_SIZE;
+          const cx = t.x + size / 2;
+          const cy = t.y + size / 2;
+          const col = Math.round((cx - CELL_SIZE / 2) / CELL_SIZE);
+          const row = Math.round((cy - CELL_SIZE / 2) / CELL_SIZE);
+          occupied.add(`${col},${row}`);
+        }
+      });
+
+      // Stage elementlerinin kapladığı hücreleri de dolu say
+      // (stageElements burada erişilebilir değil, ama masalar arası çakışma yeterli)
+
+      // Kilitli olmayan masaları mevcut pozisyonlarına göre sırala (sol-üst → sağ-alt)
+      const unlocked = clamped
+        .map((t, i) => ({ table: t, origIndex: i }))
+        .filter((item) => !item.table.isLocked);
+
+      unlocked.sort((a, b) => {
+        const rowA = Math.round(a.table.y / CELL_SIZE);
+        const rowB = Math.round(b.table.y / CELL_SIZE);
+        if (rowA !== rowB) return rowA - rowB;
+        return a.table.x - b.table.x;
+      });
+
+      const result = [...clamped];
+
+      unlocked.forEach((item) => {
+        const t = item.table;
+        const size = t.size || DEFAULT_TABLE_SIZE;
+        const centerX = t.x + size / 2;
+        const centerY = t.y + size / 2;
+
+        // En yakın grid hücresini bul
+        let col = Math.round((centerX - CELL_SIZE / 2) / CELL_SIZE);
+        let row = Math.round((centerY - CELL_SIZE / 2) / CELL_SIZE);
+
+        // Sınırları kontrol et
+        const maxCol = Math.floor((CANVAS_WIDTH - size) / CELL_SIZE);
+        const maxRow = Math.floor((CANVAS_HEIGHT - size) / CELL_SIZE);
+        col = Math.max(0, Math.min(col, maxCol));
+        row = Math.max(0, Math.min(row, maxRow));
+
+        // Eğer hücre doluysa, spiral arama ile en yakın boş hücreyi bul
+        if (occupied.has(`${col},${row}`)) {
+          let found = false;
+          for (let radius = 1; radius <= 30 && !found; radius++) {
+            for (let dc = -radius; dc <= radius && !found; dc++) {
+              for (let dr = -radius; dr <= radius && !found; dr++) {
+                if (Math.abs(dc) !== radius && Math.abs(dr) !== radius)
+                  continue;
+                const nc = col + dc;
+                const nr = row + dr;
+                if (nc < 0 || nc > maxCol || nr < 0 || nr > maxRow) continue;
+                if (!occupied.has(`${nc},${nr}`)) {
+                  col = nc;
+                  row = nr;
+                  found = true;
+                }
+              }
+            }
+          }
+        }
+
+        occupied.add(`${col},${row}`);
+
+        const newX = col * CELL_SIZE + CELL_SIZE / 2 - size / 2;
+        const newY = row * CELL_SIZE + CELL_SIZE / 2 - size / 2;
+        result[item.origIndex] = { ...t, x: newX, y: newY };
+      });
+
+      return result;
+    });
+    toast.success("Tüm masalar grid merkezine hizalandı (çakışmasız)");
+  }, [toast]);
+
+  // ==================== TABLE GROUP METHODS ====================
+  const loadTableGroups = useCallback(async () => {
+    if (!eventId) return;
+    setTableGroupsLoading(true);
+    try {
+      const { data } = await staffApi.getEventTableGroups(eventId);
+      const groups: VenueTableGroup[] = (data || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        color: g.color || DEFAULT_GROUP_COLORS[0],
+        tableIds: g.tableIds || [],
+      }));
+      setTableGroups(groups);
+    } catch (e) {
+      console.error("Masa grupları yüklenemedi:", e);
+    } finally {
+      setTableGroupsLoading(false);
+    }
+  }, [eventId]);
+
+  const saveTableGroups = useCallback(
+    async (groups: VenueTableGroup[]) => {
+      if (!eventId) return;
+      try {
+        await staffApi.saveEventTableGroups(
+          eventId,
+          groups.map((g, i) => ({
+            id: g.id,
+            name: g.name,
+            color: g.color,
+            tableIds: g.tableIds,
+            sortOrder: i,
+          })),
+        );
+        toast.success("Masa grupları kaydedildi");
+      } catch (e) {
+        console.error("Masa grupları kaydedilemedi:", e);
+        toast.error("Masa grupları kaydedilemedi");
+      }
+    },
+    [eventId, toast],
+  );
+
+  const addTableGroup = useCallback(
+    (name: string, tableIds: string[], color?: string) => {
+      const newGroup: VenueTableGroup = {
+        id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        name,
+        color:
+          color ||
+          DEFAULT_GROUP_COLORS[
+            tableGroups.length % DEFAULT_GROUP_COLORS.length
+          ],
+        tableIds,
+      };
+      setTableGroups((prev) => [...prev, newGroup]);
+      return newGroup;
+    },
+    [tableGroups.length],
+  );
+
+  const updateTableGroup = useCallback(
+    (groupId: string, updates: Partial<VenueTableGroup>) => {
+      setTableGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, ...updates } : g)),
+      );
+    },
+    [],
+  );
+
+  const deleteTableGroup = useCallback((groupId: string) => {
+    setTableGroups((prev) => prev.filter((g) => g.id !== groupId));
+  }, []);
+
+  const addTablesToGroup = useCallback(
+    (groupId: string, tableIds: string[]) => {
+      setTableGroups((prev) =>
+        prev.map((g) => ({
+          ...g,
+          tableIds:
+            g.id === groupId
+              ? [...new Set([...g.tableIds, ...tableIds])]
+              : g.tableIds.filter((id) => !tableIds.includes(id)),
+        })),
+      );
+    },
+    [],
+  );
+
+  const removeTablesFromGroup = useCallback(
+    (groupId: string, tableIds: string[]) => {
+      setTableGroups((prev) =>
+        prev.map((g) =>
+          g.id === groupId
+            ? {
+                ...g,
+                tableIds: g.tableIds.filter((id) => !tableIds.includes(id)),
+              }
+            : g,
+        ),
+      );
+    },
+    [],
+  );
+
+  // Masa → Grup renk haritası (canvas renklendirme için)
+  const tableGroupColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of tableGroups) {
+      for (const tableId of group.tableIds) {
+        map.set(tableId, group.color);
+      }
+    }
+    return map;
+  }, [tableGroups]);
 
   return {
     // State
@@ -1102,9 +1613,11 @@ export function useVenueState(eventId?: string) {
     addTable,
     addLoca,
     centerStageHorizontally,
+    duplicateStageElement,
     deleteStageElement,
     toggleStageLock,
     toggleTableLock,
+    toggleVip,
     deleteTable,
     openAreaEditModal,
     saveAreaEdit,
@@ -1127,6 +1640,12 @@ export function useVenueState(eventId?: string) {
     closeTableResize,
     applyTableResize,
     applySizeToSameTypeTables,
+    // Capacity edit actions
+    capacityEdit,
+    setCapacityEdit,
+    openCapacityEdit,
+    closeCapacityEdit,
+    applyCapacityEdit,
     toggleTableSelection,
     // Draft actions
     saveDraft,
@@ -1150,5 +1669,30 @@ export function useVenueState(eventId?: string) {
     openLocaNameEdit,
     closeLocaNameEdit,
     saveLocaName,
+    // Group lines (masa gruplama çizgileri)
+    groupLines,
+    setGroupLines,
+    groupLineDraw,
+    setGroupLineDraw,
+    addGroupLine,
+    deleteGroupLine,
+    clearGroupLines,
+    startGroupLineDraw,
+    updateGroupLineDraw,
+    endGroupLineDraw,
+    // Snap all to center
+    snapAllToCenter,
+    // Table groups (masa grupları)
+    tableGroups,
+    setTableGroups,
+    tableGroupsLoading,
+    loadTableGroups,
+    saveTableGroups,
+    addTableGroup,
+    updateTableGroup,
+    deleteTableGroup,
+    addTablesToGroup,
+    removeTablesFromGroup,
+    tableGroupColorMap,
   };
 }
