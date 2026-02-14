@@ -23,3 +23,4 @@ export { Step5Summary } from "./Step5Summary";
 // Modal Components
 export { TutorialModal } from "./TutorialModal";
 export { ExcelImportModal } from "./ExcelImportModal";
+export { BulkImportModal } from "./BulkImportModal";

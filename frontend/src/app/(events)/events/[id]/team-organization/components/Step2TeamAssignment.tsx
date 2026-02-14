@@ -13,6 +13,7 @@ import {
   User,
   ChevronDown,
   ChevronUp,
+  ClipboardPaste,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,8 @@ import {
 import { CanvasRenderer } from "./CanvasRenderer";
 import { cn } from "@/lib/utils";
 import { positionsApi } from "@/lib/api";
+import { BulkImportModal } from "./BulkImportModal";
+import { ExtraStaff } from "../hooks/useOrganizationData";
 
 // ==================== TYPES ====================
 
@@ -56,6 +59,7 @@ interface Step2TeamAssignmentProps {
   servicePoints?: ServicePoint[];
   allStaff?: Staff[];
   viewMode?: "2d" | "3d";
+  eventId?: string;
   onAddTeam: (
     name: string,
     color?: string,
@@ -87,6 +91,8 @@ interface Step2TeamAssignmentProps {
     onToolChange: (tool: CanvasTool) => void;
     onSelectAll: () => void;
   }) => void;
+  setExtraStaffList?: React.Dispatch<React.SetStateAction<ExtraStaff[]>>;
+  onStaffCreated?: () => void;
 }
 
 // ==================== COMPONENT ====================
@@ -99,6 +105,7 @@ export function Step2TeamAssignment({
   servicePoints = [],
   allStaff = [],
   viewMode = "2d",
+  eventId,
   onAddTeam,
   onUpdateTeam,
   onDeleteTeam,
@@ -108,6 +115,8 @@ export function Step2TeamAssignment({
   onUnassignGroupFromTeam,
   onAssignStaffToGroup,
   onCanvasStateChange,
+  setExtraStaffList,
+  onStaffCreated,
 }: Step2TeamAssignmentProps) {
   // Canvas interaction hook
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -136,6 +145,7 @@ export function Step2TeamAssignment({
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingAssignmentKey, setEditingAssignmentKey] = useState<
     string | null
   >(null);
@@ -258,6 +268,7 @@ export function Step2TeamAssignment({
       groupId: string;
       assignment: GroupStaffAssignment;
       tableLabels: string[];
+      tableIds: string[];
       teamId?: string;
     }> = [];
     tableGroups.forEach((g) => {
@@ -265,13 +276,14 @@ export function Step2TeamAssignment({
         result.push({
           groupId: g.id,
           assignment: a,
-          tableLabels: g.tableIds,
+          tableLabels: g.tableIds.map((id) => idToLabelMap.get(id) || id),
+          tableIds: g.tableIds,
           teamId: g.assignedTeamId,
         });
       });
     });
     return result;
-  }, [tableGroups]);
+  }, [tableGroups, idToLabelMap]);
 
   // Filtered staff for search
   const filteredStaff = useMemo(() => {
@@ -362,16 +374,12 @@ export function Step2TeamAssignment({
 
   // Open modal for editing existing assignment
   const handleOpenEdit = useCallback(
-    (
-      groupId: string,
-      assignment: GroupStaffAssignment,
-      tableLabels: string[],
-    ) => {
+    (groupId: string, assignment: GroupStaffAssignment, tableIds: string[]) => {
       const staff = allStaff.find((s) => s.id === assignment.staffId);
       setSelectedStaff(staff || null);
       setStaffSearch(staff?.fullName || assignment.staffName || "");
       setSelectedRole(assignment.role);
-      setFormTableIds(getTableIdsByLabels(tableLabels));
+      setFormTableIds(tableIds);
       setFormShiftStart(assignment.shiftStart || "18:00");
       setFormShiftEnd(assignment.shiftEnd || "02:00");
       setEditingAssignmentKey(`${groupId}::${assignment.id}`);
@@ -379,7 +387,7 @@ export function Step2TeamAssignment({
       setTableSearch("");
       setShowModal(true);
     },
-    [allStaff, getTableIdsByLabels],
+    [allStaff],
   );
 
   // Select staff
@@ -431,10 +439,10 @@ export function Step2TeamAssignment({
       if (onDeleteTableGroup) onDeleteTableGroup(oldGroupId);
     }
 
-    // 1. Create group with selected tables
+    // 1. Create group with selected tables (actual IDs, not labels)
     const newGroup = onAddTableGroup(
       `${selectedStaff.fullName} Masaları`,
-      tableLabels,
+      formTableIds,
       color,
     );
 
@@ -522,6 +530,14 @@ export function Step2TeamAssignment({
               </h3>
               <Button
                 size="sm"
+                onClick={() => setShowBulkImport(true)}
+                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+              >
+                <ClipboardPaste className="w-3 h-3 mr-1" />
+                Toplu İçe Aktar
+              </Button>
+              <Button
+                size="sm"
                 onClick={handleOpenNew}
                 className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
               >
@@ -545,93 +561,95 @@ export function Step2TeamAssignment({
                 </p>
               </div>
             ) : (
-              allAssignments.map(({ groupId, assignment, tableLabels }) => {
-                const roleConfig = STAFF_ROLES.find(
-                  (r) => r.value === assignment.role,
-                );
-                const staffInfo = allStaff.find(
-                  (s) => s.id === assignment.staffId,
-                );
+              allAssignments.map(
+                ({ groupId, assignment, tableLabels, tableIds }) => {
+                  const roleConfig = STAFF_ROLES.find(
+                    (r) => r.value === assignment.role,
+                  );
+                  const staffInfo = allStaff.find(
+                    (s) => s.id === assignment.staffId,
+                  );
 
-                return (
-                  <div
-                    key={assignment.id}
-                    className="rounded-lg border border-slate-700 bg-slate-800/60 overflow-hidden"
-                  >
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      {/* Avatar */}
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                        style={{
-                          backgroundColor: staffInfo?.color || "#6366f1",
-                        }}
-                      >
-                        {(assignment.staffName || "?")
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .slice(0, 2)}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-white font-medium truncate">
-                          {assignment.staffName || staffInfo?.fullName}
+                  return (
+                    <div
+                      key={`${groupId}-${assignment.id}`}
+                      className="rounded-lg border border-slate-700 bg-slate-800/60 overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        {/* Avatar */}
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                          style={{
+                            backgroundColor: staffInfo?.color || "#6366f1",
+                          }}
+                        >
+                          {(assignment.staffName || "?")
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .slice(0, 2)}
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                          <Badge
-                            className="text-[9px] px-1 py-0"
-                            style={{
-                              backgroundColor: `${roleConfig?.color || "#6366f1"}25`,
-                              color: roleConfig?.color || "#6366f1",
-                            }}
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white font-medium truncate">
+                            {assignment.staffName || staffInfo?.fullName}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            <Badge
+                              className="text-[9px] px-1 py-0"
+                              style={{
+                                backgroundColor: `${roleConfig?.color || "#6366f1"}25`,
+                                color: roleConfig?.color || "#6366f1",
+                              }}
+                            >
+                              {roleConfig?.label || assignment.role}
+                            </Badge>
+                            <span>{tableLabels.length} masa</span>
+                            <span>
+                              {assignment.shiftStart}-{assignment.shiftEnd}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() =>
+                              handleOpenEdit(groupId, assignment, tableIds)
+                            }
+                            className="h-6 w-6 text-slate-400 hover:text-white"
                           >
-                            {roleConfig?.label || assignment.role}
-                          </Badge>
-                          <span>{tableLabels.length} masa</span>
-                          <span>
-                            {assignment.shiftStart}-{assignment.shiftEnd}
-                          </span>
+                            <Edit3 className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDelete(groupId)}
+                            className="h-6 w-6 text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            handleOpenEdit(groupId, assignment, tableLabels)
-                          }
-                          className="h-6 w-6 text-slate-400 hover:text-white"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDelete(groupId)}
-                          className="h-6 w-6 text-red-400 hover:text-red-300"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
+                      {/* Table chips */}
+                      <div className="px-3 pb-2 flex flex-wrap gap-1">
+                        {tableLabels.map((label) => (
+                          <span
+                            key={label}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300"
+                          >
+                            {label}
+                          </span>
+                        ))}
                       </div>
                     </div>
-
-                    {/* Table chips */}
-                    <div className="px-3 pb-2 flex flex-wrap gap-1">
-                      {tableLabels.map((label) => (
-                        <span
-                          key={label}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                },
+              )
             )}
           </div>
 
@@ -919,6 +937,24 @@ export function Step2TeamAssignment({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Bulk Import Modal */}
+        <BulkImportModal
+          open={showBulkImport}
+          onClose={() => setShowBulkImport(false)}
+          tables={tables}
+          allStaff={allStaff}
+          tableGroups={tableGroups}
+          eventId={eventId || ""}
+          onAddTableGroup={onAddTableGroup}
+          onAddTeam={onAddTeam}
+          onAssignGroupToTeam={onAssignGroupToTeam}
+          onAssignStaffToGroup={onAssignStaffToGroup}
+          onDeleteTableGroup={onDeleteTableGroup}
+          onDeleteTeam={onDeleteTeam}
+          setExtraStaffList={setExtraStaffList}
+          onStaffCreated={onStaffCreated}
+        />
       </div>
     </TooltipProvider>
   );

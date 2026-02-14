@@ -83,6 +83,7 @@ export default function TeamOrganizationPage() {
     error,
     saveOrganization,
     setExtraStaffList,
+    reload: reloadData,
     addServicePoint,
     updateServicePoint,
     deleteServicePoint,
@@ -253,6 +254,7 @@ export default function TeamOrganizationPage() {
             servicePoints={servicePoints}
             allStaff={allStaff}
             viewMode={viewMode}
+            eventId={eventId}
             onAddTeam={wizard.addTeam}
             onUpdateTeam={wizard.updateTeam}
             onDeleteTeam={wizard.deleteTeam}
@@ -262,6 +264,8 @@ export default function TeamOrganizationPage() {
             onUnassignGroupFromTeam={wizard.unassignGroupFromTeam}
             onAssignStaffToGroup={wizard.assignStaffToGroup}
             onCanvasStateChange={setCanvasToolbar}
+            setExtraStaffList={setExtraStaffList}
+            onStaffCreated={reloadData}
           />
         );
       case "staff-assignment":

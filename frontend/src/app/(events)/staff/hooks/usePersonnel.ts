@@ -18,12 +18,12 @@ export function usePersonnel() {
   // State'ler
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [personnelStats, setPersonnelStats] = useState<PersonnelStats | null>(
-    null
+    null,
   );
   const [personnelLoading, setPersonnelLoading] = useState(false);
   const [personnelSearch, setPersonnelSearch] = useState("");
   const [personnelFilters, setPersonnelFilters] = useState<PersonnelFilters>(
-    {}
+    {},
   );
   const [showPersonnelFilters, setShowPersonnelFilters] = useState(false);
 
@@ -34,13 +34,13 @@ export function usePersonnel() {
   const [departmentSummaryLoading, setDepartmentSummaryLoading] =
     useState(false);
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [personnelByDepartmentCache, setPersonnelByDepartmentCache] = useState<
     Record<string, Personnel[]>
   >({});
   const [loadingDepartments, setLoadingDepartments] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   // Departman bazlı özet yükle (LAZY LOADING - İlk yükleme)
@@ -83,7 +83,7 @@ export function usePersonnel() {
         });
       }
     },
-    [personnelByDepartmentCache]
+    [personnelByDepartmentCache],
   );
 
   // Departman kartını aç/kapat
@@ -101,7 +101,7 @@ export function usePersonnel() {
         await loadPersonnelByDepartment(department);
       }
     },
-    [expandedDepartments, loadPersonnelByDepartment]
+    [expandedDepartments, loadPersonnelByDepartment],
   );
 
   // Cache'i temizle
@@ -114,19 +114,25 @@ export function usePersonnel() {
   const loadPersonnel = useCallback(async () => {
     try {
       setPersonnelLoading(true);
-      const [personnelRes, statsRes] = await Promise.all([
+      // Stats zaten yüklüyse tekrar çağırma (429 önleme)
+      const requests: Promise<any>[] = [
         staffApi.getPersonnel(personnelFilters),
-        staffApi.getPersonnelStats(),
-      ]);
-      setPersonnel(personnelRes.data || []);
-      setPersonnelStats(statsRes.data || null);
+      ];
+      if (!personnelStats) {
+        requests.push(staffApi.getPersonnelStats());
+      }
+      const results = await Promise.all(requests);
+      setPersonnel(results[0].data || []);
+      if (results[1]) {
+        setPersonnelStats(results[1].data || null);
+      }
     } catch (error) {
       console.error("HR Personel listesi yüklenemedi:", error);
       setPersonnel([]);
     } finally {
       setPersonnelLoading(false);
     }
-  }, [personnelFilters]);
+  }, [personnelFilters, personnelStats]);
 
   // Filtrelenmiş personel listesi
   const getFilteredPersonnel = useCallback(() => {
@@ -148,12 +154,15 @@ export function usePersonnel() {
   // Pozisyona göre gruplandırılmış personel
   const getPersonnelByPosition = useCallback(() => {
     const filtered = getFilteredPersonnel();
-    return filtered.reduce((acc, p) => {
-      const pos = p.position || "Diğer";
-      if (!acc[pos]) acc[pos] = [];
-      acc[pos].push(p);
-      return acc;
-    }, {} as Record<string, Personnel[]>);
+    return filtered.reduce(
+      (acc, p) => {
+        const pos = p.position || "Diğer";
+        if (!acc[pos]) acc[pos] = [];
+        acc[pos].push(p);
+        return acc;
+      },
+      {} as Record<string, Personnel[]>,
+    );
   }, [getFilteredPersonnel]);
 
   // Unique değerler (filtreler için)
@@ -177,7 +186,7 @@ export function usePersonnel() {
       data: Partial<Personnel>,
       editingPersonnel: Personnel | null,
       onSuccess: () => void,
-      avatarFile?: File | null
+      avatarFile?: File | null,
     ) => {
       try {
         let savedPersonnel: Personnel;
@@ -192,12 +201,12 @@ export function usePersonnel() {
             try {
               await staffApi.uploadPersonnelAvatar(
                 editingPersonnel.id,
-                avatarFile
+                avatarFile,
               );
               toast.success("Avatar yüklendi");
             } catch (avatarError: any) {
               toast.error(
-                avatarError.response?.data?.message || "Avatar yüklenemedi"
+                avatarError.response?.data?.message || "Avatar yüklenemedi",
               );
             }
           }
@@ -212,12 +221,12 @@ export function usePersonnel() {
             try {
               await staffApi.uploadPersonnelAvatar(
                 savedPersonnel.id,
-                avatarFile
+                avatarFile,
               );
               toast.success("Avatar yüklendi");
             } catch (avatarError: any) {
               toast.error(
-                avatarError.response?.data?.message || "Avatar yüklenemedi"
+                avatarError.response?.data?.message || "Avatar yüklenemedi",
               );
             }
           }
@@ -230,7 +239,7 @@ export function usePersonnel() {
         toast.error(error.response?.data?.message || "İşlem başarısız");
       }
     },
-    [toast, clearPersonnelCache, loadDepartmentSummary]
+    [toast, clearPersonnelCache, loadDepartmentSummary],
   );
 
   const handleDeletePersonnel = useCallback(
@@ -246,7 +255,7 @@ export function usePersonnel() {
         return false;
       }
     },
-    [toast, clearPersonnelCache, loadDepartmentSummary]
+    [toast, clearPersonnelCache, loadDepartmentSummary],
   );
 
   const handleImportCSV = useCallback(
@@ -262,7 +271,7 @@ export function usePersonnel() {
         return false;
       }
     },
-    [toast, clearPersonnelCache, loadDepartmentSummary]
+    [toast, clearPersonnelCache, loadDepartmentSummary],
   );
 
   const handleExportCSV = useCallback(() => {
@@ -288,8 +297,8 @@ export function usePersonnel() {
       p.status === "active"
         ? "Aktif"
         : p.status === "inactive"
-        ? "Pasif"
-        : "Ayrıldı",
+          ? "Pasif"
+          : "Ayrıldı",
     ]);
     const csv = [headers.join(";"), ...rows.map((r) => r.join(";"))].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -305,10 +314,10 @@ export function usePersonnel() {
   // Filtre aktif mi kontrolü
   const hasActiveFilters = Boolean(
     personnelFilters.department ||
-      personnelFilters.workLocation ||
-      personnelFilters.position ||
-      personnelFilters.status ||
-      personnelSearch
+    personnelFilters.workLocation ||
+    personnelFilters.position ||
+    personnelFilters.status ||
+    personnelSearch,
   );
 
   return {

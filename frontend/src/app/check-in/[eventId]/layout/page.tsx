@@ -130,7 +130,7 @@ export default function CheckInLayoutPage() {
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [zoom, setZoom] = useState(1);
   const [highlightedTableId, setHighlightedTableId] = useState<string | null>(
-    null
+    null,
   );
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [placedTables, setPlacedTables] = useState<PlacedTable[]>([]);
@@ -140,7 +140,7 @@ export default function CheckInLayoutPage() {
 
   // Personel konum işaretleme
   const [myPosition, setMyPosition] = useState<{ x: number; y: number } | null>(
-    null
+    null,
   );
   const [isSettingPosition, setIsSettingPosition] = useState(false);
 
@@ -148,7 +148,7 @@ export default function CheckInLayoutPage() {
   const [showGroupView, setShowGroupView] = useState(false);
   const [tableGroups, setTableGroups] = useState<TableGroup[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>(
-    []
+    [],
   );
   const [teams, setTeams] = useState<TeamData[]>([]);
 
@@ -209,7 +209,7 @@ export default function CheckInLayoutPage() {
               name: g.name,
               tableIds: g.tableIds || [],
               color: g.color,
-            }))
+            })),
           );
         }
 
@@ -221,7 +221,7 @@ export default function CheckInLayoutPage() {
               staffId: a.staffId,
               staffName: a.staffName || a.staff?.fullName || "Personel",
               tableIds: a.tableIds || [],
-            }))
+            })),
           );
         }
 
@@ -235,7 +235,7 @@ export default function CheckInLayoutPage() {
               members: t.members || [],
               leaderId: t.leaderId,
               tableIds: t.tableIds || [],
-            }))
+            })),
           );
         }
       } catch (error) {
@@ -288,8 +288,8 @@ export default function CheckInLayoutPage() {
         el.type === "stage"
           ? "stage"
           : el.type === "system_control"
-          ? "system"
-          : "stage-extension",
+            ? "system"
+            : "stage-extension",
       x: el.x,
       y: el.y,
       width: el.width,
@@ -299,8 +299,8 @@ export default function CheckInLayoutPage() {
         el.type === "stage"
           ? "#1e3a5f"
           : el.type === "system_control"
-          ? "#78350f"
-          : "#334155",
+            ? "#78350f"
+            : "#334155",
     }));
     return {
       width: CANVAS_WIDTH,
@@ -326,11 +326,6 @@ export default function CheckInLayoutPage() {
       }
     > = {};
 
-    // DEBUG: Veri yapılarını kontrol et
-    console.log("[DEBUG] tableGroups:", tableGroups);
-    console.log("[DEBUG] placedTables sample:", placedTables.slice(0, 3));
-    console.log("[DEBUG] staffAssignments:", staffAssignments);
-
     tableGroups.forEach((group, index) => {
       const groupColor =
         group.color || GROUP_COLORS[index % GROUP_COLORS.length];
@@ -339,7 +334,7 @@ export default function CheckInLayoutPage() {
       const staffForGroup: string[] = [];
       staffAssignments.forEach((assignment) => {
         const hasCommonTable = assignment.tableIds.some((tid) =>
-          group.tableIds.includes(tid)
+          group.tableIds.includes(tid),
         );
         if (hasCommonTable && !staffForGroup.includes(assignment.staffName)) {
           staffForGroup.push(assignment.staffName);
@@ -353,7 +348,7 @@ export default function CheckInLayoutPage() {
         leaders: TeamLeader[];
       } | null = null;
       const assignedTeam = teams.find((t) =>
-        t.tableIds.some((tid) => group.tableIds.includes(tid))
+        t.tableIds.some((tid) => group.tableIds.includes(tid)),
       );
       if (assignedTeam) {
         // Takım liderlerini bul
@@ -362,7 +357,7 @@ export default function CheckInLayoutPage() {
             (m) =>
               m.role === "captain" ||
               m.role === "supervisor" ||
-              m.id === assignedTeam.leaderId
+              m.id === assignedTeam.leaderId,
           )
           .map((m) => ({
             staffId: m.id,
@@ -406,11 +401,6 @@ export default function CheckInLayoutPage() {
       });
     });
 
-    console.log(
-      "[DEBUG] tableToGroupMap result:",
-      Object.keys(map).length,
-      "entries"
-    );
     return map;
   }, [tableGroups, staffAssignments, placedTables, teams]);
 
@@ -453,14 +443,14 @@ export default function CheckInLayoutPage() {
       }
       setTimeout(() => setHighlightedTableId(null), 8000);
     },
-    [viewMode, zoom, lockCamera, showGroupView, tableToGroupMap]
+    [viewMode, zoom, lockCamera, showGroupView, tableToGroupMap],
   );
 
   const handleDirectSearch = useCallback(() => {
     if (!searchQuery.trim()) return;
     const query = searchQuery.trim();
     const exactMatch = placedTables.find(
-      (t) => t.tableNumber.toString() === query || t.locaName === query
+      (t) => t.tableNumber.toString() === query || t.locaName === query,
     );
     if (exactMatch) {
       handleTableSelect(exactMatch);
@@ -526,7 +516,7 @@ export default function CheckInLayoutPage() {
         setMyPosition(newPosition);
         localStorage.setItem(
           `myPosition_${eventId}`,
-          JSON.stringify(newPosition)
+          JSON.stringify(newPosition),
         );
         setIsSettingPosition(false);
         return;
@@ -736,15 +726,15 @@ export default function CheckInLayoutPage() {
                 isSettingPosition
                   ? "bg-green-600 text-white border-green-500 animate-pulse"
                   : myPosition
-                  ? "bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30"
-                  : "bg-slate-800 text-slate-400 border-slate-600 hover:text-white hover:bg-slate-700"
+                    ? "bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30"
+                    : "bg-slate-800 text-slate-400 border-slate-600 hover:text-white hover:bg-slate-700"
               }`}
               title={
                 isSettingPosition
                   ? "Konumu belirlemek için haritaya tıkla"
                   : myPosition
-                  ? "Konumum işaretli"
-                  : "Konumumu İşaretle"
+                    ? "Konumum işaretli"
+                    : "Konumumu İşaretle"
               }
             >
               {isSettingPosition ? (
@@ -819,8 +809,8 @@ export default function CheckInLayoutPage() {
               cursor: isSettingPosition
                 ? "crosshair"
                 : isDragging
-                ? "grabbing"
-                : "grab",
+                  ? "grabbing"
+                  : "grab",
             }}
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
@@ -855,8 +845,8 @@ export default function CheckInLayoutPage() {
                       element.type === "stage"
                         ? "#3b82f6"
                         : element.type === "system_control"
-                        ? "#f59e0b"
-                        : "#8b5cf6",
+                          ? "#f59e0b"
+                          : "#8b5cf6",
                     fontSize: Math.max(10, 14 * zoom),
                   }}
                 >
@@ -967,7 +957,7 @@ export default function CheckInLayoutPage() {
                     <span className="font-bold text-lg">
                       {(() => {
                         const table = placedTables.find(
-                          (t) => t.id === highlightedTableId
+                          (t) => t.id === highlightedTableId,
                         );
                         if (!table) return "";
                         return table.isLoca
@@ -1213,7 +1203,7 @@ export default function CheckInLayoutPage() {
                       tableIds: g.tableIds,
                       staffAssignments: staffAssignments
                         .filter((a) =>
-                          a.tableIds.some((tid) => g.tableIds.includes(tid))
+                          a.tableIds.some((tid) => g.tableIds.includes(tid)),
                         )
                         .map((a) => ({
                           id: a.id,
@@ -1252,7 +1242,7 @@ export default function CheckInLayoutPage() {
                   group.color || GROUP_COLORS[index % GROUP_COLORS.length];
                 const staffForGroup = staffAssignments
                   .filter((a) =>
-                    a.tableIds.some((tid) => group.tableIds.includes(tid))
+                    a.tableIds.some((tid) => group.tableIds.includes(tid)),
                   )
                   .map((a) => a.staffName);
                 const uniqueStaff = [...new Set(staffForGroup)];
@@ -1307,11 +1297,13 @@ export default function CheckInLayoutPage() {
         @keyframes pulse {
           0%,
           100% {
-            box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.8),
+            box-shadow:
+              0 0 0 4px rgba(34, 211, 238, 0.8),
               0 0 30px rgba(34, 211, 238, 0.6);
           }
           50% {
-            box-shadow: 0 0 0 8px rgba(34, 211, 238, 0.4),
+            box-shadow:
+              0 0 0 8px rgba(34, 211, 238, 0.4),
               0 0 50px rgba(34, 211, 238, 0.8);
           }
         }

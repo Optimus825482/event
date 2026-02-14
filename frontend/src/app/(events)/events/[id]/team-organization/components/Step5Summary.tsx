@@ -45,7 +45,7 @@ import {
 } from "../types";
 import { cn } from "@/lib/utils";
 
-// Ekstra personel tipi (useOrganizationData'dan import edilebilir)
+// Ekstra personel tipi
 interface ExtraStaff {
   id: string;
   fullName: string;
@@ -74,6 +74,290 @@ interface Step5SummaryProps {
   eventDate?: string;
   onExportPDF?: () => void;
   onExportExcel?: () => void;
+}
+
+// ==================== STAFF GROUP TYPE ====================
+interface StaffGroupMember {
+  id: string;
+  name: string;
+  role: string;
+  roleLabel: string;
+  roleColor: string;
+  shiftStart: string;
+  shiftEnd: string;
+  position: string;
+  workLocation: string;
+  isExtra: boolean;
+}
+
+interface StaffGroup {
+  groupNumber: number;
+  groupName: string; // "Grup 1", "Grup 2"
+  tableIds: string[];
+  tableLabels: string[];
+  isLoca: boolean;
+  staff: StaffGroupMember[];
+  // Orijinal tableGroup ID'leri (referans için)
+  sourceGroupIds: string[];
+}
+
+// ==================== GROUPING LOGIC ====================
+function computeStaffGroups(
+  tableGroups: TableGroup[],
+  allStaff: Staff[],
+  tables: TableData[],
+  extraStaff: ExtraStaff[],
+): StaffGroup[] {
+  // Resolve table labels helper
+  const resolveTableLabel = (id: string): string => {
+    let table = tables.find((t) => t.id === id);
+    if (!table) table = tables.find((t) => t.label === id);
+    if (!table) table = tables.find((t) => t.locaName === id);
+    if (table?.isLoca) return table.locaName || table.label || id;
+    if (table?.label) return table.label;
+    return id;
+  };
+
+  // Resolve a table reference (id, label, or locaName) to actual table ID
+  const resolveToTableId = (ref: string): string | null => {
+    const byId = tables.find((t) => t.id === ref);
+    if (byId) return byId.id;
+    const byLabel = tables.find((t) => t.label === ref);
+    if (byLabel) return byLabel.id;
+    const byLocaName = tables.find(
+      (t) =>
+        t.locaName === ref || t.locaName?.toUpperCase() === ref.toUpperCase(),
+    );
+    if (byLocaName) return byLocaName.id;
+    return null;
+  };
+
+  // tableIds'leri key olarak kullanarak grupla
+  const keyMap = new Map<
+    string,
+    { tableIds: string[]; sourceGroupIds: string[]; staff: StaffGroupMember[] }
+  >();
+
+  // Track which table IDs are already covered by groups
+  const coveredTableIds = new Set<string>();
+
+  tableGroups.forEach((group) => {
+    if (!group.staffAssignments || group.staffAssignments.length === 0) return;
+
+    // Masa ID'lerini sırala ve key oluştur
+    const sortedIds = [...group.tableIds].sort();
+    const key = sortedIds.join("|");
+
+    if (!keyMap.has(key)) {
+      keyMap.set(key, { tableIds: sortedIds, sourceGroupIds: [], staff: [] });
+    }
+
+    const entry = keyMap.get(key)!;
+    entry.sourceGroupIds.push(group.id);
+
+    // Track covered tables
+    group.tableIds.forEach((tid) => {
+      coveredTableIds.add(tid);
+      // Also resolve label-based IDs to actual IDs
+      const resolved = resolveToTableId(tid);
+      if (resolved) coveredTableIds.add(resolved);
+    });
+
+    // Personelleri ekle
+    group.staffAssignments.forEach((a) => {
+      const staff = allStaff.find((s) => s.id === a.staffId);
+      const roleInfo = STAFF_ROLES.find((r) => r.value === a.role);
+      entry.staff.push({
+        id: a.id,
+        name: a.staffName || staff?.fullName || "Bilinmeyen",
+        role: a.role,
+        roleLabel: roleInfo?.label || a.role,
+        roleColor: roleInfo?.color || "#6b7280",
+        shiftStart: a.shiftStart,
+        shiftEnd: a.shiftEnd,
+        position: staff?.position || "-",
+        workLocation: staff?.workLocation || "-",
+        isExtra: false,
+      });
+    });
+
+    // Bu gruba atanmış ekstra personelleri ekle
+    extraStaff.forEach((es) => {
+      const isAssignedToGroup = es.assignedGroups?.includes(group.id);
+      const isAssignedToTable =
+        es.assignedTables &&
+        es.assignedTables.length > 0 &&
+        es.assignedTables.some((ref) => {
+          const resolvedId = resolveToTableId(ref);
+          return (
+            group.tableIds.includes(ref) ||
+            (resolvedId && group.tableIds.includes(resolvedId)) ||
+            group.tableIds.some((gid) => resolveToTableId(gid) === resolvedId)
+          );
+        });
+
+      if (isAssignedToGroup || isAssignedToTable) {
+        // Duplicate kontrolü
+        if (entry.staff.some((s) => s.id === es.id)) return;
+        const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
+        entry.staff.push({
+          id: es.id,
+          name: es.fullName,
+          role: es.role || "waiter",
+          roleLabel:
+            (roleInfo?.label || es.role || es.position || "Garson") + " ★",
+          roleColor: roleInfo?.color || es.color || "#f59e0b",
+          shiftStart: es.shiftStart || "17:00",
+          shiftEnd: es.shiftEnd || "04:00",
+          position: es.position || "-",
+          workLocation: es.workLocation || "Ekstra Personel",
+          isExtra: true,
+        });
+      }
+    });
+  });
+
+  // ==================== LOCA GRUPLARI EKLE ====================
+  // Loca masalarını bul ve henüz bir grupta olmayan locaları ekle
+  const locaTables = tables.filter((t) => t.isLoca);
+
+  // ExtraStaff'ın assignedTables'ını resolve ederek loca grupları oluştur
+  // Aynı assignedTables setine sahip extraStaff'ları grupla
+  const locaExtraMap = new Map<
+    string,
+    { tableIds: string[]; staff: StaffGroupMember[] }
+  >();
+
+  extraStaff.forEach((es) => {
+    if (!es.assignedTables || es.assignedTables.length === 0) return;
+
+    // Resolve all table references to actual table IDs
+    const resolvedIds: string[] = [];
+    es.assignedTables.forEach((ref) => {
+      const resolved = resolveToTableId(ref);
+      if (resolved) {
+        const table = tables.find((t) => t.id === resolved);
+        if (table?.isLoca) resolvedIds.push(resolved);
+      }
+    });
+
+    if (resolvedIds.length === 0) return;
+
+    // Check if these loca tables are already covered by tableGroups
+    const allCovered = resolvedIds.every((id) => coveredTableIds.has(id));
+    if (allCovered) return; // Already in a group from tableGroups
+
+    const sortedIds = [...resolvedIds].sort();
+    const key = sortedIds.join("|");
+
+    if (!locaExtraMap.has(key)) {
+      locaExtraMap.set(key, { tableIds: sortedIds, staff: [] });
+    }
+
+    const entry = locaExtraMap.get(key)!;
+    // Duplicate kontrolü
+    if (entry.staff.some((s) => s.id === es.id)) return;
+
+    const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
+    entry.staff.push({
+      id: es.id,
+      name: es.fullName,
+      role: es.role || "waiter",
+      roleLabel: (roleInfo?.label || es.role || es.position || "Garson") + " ★",
+      roleColor: roleInfo?.color || es.color || "#f59e0b",
+      shiftStart: es.shiftStart || "17:00",
+      shiftEnd: es.shiftEnd || "04:00",
+      position: es.position || "-",
+      workLocation: es.workLocation || "Ekstra Personel",
+      isExtra: true,
+    });
+  });
+
+  // Loca extra gruplarını keyMap'e ekle
+  locaExtraMap.forEach((entry, key) => {
+    if (!keyMap.has(key)) {
+      keyMap.set(key, {
+        tableIds: entry.tableIds,
+        sourceGroupIds: [],
+        staff: entry.staff,
+      });
+    } else {
+      // Mevcut gruba ekle
+      const existing = keyMap.get(key)!;
+      entry.staff.forEach((s) => {
+        if (!existing.staff.some((es) => es.id === s.id)) {
+          existing.staff.push(s);
+        }
+      });
+    }
+    entry.tableIds.forEach((id) => coveredTableIds.add(id));
+  });
+
+  // Hâlâ hiçbir grupta olmayan loca masalarını boş grup olarak ekle
+  locaTables.forEach((loca) => {
+    if (!coveredTableIds.has(loca.id)) {
+      const key = loca.id;
+      keyMap.set(key, {
+        tableIds: [loca.id],
+        sourceGroupIds: [],
+        staff: [],
+      });
+      coveredTableIds.add(loca.id);
+    }
+  });
+
+  // Grupları oluştur ve numaralandır
+  const groups: StaffGroup[] = [];
+  let groupNum = 1;
+
+  // Sıralama: önce normal masalar (numara sırasına göre), sonra localar
+  const entries = Array.from(keyMap.values()).sort((a, b) => {
+    const aIsLoca = a.tableIds.some((id) => {
+      const t = tables.find((tt) => tt.id === id);
+      return t?.isLoca;
+    });
+    const bIsLoca = b.tableIds.some((id) => {
+      const t = tables.find((tt) => tt.id === id);
+      return t?.isLoca;
+    });
+
+    // Normal masalar önce, localar sonra
+    if (aIsLoca !== bIsLoca) return aIsLoca ? 1 : -1;
+
+    const aFirst = resolveTableLabel(a.tableIds[0]);
+    const bFirst = resolveTableLabel(b.tableIds[0]);
+    const aNum = parseInt(aFirst.replace(/^L/i, ""));
+    const bNum = parseInt(bFirst.replace(/^L/i, ""));
+    if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+    return aFirst.localeCompare(bFirst, "tr");
+  });
+
+  entries.forEach((entry) => {
+    const labels = entry.tableIds.map(resolveTableLabel).sort((a, b) => {
+      const numA = parseInt(a.replace(/^L/i, ""));
+      const numB = parseInt(b.replace(/^L/i, ""));
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b, "tr");
+    });
+
+    const isLoca = entry.tableIds.some((id) => {
+      const t = tables.find((tt) => tt.id === id);
+      return t?.isLoca;
+    });
+
+    groups.push({
+      groupNumber: groupNum,
+      groupName: isLoca ? `Loca ${labels.join(", ")}` : `Grup ${groupNum}`,
+      tableIds: entry.tableIds,
+      tableLabels: labels,
+      isLoca,
+      staff: entry.staff,
+      sourceGroupIds: entry.sourceGroupIds,
+    });
+    groupNum++;
+  });
+
+  return groups;
 }
 
 // ==================== STAT CARD ====================
@@ -141,15 +425,13 @@ const WarningItem = memo(function WarningItem({
       text: "text-blue-400",
     },
   };
-
   const { icon: Icon, bg, border, text } = config[type];
-
   return (
     <div
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-lg border",
         bg,
-        border
+        border,
       )}
     >
       <Icon className={cn("w-4 h-4 flex-shrink-0", text)} />
@@ -158,154 +440,22 @@ const WarningItem = memo(function WarningItem({
   );
 });
 
-// ==================== TEAM BREAKDOWN ====================
-interface TeamBreakdownProps {
-  team: TeamDefinition;
-  groups: TableGroup[];
-  allStaff: Staff[];
-  tables?: TableData[];
-  extraStaff?: ExtraStaff[];
+// ==================== GROUP BREAKDOWN ====================
+interface GroupBreakdownProps {
+  group: StaffGroup;
   isExpanded: boolean;
   onToggle: () => void;
 }
 
-const TeamBreakdown = memo(function TeamBreakdown({
-  team,
-  groups,
-  allStaff,
-  tables = [],
-  extraStaff = [],
+const GroupBreakdown = memo(function GroupBreakdown({
+  group,
   isExpanded,
   onToggle,
-}: TeamBreakdownProps) {
-  const totalTables = groups.reduce((sum, g) => sum + g.tableIds.length, 0);
-  const allAssignments = groups.flatMap((g) => g.staffAssignments || []);
-
-  // Bu takıma ait gruplara atanmış ekstra personel sayısını hesapla
-  const teamExtraStaffCount = useMemo(() => {
-    let count = 0;
-    groups.forEach((group) => {
-      extraStaff.forEach((es) => {
-        if (es.assignedGroups?.includes(group.id)) {
-          count++;
-        } else if (es.assignedTables && es.assignedTables.length > 0) {
-          if (
-            es.assignedTables.some((tableId) =>
-              group.tableIds.includes(tableId)
-            )
-          ) {
-            count++;
-          }
-        }
-      });
-    });
-    return count;
-  }, [groups, extraStaff]);
-
-  const totalAssigned = allAssignments.length + teamExtraStaffCount;
-
-  // Personel listesi - grup, masa numaraları/loca adları, rol, vardiya, görev yeri ve unvan bilgisiyle
-  const staffList = useMemo(() => {
-    const list: Array<{
-      id: string;
-      name: string;
-      role: string;
-      roleColor: string;
-      position: string;
-      workLocation: string;
-      shiftStart: string;
-      shiftEnd: string;
-      groupName: string;
-      groupColor: string;
-      tableNumbers: string;
-      isExtra?: boolean;
-    }> = [];
-
-    groups.forEach((group) => {
-      const assignments = group.staffAssignments || [];
-      // Masa numaralarını veya loca adlarını çıkar
-      const tableLabels = group.tableIds
-        .map((id) => {
-          // Masa verisini bul
-          const table = tables.find((t) => t.id === id);
-          // Loca ise loca adını veya label'ı göster
-          if (table?.isLoca) {
-            return table.locaName || table.label || id;
-          }
-          // Normal masa - label varsa kullan, yoksa ID'den çıkar
-          if (table?.label) {
-            return table.label;
-          }
-          // ID'nin sonundaki sayıyı al (son tire'den sonraki kısım)
-          const match = id.match(/-(\d+)$/);
-          return match ? match[1] : id;
-        })
-        .sort((a, b) => {
-          // Sayısal olanları sayısal sırala, metinsel olanları alfabetik
-          const numA = parseInt(a);
-          const numB = parseInt(b);
-          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-          return a.localeCompare(b, "tr");
-        })
-        .join(", ");
-
-      // Normal personeller
-      assignments.forEach((a) => {
-        // Önce assignment'taki staffName'i kontrol et, yoksa allStaff'tan bul
-        const staff = allStaff.find((s) => s.id === a.staffId);
-        const staffName = a.staffName || staff?.fullName || "Bilinmeyen";
-        const roleInfo = STAFF_ROLES.find((r) => r.value === a.role);
-        list.push({
-          id: a.id,
-          name: staffName,
-          role: roleInfo?.label || a.role,
-          roleColor: roleInfo?.color || "#6b7280",
-          position: staff?.position || "-",
-          workLocation: staff?.workLocation || "-",
-          shiftStart: a.shiftStart,
-          shiftEnd: a.shiftEnd,
-          groupName: group.name,
-          groupColor: group.color,
-          tableNumbers: tableLabels,
-          isExtra: false,
-        });
-      });
-
-      // Bu gruba atanmış ekstra personeller
-      extraStaff.forEach((es) => {
-        const isAssignedToGroup = es.assignedGroups?.includes(group.id);
-        const isAssignedToTable =
-          es.assignedTables &&
-          es.assignedTables.length > 0 &&
-          es.assignedTables.some((tableId) => group.tableIds.includes(tableId));
-
-        if (isAssignedToGroup || isAssignedToTable) {
-          const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
-          list.push({
-            id: es.id,
-            name: es.fullName,
-            role:
-              (roleInfo?.label || es.role || es.position || "Garson") + " ★",
-            roleColor: roleInfo?.color || es.color || "#f59e0b",
-            position: es.position || "-",
-            workLocation: es.workLocation || "Ekstra Personel",
-            shiftStart: es.shiftStart || "17:00",
-            shiftEnd: es.shiftEnd || "04:00",
-            groupName: group.name,
-            groupColor: group.color,
-            tableNumbers: tableLabels,
-            isExtra: true,
-          });
-        }
-      });
-    });
-
-    return list;
-  }, [groups, allStaff, tables, extraStaff]);
+}: GroupBreakdownProps) {
+  const groupColor = group.isLoca ? "#a855f7" : "#3b82f6";
 
   return (
     <div className="border border-slate-700 rounded-lg overflow-hidden">
-      {/* Header - Clickable */}
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-700/30 transition-colors"
@@ -316,162 +466,133 @@ const TeamBreakdown = memo(function TeamBreakdown({
           <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
         )}
         <div
-          className="w-4 h-4 rounded-full flex-shrink-0"
-          style={{ backgroundColor: team.color }}
-        />
-        <span className="font-semibold text-white">{team.name}</span>
+          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+          style={{ backgroundColor: groupColor }}
+        >
+          {group.groupNumber}
+        </div>
+        <span className="font-semibold text-white">{group.groupName}</span>
+        <div className="flex items-center gap-2 ml-2">
+          <Badge
+            variant="secondary"
+            className={cn(
+              "text-xs",
+              group.isLoca
+                ? "bg-purple-700/50 text-purple-300"
+                : "bg-slate-700",
+            )}
+          >
+            {group.isLoca
+              ? `Loca · ${group.tableLabels.length} alan`
+              : `${group.tableLabels.length} masa`}
+          </Badge>
+          <span className="text-xs text-slate-500 font-mono max-w-[200px] truncate">
+            {group.tableLabels.join(", ")}
+          </span>
+        </div>
         <div className="flex items-center gap-2 ml-auto">
-          <Badge variant="secondary" className="bg-slate-700 text-xs">
-            {groups.length} grup
-          </Badge>
-          <Badge variant="secondary" className="bg-slate-700 text-xs">
-            {totalTables} masa
-          </Badge>
           <Badge
             className={cn(
               "text-xs",
-              totalAssigned > 0
+              group.staff.length > 0
                 ? "bg-emerald-600/20 text-emerald-400"
-                : "bg-amber-600/20 text-amber-400"
+                : "bg-amber-600/20 text-amber-400",
             )}
           >
-            {totalAssigned} personel
+            {group.staff.length} personel
           </Badge>
         </div>
       </button>
 
-      {/* Content - Collapsible */}
       {isExpanded && (
         <div className="px-4 pb-4 pt-2 border-t border-slate-700/50">
-          <div className="space-y-3">
-            {/* Groups */}
-            <div>
-              <p className="text-xs text-slate-500 mb-1.5">Atanan Gruplar</p>
-              <div className="flex flex-wrap gap-1.5">
-                {groups.length === 0 ? (
-                  <span className="text-sm text-slate-500">Grup atanmamış</span>
-                ) : (
-                  groups.map((group) => (
-                    <Badge
-                      key={group.id}
-                      variant="outline"
-                      className="text-xs"
-                      style={{ borderColor: group.color, color: group.color }}
+          {group.staff.length === 0 ? (
+            <span className="text-sm text-slate-500">
+              Henüz personel atanmamış
+            </span>
+          ) : (
+            <div className="border border-slate-700 rounded-lg overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-700/50">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Görev
+                    </th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Ad Soyad
+                    </th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Masalar
+                    </th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Unvan
+                    </th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Görev Yeri
+                    </th>
+                    <th className="text-center px-3 py-2 text-xs font-medium text-slate-400">
+                      Vardiya
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  {group.staff.map((s) => (
+                    <tr
+                      key={s.id}
+                      className={cn(
+                        "transition-colors",
+                        s.isExtra
+                          ? "bg-amber-500/10 hover:bg-amber-500/20"
+                          : "hover:bg-slate-700/20",
+                      )}
                     >
-                      {group.name} ({group.tableIds.length} masa,{" "}
-                      {group.staffAssignments?.length || 0} personel)
-                    </Badge>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Staff Table */}
-            <div>
-              <p className="text-xs text-slate-500 mb-1.5">Personel Listesi</p>
-              {staffList.length === 0 ? (
-                <span className="text-sm text-slate-500">
-                  Henüz personel atanmamış
-                </span>
-              ) : (
-                <div className="border border-slate-700 rounded-lg overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-700/50">
-                      <tr>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Görev
-                        </th>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Ad Soyad
-                        </th>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Grup (Masalar)
-                        </th>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Unvan
-                        </th>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Görev Yeri
-                        </th>
-                        <th className="text-center px-3 py-2 text-xs font-medium text-slate-400">
-                          Vardiya
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700/50">
-                      {staffList.map((staff) => (
-                        <tr
-                          key={staff.id}
-                          className={cn(
-                            "transition-colors",
-                            staff.isExtra
-                              ? "bg-amber-500/10 hover:bg-amber-500/20"
-                              : "hover:bg-slate-700/20"
-                          )}
-                        >
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: staff.roleColor }}
-                              />
-                              <span
-                                className={
-                                  staff.isExtra
-                                    ? "text-amber-300"
-                                    : "text-slate-300"
-                                }
-                              >
-                                {staff.role}
-                              </span>
-                            </div>
-                          </td>
-                          <td
-                            className={cn(
-                              "px-3 py-2",
-                              staff.isExtra ? "text-amber-200" : "text-white"
-                            )}
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: s.roleColor }}
+                          />
+                          <span
+                            className={
+                              s.isExtra ? "text-amber-300" : "text-slate-300"
+                            }
                           >
-                            {staff.name}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-col gap-0.5">
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  className="w-2 h-2 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: staff.groupColor }}
-                                />
-                                <span className="text-slate-300 text-xs font-medium">
-                                  {staff.groupName}
-                                </span>
-                              </div>
-                              <span
-                                className="text-slate-500 text-[10px] font-mono pl-3.5"
-                                title={staff.tableNumbers}
-                              >
-                                {staff.tableNumbers.length > 20
-                                  ? staff.tableNumbers.substring(0, 20) + "..."
-                                  : staff.tableNumbers}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {staff.position}
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {staff.workLocation}
-                          </td>
-                          <td className="px-3 py-2 text-center text-slate-400">
-                            {staff.shiftStart} - {staff.shiftEnd}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                            {s.roleLabel}
+                          </span>
+                        </div>
+                      </td>
+                      <td
+                        className={cn(
+                          "px-3 py-2",
+                          s.isExtra ? "text-amber-200" : "text-white",
+                        )}
+                      >
+                        {s.name}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className="text-slate-400 text-xs font-mono"
+                          title={group.tableLabels.join(", ")}
+                        >
+                          {group.tableLabels.join(", ").length > 25
+                            ? group.tableLabels.join(", ").substring(0, 25) +
+                              "..."
+                            : group.tableLabels.join(", ")}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-slate-400">{s.position}</td>
+                      <td className="px-3 py-2 text-slate-400">
+                        {s.workLocation}
+                      </td>
+                      <td className="px-3 py-2 text-center text-slate-400">
+                        {s.shiftStart} - {s.shiftEnd}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -495,10 +616,9 @@ const ServicePointBreakdown = memo(function ServicePointBreakdown({
   const assignments = servicePoint.staffAssignments || [];
   const totalAssigned = assignments.length;
   const pointTypeInfo = SERVICE_POINT_TYPES.find(
-    (t) => t.value === servicePoint.pointType
+    (t) => t.value === servicePoint.pointType,
   );
 
-  // Personel listesi
   const staffList = useMemo(() => {
     return assignments.map((a) => {
       const staff = a.staff || allStaff.find((s) => s.id === a.staffId);
@@ -518,7 +638,6 @@ const ServicePointBreakdown = memo(function ServicePointBreakdown({
 
   return (
     <div className="border border-cyan-700/50 rounded-lg overflow-hidden">
-      {/* Header - Clickable */}
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-cyan-700/10 transition-colors"
@@ -545,7 +664,7 @@ const ServicePointBreakdown = memo(function ServicePointBreakdown({
               "text-xs",
               totalAssigned >= servicePoint.requiredStaffCount
                 ? "bg-emerald-600/20 text-emerald-400"
-                : "bg-amber-600/20 text-amber-400"
+                : "bg-amber-600/20 text-amber-400",
             )}
           >
             {totalAssigned}/{servicePoint.requiredStaffCount} personel
@@ -553,268 +672,93 @@ const ServicePointBreakdown = memo(function ServicePointBreakdown({
         </div>
       </button>
 
-      {/* Content - Collapsible */}
       {isExpanded && (
         <div className="px-4 pb-4 pt-2 border-t border-cyan-700/30">
-          <div className="space-y-3">
-            {/* Allowed Roles */}
-            <div>
-              <p className="text-xs text-slate-500 mb-1.5">
-                İzin Verilen Görevler
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {(servicePoint.allowedRoles || []).map((role) => {
-                  const roleInfo = SERVICE_POINT_ROLES.find(
-                    (r) => r.value === role
-                  );
-                  return (
-                    <Badge
-                      key={role}
-                      variant="outline"
-                      className="text-xs"
-                      style={{
-                        borderColor: roleInfo?.color || "#6b7280",
-                        color: roleInfo?.color || "#6b7280",
-                      }}
+          {staffList.length === 0 ? (
+            <span className="text-sm text-slate-500">
+              Henüz personel atanmamış
+            </span>
+          ) : (
+            <div className="border border-slate-700 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-700/50">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Görev
+                    </th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Ad Soyad
+                    </th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Unvan
+                    </th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
+                      Görev Yeri
+                    </th>
+                    <th className="text-center px-3 py-2 text-xs font-medium text-slate-400">
+                      Vardiya
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  {staffList.map((staff) => (
+                    <tr
+                      key={staff.id}
+                      className="hover:bg-slate-700/20 transition-colors"
                     >
-                      {roleInfo?.label || role}
-                    </Badge>
-                  );
-                })}
-              </div>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: staff.roleColor }}
+                          />
+                          <span className="text-slate-300">{staff.role}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-white">{staff.name}</td>
+                      <td className="px-3 py-2 text-slate-400">
+                        {staff.position}
+                      </td>
+                      <td className="px-3 py-2 text-slate-400">
+                        {staff.workLocation}
+                      </td>
+                      <td className="px-3 py-2 text-center text-slate-400">
+                        {staff.shiftStart} - {staff.shiftEnd}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-
-            {/* Staff Table */}
-            <div>
-              <p className="text-xs text-slate-500 mb-1.5">Personel Listesi</p>
-              {staffList.length === 0 ? (
-                <span className="text-sm text-slate-500">
-                  Henüz personel atanmamış
-                </span>
-              ) : (
-                <div className="border border-slate-700 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-700/50">
-                      <tr>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Görev
-                        </th>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Ad Soyad
-                        </th>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Unvan
-                        </th>
-                        <th className="text-left px-3 py-2 text-xs font-medium text-slate-400">
-                          Görev Yeri
-                        </th>
-                        <th className="text-center px-3 py-2 text-xs font-medium text-slate-400">
-                          Vardiya
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700/50">
-                      {staffList.map((staff) => (
-                        <tr
-                          key={staff.id}
-                          className="hover:bg-slate-700/20 transition-colors"
-                        >
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: staff.roleColor }}
-                              />
-                              <span className="text-slate-300">
-                                {staff.role}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-white">{staff.name}</td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {staff.position}
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {staff.workLocation}
-                          </td>
-                          <td className="px-3 py-2 text-center text-slate-400">
-                            {staff.shiftStart} - {staff.shiftEnd}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>
   );
 });
 
-// ==================== EXPORT HELPERS ====================
-
-// Excel Export - XLSX formatında biçimlendirilmiş tablo
-// LAZY LOAD: xlsx kütüphanesi sadece export sırasında yüklenir (~1.2MB tasarruf)
+// ==================== EXCEL EXPORT (GRUP BAZLI) ====================
 async function exportToExcel(
-  teams: TeamDefinition[],
-  tableGroups: TableGroup[],
+  staffGroups: StaffGroup[],
+  servicePoints: ServicePoint[],
   allStaff: Staff[],
   tables: TableData[],
-  servicePoints: ServicePoint[],
   extraStaff: ExtraStaff[],
-  eventName?: string
+  eventName?: string,
 ) {
-  // Dynamic import - xlsx sadece gerektiğinde yüklenir
   const XLSX = await import("xlsx");
-  // Veri hazırla - Takımlar
   const data: Record<string, string>[] = [];
 
-  // Sadece gruba atanmış takımları filtrele
-  const teamsWithGroups = teams.filter((team) =>
-    tableGroups.some((g) => g.assignedTeamId === team.id)
-  );
+  // Grup bazlı personel listesi
+  staffGroups.forEach((group) => {
+    const grupLabel = group.isLoca
+      ? `${group.groupName} (LOCA)`
+      : group.groupName;
 
-  teamsWithGroups.forEach((team) => {
-    const teamGroups = tableGroups.filter((g) => g.assignedTeamId === team.id);
-    // Takım kaptanları
-    const teamLeaders: TeamLeader[] = team.leaders || [];
-
-    // Önce takım kaptanlarını ekle
-    teamLeaders.forEach((leader) => {
+    if (group.staff.length === 0) {
       data.push({
-        Bölüm: "Takım Kaptanı",
-        "Takım/Nokta": team.name,
-        Grup: "-",
-        Masalar: "-",
-        Görev: leader.role === "supervisor" ? "Süpervizör" : "Kaptan",
-        "Ad Soyad": leader.staffName,
-        Unvan: "-",
-        "Görev Yeri": "-",
-        "Vardiya Başlangıç": leader.shiftStart || "18:00",
-        "Vardiya Bitiş": leader.shiftEnd || "02:00",
-      });
-    });
-
-    teamGroups.forEach((group) => {
-      const assignments = group.staffAssignments || [];
-      // Masa numaralarını veya loca adlarını çıkar
-      const tableLabels = group.tableIds
-        .map((id) => {
-          // Önce ID ile eşleştir
-          let table = tables.find((t) => t.id === id);
-
-          // Bulunamadıysa label ile eşleştir
-          if (!table) {
-            table = tables.find((t) => t.label === id);
-          }
-
-          // Hala bulunamadıysa locaName ile eşleştir
-          if (!table) {
-            table = tables.find((t) => t.locaName === id);
-          }
-
-          // Loca ise loca adını veya label'ı göster
-          if (table?.isLoca) {
-            return table.locaName || table.label || id;
-          }
-          // Normal masa - label varsa kullan
-          if (table?.label) {
-            return table.label;
-          }
-          // Hiçbiri bulunamadıysa direkt ID'yi döndür (muhtemelen masa numarası)
-          return id;
-        })
-        .sort((a, b) => {
-          const numA = parseInt(a);
-          const numB = parseInt(b);
-          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-          return a.localeCompare(b, "tr");
-        })
-        .join(", ");
-
-      // Bu gruba atanmış ekstra personelleri bul
-      const groupExtraStaff = extraStaff.filter((es) => {
-        // Grup ID'si ile eşleşme
-        if (es.assignedGroups?.includes(group.id)) return true;
-        // Masa ID'leri ile eşleşme
-        if (es.assignedTables && es.assignedTables.length > 0) {
-          return es.assignedTables.some((tableId) =>
-            group.tableIds.includes(tableId)
-          );
-        }
-        return false;
-      });
-
-      if (assignments.length === 0 && groupExtraStaff.length === 0) {
-        data.push({
-          Bölüm: "Takım",
-          "Takım/Nokta": team.name,
-          Grup: group.name,
-          Masalar: tableLabels,
-          Görev: "-",
-          "Ad Soyad": "-",
-          Unvan: "-",
-          "Görev Yeri": "-",
-          "Vardiya Başlangıç": "-",
-          "Vardiya Bitiş": "-",
-        });
-      } else {
-        // Normal personeller
-        assignments.forEach((a) => {
-          const staff = allStaff.find((s) => s.id === a.staffId);
-          const roleInfo = STAFF_ROLES.find((r) => r.value === a.role);
-          // Önce assignment'taki staffName'i kontrol et (ekstra personel için), yoksa allStaff'tan bul
-          const staffName = a.staffName || staff?.fullName || "Bilinmeyen";
-          data.push({
-            Bölüm: "Takım",
-            "Takım/Nokta": team.name,
-            Grup: group.name,
-            Masalar: tableLabels,
-            Görev: roleInfo?.label || a.role,
-            "Ad Soyad": staffName,
-            Unvan: staff?.position || "-",
-            "Görev Yeri": staff?.workLocation || "-",
-            "Vardiya Başlangıç": a.shiftStart,
-            "Vardiya Bitiş": a.shiftEnd,
-          });
-        });
-
-        // Ekstra personeller (aynı gruba dahil)
-        groupExtraStaff.forEach((es) => {
-          const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
-          data.push({
-            Bölüm: "Takım",
-            "Takım/Nokta": team.name,
-            Grup: group.name,
-            Masalar: tableLabels,
-            Görev: (roleInfo?.label || es.role || es.position || "-") + " ★",
-            "Ad Soyad": es.fullName,
-            Unvan: es.position || "-",
-            "Görev Yeri": es.workLocation || "Ekstra Personel",
-            "Vardiya Başlangıç": es.shiftStart || "-",
-            "Vardiya Bitiş": es.shiftEnd || "-",
-          });
-        });
-      }
-    });
-  });
-
-  // Hizmet Noktaları
-  servicePoints.forEach((sp) => {
-    const assignments = sp.staffAssignments || [];
-    const pointTypeInfo = SERVICE_POINT_TYPES.find(
-      (t) => t.value === sp.pointType
-    );
-
-    if (assignments.length === 0) {
-      data.push({
-        Bölüm: "Hizmet Noktası",
-        "Takım/Nokta": sp.name,
-        Grup: pointTypeInfo?.label || sp.pointType,
-        Masalar: "-",
+        Grup: grupLabel,
+        Masalar: group.tableLabels.join(", "),
         Görev: "-",
         "Ad Soyad": "-",
         Unvan: "-",
@@ -823,74 +767,76 @@ async function exportToExcel(
         "Vardiya Bitiş": "-",
       });
     } else {
-      assignments.forEach((a) => {
-        const staff = a.staff || allStaff.find((s) => s.id === a.staffId);
-        const roleInfo = SERVICE_POINT_ROLES.find((r) => r.value === a.role);
+      group.staff.forEach((s, idx) => {
         data.push({
-          Bölüm: "Hizmet Noktası",
-          "Takım/Nokta": sp.name,
-          Grup: pointTypeInfo?.label || sp.pointType,
-          Masalar: "-",
-          Görev: roleInfo?.label || a.role,
-          "Ad Soyad": staff?.fullName || "Bilinmeyen",
-          Unvan: staff?.position || "-",
-          "Görev Yeri": staff?.workLocation || "-",
-          "Vardiya Başlangıç": a.shiftStart || "-",
-          "Vardiya Bitiş": a.shiftEnd || "-",
+          Grup: idx === 0 ? grupLabel : "",
+          Masalar: idx === 0 ? group.tableLabels.join(", ") : "",
+          Görev: s.roleLabel,
+          "Ad Soyad": s.name,
+          Unvan: s.position,
+          "Görev Yeri": s.workLocation,
+          "Vardiya Başlangıç": s.shiftStart,
+          "Vardiya Bitiş": s.shiftEnd,
         });
       });
     }
   });
 
-  // Ekstra Personeller
-  if (extraStaff && extraStaff.length > 0) {
-    extraStaff.forEach((es) => {
-      // Atandığı grupları bul
-      const assignedGroupNames = (es.assignedGroups || [])
-        .map((groupId) => {
-          const group = tableGroups.find((g) => g.id === groupId);
-          return group?.name || groupId;
-        })
-        .join(", ");
+  // Hizmet Noktaları
+  if (servicePoints.length > 0) {
+    // Boş satır ayırıcı
+    data.push({
+      Grup: "",
+      Masalar: "",
+      Görev: "",
+      "Ad Soyad": "",
+      Unvan: "",
+      "Görev Yeri": "",
+      "Vardiya Başlangıç": "",
+      "Vardiya Bitiş": "",
+    });
 
-      // Atandığı masaları bul
-      const assignedTableLabels = (es.assignedTables || [])
-        .map((tableId) => {
-          const table = tables.find((t) => t.id === tableId);
-          if (table?.isLoca) {
-            return table.locaName || table.label || tableId;
-          }
-          return table?.label || tableId;
-        })
-        .join(", ");
+    servicePoints.forEach((sp) => {
+      const assignments = sp.staffAssignments || [];
+      const pointTypeInfo = SERVICE_POINT_TYPES.find(
+        (t) => t.value === sp.pointType,
+      );
 
-      const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
-
-      data.push({
-        Bölüm: "Ekstra Personel",
-        "Takım/Nokta": "-",
-        Grup: assignedGroupNames || "-",
-        Masalar: assignedTableLabels || "-",
-        Görev: roleInfo?.label || es.role || es.position || "-",
-        "Ad Soyad": es.fullName,
-        Unvan: es.position || "-",
-        "Görev Yeri": es.workLocation || "Ekstra Personel",
-        "Vardiya Başlangıç": es.shiftStart || "-",
-        "Vardiya Bitiş": es.shiftEnd || "-",
-      });
+      if (assignments.length === 0) {
+        data.push({
+          Grup: `📍 ${sp.name}`,
+          Masalar: pointTypeInfo?.label || sp.pointType,
+          Görev: "-",
+          "Ad Soyad": "-",
+          Unvan: "-",
+          "Görev Yeri": "-",
+          "Vardiya Başlangıç": "-",
+          "Vardiya Bitiş": "-",
+        });
+      } else {
+        assignments.forEach((a, idx) => {
+          const staff = a.staff || allStaff.find((s) => s.id === a.staffId);
+          const roleInfo = SERVICE_POINT_ROLES.find((r) => r.value === a.role);
+          data.push({
+            Grup: idx === 0 ? `📍 ${sp.name}` : "",
+            Masalar: idx === 0 ? pointTypeInfo?.label || sp.pointType : "",
+            Görev: roleInfo?.label || a.role,
+            "Ad Soyad": staff?.fullName || "Bilinmeyen",
+            Unvan: staff?.position || "-",
+            "Görev Yeri": staff?.workLocation || "-",
+            "Vardiya Başlangıç": a.shiftStart || "-",
+            "Vardiya Bitiş": a.shiftEnd || "-",
+          });
+        });
+      }
     });
   }
 
-  // Worksheet oluştur
   const ws = XLSX.utils.json_to_sheet(data);
-
-  // Sütun genişlikleri
   ws["!cols"] = [
-    { wch: 14 }, // Bölüm
-    { wch: 15 }, // Takım/Nokta
-    { wch: 15 }, // Grup
-    { wch: 25 }, // Masalar
-    { wch: 12 }, // Görev
+    { wch: 12 }, // Grup
+    { wch: 30 }, // Masalar
+    { wch: 14 }, // Görev
     { wch: 25 }, // Ad Soyad
     { wch: 20 }, // Unvan
     { wch: 20 }, // Görev Yeri
@@ -898,31 +844,21 @@ async function exportToExcel(
     { wch: 12 }, // Vardiya Bitiş
   ];
 
-  // Workbook oluştur
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Personel Listesi");
-
-  // XLSX olarak indir
   XLSX.writeFile(wb, `${eventName || "organizasyon"}_personel_listesi.xlsx`);
 }
 
-// PDF Export - Dikey (Portrait) A4
+// ==================== PDF EXPORT (GRUP BAZLI) ====================
 function exportToPDF(
-  teams: TeamDefinition[],
-  tableGroups: TableGroup[],
+  staffGroups: StaffGroup[],
+  servicePoints: ServicePoint[],
   allStaff: Staff[],
   tables: TableData[],
-  servicePoints: ServicePoint[],
   extraStaff: ExtraStaff[],
   eventName?: string,
-  eventDate?: string
+  eventDate?: string,
 ) {
-  // Sadece gruba atanmış takımları filtrele
-  const teamsWithGroups = teams.filter((team) =>
-    tableGroups.some((g) => g.assignedTeamId === team.id)
-  );
-
-  // Merit logoları - base64 encoded (küçük boyutlu placeholder, gerçek logolar için URL kullanılacak)
   const meritRoyalLogo = "/images/merit-royal-logo.png";
   const meritInternationalLogo = "/images/merit-international-logo.png";
 
@@ -935,186 +871,57 @@ function exportToPDF(
   <style>
     @page { size: A4 portrait; margin: 12mm; }
     * { box-sizing: border-box; }
-    body { 
-      font-family: Arial, sans-serif; 
-      font-size: 9px; 
-      color: #333;
-      margin: 0;
-      padding: 0;
-    }
+    body { font-family: Arial, sans-serif; font-size: 9px; color: #333; margin: 0; padding: 0; }
     .header { 
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 15px;
-      border-bottom: 3px solid #1a365d;
-      padding-bottom: 12px;
-      background: linear-gradient(to right, #f8f9fa, #ffffff, #f8f9fa);
-      padding: 10px 15px;
-      border-radius: 5px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 15px; border-bottom: 3px solid #1a365d; padding: 10px 15px;
+      background: linear-gradient(to right, #f8f9fa, #ffffff, #f8f9fa); border-radius: 5px;
     }
-    .header-logo {
-      width: 80px;
-      height: auto;
-      object-fit: contain;
-    }
-    .header-logo-left {
-      width: 70px;
-      height: auto;
-    }
-    .header-logo-right {
-      width: 90px;
-      height: auto;
-    }
-    .header-center {
-      text-align: center;
-      flex: 1;
-      padding: 0 20px;
-    }
-    .header-center h1 { 
-      margin: 0 0 4px 0; 
-      font-size: 18px;
-      color: #1a365d;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .header-center p { 
-      margin: 0; 
-      color: #666;
-      font-size: 11px;
-    }
-    .header-divider {
-      width: 100%;
-      height: 2px;
-      background: linear-gradient(to right, #d4af37, #1a365d, #d4af37);
-      margin: 10px 0;
-    }
+    .header-logo { width: 80px; height: auto; object-fit: contain; }
+    .header-logo-left { width: 70px; height: auto; }
+    .header-logo-right { width: 90px; height: auto; }
+    .header-center { text-align: center; flex: 1; padding: 0 20px; }
+    .header-center h1 { margin: 0 0 4px 0; font-size: 18px; color: #1a365d; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+    .header-center p { margin: 0; color: #666; font-size: 11px; }
+    .header-divider { width: 100%; height: 2px; background: linear-gradient(to right, #d4af37, #1a365d, #d4af37); margin: 10px 0; }
     .section-title {
       background: linear-gradient(135deg, #1a365d 0%, #2d4a6f 100%);
-      color: white;
-      padding: 8px 12px;
-      font-size: 11px;
-      font-weight: bold;
-      margin: 15px 0 10px 0;
-      border-radius: 4px;
-      border-left: 4px solid #d4af37;
+      color: white; padding: 8px 12px; font-size: 11px; font-weight: bold;
+      margin: 15px 0 10px 0; border-radius: 4px; border-left: 4px solid #d4af37;
     }
-    .team-section { 
-      margin-bottom: 15px;
-      page-break-inside: avoid;
-    }
-    .team-header { 
+    .group-section { margin-bottom: 12px; page-break-inside: avoid; }
+    .group-header {
       background: linear-gradient(to right, #f0f0f0, #fafafa);
-      padding: 8px 12px;
-      border-radius: 4px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-left: 4px solid;
+      padding: 8px 12px; border-radius: 4px; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 8px; border-left: 4px solid #3b82f6;
     }
-    .team-color { 
-      width: 12px; 
-      height: 12px; 
-      border-radius: 50%;
-      flex-shrink: 0;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    .group-number {
+      width: 24px; height: 24px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 11px;
+      font-weight: bold; color: white; flex-shrink: 0;
     }
-    .service-point-color {
-      width: 10px;
-      height: 10px;
-      border-radius: 2px;
-      flex-shrink: 0;
-    }
-    .team-name { 
-      font-weight: bold; 
-      font-size: 12px;
-      color: #1a365d;
-    }
-    .team-stats {
-      margin-left: auto;
-      font-size: 9px;
-      color: #666;
-      background: #e8e8e8;
-      padding: 2px 8px;
-      border-radius: 10px;
-    }
-    .point-type {
-      background: #e0f7fa;
-      color: #00838f;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-size: 8px;
-    }
-    table { 
-      width: 100%; 
-      border-collapse: collapse;
-      margin-bottom: 10px;
-      font-size: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    th { 
-      background: linear-gradient(to bottom, #1a365d, #2d4a6f);
-      color: white;
-      padding: 6px 8px;
-      text-align: left;
-      font-weight: 600;
-      font-size: 9px;
-      border: 1px solid #1a365d;
-    }
-    td { 
-      padding: 5px 8px;
-      border: 1px solid #ddd;
-      vertical-align: top;
-    }
+    .group-name { font-weight: bold; font-size: 12px; color: #1a365d; }
+    .group-tables { font-size: 9px; color: #666; font-family: monospace; margin-left: 8px; }
+    .group-stats { margin-left: auto; font-size: 9px; color: #666; background: #e8e8e8; padding: 2px 8px; border-radius: 10px; }
+    .service-point-color { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .point-type { background: #e0f7fa; color: #00838f; padding: 2px 6px; border-radius: 3px; font-size: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    th { background: linear-gradient(to bottom, #1a365d, #2d4a6f); color: white; padding: 6px 8px; text-align: left; font-weight: 600; font-size: 9px; border: 1px solid #1a365d; }
+    td { padding: 5px 8px; border: 1px solid #ddd; vertical-align: top; }
     tr:nth-child(even) { background: #f8f9fa; }
-    tr:hover { background: #f0f4f8; }
-    .role-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-    }
-    .role-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .shift-time {
-      font-family: monospace;
-      font-size: 8px;
-    }
+    .role-badge { display: inline-flex; align-items: center; gap: 3px; }
+    .role-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .shift-time { font-family: monospace; font-size: 8px; }
     .footer {
-      margin-top: 20px;
-      text-align: center;
-      font-size: 8px;
-      color: #666;
-      border-top: 2px solid #1a365d;
-      padding-top: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      margin-top: 20px; text-align: center; font-size: 8px; color: #666;
+      border-top: 2px solid #1a365d; padding-top: 10px;
+      display: flex; justify-content: space-between; align-items: center;
     }
-    .footer-logo {
-      width: 50px;
-      height: auto;
-      opacity: 0.7;
-    }
-    .footer-text {
-      flex: 1;
-      text-align: center;
-    }
-    .no-staff {
-      color: #999;
-      font-style: italic;
-      padding: 8px;
-      text-align: center;
-      font-size: 9px;
-    }
-    .gold-accent {
-      color: #d4af37;
-    }
+    .footer-logo { width: 50px; height: auto; opacity: 0.7; }
+    .footer-text { flex: 1; text-align: center; }
+    .no-staff { color: #999; font-style: italic; padding: 8px; text-align: center; font-size: 9px; }
+    .gold-accent { color: #d4af37; }
+    .extra-row { background: #fffbeb !important; }
   </style>
 </head>
 <body>
@@ -1139,79 +946,38 @@ function exportToPDF(
   <div class="header-divider"></div>
 `;
 
-  // Takımlar Bölümü
-  if (teamsWithGroups.length > 0) {
-    content += `<div class="section-title">📋 Takımlar</div>`;
+  // Gruplar Bölümü
+  if (staffGroups.length > 0) {
+    content += `<div class="section-title">📋 Personel Grupları (${staffGroups.length} Grup)</div>`;
 
-    teamsWithGroups.forEach((team) => {
-      const teamGroups = tableGroups.filter(
-        (g) => g.assignedTeamId === team.id
-      );
-      const totalTables = teamGroups.reduce(
-        (sum, g) => sum + g.tableIds.length,
-        0
-      );
-      const allAssignments = teamGroups.flatMap(
-        (g) => g.staffAssignments || []
-      );
-
-      // Takım kaptanları - önce team.leaders'dan, yoksa staffAssignments'tan captain/supervisor rolündeki kişileri al
-      let teamLeaders: TeamLeader[] = team.leaders || [];
-
-      // Eğer leaders boşsa, staffAssignments'tan kaptanları çıkar
-      if (teamLeaders.length === 0) {
-        const captainAssignments = allAssignments.filter(
-          (a) => a.role === "captain" || a.role === "supervisor"
-        );
-        teamLeaders = captainAssignments.map((a) => ({
-          staffId: a.staffId,
-          staffName:
-            a.staffName ||
-            allStaff.find((s) => s.id === a.staffId)?.fullName ||
-            "Bilinmeyen",
-          role: a.role as StaffRole,
-          shiftStart: a.shiftStart,
-          shiftEnd: a.shiftEnd,
-        }));
-      }
+    staffGroups.forEach((group) => {
+      const bgColor = group.isLoca ? "#a855f7" : "#3b82f6";
+      const borderColor = group.isLoca ? "#a855f7" : "#3b82f6";
+      const locaBadge = group.isLoca
+        ? `<span style="background: #a855f7; color: white; padding: 1px 6px; border-radius: 3px; font-size: 8px; margin-left: 6px;">LOCA</span>`
+        : "";
 
       content += `
-  <div class="team-section">
-    <div class="team-header" style="border-left-color: ${team.color}">
-      <div class="team-color" style="background: ${team.color}"></div>
-      <span class="team-name">${team.name}</span>
-      <span class="team-stats">${teamGroups.length} grup | ${totalTables} masa | ${allAssignments.length} personel</span>
+  <div class="group-section">
+    <div class="group-header" style="border-left-color: ${borderColor}">
+      <div class="group-number" style="background: ${bgColor}">${group.groupNumber}</div>
+      <span class="group-name">${group.groupName}</span>${locaBadge}
+      <span class="group-tables">${group.tableLabels.join(", ")}</span>
+      <span class="group-stats">${group.staff.length} personel</span>
     </div>
 `;
 
-      // Takım Kaptanları Satırı
-      if (teamLeaders.length > 0) {
-        content += `
-    <div style="background: #fff8e1; padding: 6px 10px; border-bottom: 1px solid #ffe082; font-size: 9px;">
-      <strong style="color: #f59e0b;">👑 Takım Kaptanları:</strong>
-      ${teamLeaders
-        .map(
-          (l) =>
-            `${l.staffName} (${l.shiftStart || "18:00"} - ${
-              l.shiftEnd || "02:00"
-            })`
-        )
-        .join(", ")}
-    </div>
-`;
-      }
-
-      if (allAssignments.length === 0) {
+      if (group.staff.length === 0) {
         content += `<div class="no-staff">Henüz personel atanmamış</div>`;
       } else {
         content += `
     <table>
       <thead>
         <tr>
-          <th style="width: 15%">Grup</th>
-          <th style="width: 20%">Masalar</th>
           <th style="width: 15%">Görev</th>
-          <th style="width: 30%">Ad Soyad</th>
+          <th style="width: 25%">Ad Soyad</th>
+          <th style="width: 20%">Unvan</th>
+          <th style="width: 20%">Görev Yeri</th>
           <th style="width: 10%">Başlangıç</th>
           <th style="width: 10%">Bitiş</th>
         </tr>
@@ -1219,98 +985,22 @@ function exportToPDF(
       <tbody>
 `;
 
-        teamGroups.forEach((group) => {
-          const assignments = group.staffAssignments || [];
-          // Masa numaralarını veya loca adlarını çıkar
-          const tableLabels = group.tableIds
-            .map((id) => {
-              // Önce ID ile eşleştir
-              let table = tables.find((t) => t.id === id);
-
-              // Bulunamadıysa label ile eşleştir
-              if (!table) {
-                table = tables.find((t) => t.label === id);
-              }
-
-              // Hala bulunamadıysa locaName ile eşleştir
-              if (!table) {
-                table = tables.find((t) => t.locaName === id);
-              }
-
-              // Loca ise loca adını veya label'ı göster
-              if (table?.isLoca) {
-                return table.locaName || table.label || id;
-              }
-              // Normal masa - label varsa kullan
-              if (table?.label) {
-                return table.label;
-              }
-              // Hiçbiri bulunamadıysa direkt ID'yi döndür (muhtemelen masa numarası)
-              return id;
-            })
-            .sort((a, b) => {
-              const numA = parseInt(a);
-              const numB = parseInt(b);
-              if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-              return a.localeCompare(b, "tr");
-            })
-            .join(", ");
-
-          // Bu gruba atanmış ekstra personelleri bul
-          const groupExtraStaff = extraStaff.filter((es) => {
-            // Grup ID'si ile eşleşme
-            if (es.assignedGroups?.includes(group.id)) return true;
-            // Masa ID'leri ile eşleşme
-            if (es.assignedTables && es.assignedTables.length > 0) {
-              return es.assignedTables.some((tableId) =>
-                group.tableIds.includes(tableId)
-              );
-            }
-            return false;
-          });
-
-          // Tüm personelleri birleştir (normal + ekstra)
-          const allGroupAssignments = [
-            ...assignments.map((a) => ({
-              ...a,
-              isExtra: false,
-            })),
-            ...groupExtraStaff.map((es) => ({
-              id: es.id,
-              staffId: es.id,
-              staffName: es.fullName,
-              role: es.role || es.position || "garson",
-              shiftStart: es.shiftStart || "17:00",
-              shiftEnd: es.shiftEnd || "04:00",
-              isExtra: true,
-            })),
-          ];
-
-          allGroupAssignments.forEach((a, idx) => {
-            const staff = allStaff.find((s) => s.id === a.staffId);
-            const roleInfo = STAFF_ROLES.find((r) => r.value === a.role);
-            const isExtra = "isExtra" in a && a.isExtra;
-
-            content += `
-        <tr${isExtra ? ' style="background: #fffbeb;"' : ""}>
-          <td>${idx === 0 ? group.name : ""}</td>
-          <td style="font-family: monospace; font-size: 7px;">${
-            idx === 0 ? tableLabels : ""
-          }</td>
+        group.staff.forEach((s) => {
+          content += `
+        <tr${s.isExtra ? ' class="extra-row"' : ""}>
           <td>
             <span class="role-badge">
-              <span class="role-dot" style="background: ${
-                roleInfo?.color || "#666"
-              }"></span>
-              ${roleInfo?.label || a.role}${isExtra ? " ★" : ""}
+              <span class="role-dot" style="background: ${s.roleColor}"></span>
+              ${s.roleLabel}
             </span>
           </td>
-          <td>${a.staffName || staff?.fullName || "Bilinmeyen"}</td>
-          <td class="shift-time">${a.shiftStart}</td>
-          <td class="shift-time">${a.shiftEnd}</td>
+          <td>${s.name}</td>
+          <td>${s.position}</td>
+          <td>${s.workLocation}</td>
+          <td class="shift-time">${s.shiftStart}</td>
+          <td class="shift-time">${s.shiftEnd}</td>
         </tr>
 `;
-          });
         });
 
         content += `
@@ -1323,25 +1013,23 @@ function exportToPDF(
     });
   }
 
-  // Hizmet Noktaları Bölümü
+  // Hizmet Noktaları
   if (servicePoints.length > 0) {
     content += `<div class="section-title">📍 Hizmet Noktaları</div>`;
 
     servicePoints.forEach((sp) => {
       const assignments = sp.staffAssignments || [];
       const pointTypeInfo = SERVICE_POINT_TYPES.find(
-        (t) => t.value === sp.pointType
+        (t) => t.value === sp.pointType,
       );
 
       content += `
-  <div class="team-section">
-    <div class="team-header">
+  <div class="group-section">
+    <div class="group-header">
       <div class="service-point-color" style="background: ${sp.color}"></div>
-      <span class="team-name">${sp.name}</span>
+      <span class="group-name">${sp.name}</span>
       <span class="point-type">${pointTypeInfo?.label || sp.pointType}</span>
-      <span class="team-stats">${assignments.length}/${
-        sp.requiredStaffCount
-      } personel</span>
+      <span class="group-stats">${assignments.length}/${sp.requiredStaffCount} personel</span>
     </div>
 `;
 
@@ -1364,17 +1052,9 @@ function exportToPDF(
         assignments.forEach((a) => {
           const staff = a.staff || allStaff.find((s) => s.id === a.staffId);
           const roleInfo = SERVICE_POINT_ROLES.find((r) => r.value === a.role);
-
           content += `
         <tr>
-          <td>
-            <span class="role-badge">
-              <span class="role-dot" style="background: ${
-                roleInfo?.color || "#666"
-              }"></span>
-              ${roleInfo?.label || a.role}
-            </span>
-          </td>
+          <td><span class="role-badge"><span class="role-dot" style="background: ${roleInfo?.color || "#666"}"></span>${roleInfo?.label || a.role}</span></td>
           <td>${staff?.fullName || "Bilinmeyen"}</td>
           <td class="shift-time">${a.shiftStart || "-"}</td>
           <td class="shift-time">${a.shiftEnd || "-"}</td>
@@ -1382,97 +1062,18 @@ function exportToPDF(
 `;
         });
 
-        content += `
-      </tbody>
-    </table>
-`;
+        content += `</tbody></table>`;
       }
 
       content += `</div>`;
     });
   }
 
-  // Ekstra Personeller Bölümü
-  if (extraStaff && extraStaff.length > 0) {
-    content += `<div class="section-title">👥 Ekstra Personeller</div>`;
-
-    content += `
-  <div class="team-section">
-    <div class="team-header" style="border-left-color: #f59e0b">
-      <div class="team-color" style="background: #f59e0b"></div>
-      <span class="team-name">Ekstra Personel Listesi</span>
-      <span class="team-stats">${extraStaff.length} personel</span>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 25%">Ad Soyad</th>
-          <th style="width: 15%">Görev</th>
-          <th style="width: 20%">Atandığı Gruplar</th>
-          <th style="width: 20%">Atandığı Masalar</th>
-          <th style="width: 10%">Başlangıç</th>
-          <th style="width: 10%">Bitiş</th>
-        </tr>
-      </thead>
-      <tbody>
-`;
-
-    extraStaff.forEach((es) => {
-      // Atandığı grupları bul
-      const assignedGroupNames = (es.assignedGroups || [])
-        .map((groupId) => {
-          const group = tableGroups.find((g) => g.id === groupId);
-          return group?.name || groupId;
-        })
-        .join(", ");
-
-      // Atandığı masaları bul
-      const assignedTableLabels = (es.assignedTables || [])
-        .map((tableId) => {
-          const table = tables.find((t) => t.id === tableId);
-          if (table?.isLoca) {
-            return table.locaName || table.label || tableId;
-          }
-          return table?.label || tableId;
-        })
-        .join(", ");
-
-      const roleInfo = STAFF_ROLES.find((r) => r.value === es.role);
-
-      content += `
-        <tr>
-          <td>${es.fullName}</td>
-          <td>
-            <span class="role-badge">
-              <span class="role-dot" style="background: ${
-                roleInfo?.color || es.color || "#f59e0b"
-              }"></span>
-              ${roleInfo?.label || es.role || es.position || "-"}
-            </span>
-          </td>
-          <td style="font-size: 7px;">${assignedGroupNames || "-"}</td>
-          <td style="font-family: monospace; font-size: 7px;">${
-            assignedTableLabels || "-"
-          }</td>
-          <td class="shift-time">${es.shiftStart || "-"}</td>
-          <td class="shift-time">${es.shiftEnd || "-"}</td>
-        </tr>
-`;
-    });
-
-    content += `
-      </tbody>
-    </table>
-  </div>`;
-  }
-
   content += `
   <div class="footer">
     <img src="${meritInternationalLogo}" alt="Merit" class="footer-logo" onerror="this.style.display='none'">
     <div class="footer-text">
-      <span class="gold-accent">★</span> Oluşturulma: ${new Date().toLocaleString(
-        "tr-TR"
-      )} <span class="gold-accent">★</span><br>
+      <span class="gold-accent">★</span> Oluşturulma: ${new Date().toLocaleString("tr-TR")} <span class="gold-accent">★</span><br>
       <span style="color: #1a365d; font-weight: bold;">EventFlow PRO</span> - Merit Royal Hotel & Casino & SPA
     </div>
     <img src="${meritRoyalLogo}" alt="Merit Royal" class="footer-logo" onerror="this.style.display='none'">
@@ -1481,7 +1082,6 @@ function exportToPDF(
 </html>
 `;
 
-  // Yeni pencerede aç ve yazdır
   const printWindow = window.open("", "_blank");
   if (printWindow) {
     printWindow.document.write(content);
@@ -1506,7 +1106,7 @@ export function Step5Summary({
   onExportPDF,
   onExportExcel,
 }: Step5SummaryProps) {
-  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [expandedServicePoints, setExpandedServicePoints] = useState<
     Set<string>
   >(new Set());
@@ -1518,14 +1118,17 @@ export function Step5Summary({
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const toggleTeam = useCallback((teamId: string) => {
-    setExpandedTeams((prev) => {
+  // Otomatik gruplama: aynı masalara atanmış personelleri birleştir
+  const staffGroups = useMemo(
+    () => computeStaffGroups(tableGroups, allStaff, tables, extraStaff),
+    [tableGroups, allStaff, tables, extraStaff],
+  );
+
+  const toggleGroup = useCallback((groupNum: number) => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(teamId)) {
-        next.delete(teamId);
-      } else {
-        next.add(teamId);
-      }
+      if (next.has(groupNum)) next.delete(groupNum);
+      else next.add(groupNum);
       return next;
     });
   }, []);
@@ -1533,11 +1136,8 @@ export function Step5Summary({
   const toggleServicePoint = useCallback((spId: string) => {
     setExpandedServicePoints((prev) => {
       const next = new Set(prev);
-      if (next.has(spId)) {
-        next.delete(spId);
-      } else {
-        next.add(spId);
-      }
+      if (next.has(spId)) next.delete(spId);
+      else next.add(spId);
       return next;
     });
   }, []);
@@ -1545,21 +1145,19 @@ export function Step5Summary({
   // Export handlers
   const handleExportExcel = useCallback(async () => {
     await exportToExcel(
-      teams,
-      tableGroups,
+      staffGroups,
+      servicePoints,
       allStaff,
       tables,
-      servicePoints,
       extraStaff,
-      eventName
+      eventName,
     );
     onExportExcel?.();
   }, [
-    teams,
-    tableGroups,
+    staffGroups,
+    servicePoints,
     allStaff,
     tables,
-    servicePoints,
     extraStaff,
     eventName,
     onExportExcel,
@@ -1567,22 +1165,20 @@ export function Step5Summary({
 
   const handleExportPDF = useCallback(() => {
     exportToPDF(
-      teams,
-      tableGroups,
+      staffGroups,
+      servicePoints,
       allStaff,
       tables,
-      servicePoints,
       extraStaff,
       eventName,
-      eventDate
+      eventDate,
     );
     onExportPDF?.();
   }, [
-    teams,
-    tableGroups,
+    staffGroups,
+    servicePoints,
     allStaff,
     tables,
-    servicePoints,
     extraStaff,
     eventName,
     eventDate,
@@ -1592,7 +1188,6 @@ export function Step5Summary({
   // Şablon olarak kaydet
   const handleSaveAsTemplate = useCallback(async () => {
     if (!templateName.trim() || !eventId) return;
-
     setSavingTemplate(true);
     try {
       await staffApi.createOrganizationTemplate({
@@ -1615,7 +1210,6 @@ export function Step5Summary({
     }
   }, [templateName, templateDescription, eventId]);
 
-  // Şablon modal'ını aç
   const handleOpenSaveTemplateModal = useCallback(() => {
     setTemplateName(eventName ? `${eventName} Şablonu` : "Yeni Şablon");
     setTemplateDescription("");
@@ -1623,141 +1217,56 @@ export function Step5Summary({
     setShowSaveTemplateModal(true);
   }, [eventName]);
 
-  // Calculate stats
+  // Stats
   const stats = useMemo(() => {
-    const totalTables = tableGroups.reduce(
-      (sum, g) => sum + g.tableIds.length,
-      0
-    );
-    const assignedGroups = tableGroups.filter((g) => g.assignedTeamId).length;
-    const totalStaffAssigned = tableGroups.reduce(
-      (sum, g) => sum + (g.staffAssignments?.length || 0),
-      0
-    );
-    // Hizmet noktalarındaki personel sayısı
+    const totalStaff = staffGroups.reduce((sum, g) => sum + g.staff.length, 0);
+    const totalTables = new Set(staffGroups.flatMap((g) => g.tableIds)).size;
+    const locaGroups = staffGroups.filter((g) => g.isLoca);
+    const normalGroups = staffGroups.filter((g) => !g.isLoca);
     const servicePointStaffCount = servicePoints.reduce(
       (sum, sp) => sum + (sp.staffAssignments?.length || 0),
-      0
-    );
-    const groupsWithStaff = tableGroups.filter(
-      (g) => g.staffAssignments && g.staffAssignments.length > 0
-    ).length;
-    const completionPercent =
-      assignedGroups > 0
-        ? Math.round((groupsWithStaff / assignedGroups) * 100)
-        : tableGroups.length === 0
-        ? 100
-        : 0;
-
-    // Sadece gruba atanmış takımları say
-    const teamsWithGroups = teams.filter((team) =>
-      tableGroups.some((g) => g.assignedTeamId === team.id)
+      0,
     );
 
     return {
-      totalGroups: tableGroups.length,
+      totalGroups: staffGroups.length,
+      normalGroupCount: normalGroups.length,
+      locaGroupCount: locaGroups.length,
       totalTables,
-      totalTeams: teamsWithGroups.length,
-      assignedGroups,
-      unassignedGroups: tableGroups.length - assignedGroups,
-      totalStaffAssigned: totalStaffAssigned + servicePointStaffCount,
-      groupsWithStaff,
-      groupsWithoutStaff: assignedGroups - groupsWithStaff,
-      completionPercent,
+      totalStaff: totalStaff + servicePointStaffCount,
       servicePointsCount: servicePoints.length,
       servicePointStaffCount,
     };
-  }, [tableGroups, teams, servicePoints]);
+  }, [staffGroups, servicePoints]);
 
-  // Generate warnings
+  // Warnings
   const warnings = useMemo(() => {
     const list: { type: "error" | "warning" | "info"; message: string }[] = [];
 
-    const unassignedGroups = tableGroups.filter((g) => !g.assignedTeamId);
-    if (unassignedGroups.length > 0) {
-      list.push({
-        type: "warning",
-        message: `${
-          unassignedGroups.length
-        } grup takıma atanmamış: ${unassignedGroups
-          .map((g) => g.name)
-          .join(", ")}`,
-      });
-    }
-
-    // Gruba atanmamış takımları uyarı olarak gösterme - sadece bilgi amaçlı
-    const teamsWithoutGroups = teams.filter(
-      (t) => !tableGroups.some((g) => g.assignedTeamId === t.id)
-    );
-    if (teamsWithoutGroups.length > 0) {
-      list.push({
-        type: "warning",
-        message: `${
-          teamsWithoutGroups.length
-        } takıma grup atanmamış: ${teamsWithoutGroups
-          .map((t) => t.name)
-          .join(", ")}`,
-      });
-    }
-
-    const groupsWithoutStaff = tableGroups.filter(
-      (g) =>
-        g.assignedTeamId &&
-        (!g.staffAssignments || g.staffAssignments.length === 0)
-    );
-    if (groupsWithoutStaff.length > 0) {
+    const emptyGroups = staffGroups.filter((g) => g.staff.length === 0);
+    if (emptyGroups.length > 0) {
       list.push({
         type: "error",
-        message: `${
-          groupsWithoutStaff.length
-        } gruba personel atanmamış: ${groupsWithoutStaff
-          .map((g) => g.name)
-          .join(", ")}`,
+        message: `${emptyGroups.length} gruba personel atanmamış`,
       });
     }
 
-    // Hizmet noktası uyarıları
     const servicePointsWithoutStaff = servicePoints.filter(
-      (sp) => !sp.staffAssignments || sp.staffAssignments.length === 0
+      (sp) => !sp.staffAssignments || sp.staffAssignments.length === 0,
     );
     if (servicePointsWithoutStaff.length > 0) {
       list.push({
         type: "warning",
-        message: `${
-          servicePointsWithoutStaff.length
-        } hizmet noktasına personel atanmamış: ${servicePointsWithoutStaff
-          .map((sp) => sp.name)
-          .join(", ")}`,
+        message: `${servicePointsWithoutStaff.length} hizmet noktasına personel atanmamış`,
       });
     }
 
     if (list.length === 0) {
-      list.push({
-        type: "info",
-        message: "Tüm atamalar tamamlandı!",
-      });
+      list.push({ type: "info", message: "Tüm atamalar tamamlandı!" });
     }
 
     return list;
-  }, [tableGroups, teams, servicePoints]);
-
-  // Groups by team - sadece gruba atanmış takımlar
-  const teamsWithGroups = useMemo(() => {
-    return teams.filter((team) =>
-      tableGroups.some((g) => g.assignedTeamId === team.id)
-    );
-  }, [teams, tableGroups]);
-
-  const groupsByTeam = useMemo(() => {
-    const map = new Map<string, TableGroup[]>();
-    teamsWithGroups.forEach((team) => {
-      map.set(
-        team.id,
-        tableGroups.filter((g) => g.assignedTeamId === team.id)
-      );
-    });
-    return map;
-  }, [teamsWithGroups, tableGroups]);
+  }, [staffGroups, servicePoints]);
 
   const hasErrors = warnings.some((w) => w.type === "error");
   const hasWarnings = warnings.some((w) => w.type === "warning");
@@ -1769,7 +1278,7 @@ export function Step5Summary({
         <div>
           <h2 className="text-lg font-semibold text-white">Özet</h2>
           <p className="text-sm text-slate-400">
-            Organizasyonu kontrol edin ve kaydedin
+            Aynı masalara atanmış personeller otomatik gruplanır
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1805,23 +1314,18 @@ export function Step5Summary({
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          icon={Users}
-          label="Takım"
-          value={stats.totalTeams}
-          color="#8b5cf6"
-        />
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <StatCard
           icon={Layers}
           label="Grup"
-          value={stats.totalGroups}
-          subValue={
-            stats.unassignedGroups > 0
-              ? `${stats.unassignedGroups} atanmamış`
-              : undefined
-          }
+          value={stats.normalGroupCount}
           color="#3b82f6"
+        />
+        <StatCard
+          icon={Layers}
+          label="Loca"
+          value={stats.locaGroupCount}
+          color="#a855f7"
         />
         <StatCard
           icon={Grid3X3}
@@ -1832,9 +1336,15 @@ export function Step5Summary({
         <StatCard
           icon={UserCheck}
           label="Personel"
-          value={stats.totalStaffAssigned}
-          subValue={`${stats.groupsWithStaff}/${stats.assignedGroups} gruba atandı`}
+          value={stats.totalStaff}
           color="#f59e0b"
+        />
+        <StatCard
+          icon={MapPin}
+          label="Hizmet Noktası"
+          value={stats.servicePointsCount}
+          subValue={`${stats.servicePointStaffCount} personel`}
+          color="#06b6d4"
         />
       </div>
 
@@ -1861,34 +1371,30 @@ export function Step5Summary({
         </div>
       </div>
 
-      {/* Team Breakdown */}
+      {/* Group Breakdown */}
       <div className="flex-1 overflow-y-auto">
         <h3 className="text-sm font-semibold text-white mb-2">
-          Takım Detayları
+          Personel Grupları ({staffGroups.length})
         </h3>
-        {teamsWithGroups.length === 0 ? (
+        {staffGroups.length === 0 ? (
           <div className="text-center py-8 text-slate-500">
             <Users className="w-10 h-10 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Gruba atanmış takım bulunamadı</p>
+            <p className="text-sm">Henüz personel ataması yapılmamış</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {teamsWithGroups.map((team) => (
-              <TeamBreakdown
-                key={team.id}
-                team={team}
-                groups={groupsByTeam.get(team.id) || []}
-                allStaff={allStaff}
-                tables={tables}
-                extraStaff={extraStaff}
-                isExpanded={expandedTeams.has(team.id)}
-                onToggle={() => toggleTeam(team.id)}
+            {staffGroups.map((group) => (
+              <GroupBreakdown
+                key={group.groupNumber}
+                group={group}
+                isExpanded={expandedGroups.has(group.groupNumber)}
+                onToggle={() => toggleGroup(group.groupNumber)}
               />
             ))}
           </div>
         )}
 
-        {/* Service Points Breakdown */}
+        {/* Service Points */}
         {servicePoints.length > 0 && (
           <>
             <h3 className="text-sm font-semibold text-white mb-2 mt-6 flex items-center gap-2">
@@ -1916,7 +1422,7 @@ export function Step5Summary({
       <div className="mt-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {stats.completionPercent === 100 && !hasErrors && !hasWarnings ? (
+            {!hasErrors && !hasWarnings ? (
               <>
                 <CheckCircle className="w-6 h-6 text-emerald-400" />
                 <div>
@@ -1944,9 +1450,9 @@ export function Step5Summary({
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-white">
-              %{stats.completionPercent}
+              {staffGroups.length}
             </p>
-            <p className="text-xs text-slate-500">Tamamlanma</p>
+            <p className="text-xs text-slate-500">Grup</p>
           </div>
         </div>
       </div>
@@ -1993,7 +1499,6 @@ export function Step5Summary({
                     autoFocus
                   />
                 </div>
-
                 <div>
                   <label className="text-sm text-slate-400 mb-1 block">
                     Açıklama (Opsiyonel)
@@ -2005,8 +1510,6 @@ export function Step5Summary({
                     className="bg-slate-700 border-slate-600"
                   />
                 </div>
-
-                {/* Özet Bilgi */}
                 <div className="bg-slate-700/50 rounded-lg p-3 space-y-1">
                   <p className="text-xs text-slate-400">
                     Şablona dahil edilecek:
@@ -2014,21 +1517,15 @@ export function Step5Summary({
                   <div className="flex flex-wrap gap-2">
                     <Badge
                       variant="secondary"
-                      className="bg-purple-600/20 text-purple-400"
-                    >
-                      {teams.length} Takım
-                    </Badge>
-                    <Badge
-                      variant="secondary"
                       className="bg-blue-600/20 text-blue-400"
                     >
-                      {tableGroups.length} Grup
+                      {staffGroups.length} Grup
                     </Badge>
                     <Badge
                       variant="secondary"
                       className="bg-amber-600/20 text-amber-400"
                     >
-                      {stats.totalStaffAssigned} Personel Ataması
+                      {stats.totalStaff} Personel Ataması
                     </Badge>
                   </div>
                 </div>

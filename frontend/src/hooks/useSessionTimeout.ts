@@ -30,7 +30,7 @@ function getTokenExpiry(token: string | null): number | null {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
 export function useSessionTimeout(
-  options: UseSessionTimeoutOptions = {}
+  options: UseSessionTimeoutOptions = {},
 ): SessionTimeoutState {
   const { warningTime = 2 * 60 * 1000, checkInterval = 30 * 1000 } = options;
 
@@ -39,6 +39,19 @@ export function useSessionTimeout(
   const [remainingTime, setRemainingTime] = useState(0);
   const warningShownRef = useRef(false);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Tüm timer'ları temizle
+  const clearAllTimers = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    if (checkIntervalRef.current) {
+      clearInterval(checkIntervalRef.current);
+      checkIntervalRef.current = null;
+    }
+  }, []);
 
   // Session'ı uzat
   const extendSession = useCallback(async (): Promise<boolean> => {
@@ -59,18 +72,15 @@ export function useSessionTimeout(
         return false;
       }
 
-      // Zustand store'u güncelle (persist otomatik localStorage'ı günceller)
-      setTokens(accessToken, newRefreshToken);
+      // Önce tüm timer'ları temizle (eski token'a bağlı checkExpiry'yi durdur)
+      clearAllTimers();
 
       // Warning'i kapat ve ref'i sıfırla
       setShowWarning(false);
       warningShownRef.current = false;
 
-      // Countdown'ı temizle
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-      }
+      // Zustand store'u güncelle — bu token değişikliği useEffect'i yeniden tetikleyecek
+      setTokens(accessToken, newRefreshToken);
 
       return true;
     } catch (error) {
@@ -78,12 +88,14 @@ export function useSessionTimeout(
       logout();
       return false;
     }
-  }, [refreshToken, logout, setTokens]);
+  }, [refreshToken, logout, setTokens, clearAllTimers]);
 
-  // Uyarıyı kapat (oturum kapanacak)
+  // Uyarıyı kapat ve çıkış yap
   const dismissWarning = useCallback(() => {
     setShowWarning(false);
-  }, []);
+    clearAllTimers();
+    logout();
+  }, [logout, clearAllTimers]);
 
   // Token süresini kontrol et
   useEffect(() => {
@@ -98,6 +110,7 @@ export function useSessionTimeout(
 
       // Süre dolmuşsa logout
       if (timeLeft <= 0) {
+        clearAllTimers();
         logout();
         return;
       }
@@ -113,7 +126,7 @@ export function useSessionTimeout(
         countdownRef.current = setInterval(() => {
           setRemainingTime((prev) => {
             if (prev <= 1) {
-              if (countdownRef.current) clearInterval(countdownRef.current);
+              clearAllTimers();
               logout();
               return 0;
             }
@@ -123,14 +136,17 @@ export function useSessionTimeout(
       }
     };
 
+    // İlk kontrol
     checkExpiry();
-    const interval = setInterval(checkExpiry, checkInterval);
+
+    // Periyodik kontrol
+    if (checkIntervalRef.current) clearInterval(checkIntervalRef.current);
+    checkIntervalRef.current = setInterval(checkExpiry, checkInterval);
 
     return () => {
-      clearInterval(interval);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      clearAllTimers();
     };
-  }, [token, warningTime, checkInterval, logout]);
+  }, [token, warningTime, checkInterval, logout, clearAllTimers]);
 
   return { showWarning, remainingTime, extendSession, dismissWarning };
 }

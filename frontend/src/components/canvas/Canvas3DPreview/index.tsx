@@ -7,6 +7,7 @@ import {
   useRef,
   useCallback,
   useEffect,
+  memo,
 } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
@@ -363,7 +364,7 @@ function FloorLightStrip({
 
 // ==================== SECOND FLOOR BALCONY ====================
 // Localar için ARKA DUVARA yaslanmış balkon
-function SecondFloorPlatform({
+const SecondFloorPlatform = memo(function SecondFloorPlatform({
   tables,
   scale,
   centerX,
@@ -441,7 +442,7 @@ function SecondFloorPlatform({
       {/* Balkon - 180° döndürülmüş, localar sahneye bakıyor */}
       <group position={[balconyX, 0, balconyZ]} rotation={[0, Math.PI, 0]}>
         {/* ==================== BALKON ZEMİNİ ==================== */}
-        <mesh position={[0, FLOOR_HEIGHT - 0.05, 0]} receiveShadow castShadow>
+        <mesh position={[0, FLOOR_HEIGHT - 0.05, 0]} receiveShadow>
           <boxGeometry args={[balconyWidth, 0.15, BALCONY_DEPTH]} />
           <meshStandardMaterial
             color="#1a1a2e"
@@ -469,13 +470,12 @@ function SecondFloorPlatform({
           ]}
         >
           <boxGeometry args={[balconyWidth - 0.2, RAILING_HEIGHT, 0.03]} />
-          <meshPhysicalMaterial
+          <meshStandardMaterial
             color="#88ccff"
             transparent
             opacity={0.25}
-            roughness={0.05}
+            roughness={0.1}
             metalness={0.1}
-            clearcoat={1}
           />
         </mesh>
 
@@ -514,13 +514,12 @@ function SecondFloorPlatform({
           ]}
         >
           <boxGeometry args={[0.03, RAILING_HEIGHT, BALCONY_DEPTH - 0.2]} />
-          <meshPhysicalMaterial
+          <meshStandardMaterial
             color="#88ccff"
             transparent
             opacity={0.25}
-            roughness={0.05}
+            roughness={0.1}
             metalness={0.1}
-            clearcoat={1}
           />
         </mesh>
         <mesh
@@ -531,38 +530,25 @@ function SecondFloorPlatform({
           ]}
         >
           <boxGeometry args={[0.03, RAILING_HEIGHT, BALCONY_DEPTH - 0.2]} />
-          <meshPhysicalMaterial
+          <meshStandardMaterial
             color="#88ccff"
             transparent
             opacity={0.25}
-            roughness={0.05}
+            roughness={0.1}
             metalness={0.1}
-            clearcoat={1}
           />
         </mesh>
 
-        {/* ==================== AYDINLATMA ==================== */}
+        {/* ==================== AYDINLATMA (tek paylaşımlı ışık) ==================== */}
         <mesh position={[0, FLOOR_HEIGHT - 0.2, -BALCONY_DEPTH / 2 + 0.1]}>
           <boxGeometry args={[balconyWidth - 0.5, 0.03, 0.03]} />
           <meshBasicMaterial color="#ffd700" />
         </mesh>
         <pointLight
-          position={[0, FLOOR_HEIGHT - 0.3, -BALCONY_DEPTH / 2]}
-          color="#ffd700"
-          intensity={0.4}
-          distance={4}
-        />
-        <pointLight
-          position={[-balconyWidth / 3, FLOOR_HEIGHT + 1.5, 0]}
-          color="#ffffff"
-          intensity={0.3}
-          distance={3}
-        />
-        <pointLight
-          position={[balconyWidth / 3, FLOOR_HEIGHT + 1.5, 0]}
-          color="#ffffff"
-          intensity={0.3}
-          distance={3}
+          position={[0, FLOOR_HEIGHT + 1.2, 0]}
+          color="#ffe4b5"
+          intensity={0.6}
+          distance={5}
         />
 
         {/* ==================== LOCA ETİKETİ ==================== */}
@@ -584,143 +570,66 @@ function SecondFloorPlatform({
 
         {/* ==================== LOCALAR - Balkon içinde yan yana ==================== */}
         {secondFloorTables.map((table, index) => {
-          // Locaları balkon içinde ortalanmış şekilde yan yana diz
           const totalWidth = locaCount * (LOCA_WIDTH + LOCA_GAP) - LOCA_GAP;
           const startX = -totalWidth / 2 + LOCA_WIDTH / 2;
           const locaX = startX + index * (LOCA_WIDTH + LOCA_GAP);
 
           return (
             <group key={table.id} position={[locaX, FLOOR_HEIGHT, 0]}>
-              {/* VIP Loca Booth - rotation=0 çünkü balkon zaten 180° döndürülmüş */}
-              <group rotation={[0, 0, 0]} position={[0, 0, 0]}>
-                {/* ===== BALKON AYIRICI DUVARLAR ===== */}
-                <mesh position={[-LOCA_WIDTH / 2 + 0.03, 0.3, 0]} castShadow>
-                  <boxGeometry args={[0.06, 0.6, 0.7]} />
-                  <meshStandardMaterial
-                    color="#0a0a14"
-                    metalness={0.4}
-                    roughness={0.6}
-                  />
-                </mesh>
-                <mesh position={[LOCA_WIDTH / 2 - 0.03, 0.3, 0]} castShadow>
-                  <boxGeometry args={[0.06, 0.6, 0.7]} />
-                  <meshStandardMaterial
-                    color="#0a0a14"
-                    metalness={0.4}
-                    roughness={0.6}
-                  />
-                </mesh>
-
-                {/* ===== BOOTH ARKA DUVAR ===== */}
-                <mesh position={[0, 0.3, -0.32]} castShadow>
-                  <boxGeometry args={[LOCA_WIDTH - 0.08, 0.6, 0.05]} />
-                  <meshStandardMaterial
-                    color="#0f172a"
-                    metalness={0.3}
-                    roughness={0.7}
-                  />
-                </mesh>
-
-                {/* ===== BOOTH ZEMİN ===== */}
-                <mesh position={[0, 0.02, 0]} receiveShadow>
-                  <boxGeometry args={[LOCA_WIDTH - 0.08, 0.04, 0.65]} />
-                  <meshStandardMaterial
-                    color="#1e293b"
-                    metalness={0.2}
-                    roughness={0.8}
-                  />
-                </mesh>
-
-                {/* ===== 2'Lİ VIP KANEPE ===== */}
-                {/* Kanepe gövdesi */}
-                <mesh position={[0, 0.16, -0.15]} castShadow>
-                  <boxGeometry args={[LOCA_WIDTH - 0.2, 0.28, 0.16]} />
-                  <meshStandardMaterial
-                    color="#1a1a2e"
-                    metalness={0.4}
-                    roughness={0.6}
-                  />
-                </mesh>
-                {/* Kanepe sırtlık */}
-                <mesh
-                  position={[0, 0.32, -0.22]}
-                  rotation={[-0.15, 0, 0]}
-                  castShadow
-                >
-                  <boxGeometry args={[LOCA_WIDTH - 0.24, 0.28, 0.05]} />
-                  <meshStandardMaterial
-                    color="#0f172a"
-                    metalness={0.3}
-                    roughness={0.7}
-                  />
-                </mesh>
-                {/* Oturma yeri */}
-                <mesh position={[0, 0.22, -0.08]} castShadow>
-                  <boxGeometry args={[LOCA_WIDTH - 0.28, 0.06, 0.28]} />
-                  <meshStandardMaterial
-                    color="#1e3a5f"
-                    metalness={0.1}
-                    roughness={0.9}
-                  />
-                </mesh>
-                {/* Sol kol dayama */}
-                <mesh
-                  position={[-(LOCA_WIDTH / 2 - 0.14), 0.2, -0.08]}
-                  castShadow
-                >
-                  <boxGeometry args={[0.08, 0.34, 0.28]} />
-                  <meshStandardMaterial
-                    color="#1a1a2e"
-                    metalness={0.4}
-                    roughness={0.6}
-                  />
-                </mesh>
-                {/* Sağ kol dayama */}
-                <mesh position={[LOCA_WIDTH / 2 - 0.14, 0.2, -0.08]} castShadow>
-                  <boxGeometry args={[0.08, 0.34, 0.28]} />
-                  <meshStandardMaterial
-                    color="#1a1a2e"
-                    metalness={0.4}
-                    roughness={0.6}
-                  />
-                </mesh>
-
-                {/* ===== NEON KENARLAR ===== */}
-                <mesh position={[0, 0.58, -0.3]}>
-                  <boxGeometry args={[LOCA_WIDTH - 0.08, 0.02, 0.02]} />
-                  <meshBasicMaterial color="#22d3ee" />
-                </mesh>
-                <mesh position={[-(LOCA_WIDTH / 2 - 0.05), 0.3, -0.3]}>
-                  <boxGeometry args={[0.02, 0.56, 0.02]} />
-                  <meshBasicMaterial color="#22d3ee" />
-                </mesh>
-                <mesh position={[LOCA_WIDTH / 2 - 0.05, 0.3, -0.3]}>
-                  <boxGeometry args={[0.02, 0.56, 0.02]} />
-                  <meshBasicMaterial color="#22d3ee" />
-                </mesh>
-                <mesh position={[0, 0.46, -0.2]}>
-                  <boxGeometry args={[LOCA_WIDTH - 0.24, 0.015, 0.015]} />
-                  <meshBasicMaterial color="#22d3ee" />
-                </mesh>
-                {/* Kol neonları */}
-                <mesh position={[-(LOCA_WIDTH / 2 - 0.14), 0.38, -0.08]}>
-                  <boxGeometry args={[0.09, 0.015, 0.28]} />
-                  <meshBasicMaterial color="#22d3ee" />
-                </mesh>
-                <mesh position={[LOCA_WIDTH / 2 - 0.14, 0.38, -0.08]}>
-                  <boxGeometry args={[0.09, 0.015, 0.28]} />
-                  <meshBasicMaterial color="#22d3ee" />
-                </mesh>
-
-                <pointLight
-                  position={[0, 0.4, 0]}
-                  color="#22d3ee"
-                  intensity={0.3}
-                  distance={0.8}
+              {/* Ayırıcı duvarlar (castShadow kaldırıldı) */}
+              <mesh position={[-LOCA_WIDTH / 2 + 0.03, 0.3, 0]}>
+                <boxGeometry args={[0.06, 0.6, 0.7]} />
+                <meshStandardMaterial
+                  color="#0a0a14"
+                  metalness={0.4}
+                  roughness={0.6}
                 />
-              </group>
+              </mesh>
+              <mesh position={[LOCA_WIDTH / 2 - 0.03, 0.3, 0]}>
+                <boxGeometry args={[0.06, 0.6, 0.7]} />
+                <meshStandardMaterial
+                  color="#0a0a14"
+                  metalness={0.4}
+                  roughness={0.6}
+                />
+              </mesh>
 
-              {/* Loca Label - Ön tarafa bakacak şekilde (balkon 180° döndürülmüş) */}
+              {/* Arka duvar */}
+              <mesh position={[0, 0.3, -0.32]}>
+                <boxGeometry args={[LOCA_WIDTH - 0.08, 0.6, 0.05]} />
+                <meshStandardMaterial
+                  color="#0f172a"
+                  metalness={0.3}
+                  roughness={0.7}
+                />
+              </mesh>
+
+              {/* Kanepe (tek mesh - gövde + oturma birleşik) */}
+              <mesh position={[0, 0.18, -0.12]}>
+                <boxGeometry args={[LOCA_WIDTH - 0.2, 0.32, 0.24]} />
+                <meshStandardMaterial
+                  color="#1a1a2e"
+                  metalness={0.3}
+                  roughness={0.7}
+                />
+              </mesh>
+              {/* Kanepe sırtlık */}
+              <mesh position={[0, 0.32, -0.22]} rotation={[-0.15, 0, 0]}>
+                <boxGeometry args={[LOCA_WIDTH - 0.24, 0.28, 0.05]} />
+                <meshStandardMaterial
+                  color="#0f172a"
+                  metalness={0.3}
+                  roughness={0.7}
+                />
+              </mesh>
+
+              {/* Tek neon çerçeve (üst kenar) */}
+              <mesh position={[0, 0.58, -0.3]}>
+                <boxGeometry args={[LOCA_WIDTH - 0.08, 0.02, 0.02]} />
+                <meshBasicMaterial color="#22d3ee" />
+              </mesh>
+
+              {/* Loca Label */}
               <Text
                 position={[0, 0.7, 0.4]}
                 fontSize={0.14}
@@ -788,7 +697,7 @@ function SecondFloorPlatform({
       )}
     </group>
   );
-}
+});
 
 // ==================== BALCONY PILLAR ====================
 function BalconyPillar({
@@ -825,7 +734,7 @@ function BalconyPillar({
 }
 
 // ==================== TABLE MESH ====================
-function TableMesh({
+const TableMesh = memo(function TableMesh({
   table,
   scale,
   isSelected,
@@ -966,7 +875,7 @@ function TableMesh({
       {/* LOCA ve Normal Masalar */}
       {isLoca ? null : ( // Localar SecondFloorPlatform içinde render ediliyor - burada skip
         <>
-          {/* Normal Masa */}
+          {/* Normal Masa - sadece üst yüzeyde castShadow */}
           <mesh position={[0, 0.38, 0]} castShadow>
             <cylinderGeometry
               args={[TABLE_RADIUS + 0.01, TABLE_RADIUS + 0.02, 0.025, 16]}
@@ -978,7 +887,7 @@ function TableMesh({
             />
           </mesh>
 
-          <mesh position={[0, 0.355, 0]} castShadow>
+          <mesh position={[0, 0.355, 0]}>
             <cylinderGeometry args={[TABLE_RADIUS, TABLE_RADIUS, 0.03, 16]} />
             <meshStandardMaterial
               color="#f8fafc"
@@ -1017,7 +926,7 @@ function TableMesh({
       )}
     </group>
   );
-}
+});
 
 // ==================== ZONE MESH ====================
 function ZoneMesh({ zone, scale }: { zone: Zone; scale: number }) {
@@ -1166,13 +1075,13 @@ function ServicePointMesh({
       )}
 
       {/* Bar/Counter Base - Dikdörtgen tezgah */}
-      <mesh position={[0, baseHeight / 2, 0]} castShadow>
+      <mesh position={[0, baseHeight / 2, 0]}>
         <boxGeometry args={[counterWidth, baseHeight, counterDepth]} />
         <meshStandardMaterial color="#1e293b" metalness={0.2} roughness={0.8} />
       </mesh>
 
       {/* Counter Top - Üst yüzey */}
-      <mesh position={[0, baseHeight + 0.02, 0]} castShadow>
+      <mesh position={[0, baseHeight + 0.02, 0]}>
         <boxGeometry args={[counterWidth + 0.04, 0.04, counterDepth + 0.04]} />
         <meshStandardMaterial color={color} metalness={0.3} roughness={0.6} />
       </mesh>
@@ -1451,7 +1360,7 @@ function Scene({
     const LOCA_GAP = 0.25;
     const balconyWidth = Math.max(
       locaCount * (LOCA_WIDTH + LOCA_GAP) + 0.4,
-      2.5
+      2.5,
     );
 
     // Venue ortası
@@ -1506,7 +1415,7 @@ function Scene({
           if (tableLabel.startsWith("L") && tid === tableLabel.substring(1))
             return true;
           return false;
-        })
+        }),
       );
 
       if (matchingGroup) {
@@ -1637,7 +1546,7 @@ function Scene({
         showPath &&
         (() => {
           const targetTable = processedTables.find(
-            (t) => t.id === selectedTableId
+            (t) => t.id === selectedTableId,
           );
           if (!targetTable) return null;
           return (
@@ -1841,7 +1750,7 @@ export function Canvas3DPreview({
       controlsRef.current.object.position.set(
         centerX,
         camDist * 0.7,
-        centerZ + camDist * 0.4
+        centerZ + camDist * 0.4,
       );
       controlsRef.current.update();
     }
@@ -1997,9 +1906,9 @@ export function Canvas3DPreview({
 
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         gl={{
-          antialias: true,
+          antialias: false,
           powerPreference: "high-performance",
           preserveDrawingBuffer: true,
         }}
@@ -2012,7 +1921,7 @@ export function Canvas3DPreview({
         }}
       >
         <color attach="background" args={["#0f172a"]} />
-        <fog attach="fog" args={["#0f172a", 12, 25]} />
+        <fog attach="fog" args={["#0f172a", 15, 30]} />
         <Suspense fallback={null}>
           <Scene
             layout={layout}
