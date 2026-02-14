@@ -47,18 +47,18 @@ export function validateStep2(teams: TeamDefinition[]): ValidationResult {
 
   // Personel gereksinimi olmayan takımları kontrol et
   const teamsWithoutRequirements = teams.filter(
-    (t) => t.requiredStaff.length === 0
+    (t) => t.requiredStaff.length === 0,
   );
   if (teamsWithoutRequirements.length > 0) {
     warnings.push(
-      `${teamsWithoutRequirements.length} takımda personel gereksinimi tanımlanmamış`
+      `${teamsWithoutRequirements.length} takımda personel gereksinimi tanımlanmamış`,
     );
   }
 
   // Aynı isimli takımları kontrol et
   const names = teams.map((t) => t.name.toLowerCase());
   const duplicates = names.filter(
-    (name, index) => names.indexOf(name) !== index
+    (name, index) => names.indexOf(name) !== index,
   );
   if (duplicates.length > 0) {
     errors.push("Aynı isimde birden fazla takım var");
@@ -76,7 +76,7 @@ export function validateStep2(teams: TeamDefinition[]): ValidationResult {
  */
 export function validateStep3(
   tableGroups: TableGroup[],
-  teams: TeamDefinition[]
+  teams: TeamDefinition[],
 ): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -89,7 +89,7 @@ export function validateStep3(
 
   // Grup atanmamış takımları kontrol et
   const teamsWithoutGroups = teams.filter(
-    (t) => t.assignedGroupIds.length === 0
+    (t) => t.assignedGroupIds.length === 0,
   );
   if (teamsWithoutGroups.length > 0) {
     warnings.push(`${teamsWithoutGroups.length} takıma grup atanmamış`);
@@ -127,7 +127,7 @@ export function validateStep4(teams: TeamDefinition[]): ValidationResult {
         warnings.push(
           `${team.name}: ${req.count - req.assignedStaffIds.length} ${
             req.role
-          } eksik`
+          } eksik`,
         );
       }
     });
@@ -158,11 +158,11 @@ export function validateStep4(teams: TeamDefinition[]): ValidationResult {
  */
 export function validateAllSteps(
   tableGroups: TableGroup[],
-  teams: TeamDefinition[]
+  teams: TeamDefinition[],
 ): Record<WizardStep, ValidationResult> {
   return {
-    "table-grouping": validateStep1(tableGroups),
-    "team-assignment": validateStep4(teams),
+    "team-assignment": validateStep1(tableGroups),
+    "staff-assignment": validateStep4(teams),
     summary: { isValid: true, errors: [], warnings: [] },
   };
 }
@@ -173,15 +173,13 @@ export function validateAllSteps(
 export function isStepComplete(
   step: WizardStep,
   tableGroups: TableGroup[],
-  teams: TeamDefinition[]
+  teams: TeamDefinition[],
 ): boolean {
   switch (step) {
-    case "table-grouping":
-      return tableGroups.length > 0 && teams.length > 0;
     case "team-assignment":
-      return teams.some((t) =>
-        t.requiredStaff.some((r) => r.assignedStaffIds.length > 0)
-      );
+      return tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0);
+    case "staff-assignment":
+      return tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0);
     case "summary":
       return true;
     default:
@@ -194,9 +192,13 @@ export function isStepComplete(
  */
 export function getCompletedSteps(
   tableGroups: TableGroup[],
-  teams: TeamDefinition[]
+  teams: TeamDefinition[],
 ): WizardStep[] {
-  const steps: WizardStep[] = ["table-grouping", "team-assignment", "summary"];
+  const steps: WizardStep[] = [
+    "team-assignment",
+    "staff-assignment",
+    "summary",
+  ];
 
   return steps.filter((step) => isStepComplete(step, tableGroups, teams));
 }

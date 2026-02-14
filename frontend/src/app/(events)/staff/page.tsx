@@ -44,10 +44,10 @@ export default function StaffManagementPage() {
 
   // Modal state'leri
   const [viewingPersonnel, setViewingPersonnel] = useState<Personnel | null>(
-    null
+    null,
   );
   const [editingPersonnel, setEditingPersonnel] = useState<Personnel | null>(
-    null
+    null,
   );
   const [deletePersonnelConfirm, setDeletePersonnelConfirm] =
     useState<Personnel | null>(null);
@@ -87,17 +87,17 @@ export default function StaffManagementPage() {
           setShowPersonnelFormModal(false);
           setEditingPersonnel(null);
         },
-        avatarFile
+        avatarFile,
       );
     },
-    [editingPersonnel, personnelHook]
+    [editingPersonnel, personnelHook],
   );
 
   // Personnel silme handler
   const handleDeletePersonnel = useCallback(async () => {
     if (!deletePersonnelConfirm) return;
     const success = await personnelHook.handleDeletePersonnel(
-      deletePersonnelConfirm
+      deletePersonnelConfirm,
     );
     if (success) {
       setDeletePersonnelConfirm(null);
@@ -113,7 +113,7 @@ export default function StaffManagementPage() {
       }
       return success;
     },
-    [personnelHook]
+    [personnelHook],
   );
 
   // Modül geri dönüş
@@ -140,7 +140,7 @@ export default function StaffManagementPage() {
             personnelStats={personnelHook.personnelStats}
             personnelCount={personnelHook.departmentSummary.reduce(
               (sum, d) => sum + d.count,
-              0
+              0,
             )}
             events={staffData.events}
             onSelectModule={setActiveModule}
@@ -161,7 +161,7 @@ export default function StaffManagementPage() {
                 showFilters={personnelHook.showPersonnelFilters}
                 onToggleFilters={() =>
                   personnelHook.setShowPersonnelFilters(
-                    !personnelHook.showPersonnelFilters
+                    !personnelHook.showPersonnelFilters,
                   )
                 }
                 loading={
@@ -242,7 +242,7 @@ export default function StaffManagementPage() {
                             ))}
                           </CardContent>
                         </Card>
-                      )
+                      ),
                     )}
                   </div>
                 )
@@ -280,12 +280,12 @@ export default function StaffManagementPage() {
                   if (hasTeamAssignment) {
                     // Ekip organizasyonu YAPILMIŞ - Step 3'e git (özet görüntüleme)
                     router.push(
-                      `/events/${eventId}/team-organization?step=summary`
+                      `/events/${eventId}/team-organization?step=summary`,
                     );
                   } else {
                     // Ekip organizasyonu YAPILMAMIŞ - Step 1'e git (yeni başlangıç)
                     router.push(
-                      `/events/${eventId}/team-organization?step=table-grouping`
+                      `/events/${eventId}/team-organization?step=team-assignment`,
                     );
                   }
                 }}
