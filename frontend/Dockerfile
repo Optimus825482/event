@@ -12,8 +12,11 @@ ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
 # Package files
 COPY package*.json ./
 
-# Install ALL dependencies (including devDependencies for build)
-RUN npm ci --include=dev
+# Install ALL dependencies (with retry for flaky networks)
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 60000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci --include=dev
 
 # Copy source
 COPY . .
