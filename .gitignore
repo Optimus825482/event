@@ -45,6 +45,7 @@ coverage/
 # Database dumps (büyük dosyalar)
 *.dump
 *.sql
+!backend/seed-data.sql
 
 # Uploads (keep folder structure)
 backend/uploads/avatars/*
