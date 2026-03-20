@@ -76,9 +76,7 @@ services:
 
   # NestJS Backend API
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/optimus825482/eventflow-backend:latest
     restart: unless-stopped
     exclude_from_hc: true
     depends_on:
@@ -111,12 +109,7 @@ services:
           memory: 256M
   # Next.js Frontend
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+    image: ghcr.io/optimus825482/eventflow-frontend:latest
     restart: unless-stopped
     exclude_from_hc: true
     depends_on:
