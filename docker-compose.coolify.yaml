@@ -53,7 +53,6 @@ services:
       - "log_min_duration_statement=1000"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/seed-data.sql:/docker-entrypoint-initdb.d/01-seed-data.sql:ro
     healthcheck:
       test:
         [
