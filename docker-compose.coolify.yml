@@ -20,15 +20,15 @@ services:
       - "-c"
       - "max_connections=100"
       - "-c"
-      - "shared_buffers=256MB"
+      - "shared_buffers=128MB"
       - "-c"
-      - "effective_cache_size=768MB"
+      - "effective_cache_size=512MB"
       - "-c"
-      - "maintenance_work_mem=128MB"
+      - "maintenance_work_mem=64MB"
       - "-c"
       - "checkpoint_completion_target=0.9"
       - "-c"
-      - "wal_buffers=16MB"
+      - "wal_buffers=8MB"
       - "-c"
       - "default_statistics_target=100"
       - "-c"
@@ -38,17 +38,17 @@ services:
       - "-c"
       - "work_mem=4MB"
       - "-c"
-      - "min_wal_size=1GB"
+      - "min_wal_size=256MB"
       - "-c"
-      - "max_wal_size=4GB"
+      - "max_wal_size=1GB"
       - "-c"
-      - "max_worker_processes=4"
+      - "max_worker_processes=2"
       - "-c"
-      - "max_parallel_workers_per_gather=2"
+      - "max_parallel_workers_per_gather=1"
       - "-c"
-      - "max_parallel_workers=4"
+      - "max_parallel_workers=2"
       - "-c"
-      - "max_parallel_maintenance_workers=2"
+      - "max_parallel_maintenance_workers=1"
       - "-c"
       - "log_min_duration_statement=1000"
     volumes:
@@ -60,10 +60,10 @@ services:
           "CMD-SHELL",
           "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-eventflow} || exit 1",
         ]
-      interval: 5s
-      timeout: 5s
+      interval: 10s
+      timeout: 10s
       retries: 30
-      start_period: 60s
+      start_period: 120s
     networks:
       - coolify
       - default
