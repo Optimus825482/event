@@ -27,7 +27,7 @@ async function bootstrap() {
       },
       level: 6, // Balanced compression level
       threshold: 1024, // 1KB'dan büyük response'ları sıkıştır
-    })
+    }),
   );
 
   // Response time tracking
@@ -41,7 +41,7 @@ async function bootstrap() {
       contentSecurityPolicy: isProduction ? undefined : false, // Dev'de CSP kapalı
       crossOriginEmbedderPolicy: false, // WebSocket için gerekli
       crossOriginResourcePolicy: { policy: "cross-origin" }, // Static dosyalar için CORS
-    })
+    }),
   );
 
   // CORS ayarları
@@ -68,7 +68,7 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
-    })
+    }),
   );
 
   // Global exception filter
@@ -76,8 +76,10 @@ async function bootstrap() {
 
   // ==================== API ====================
 
-  // API prefix
-  app.setGlobalPrefix("api");
+  // API prefix - Production'da Coolify/Traefik /api path'ini strip ettiği için prefix eklenmez
+  if (!isProduction) {
+    app.setGlobalPrefix("api");
+  }
 
   // Swagger API Documentation
   const swaggerConfig = new DocumentBuilder()
@@ -115,7 +117,7 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
   }
 }
 \`\`\`
-      `
+      `,
     )
     .setVersion("1.0.0")
     .addBearerAuth(
@@ -127,7 +129,7 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
         description: "JWT token giriniz",
         in: "header",
       },
-      "JWT-auth"
+      "JWT-auth",
     )
     .addTag("Auth", "Kimlik doğrulama işlemleri")
     .addTag("Events", "Etkinlik yönetimi")
@@ -139,7 +141,8 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup("api/docs", app, document, {
+  const swaggerPath = isProduction ? "docs" : "api/docs";
+  SwaggerModule.setup(swaggerPath, app, document, {
     swaggerOptions: {
       persistAuthorization: true,
       docExpansion: "none",
@@ -165,7 +168,7 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
   logger.log(
     `🌐 CORS: ${
       isProduction ? allowedOrigins.join(", ") : "Open (development)"
-    }`
+    }`,
   );
 }
 bootstrap();
