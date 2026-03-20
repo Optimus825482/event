@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   BadRequestException,
+  HttpException,
   UseGuards,
   Request,
   UseInterceptors,
@@ -16,11 +17,11 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { extname } from "path";
-import { SkipThrottle } from "@nestjs/throttler";
 import { StaffService } from "./staff.service";
 import { StaffPosition } from "../../entities/user.entity";
 import { Staff, Gender, StaffStatus } from "../../entities/staff.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { SkipThrottle } from "@nestjs/throttler";
 
 // DTO tanımları
 interface CreateStaffDto {
@@ -57,8 +58,9 @@ interface BulkAssignDto {
   }>;
 }
 
+@SkipThrottle()
+@UseGuards(JwtAuthGuard)
 @Controller("staff")
-@SkipThrottle() // Staff modülü için rate limiting devre dışı - team-organization çok fazla istek yapıyor
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
@@ -97,7 +99,7 @@ export class StaffController {
       description?: string;
       isActive?: boolean;
       sortOrder?: number;
-    }
+    },
   ) {
     return this.staffService.updatePosition(id, dto);
   }
@@ -121,7 +123,7 @@ export class StaffController {
   // Yeni bölüm ekle
   @Post("departments")
   createDepartment(
-    @Body() dto: { name: string; description?: string; color?: string }
+    @Body() dto: { name: string; description?: string; color?: string },
   ) {
     return this.staffService.createDepartment(dto);
   }
@@ -137,7 +139,7 @@ export class StaffController {
       color?: string;
       isActive?: boolean;
       sortOrder?: number;
-    }
+    },
   ) {
     return this.staffService.updateDepartment(id, dto);
   }
@@ -161,7 +163,7 @@ export class StaffController {
   // Yeni görev yeri ekle
   @Post("work-locations")
   createWorkLocation(
-    @Body() dto: { name: string; description?: string; address?: string }
+    @Body() dto: { name: string; description?: string; address?: string },
   ) {
     return this.staffService.createWorkLocation(dto);
   }
@@ -177,7 +179,7 @@ export class StaffController {
       address?: string;
       isActive?: boolean;
       sortOrder?: number;
-    }
+    },
   ) {
     return this.staffService.updateWorkLocation(id, dto);
   }
@@ -218,7 +220,7 @@ export class StaffController {
   @Put("departments/:id/positions")
   updateDepartmentPositions(
     @Param("id") id: string,
-    @Body() dto: { positionIds: string[] }
+    @Body() dto: { positionIds: string[] },
   ) {
     return this.staffService.updateDepartmentPositions(id, dto.positionIds);
   }
@@ -227,7 +229,7 @@ export class StaffController {
   @Put("departments/:id/locations")
   updateDepartmentLocations(
     @Param("id") id: string,
-    @Body() dto: { locationIds: string[] }
+    @Body() dto: { locationIds: string[] },
   ) {
     return this.staffService.updateDepartmentLocations(id, dto.locationIds);
   }
@@ -271,7 +273,7 @@ export class StaffController {
         endTime: string;
         color?: string;
       }>;
-    }
+    },
   ) {
     return this.staffService.createBulkShifts(eventId, dto.shifts);
   }
@@ -310,7 +312,7 @@ export class StaffController {
     @Query("workLocation") workLocation?: string,
     @Query("position") position?: string,
     @Query("isActive") isActive?: string,
-    @Query("status") status?: string
+    @Query("status") status?: string,
   ) {
     return this.staffService.findAllPersonnel({
       department,
@@ -346,7 +348,7 @@ export class StaffController {
   @Get("personnel/by-position/:position")
   getPersonnelByPosition(@Param("position") position: string) {
     return this.staffService.getPersonnelByPosition(
-      decodeURIComponent(position)
+      decodeURIComponent(position),
     );
   }
 
@@ -354,7 +356,7 @@ export class StaffController {
   @Get("personnel/by-department/:department")
   getPersonnelByDepartment(@Param("department") department: string) {
     return this.staffService.getPersonnelByDepartment(
-      decodeURIComponent(department)
+      decodeURIComponent(department),
     );
   }
 
@@ -401,7 +403,7 @@ export class StaffController {
       specialTaskLocation?: string;
       specialTaskStartTime?: string;
       specialTaskEndTime?: string;
-    }
+    },
   ) {
     return this.staffService.assignStaffToTables({ eventId, ...dto });
   }
@@ -421,13 +423,13 @@ export class StaffController {
         color?: string;
       }>;
     },
-    @Request() req
+    @Request() req,
   ) {
     const userId = req.user?.id;
     return this.staffService.saveEventStaffAssignments(
       eventId,
       dto.assignments,
-      userId
+      userId,
     );
   }
 
@@ -446,7 +448,7 @@ export class StaffController {
       specialTaskLocation?: string;
       specialTaskStartTime?: string;
       specialTaskEndTime?: string;
-    }
+    },
   ) {
     return this.staffService.updateStaffAssignment(assignmentId, dto);
   }
@@ -465,6 +467,9 @@ export class StaffController {
     try {
       return await this.staffService.createStaff(dto);
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new BadRequestException(error.message || "Personel oluşturulamadı");
     }
   }
@@ -475,6 +480,9 @@ export class StaffController {
     try {
       return await this.staffService.updateStaff(id, dto);
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new BadRequestException(error.message || "Personel güncellenemedi");
     }
   }
@@ -504,7 +512,7 @@ export class StaffController {
       dto.eventId,
       dto.staffId,
       dto.tableIds,
-      dto.color
+      dto.color,
     );
   }
 
@@ -518,7 +526,7 @@ export class StaffController {
   @Delete("assign/:eventId/:staffId")
   removeAssignment(
     @Param("eventId") eventId: string,
-    @Param("staffId") staffId: string
+    @Param("staffId") staffId: string,
   ) {
     return this.staffService.removeAssignment(eventId, staffId);
   }
@@ -539,7 +547,7 @@ export class StaffController {
   @Get("event/:eventId/staff/:staffId")
   getStaffTables(
     @Param("eventId") eventId: string,
-    @Param("staffId") staffId: string
+    @Param("staffId") staffId: string,
   ) {
     return this.staffService.getStaffTables(eventId, staffId);
   }
@@ -549,12 +557,12 @@ export class StaffController {
   autoAssignTables(
     @Param("eventId") eventId: string,
     @Body()
-    dto: { staffIds: string[]; strategy?: "balanced" | "zone" | "random" }
+    dto: { staffIds: string[]; strategy?: "balanced" | "zone" | "random" },
   ) {
     return this.staffService.autoAssignTables(
       eventId,
       dto.staffIds,
-      dto.strategy || "balanced"
+      dto.strategy || "balanced",
     );
   }
 
@@ -569,7 +577,7 @@ export class StaffController {
         tableIds: string[];
         color?: string;
       }>;
-    }
+    },
   ) {
     return this.staffService.saveEventAssignments(eventId, dto.assignments);
   }
@@ -593,7 +601,7 @@ export class StaffController {
       members?: any[];
       leaderId?: string;
       tableIds?: string[];
-    }
+    },
   ) {
     return this.staffService.createServiceTeam(dto);
   }
@@ -609,7 +617,7 @@ export class StaffController {
       members?: any[];
       leaderId?: string;
       tableIds?: string[];
-    }
+    },
   ) {
     return this.staffService.updateServiceTeam(teamId, dto);
   }
@@ -630,7 +638,7 @@ export class StaffController {
   @Delete("service-teams/:teamId/members/:memberId")
   removeMemberFromServiceTeam(
     @Param("teamId") teamId: string,
-    @Param("memberId") memberId: string
+    @Param("memberId") memberId: string,
   ) {
     return this.staffService.removeMemberFromServiceTeam(teamId, memberId);
   }
@@ -639,7 +647,7 @@ export class StaffController {
   @Post("service-teams/:teamId/tables")
   assignTablesToServiceTeam(
     @Param("teamId") teamId: string,
-    @Body() dto: { tableIds: string[] }
+    @Body() dto: { tableIds: string[] },
   ) {
     return this.staffService.assignTablesToServiceTeam(teamId, dto.tableIds);
   }
@@ -648,7 +656,7 @@ export class StaffController {
   @Delete("service-teams/:teamId/tables")
   removeTablesFromServiceTeam(
     @Param("teamId") teamId: string,
-    @Body() dto: { tableIds: string[] }
+    @Body() dto: { tableIds: string[] },
   ) {
     return this.staffService.removeTablesFromServiceTeam(teamId, dto.tableIds);
   }
@@ -667,7 +675,7 @@ export class StaffController {
         leaderId?: string;
         tableIds: string[];
       }>;
-    }
+    },
   ) {
     return this.staffService.saveEventTeams(eventId, dto.teams);
   }
@@ -691,7 +699,7 @@ export class StaffController {
       tableIds: string[];
       groupType?: string;
       notes?: string;
-    }
+    },
   ) {
     return this.staffService.createTableGroup(dto);
   }
@@ -710,7 +718,7 @@ export class StaffController {
       assignedTeamId?: string;
       assignedSupervisorId?: string;
       sortOrder?: number;
-    }
+    },
   ) {
     return this.staffService.updateTableGroup(groupId, dto);
   }
@@ -725,7 +733,7 @@ export class StaffController {
   @Post("table-groups/:groupId/tables")
   addTablesToGroup(
     @Param("groupId") groupId: string,
-    @Body() dto: { tableIds: string[] }
+    @Body() dto: { tableIds: string[] },
   ) {
     return this.staffService.addTablesToGroup(groupId, dto.tableIds);
   }
@@ -734,7 +742,7 @@ export class StaffController {
   @Delete("table-groups/:groupId/tables")
   removeTablesFromGroup(
     @Param("groupId") groupId: string,
-    @Body() dto: { tableIds: string[] }
+    @Body() dto: { tableIds: string[] },
   ) {
     return this.staffService.removeTablesFromGroup(groupId, dto.tableIds);
   }
@@ -743,7 +751,7 @@ export class StaffController {
   @Post("table-groups/:groupId/supervisor")
   assignSupervisorToGroup(
     @Param("groupId") groupId: string,
-    @Body() dto: { supervisorId: string }
+    @Body() dto: { supervisorId: string },
   ) {
     return this.staffService.assignSupervisorToGroup(groupId, dto.supervisorId);
   }
@@ -758,7 +766,7 @@ export class StaffController {
   @Post("table-groups/:groupId/team")
   assignTeamToGroup(
     @Param("groupId") groupId: string,
-    @Body() dto: { teamId: string }
+    @Body() dto: { teamId: string },
   ) {
     return this.staffService.assignTeamToGroup(groupId, dto.teamId);
   }
@@ -780,7 +788,7 @@ export class StaffController {
         notes?: string;
         sortOrder?: number;
       }>;
-    }
+    },
   ) {
     return this.staffService.saveEventTableGroups(eventId, dto.groups);
   }
@@ -803,7 +811,7 @@ export class StaffController {
       color: string;
       badgeColor?: string;
       bgColor?: string;
-    }
+    },
   ) {
     return this.staffService.createRole(dto);
   }
@@ -819,7 +827,7 @@ export class StaffController {
       badgeColor?: string;
       bgColor?: string;
       sortOrder?: number;
-    }
+    },
   ) {
     return this.staffService.updateRole(id, dto);
   }
@@ -848,7 +856,7 @@ export class StaffController {
       endTime: string;
       color?: string;
       eventId?: string;
-    }
+    },
   ) {
     return this.staffService.createShift(dto);
   }
@@ -864,7 +872,7 @@ export class StaffController {
       endTime?: string;
       color?: string;
       sortOrder?: number;
-    }
+    },
   ) {
     return this.staffService.updateShift(id, dto);
   }
@@ -886,7 +894,7 @@ export class StaffController {
       color?: string;
       memberIds?: string[];
       leaderId?: string;
-    }
+    },
   ) {
     return this.staffService.createTeam(dto);
   }
@@ -902,7 +910,7 @@ export class StaffController {
       memberIds?: string[];
       leaderId?: string;
       sortOrder?: number;
-    }
+    },
   ) {
     return this.staffService.updateTeam(id, dto);
   }
@@ -923,7 +931,7 @@ export class StaffController {
   @Put("teams/:id/leader")
   setTeamLeader(
     @Param("id") teamId: string,
-    @Body() dto: { leaderId: string | null }
+    @Body() dto: { leaderId: string | null },
   ) {
     return this.staffService.setTeamLeader(teamId, dto.leaderId);
   }
@@ -932,7 +940,7 @@ export class StaffController {
   @Post("teams/:id/members")
   addMemberToTeam(
     @Param("id") teamId: string,
-    @Body() dto: { memberId: string }
+    @Body() dto: { memberId: string },
   ) {
     return this.staffService.addMemberToTeam(teamId, dto.memberId);
   }
@@ -941,7 +949,7 @@ export class StaffController {
   @Post("teams/:id/members/bulk")
   addMembersToTeamBulk(
     @Param("id") teamId: string,
-    @Body() dto: { memberIds: string[] }
+    @Body() dto: { memberIds: string[] },
   ) {
     return this.staffService.addMembersToTeamBulk(teamId, dto.memberIds);
   }
@@ -950,7 +958,7 @@ export class StaffController {
   @Delete("teams/:id/members/:memberId")
   removeMemberFromTeam(
     @Param("id") teamId: string,
-    @Param("memberId") memberId: string
+    @Param("memberId") memberId: string,
   ) {
     return this.staffService.removeMemberFromTeam(teamId, memberId);
   }
@@ -966,7 +974,7 @@ export class StaffController {
       description?: string;
       createdById?: string;
       eventId: string;
-    }
+    },
   ) {
     return this.staffService.createOrganizationTemplate(dto);
   }
@@ -975,7 +983,7 @@ export class StaffController {
   @Post("organization-templates/:id/apply")
   applyOrganizationTemplate(
     @Param("id") templateId: string,
-    @Body() dto: { eventId: string }
+    @Body() dto: { eventId: string },
   ) {
     return this.staffService.applyOrganizationTemplate(templateId, dto.eventId);
   }
@@ -1021,7 +1029,7 @@ export class StaffController {
       yearsAtCompany?: number;
       isActive?: boolean;
       status?: StaffStatus;
-    }
+    },
   ) {
     // Tarih string'lerini Date'e çevir
     const staffData: Partial<Staff> = {
@@ -1063,7 +1071,7 @@ export class StaffController {
       yearsAtCompany?: number;
       isActive?: boolean;
       status?: StaffStatus;
-    }
+    },
   ) {
     // Tarih string'lerini Date'e çevir
     const staffData: Partial<Staff> = {
@@ -1087,7 +1095,7 @@ export class StaffController {
   @Post("personnel/:id/avatar-base64")
   async uploadPersonnelAvatarBase64(
     @Param("id") id: string,
-    @Body() dto: { avatar: string }
+    @Body() dto: { avatar: string },
   ) {
     if (!dto.avatar) {
       throw new BadRequestException("Avatar verisi gerekli");
@@ -1119,7 +1127,7 @@ export class StaffController {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           return cb(
             new BadRequestException("Sadece resim dosyaları yüklenebilir"),
-            false
+            false,
           );
         }
         cb(null, true);
@@ -1127,11 +1135,11 @@ export class StaffController {
       limits: {
         fileSize: 5 * 1024 * 1024, // 5MB
       },
-    })
+    }),
   )
   async uploadPersonnelAvatar(
     @Param("id") id: string,
-    @UploadedFile() file: Express.Multer.File
+    @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) {
       throw new BadRequestException("Dosya yüklenemedi");
@@ -1144,11 +1152,5 @@ export class StaffController {
   @Post("personnel/import-csv")
   importPersonnelFromCSV(@Body() dto: { data: Array<Record<string, string>> }) {
     return this.staffService.importPersonnelFromCSV(dto.data);
-  }
-
-  // Users tablosundan Staff tablosuna migration
-  @Post("personnel/migrate")
-  migrateUsersToStaff() {
-    return this.staffService.migrateUsersToStaff();
   }
 }

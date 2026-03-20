@@ -37,7 +37,7 @@ export function ReservationPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
+    null,
   );
   const [guestCount, setGuestCount] = useState(2);
   const [notes, setNotes] = useState("");
@@ -50,8 +50,6 @@ export function ReservationPanel({
 
   // Abort controller ref - önceki istekleri iptal etmek için
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  if (!table) return null;
 
   // API ile misafir arama
   const searchCustomers = useCallback(async (query: string) => {
@@ -102,6 +100,8 @@ export function ReservationPanel({
       }
     };
   }, [debouncedSearchQuery, searchCustomers]);
+
+  if (!table) return null;
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);

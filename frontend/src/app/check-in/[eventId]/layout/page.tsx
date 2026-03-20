@@ -96,7 +96,8 @@ const TABLE_TYPE_CONFIG: Record<
 };
 
 const CANVAS_WIDTH = 1050;
-const CANVAS_HEIGHT = 680;
+const CANVAS_HEIGHT_DEFAULT = 680;
+const TABLE_SIZE = 38; // Approximate table render size for bounds calculation
 
 // Grup renkleri palette
 const GROUP_COLORS = [
@@ -155,11 +156,9 @@ export default function CheckInLayoutPage() {
   // Kamera sabit kalma ayarı
   const [lockCamera, setLockCamera] = useState(true);
 
-  // Tıklanan masanın görevli bilgisi popup'ı
-  const [selectedTablePopup, setSelectedTablePopup] = useState<{
+  // Tıklanan masanın görevli bilgisi (sol üst panel)
+  const [selectedTableInfo, setSelectedTableInfo] = useState<{
     tableId: string;
-    x: number;
-    y: number;
     tableLabel: string;
     groupName: string;
     groupColor: string;
@@ -281,6 +280,20 @@ export default function CheckInLayoutPage() {
       .slice(0, 12);
   }, [searchQuery, placedTables]);
 
+  // Dinamik canvas yüksekliği — tüm masalar ve stage element'ler sığacak şekilde
+  const dynamicCanvasHeight = useMemo(() => {
+    let maxY = CANVAS_HEIGHT_DEFAULT;
+    for (const table of placedTables) {
+      const bottomEdge = table.y + (table.isLoca ? 28 : TABLE_SIZE);
+      if (bottomEdge > maxY) maxY = bottomEdge;
+    }
+    for (const el of stageElements) {
+      const bottomEdge = el.y + el.height;
+      if (bottomEdge > maxY) maxY = bottomEdge;
+    }
+    return maxY + 30; // 30px bottom padding
+  }, [placedTables, stageElements]);
+
   const venueLayout: VenueLayout = useMemo(() => {
     const zones: Zone[] = stageElements.map((el) => ({
       id: el.id,
@@ -304,13 +317,13 @@ export default function CheckInLayoutPage() {
     }));
     return {
       width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
+      height: dynamicCanvasHeight,
       zones,
       tables: [],
       walls: [],
       gridSize: 38,
     };
-  }, [stageElements]);
+  }, [stageElements, dynamicCanvasHeight]);
 
   // Masa -> Grup eşleştirmesi (canvasTables'dan önce tanımlanmalı)
   const tableToGroupMap = useMemo(() => {
@@ -410,27 +423,31 @@ export default function CheckInLayoutPage() {
       setHighlightedTableId(table.id);
       setSearchQuery("");
 
-      // Grup görünümü açıksa ve masanın grup bilgisi varsa popup göster
-      if (showGroupView) {
-        const groupInfo = tableToGroupMap[table.id];
-        if (groupInfo) {
-          setSelectedTablePopup({
-            tableId: table.id,
-            x: table.x,
-            y: table.y,
-            tableLabel: table.isLoca
-              ? table.locaName || `L${table.tableNumber}`
-              : `Masa ${table.tableNumber}`,
-            groupName: groupInfo.groupName,
-            groupColor: groupInfo.groupColor,
-            staffNames: groupInfo.staffNames,
-            teamName: groupInfo.teamName,
-            teamColor: groupInfo.teamColor,
-            teamLeaders: groupInfo.teamLeaders,
-          });
-        }
+      // Her zaman masanın görevli bilgisini sol üst panelde göster
+      const groupInfo = tableToGroupMap[table.id];
+      if (groupInfo) {
+        setSelectedTableInfo({
+          tableId: table.id,
+          tableLabel: table.isLoca
+            ? `Loca ${table.locaName || table.tableNumber}`
+            : `Masa ${table.tableNumber}`,
+          groupName: groupInfo.groupName,
+          groupColor: groupInfo.groupColor,
+          staffNames: groupInfo.staffNames,
+          teamName: groupInfo.teamName,
+          teamColor: groupInfo.teamColor,
+          teamLeaders: groupInfo.teamLeaders,
+        });
       } else {
-        setSelectedTablePopup(null);
+        setSelectedTableInfo({
+          tableId: table.id,
+          tableLabel: table.isLoca
+            ? `Loca ${table.locaName || table.tableNumber}`
+            : `Masa ${table.tableNumber}`,
+          groupName: "",
+          groupColor: "#6b7280",
+          staffNames: [],
+        });
       }
 
       // Kamera kilidi kapalıysa hareket ettir
@@ -443,7 +460,7 @@ export default function CheckInLayoutPage() {
       }
       setTimeout(() => setHighlightedTableId(null), 8000);
     },
-    [viewMode, zoom, lockCamera, showGroupView, tableToGroupMap],
+    [viewMode, zoom, lockCamera, tableToGroupMap],
   );
 
   const handleDirectSearch = useCallback(() => {
@@ -523,9 +540,9 @@ export default function CheckInLayoutPage() {
       }
     }
 
-    // Popup açıksa ve boş alana tıklandıysa kapat
-    if (selectedTablePopup) {
-      setSelectedTablePopup(null);
+    // Panel açıksa ve boş alana tıklandıysa kapat
+    if (selectedTableInfo) {
+      setSelectedTableInfo(null);
     }
 
     setIsDragging(true);
@@ -821,7 +838,7 @@ export default function CheckInLayoutPage() {
               className="relative bg-slate-800/50 rounded-2xl border border-slate-700 shadow-2xl"
               style={{
                 width: CANVAS_WIDTH * zoom,
-                height: CANVAS_HEIGHT * zoom,
+                height: dynamicCanvasHeight * zoom,
               }}
             >
               <div
@@ -894,7 +911,8 @@ export default function CheckInLayoutPage() {
                         transform: isHighlighted ? "scale(1.5)" : "scale(1)",
                         animation: isHighlighted ? "pulse 1s infinite" : "none",
                       }}
-                      onClick={() => handleTableSelect(table)}
+                      onClick={(e) => { e.stopPropagation(); handleTableSelect(table); }}
+                      onMouseDown={(e) => e.stopPropagation()}
                     >
                       {table.tableNumber}
                     </div>
@@ -939,7 +957,8 @@ export default function CheckInLayoutPage() {
                         transform: isHighlighted ? "scale(1.5)" : "scale(1)",
                         animation: isHighlighted ? "pulse 1s infinite" : "none",
                       }}
-                      onClick={() => handleTableSelect(loca)}
+                      onClick={(e) => { e.stopPropagation(); handleTableSelect(loca); }}
+                      onMouseDown={(e) => e.stopPropagation()}
                     >
                       {loca.locaName}
                     </div>
@@ -948,13 +967,12 @@ export default function CheckInLayoutPage() {
 
               {highlightedTableId && (
                 <div
-                  className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-start gap-3"
+                  className="absolute top-4 left-1/2 -translate-x-1/2 z-40"
                   style={{ transform: `translateX(-50%) scale(${1 / zoom})` }}
                 >
-                  {/* Masa Kartı */}
-                  <div className="bg-cyan-600 text-white px-6 py-3 rounded-xl shadow-2xl animate-bounce flex items-center gap-3">
-                    <MapPin className="w-6 h-6" />
-                    <span className="font-bold text-lg">
+                  <div className="bg-cyan-600 text-white px-5 py-2 rounded-xl shadow-2xl animate-bounce flex items-center gap-2">
+                    <MapPin className="w-5 h-5" />
+                    <span className="font-bold text-base">
                       {(() => {
                         const table = placedTables.find(
                           (t) => t.id === highlightedTableId,
@@ -965,194 +983,11 @@ export default function CheckInLayoutPage() {
                           : `Masa ${table.tableNumber}`;
                       })()}
                     </span>
-                    <span className="text-cyan-200">← Burada</span>
-                  </div>
-
-                  {/* Takım Bilgi Kartı - Grup görünümü açıksa göster */}
-                  {showGroupView &&
-                    (() => {
-                      const groupInfo = tableToGroupMap[highlightedTableId];
-                      if (!groupInfo) return null;
-
-                      return (
-                        <div
-                          className="bg-slate-900/95 border-2 rounded-xl p-4 shadow-2xl backdrop-blur-sm min-w-[220px] animate-fadeIn"
-                          style={{
-                            borderColor:
-                              groupInfo.teamColor || groupInfo.groupColor,
-                          }}
-                        >
-                          {/* Grup Bilgisi */}
-                          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-700">
-                            <div
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: groupInfo.groupColor }}
-                            />
-                            <span className="text-white font-bold text-sm">
-                              {groupInfo.groupName}
-                            </span>
-                          </div>
-
-                          {/* Takım Bilgisi */}
-                          {groupInfo.teamName && (
-                            <div className="mb-3">
-                              <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
-                                Takım
-                              </p>
-                              <div
-                                className="flex items-center gap-2 px-3 py-2 rounded-lg"
-                                style={{
-                                  backgroundColor: `${groupInfo.teamColor}20`,
-                                }}
-                              >
-                                <Users
-                                  className="w-4 h-4"
-                                  style={{ color: groupInfo.teamColor }}
-                                />
-                                <span className="text-white font-medium text-sm">
-                                  {groupInfo.teamName}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Takım Kaptanları */}
-                          {groupInfo.teamLeaders &&
-                            groupInfo.teamLeaders.length > 0 && (
-                              <div className="mb-3">
-                                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
-                                  Takım Kaptanı
-                                </p>
-                                <div className="space-y-1">
-                                  {groupInfo.teamLeaders.map((leader, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="flex items-center gap-2 bg-amber-500/20 px-3 py-2 rounded-lg"
-                                    >
-                                      <Crown className="w-4 h-4 text-amber-400" />
-                                      <span className="text-amber-200 font-medium text-sm">
-                                        {leader.staffName}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                          {/* Görevliler */}
-                          <div>
-                            <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
-                              Görevliler
-                            </p>
-                            {groupInfo.staffNames.length > 0 ? (
-                              <div className="space-y-1 max-h-24 overflow-y-auto">
-                                {groupInfo.staffNames.map((name, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg"
-                                  >
-                                    <User className="w-3 h-3 text-slate-400" />
-                                    <span className="text-white text-xs">
-                                      {name}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-slate-500 italic">
-                                Görevli atanmamış
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                </div>
-              )}
-
-              {/* Staff Info Popup - Masaya tıklayınca gösterilir */}
-              {selectedTablePopup && showGroupView && (
-                <div
-                  className="absolute z-50"
-                  style={{
-                    left: selectedTablePopup.x * zoom,
-                    top: selectedTablePopup.y * zoom - 80,
-                    transform: "translateX(-50%)",
-                  }}
-                >
-                  <div
-                    className="bg-slate-900/95 border-2 rounded-xl p-3 shadow-2xl backdrop-blur-sm min-w-[180px] max-w-[280px]"
-                    style={{ borderColor: selectedTablePopup.groupColor }}
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-700">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{
-                            backgroundColor: selectedTablePopup.groupColor,
-                          }}
-                        />
-                        <span className="text-white font-bold text-sm">
-                          {selectedTablePopup.tableLabel}
-                        </span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedTablePopup(null);
-                        }}
-                        className="p-1 hover:bg-slate-700 rounded-full transition-colors"
-                      >
-                        <X className="w-3 h-3 text-slate-400" />
-                      </button>
-                    </div>
-
-                    {/* Grup Adı */}
-                    <div
-                      className="text-xs font-medium mb-2 px-2 py-1 rounded-lg"
-                      style={{
-                        backgroundColor: `${selectedTablePopup.groupColor}20`,
-                        color: selectedTablePopup.groupColor,
-                      }}
-                    >
-                      {selectedTablePopup.groupName}
-                    </div>
-
-                    {/* Görevliler */}
-                    <div className="space-y-1">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-                        Görevliler
-                      </p>
-                      {selectedTablePopup.staffNames.length > 0 ? (
-                        <div className="space-y-1">
-                          {selectedTablePopup.staffNames.map((name, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center gap-2 text-xs text-white bg-slate-800 px-2 py-1.5 rounded-lg"
-                            >
-                              <User className="w-3 h-3 text-slate-400" />
-                              {name}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500 italic">
-                          Görevli atanmamış
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Arrow */}
-                    <div
-                      className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-t-[8px] border-l-transparent border-r-transparent"
-                      style={{
-                        borderTopColor: selectedTablePopup.groupColor,
-                      }}
-                    />
                   </div>
                 </div>
               )}
+
+
 
               {/* My Position Marker */}
               {myPosition && (
@@ -1221,13 +1056,131 @@ export default function CheckInLayoutPage() {
                 setTimeout(() => setHighlightedTableId(null), 8000);
               }}
               entrancePosition={
-                myPosition || { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 50 }
+                myPosition || { x: CANVAS_WIDTH / 2, y: dynamicCanvasHeight - 50 }
               }
               showPath={!!highlightedTableId}
             />
           </div>
         )}
       </div>
+
+      {/* Selected Table Staff Info Panel - Sol Üst */}
+      {selectedTableInfo && (
+        <div className="fixed top-16 left-4 z-50 animate-fadeIn">
+          <div
+            className="bg-slate-900/95 border-2 rounded-xl p-4 shadow-2xl backdrop-blur-sm min-w-[240px] max-w-[320px]"
+            style={{ borderColor: selectedTableInfo.groupColor }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-700">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+                  style={{ backgroundColor: selectedTableInfo.groupColor }}
+                >
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <span className="text-white font-bold text-base">
+                  {selectedTableInfo.tableLabel}
+                </span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedTableInfo(null);
+                }}
+                className="p-1.5 hover:bg-slate-700 rounded-full transition-colors"
+                title="Kapat"
+              >
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Grup Adı */}
+            {selectedTableInfo.groupName && (
+              <div
+                className="text-xs font-medium mb-3 px-2.5 py-1.5 rounded-lg"
+                style={{
+                  backgroundColor: `${selectedTableInfo.groupColor}20`,
+                  color: selectedTableInfo.groupColor,
+                }}
+              >
+                {selectedTableInfo.groupName}
+              </div>
+            )}
+
+            {/* Takım Bilgisi */}
+            {selectedTableInfo.teamName && (
+              <div className="mb-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+                  Takım
+                </p>
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                  style={{
+                    backgroundColor: `${selectedTableInfo.teamColor}20`,
+                  }}
+                >
+                  <Users
+                    className="w-4 h-4"
+                    style={{ color: selectedTableInfo.teamColor }}
+                  />
+                  <span className="text-white font-medium text-sm">
+                    {selectedTableInfo.teamName}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Takım Kaptanları */}
+            {selectedTableInfo.teamLeaders &&
+              selectedTableInfo.teamLeaders.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+                    Takım Kaptanı
+                  </p>
+                  <div className="space-y-1">
+                    {selectedTableInfo.teamLeaders.map((leader, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 bg-amber-500/20 px-3 py-2 rounded-lg"
+                      >
+                        <Crown className="w-4 h-4 text-amber-400" />
+                        <span className="text-amber-200 font-medium text-sm">
+                          {leader.staffName}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Görevliler */}
+            <div>
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+                Görevliler
+              </p>
+              {selectedTableInfo.staffNames.length > 0 ? (
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {selectedTableInfo.staffNames.map((name, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 bg-slate-800 px-3 py-2 rounded-lg"
+                    >
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="text-white text-sm">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  Görevli atanmamış
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="fixed bottom-4 left-4 bg-slate-800/95 border border-slate-700 rounded-xl p-3 z-40 backdrop-blur-sm">

@@ -18,7 +18,7 @@ export function useEvents(page = 1, limit = 50) {
   return useQuery({
     queryKey: queryKeys.events.list({ page, limit }),
     queryFn: async () => {
-      const response = await eventsApi.getAll(false); // useCache=false, React Query handles caching
+      const response = await eventsApi.getAll(); // React Query handles caching
       return response.data;
     },
   });

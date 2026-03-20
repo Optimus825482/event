@@ -7,16 +7,12 @@ import {
   Min,
   Max,
   MaxLength,
-  Matches,
   IsEmail,
   IsUUID,
 } from "class-validator";
 import { Transform } from "class-transformer";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { ReservationStatus } from "../../../entities/reservation.entity";
-
-// Telefon numarası regex - Türkiye formatı
-const PHONE_REGEX = /^(\+90|0)?[0-9]{10}$/;
 
 // XSS koruması için sanitize
 const sanitizeInput = (value: string): string => {
@@ -111,9 +107,6 @@ export class CreateReservationDto {
   @ApiPropertyOptional({ description: "Misafir telefonu" })
   @IsOptional()
   @IsString()
-  @Matches(PHONE_REGEX, {
-    message: "Geçerli bir telefon numarası giriniz (örn: 05551234567)",
-  })
   guestPhone?: string;
 
   @ApiPropertyOptional({ description: "Misafir e-postası" })
@@ -166,4 +159,49 @@ export class UpdateReservationDto {
   @IsOptional()
   @IsBoolean()
   isPaid?: boolean;
+}
+
+/**
+ * Walk-in misafir kaydı DTO'su
+ * Requirement: Check-in Module 11.1, 11.2, 11.4
+ */
+export class WalkInDto {
+  @ApiProperty({ description: "Etkinlik ID" })
+  @IsString()
+  @IsUUID("4", { message: "Geçerli bir etkinlik ID giriniz" })
+  eventId: string;
+
+  @ApiProperty({ description: "Misafir adı" })
+  @IsString()
+  @MaxLength(100, { message: "Misafir adı en fazla 100 karakter olabilir" })
+  @Transform(({ value }) => (value ? sanitizeInput(value) : value))
+  guestName: string;
+
+  @ApiProperty({ description: "Misafir sayısı", minimum: 1 })
+  @IsNumber()
+  @Min(1, { message: "Misafir sayısı en az 1 olmalıdır" })
+  @Max(50, { message: "Misafir sayısı en fazla 50 olabilir" })
+  guestCount: number;
+
+  @ApiProperty({ description: "Masa ID" })
+  @IsString()
+  tableId: string;
+
+  @ApiPropertyOptional({ description: "Telefon numarası" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
+}
+
+/**
+ * Kişi sayısı güncelleme DTO'su
+ * Requirement: Check-in Module 12.1
+ */
+export class UpdateGuestCountDto {
+  @ApiProperty({ description: "Yeni misafir sayısı", minimum: 1 })
+  @IsNumber()
+  @Min(1, { message: "Misafir sayısı en az 1 olmalıdır" })
+  @Max(50, { message: "Misafir sayısı en fazla 50 olabilir" })
+  guestCount: number;
 }

@@ -1,8 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree:*)",
-      "Bash(ls:*)"
+      "mcp__plugin_playwright_playwright__browser_navigate"
     ]
   }
 }

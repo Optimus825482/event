@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { User, Briefcase, Phone, CalendarDays, Edit2 } from "lucide-react";
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { staffApi } from "@/lib/api";
 import { getAvatarUrl, getInitials } from "../utils";
 import type { Personnel } from "../types";
 
@@ -26,7 +28,26 @@ export function PersonnelViewModal({
   onClose,
   onEdit,
 }: PersonnelViewModalProps) {
+  const [fullData, setFullData] = useState<Personnel | null>(null);
+
+  // Liste avatar içermediğinden, modal açılınca tam veriyi yükle
+  useEffect(() => {
+    if (personnel && !personnel.avatar) {
+      staffApi
+        .getPersonnelById(personnel.id)
+        .then((res) => {
+          setFullData(res.data);
+        })
+        .catch(() => {});
+    } else {
+      setFullData(null);
+    }
+  }, [personnel]);
+
   if (!personnel) return null;
+
+  // Tam veri yüklendiyse onu kullan (avatar için)
+  const displayAvatar = fullData?.avatar || personnel.avatar;
 
   return (
     <Dialog open={!!personnel} onOpenChange={onClose}>
@@ -46,10 +67,7 @@ export function PersonnelViewModal({
                   personnel.status === "active" ? "#22c55e" : "#ef4444",
               }}
             >
-              <AvatarImage
-                src={getAvatarUrl(personnel.avatar)}
-                loading="eager"
-              />
+              <AvatarImage src={getAvatarUrl(displayAvatar)} loading="eager" />
               <AvatarFallback className="bg-slate-600 text-white font-bold text-3xl">
                 {getInitials(personnel.fullName)}
               </AvatarFallback>
@@ -69,15 +87,15 @@ export function PersonnelViewModal({
                     personnel.status === "active"
                       ? "bg-green-500/20 text-green-400 border-green-500/30"
                       : personnel.status === "inactive"
-                      ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                      : "bg-red-500/20 text-red-400 border-red-500/30"
+                        ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                        : "bg-red-500/20 text-red-400 border-red-500/30"
                   }`}
                 >
                   {personnel.status === "active"
                     ? "Aktif"
                     : personnel.status === "inactive"
-                    ? "Pasif"
-                    : "Ayrıldı"}
+                      ? "Pasif"
+                      : "Ayrıldı"}
                 </Badge>
               </div>
             </div>
@@ -151,8 +169,8 @@ export function PersonnelViewModal({
                   {personnel.gender === "male"
                     ? "Erkek"
                     : personnel.gender === "female"
-                    ? "Kadın"
-                    : "-"}
+                      ? "Kadın"
+                      : "-"}
                 </p>
               </div>
               <div className="bg-slate-700/50 rounded-lg p-3">
@@ -217,7 +235,7 @@ export function PersonnelViewModal({
                     <p className="text-white font-medium">
                       {personnel.terminationDate
                         ? new Date(
-                            personnel.terminationDate
+                            personnel.terminationDate,
                           ).toLocaleDateString("tr-TR")
                         : "-"}
                     </p>

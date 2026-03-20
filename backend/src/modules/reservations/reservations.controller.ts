@@ -9,7 +9,7 @@ import {
   Param,
   Query,
   UseGuards,
-  SetMetadata,
+  ForbiddenException,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -22,21 +22,33 @@ import {
   CreateReservationDto,
   UpdateReservationDto,
   ReservationFiltersDto,
+  WalkInDto,
+  UpdateGuestCountDto,
 } from "./dto/reservation.dto";
 import { ReservationStatus } from "../../entities/reservation.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { Public } from "../auth/decorators/public.decorator";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
-
-// Public decorator - check-in endpoint'leri için auth bypass
-const IS_PUBLIC_KEY = "isPublic";
-const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+import { SettingsService } from "../settings/settings.service";
 
 @ApiTags("Reservations")
 @ApiBearerAuth("JWT-auth")
 @Controller("reservations")
 @UseGuards(JwtAuthGuard)
 export class ReservationsController {
-  constructor(private reservationsService: ReservationsService) {}
+  constructor(
+    private reservationsService: ReservationsService,
+    private settingsService: SettingsService,
+  ) {}
+
+  private async ensureQrCodeEnabled(): Promise<void> {
+    const settings = await this.settingsService.getSettings();
+    if (!settings.qrCodeSystemEnabled) {
+      throw new ForbiddenException(
+        "QR kod sistemi şu anda devre dışı. Sistem ayarlarından aktif edebilirsiniz.",
+      );
+    }
+  }
 
   @Post()
   @ApiOperation({ summary: "Yeni rezervasyon oluştur" })
@@ -55,12 +67,16 @@ export class ReservationsController {
   @ApiQuery({ name: "status", required: false, enum: ReservationStatus })
   @ApiQuery({ name: "searchQuery", required: false })
   @ApiQuery({ name: "tableId", required: false })
+  @ApiQuery({ name: "page", required: false, type: Number })
+  @ApiQuery({ name: "limit", required: false, type: Number })
   findAll(
     @Query("eventId") eventId?: string,
     @Query("customerId") customerId?: string,
     @Query("status") status?: ReservationStatus,
     @Query("searchQuery") searchQuery?: string,
-    @Query("tableId") tableId?: string
+    @Query("tableId") tableId?: string,
+    @Query("page") page?: number,
+    @Query("limit") limit?: number,
   ) {
     const filters: ReservationFiltersDto = {
       eventId,
@@ -69,7 +85,9 @@ export class ReservationsController {
       searchQuery,
       tableId,
     };
-    return this.reservationsService.findAll(filters);
+    const pageNum = page && page > 0 ? +page : 1;
+    const limitNum = limit && limit > 0 && limit <= 100 ? +limit : 50;
+    return this.reservationsService.findAll(filters, pageNum, limitNum);
   }
 
   /**
@@ -78,8 +96,22 @@ export class ReservationsController {
    */
   @Get("search")
   @ApiOperation({ summary: "Rezervasyon ara" })
-  search(@Query("q") searchQuery: string, @Query("eventId") eventId?: string) {
-    return this.reservationsService.search(searchQuery, eventId);
+  @ApiQuery({ name: "page", required: false, type: Number })
+  @ApiQuery({ name: "limit", required: false, type: Number })
+  search(
+    @Query("q") searchQuery: string,
+    @Query("eventId") eventId?: string,
+    @Query("page") page?: number,
+    @Query("limit") limit?: number,
+  ) {
+    const pageNum = page && page > 0 ? +page : 1;
+    const limitNum = limit && limit > 0 && limit <= 100 ? +limit : 50;
+    return this.reservationsService.search(
+      searchQuery,
+      eventId,
+      pageNum,
+      limitNum,
+    );
   }
 
   /**
@@ -88,12 +120,22 @@ export class ReservationsController {
    */
   @Get("filter")
   @ApiOperation({ summary: "Rezervasyonları filtrele" })
+  @ApiQuery({ name: "page", required: false, type: Number })
+  @ApiQuery({ name: "limit", required: false, type: Number })
   filter(
     @Query("status") status?: ReservationStatus,
     @Query("eventId") eventId?: string,
-    @Query("tableId") tableId?: string
+    @Query("tableId") tableId?: string,
+    @Query("page") page?: number,
+    @Query("limit") limit?: number,
   ) {
-    return this.reservationsService.filter({ status, eventId, tableId });
+    const pageNum = page && page > 0 ? +page : 1;
+    const limitNum = limit && limit > 0 && limit <= 100 ? +limit : 50;
+    return this.reservationsService.filter(
+      { status, eventId, tableId },
+      pageNum,
+      limitNum,
+    );
   }
 
   @Get(":id")
@@ -104,7 +146,8 @@ export class ReservationsController {
 
   @Get(":id/qrcode")
   @ApiOperation({ summary: "Rezervasyon QR kodu oluştur" })
-  generateQRCode(@Param("id") id: string) {
+  async generateQRCode(@Param("id") id: string) {
+    await this.ensureQrCodeEnabled();
     return this.reservationsService.generateQRCode(id);
   }
 
@@ -122,7 +165,8 @@ export class ReservationsController {
   @Public()
   @Get("qr/:qrCodeHash")
   @ApiOperation({ summary: "QR kod ile rezervasyon getir (Public)" })
-  getByQRCode(@Param("qrCodeHash") qrCodeHash: string) {
+  async getByQRCode(@Param("qrCodeHash") qrCodeHash: string) {
+    await this.ensureQrCodeEnabled();
     return this.reservationsService.getReservationByQRCode(qrCodeHash);
   }
 
@@ -134,7 +178,8 @@ export class ReservationsController {
   @Public()
   @Post("check-in/:qrCodeHash")
   @ApiOperation({ summary: "QR kod ile check-in (Public)" })
-  checkIn(@Param("qrCodeHash") qrCodeHash: string) {
+  async checkIn(@Param("qrCodeHash") qrCodeHash: string) {
+    await this.ensureQrCodeEnabled();
     return this.reservationsService.checkIn(qrCodeHash);
   }
 
@@ -158,7 +203,7 @@ export class ReservationsController {
   @ApiOperation({ summary: "Masa rezervasyonları" })
   getByTable(
     @Param("eventId") eventId: string,
-    @Param("tableId") tableId: string
+    @Param("tableId") tableId: string,
   ) {
     return this.reservationsService.getByTable(eventId, tableId);
   }
@@ -167,7 +212,7 @@ export class ReservationsController {
   @ApiOperation({ summary: "Masa müsaitlik kontrolü" })
   isTableAvailable(
     @Param("eventId") eventId: string,
-    @Param("tableId") tableId: string
+    @Param("tableId") tableId: string,
   ) {
     return this.reservationsService.isTableAvailable(eventId, tableId);
   }
@@ -231,11 +276,11 @@ export class ReservationsController {
   @ApiOperation({ summary: "Check-in geçmişi (Public)" })
   getCheckInHistory(
     @Param("eventId") eventId: string,
-    @Query("limit") limit?: string
+    @Query("limit") limit?: string,
   ) {
     return this.reservationsService.getCheckInHistory(
       eventId,
-      limit ? parseInt(limit, 10) : 20
+      limit ? parseInt(limit, 10) : 20,
     );
   }
 
@@ -257,16 +302,7 @@ export class ReservationsController {
   @Public()
   @Post("walk-in")
   @ApiOperation({ summary: "Walk-in misafir kaydı (Public)" })
-  registerWalkIn(
-    @Body()
-    dto: {
-      eventId: string;
-      guestName: string;
-      guestCount: number;
-      tableId: string;
-      phone?: string;
-    }
-  ) {
+  registerWalkIn(@Body() dto: WalkInDto) {
     return this.reservationsService.registerWalkIn(dto);
   }
 
@@ -277,10 +313,7 @@ export class ReservationsController {
   @Public()
   @Patch(":id/guest-count")
   @ApiOperation({ summary: "Kişi sayısı güncelle (Public)" })
-  updateGuestCount(
-    @Param("id") id: string,
-    @Body() dto: { guestCount: number }
-  ) {
+  updateGuestCount(@Param("id") id: string, @Body() dto: UpdateGuestCountDto) {
     return this.reservationsService.updateGuestCount(id, dto.guestCount);
   }
 }

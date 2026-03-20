@@ -82,7 +82,7 @@ export class StaffService {
     private departmentLocationRepository: Repository<DepartmentLocation>,
     @Inject(forwardRef(() => NotificationsService))
     private notificationsService: NotificationsService,
-    private dataSource: DataSource
+    private dataSource: DataSource,
   ) {}
 
   // Personel listesi (role = 'staff' veya 'leader')
@@ -168,7 +168,7 @@ export class StaffService {
     }
 
     // Şifreyi hashle
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 12);
 
     // Captan ve Supervizor için role=leader, diğerleri için role=staff
     const leaderPositions = ["captan", "supervizor", "sef"];
@@ -195,7 +195,7 @@ export class StaffService {
       await this.notificationsService.notifyNewStaffAdded(
         saved.fullName,
         saved.position || "Personel",
-        "" // createdById - controller'dan geçirilecek
+        "", // createdById - controller'dan geçirilecek
       );
     } catch {
       // Bildirim hatası ana işlemi etkilemesin
@@ -216,7 +216,7 @@ export class StaffService {
       position?: string;
       avatar?: string;
       isActive?: boolean;
-    }
+    },
   ): Promise<User> {
     const staff = await this.userRepository.findOne({
       where: [
@@ -246,7 +246,7 @@ export class StaffService {
 
   // Personeli deaktif et (soft delete)
   async deactivateStaff(
-    id: string
+    id: string,
   ): Promise<{ success: boolean; message: string }> {
     const staff = await this.userRepository.findOne({
       where: [
@@ -270,7 +270,7 @@ export class StaffService {
     eventId: string,
     staffId: string,
     tableIds: string[],
-    color?: string
+    color?: string,
   ): Promise<StaffAssignment> {
     // Personel kontrolü
     const staff = await this.userRepository.findOne({ where: { id: staffId } });
@@ -300,7 +300,7 @@ export class StaffService {
   // Toplu atama - OPTİMİZE EDİLDİ
   async bulkAssignTables(
     eventId: string,
-    assignments: Array<{ staffId: string; tableIds: string[] }>
+    assignments: Array<{ staffId: string; tableIds: string[] }>,
   ): Promise<StaffAssignment[]> {
     if (assignments.length === 0) {
       return [];
@@ -350,7 +350,7 @@ export class StaffService {
   // Atama kaldır
   async removeAssignment(
     eventId: string,
-    staffId: string
+    staffId: string,
   ): Promise<{ success: boolean }> {
     await this.assignmentRepository.delete({ eventId, staffId });
     return { success: true };
@@ -430,7 +430,7 @@ export class StaffService {
   async autoAssignTables(
     eventId: string,
     staffIds: string[],
-    strategy: "balanced" | "zone" | "random" = "balanced"
+    strategy: "balanced" | "zone" | "random" = "balanced",
   ): Promise<Array<{ staffId: string; tableIds: string[] }>> {
     if (staffIds.length === 0) {
       throw new BadRequestException("En az bir personel seçilmeli");
@@ -454,7 +454,7 @@ export class StaffService {
     }>;
     // Loca hariç masalar
     const assignableTables = tables.filter(
-      (t) => t.typeName?.toLowerCase() !== "loca" && t.type !== "loca"
+      (t) => t.typeName?.toLowerCase() !== "loca" && t.type !== "loca",
     );
 
     if (assignableTables.length === 0) {
@@ -466,7 +466,7 @@ export class StaffService {
     if (strategy === "balanced") {
       // Dengeli dağıtım - her personele eşit sayıda masa
       const tablesPerStaff = Math.ceil(
-        assignableTables.length / staffIds.length
+        assignableTables.length / staffIds.length,
       );
       let tableIndex = 0;
 
@@ -519,7 +519,7 @@ export class StaffService {
   // Tüm atamaları kaydet - N+1 QUERY DÜZELTİLDİ
   async saveEventAssignments(
     eventId: string,
-    assignments: Array<{ staffId: string; tableIds: string[]; color?: string }>
+    assignments: Array<{ staffId: string; tableIds: string[]; color?: string }>,
   ): Promise<{ success: boolean; savedCount: number }> {
     // Önce mevcut atamaları sil
     await this.assignmentRepository.delete({ eventId });
@@ -546,7 +546,7 @@ export class StaffService {
         staffId: item.staffId,
         assignedTableIds: item.tableIds || [],
         color: item.color || staffColorMap.get(item.staffId) || "#3b82f6",
-      })
+      }),
     );
 
     // Tek sorguda tüm atamaları kaydet
@@ -607,7 +607,7 @@ export class StaffService {
       members?: TeamMember[];
       leaderId?: string;
       tableIds?: string[];
-    }
+    },
   ): Promise<ServiceTeam> {
     const team = await this.getServiceTeamById(teamId);
     Object.assign(team, dto);
@@ -626,7 +626,7 @@ export class StaffService {
   // Servis ekibine üye ekle
   async addMemberToServiceTeam(
     teamId: string,
-    member: TeamMember
+    member: TeamMember,
   ): Promise<ServiceTeam> {
     const team = await this.getServiceTeamById(teamId);
 
@@ -642,7 +642,7 @@ export class StaffService {
   // Servis ekibinden üye çıkar
   async removeMemberFromServiceTeam(
     teamId: string,
-    memberId: string
+    memberId: string,
   ): Promise<ServiceTeam> {
     const team = await this.getServiceTeamById(teamId);
     team.members = team.members.filter((m) => m.id !== memberId);
@@ -658,7 +658,7 @@ export class StaffService {
   // Servis ekibine masa ata
   async assignTablesToServiceTeam(
     teamId: string,
-    tableIds: string[]
+    tableIds: string[],
   ): Promise<ServiceTeam> {
     const team = await this.getServiceTeamById(teamId);
 
@@ -670,7 +670,7 @@ export class StaffService {
     for (const otherTeam of otherTeams) {
       if (otherTeam.id !== teamId) {
         const filteredTableIds = otherTeam.tableIds.filter(
-          (id) => !tableIds.includes(id)
+          (id) => !tableIds.includes(id),
         );
         if (filteredTableIds.length !== otherTeam.tableIds.length) {
           otherTeam.tableIds = filteredTableIds;
@@ -687,7 +687,7 @@ export class StaffService {
   // Servis ekibinden masa kaldır
   async removeTablesFromServiceTeam(
     teamId: string,
-    tableIds: string[]
+    tableIds: string[],
   ): Promise<ServiceTeam> {
     const team = await this.getServiceTeamById(teamId);
     team.tableIds = team.tableIds.filter((id) => !tableIds.includes(id));
@@ -712,7 +712,7 @@ export class StaffService {
       }>;
       leaderId?: string;
       tableIds: string[];
-    }>
+    }>,
   ): Promise<{
     success: boolean;
     savedCount: number;
@@ -803,7 +803,7 @@ export class StaffService {
 
     for (const group of existingGroups) {
       const filteredTableIds = group.tableIds.filter(
-        (id) => !dto.tableIds.includes(id)
+        (id) => !dto.tableIds.includes(id),
       );
       if (filteredTableIds.length !== group.tableIds.length) {
         group.tableIds = filteredTableIds;
@@ -814,7 +814,7 @@ export class StaffService {
     // Sıralama numarası
     const maxOrder = existingGroups.reduce(
       (max, g) => Math.max(max, g.sortOrder),
-      0
+      0,
     );
 
     const tableGroup = this.tableGroupRepository.create({
@@ -842,7 +842,7 @@ export class StaffService {
       assignedTeamId?: string;
       assignedSupervisorId?: string;
       sortOrder?: number;
-    }
+    },
   ): Promise<TableGroup> {
     const group = await this.getTableGroupById(groupId);
 
@@ -855,7 +855,7 @@ export class StaffService {
       for (const otherGroup of otherGroups) {
         if (otherGroup.id !== groupId) {
           const filteredTableIds = otherGroup.tableIds.filter(
-            (id) => !dto.tableIds!.includes(id)
+            (id) => !dto.tableIds!.includes(id),
           );
           if (filteredTableIds.length !== otherGroup.tableIds.length) {
             otherGroup.tableIds = filteredTableIds;
@@ -881,7 +881,7 @@ export class StaffService {
   // Gruba masa ekle
   async addTablesToGroup(
     groupId: string,
-    tableIds: string[]
+    tableIds: string[],
   ): Promise<TableGroup> {
     const group = await this.getTableGroupById(groupId);
 
@@ -893,7 +893,7 @@ export class StaffService {
     for (const otherGroup of otherGroups) {
       if (otherGroup.id !== groupId) {
         const filteredTableIds = otherGroup.tableIds.filter(
-          (id) => !tableIds.includes(id)
+          (id) => !tableIds.includes(id),
         );
         if (filteredTableIds.length !== otherGroup.tableIds.length) {
           otherGroup.tableIds = filteredTableIds;
@@ -909,7 +909,7 @@ export class StaffService {
   // Gruptan masa çıkar
   async removeTablesFromGroup(
     groupId: string,
-    tableIds: string[]
+    tableIds: string[],
   ): Promise<TableGroup> {
     const group = await this.getTableGroupById(groupId);
     group.tableIds = group.tableIds.filter((id) => !tableIds.includes(id));
@@ -919,7 +919,7 @@ export class StaffService {
   // Gruba süpervizör ata
   async assignSupervisorToGroup(
     groupId: string,
-    supervisorId: string
+    supervisorId: string,
   ): Promise<TableGroup> {
     const group = await this.getTableGroupById(groupId);
 
@@ -948,7 +948,7 @@ export class StaffService {
   // Gruba ekip ata
   async assignTeamToGroup(
     groupId: string,
-    teamId: string
+    teamId: string,
   ): Promise<TableGroup> {
     const group = await this.getTableGroupById(groupId);
 
@@ -977,7 +977,7 @@ export class StaffService {
       await this.syncStaffTeamIdByTableGroup(
         group.eventId,
         group.tableIds,
-        teamId
+        teamId,
       );
 
       return this.tableGroupRepository.save(group);
@@ -994,7 +994,7 @@ export class StaffService {
       await this.syncStaffTeamIdByTableGroup(
         group.eventId,
         group.tableIds,
-        teamId
+        teamId,
       );
     }
 
@@ -1005,7 +1005,7 @@ export class StaffService {
   private async syncStaffTeamIdByTableGroup(
     eventId: string,
     tableIds: string[],
-    teamId: string
+    teamId: string,
   ): Promise<void> {
     if (!tableIds || tableIds.length === 0) return;
 
@@ -1028,7 +1028,7 @@ export class StaffService {
 
       // Personelin atandığı masalardan herhangi biri bu gruptaki masalardan mı?
       const hasMatchingTable = assignment.tableIds.some((tid) =>
-        tableIds.includes(tid)
+        tableIds.includes(tid),
       );
 
       if (hasMatchingTable && assignment.teamId !== teamId) {
@@ -1052,7 +1052,7 @@ export class StaffService {
       assignedSupervisorId?: string;
       notes?: string;
       sortOrder?: number;
-    }>
+    }>,
   ): Promise<{ success: boolean; savedCount: number }> {
     // Input validasyonu
     if (!eventId) {
@@ -1190,7 +1190,7 @@ export class StaffService {
     // Atanmış masa sayısı
     const assignedTableIds = new Set<string>();
     tableGroups.forEach((g) =>
-      g.tableIds.forEach((id) => assignedTableIds.add(id))
+      g.tableIds.forEach((id) => assignedTableIds.add(id)),
     );
 
     return {
@@ -1336,7 +1336,7 @@ export class StaffService {
       badgeColor?: string;
       bgColor?: string;
       sortOrder?: number;
-    }
+    },
   ): Promise<StaffRole> {
     const role = await this.getRoleById(id);
 
@@ -1359,7 +1359,7 @@ export class StaffService {
 
     if (staffCount > 0) {
       throw new BadRequestException(
-        `Bu rolde ${staffCount} personel var. Önce personellerin rolünü değiştirin.`
+        `Bu rolde ${staffCount} personel var. Önce personellerin rolünü değiştirin.`,
       );
     }
 
@@ -1380,7 +1380,7 @@ export class StaffService {
 
     if (staffCount > 0) {
       throw new BadRequestException(
-        `Bu rolde ${staffCount} personel var. Önce personellerin rolünü değiştirin.`
+        `Bu rolde ${staffCount} personel var. Önce personellerin rolünü değiştirin.`,
       );
     }
 
@@ -1493,7 +1493,7 @@ export class StaffService {
       startTime: string;
       endTime: string;
       color?: string;
-    }>
+    }>,
   ): Promise<WorkShift[]> {
     const createdShifts: WorkShift[] = [];
 
@@ -1522,7 +1522,7 @@ export class StaffService {
       endTime?: string;
       color?: string;
       sortOrder?: number;
-    }
+    },
   ): Promise<WorkShift> {
     const shift = await this.getShiftById(id);
 
@@ -1546,7 +1546,7 @@ export class StaffService {
 
   // Çalışma saati sil (soft delete)
   async deleteShift(
-    id: string
+    id: string,
   ): Promise<{ success: boolean; message: string }> {
     const shift = await this.getShiftById(id);
     shift.isActive = false;
@@ -1670,7 +1670,7 @@ export class StaffService {
       memberIds?: string[];
       leaderId?: string;
       sortOrder?: number;
-    }
+    },
   ): Promise<Team> {
     const team = await this.getTeamById(id);
 
@@ -1729,7 +1729,7 @@ export class StaffService {
 
   // Toplu ekip sil (soft delete) - OPTİMİZE: Tek query ile
   async bulkDeleteTeams(
-    teamIds: string[]
+    teamIds: string[],
   ): Promise<{ success: boolean; deletedCount: number; message: string }> {
     if (!teamIds || teamIds.length === 0) {
       throw new BadRequestException("Silinecek ekip seçilmedi");
@@ -1766,7 +1766,7 @@ export class StaffService {
   // Ekibe toplu üye ekle
   async addMembersToTeamBulk(
     teamId: string,
-    memberIds: string[]
+    memberIds: string[],
   ): Promise<Team> {
     const team = await this.getTeamById(teamId);
     const newMemberIds = memberIds.filter((id) => !team.memberIds.includes(id));
@@ -1789,7 +1789,7 @@ export class StaffService {
 
   // Personelin tüm etkinliklerdeki atamalarını getir (staffId bazlı)
   async getStaffEventAssignments(
-    staffId: string
+    staffId: string,
   ): Promise<EventStaffAssignment[]> {
     return this.eventStaffAssignmentRepository.find({
       where: { staffId, isActive: true },
@@ -1800,7 +1800,7 @@ export class StaffService {
 
   // Etkinlik için tüm personel atamalarını getir
   async getEventStaffAssignments(
-    eventId: string
+    eventId: string,
   ): Promise<EventStaffAssignment[]> {
     // Staff relation nullable olduğu için raw query ile daha güvenli
     const assignments = await this.eventStaffAssignmentRepository.find({
@@ -1955,7 +1955,7 @@ export class StaffService {
       specialTaskLocation?: string;
       specialTaskStartTime?: string;
       specialTaskEndTime?: string;
-    }
+    },
   ): Promise<EventStaffAssignment> {
     const assignment = await this.eventStaffAssignmentRepository.findOne({
       where: { id: assignmentId },
@@ -1970,7 +1970,7 @@ export class StaffService {
 
   // Personel atamasını kaldır
   async removeStaffAssignment(
-    assignmentId: string
+    assignmentId: string,
   ): Promise<{ success: boolean }> {
     const assignment = await this.eventStaffAssignmentRepository.findOne({
       where: { id: assignmentId },
@@ -1988,7 +1988,7 @@ export class StaffService {
   async removeStaffFromTables(
     eventId: string,
     staffId: string,
-    tableIds: string[]
+    tableIds: string[],
   ): Promise<EventStaffAssignment | null> {
     const assignment = await this.eventStaffAssignmentRepository.findOne({
       where: { eventId, staffId, isActive: true },
@@ -1996,7 +1996,7 @@ export class StaffService {
     if (!assignment) return null;
 
     assignment.tableIds = assignment.tableIds.filter(
-      (id) => !tableIds.includes(id)
+      (id) => !tableIds.includes(id),
     );
 
     if (assignment.tableIds.length === 0) {
@@ -2016,13 +2016,13 @@ export class StaffService {
       teamId?: string;
       color?: string;
     }>,
-    createdById?: string
+    createdById?: string,
   ): Promise<{ success: boolean; savedCount: number }> {
     try {
       // Önce mevcut atamaları deaktif et
       await this.eventStaffAssignmentRepository.update(
         { eventId, isActive: true },
-        { isActive: false }
+        { isActive: false },
       );
 
       // UUID regex pattern - sadece geçerli UUID'leri kabul et
@@ -2070,7 +2070,7 @@ export class StaffService {
           if (event) {
             await this.notificationsService.notifyTeamOrganizationCompleted(
               event,
-              createdById
+              createdById,
             );
           }
         } catch {
@@ -2181,14 +2181,14 @@ export class StaffService {
   // Şablonu etkinliğe uygula
   async applyOrganizationTemplate(
     templateId: string,
-    eventId: string
+    eventId: string,
   ): Promise<{ success: boolean; message: string }> {
     const template = await this.getOrganizationTemplateById(templateId);
 
     // Mevcut atamaları temizle
     await this.eventStaffAssignmentRepository.update(
       { eventId, isActive: true },
-      { isActive: false }
+      { isActive: false },
     );
     await this.tableGroupRepository.delete({ eventId });
     await this.serviceTeamRepository.delete({ eventId });
@@ -2245,7 +2245,7 @@ export class StaffService {
       // staffId ile bulunamadıysa, staffName ile eşleştir
       if (!staff && assignment.staffName) {
         const matchedStaff = staffNameToIdMap.get(
-          assignment.staffName.toLowerCase()
+          assignment.staffName.toLowerCase(),
         );
         if (matchedStaff) {
           staff = await this.userRepository.findOne({
@@ -2286,7 +2286,7 @@ export class StaffService {
       let newSupervisorId: string | undefined;
       if (group.assignedSupervisorName) {
         const matchedSupervisor = staffNameToIdMap.get(
-          group.assignedSupervisorName.toLowerCase()
+          group.assignedSupervisorName.toLowerCase(),
         );
         if (matchedSupervisor) {
           newSupervisorId = matchedSupervisor.id;
@@ -2334,7 +2334,7 @@ export class StaffService {
     // Önce tüm şablonların varsayılan durumunu kaldır
     await this.organizationTemplateRepository.update(
       { isDefault: true },
-      { isDefault: false }
+      { isDefault: false },
     );
 
     // Bu şablonu varsayılan yap
@@ -2369,7 +2369,6 @@ export class StaffService {
         "staff.color",
         "staff.gender",
         "staff.birthDate",
-        "staff.age",
         "staff.bloodType",
         "staff.shoeSize",
         "staff.sockSize",
@@ -2480,7 +2479,7 @@ export class StaffService {
 
   // CSV'den toplu personel import et
   async importPersonnelFromCSV(
-    csvData: Array<Record<string, string>>
+    csvData: Array<Record<string, string>>,
   ): Promise<{
     success: boolean;
     imported: number;
@@ -2532,7 +2531,7 @@ export class StaffService {
           row["Ayakkabı \nNumarası"]?.trim() ||
             row["Ayakkabı Numarası"]?.trim() ||
             "0",
-          10
+          10,
         );
         if (shoeSize > 0) staff.shoeSize = shoeSize;
 
@@ -2567,15 +2566,18 @@ export class StaffService {
           row["Ayrılma Nedeni"]?.trim() ||
           staff.terminationReason;
 
-        // Yaş ve kıdem
-        const age = parseInt(row["Yaş"]?.trim() || "0", 10);
-        if (age > 0) staff.age = age;
+        // Yaş → birthDate yoksa yaştan yaklaşık birthDate hesapla
+        const ageFromExcel = parseInt(row["Yaş"]?.trim() || "0", 10);
+        if (ageFromExcel > 0 && !staff.birthDate) {
+          const approxBirthYear = new Date().getFullYear() - ageFromExcel;
+          staff.birthDate = new Date(approxBirthYear, 0, 1);
+        }
 
         const yearsAtCompany = parseInt(
           row["Şirkette \nGeçirdiği Yıl"]?.trim() ||
             row["Şirkette Geçirdiği Yıl"]?.trim() ||
             "0",
-          10
+          10,
         );
         if (yearsAtCompany >= 0) staff.yearsAtCompany = yearsAtCompany;
 
@@ -2782,7 +2784,7 @@ export class StaffService {
       .addSelect("COUNT(*)", "count")
       .addSelect(
         "SUM(CASE WHEN staff.isActive = true THEN 1 ELSE 0 END)",
-        "activeCount"
+        "activeCount",
       )
       .where("staff.position IS NOT NULL")
       .groupBy("staff.position")
@@ -2809,7 +2811,6 @@ export class StaffService {
         "staff.fullName",
         "staff.email",
         "staff.phone",
-        "staff.avatar",
         "staff.position",
         "staff.department",
         "staff.workLocation",
@@ -2817,7 +2818,6 @@ export class StaffService {
         "staff.color",
         "staff.gender",
         "staff.birthDate",
-        "staff.age",
         "staff.bloodType",
         "staff.shoeSize",
         "staff.sockSize",
@@ -2849,11 +2849,11 @@ export class StaffService {
       .addSelect("COUNT(*)", "count")
       .addSelect(
         "SUM(CASE WHEN staff.isActive = true THEN 1 ELSE 0 END)",
-        "activeCount"
+        "activeCount",
       )
       .addSelect(
         `COALESCE((SELECT d."sortOrder" FROM departments d WHERE d.name = staff.department), 999)`,
-        "sortOrder"
+        "sortOrder",
       )
       .where("staff.department IS NOT NULL")
       .groupBy("staff.department")
@@ -2880,7 +2880,6 @@ export class StaffService {
         "staff.fullName",
         "staff.email",
         "staff.phone",
-        "staff.avatar",
         "staff.position",
         "staff.department",
         "staff.workLocation",
@@ -2942,7 +2941,7 @@ export class StaffService {
       description?: string;
       isActive?: boolean;
       sortOrder?: number;
-    }
+    },
   ): Promise<Position> {
     const position = await this.positionRepository.findOne({ where: { id } });
     if (!position) {
@@ -2977,7 +2976,7 @@ export class StaffService {
     });
     if (usageCount > 0) {
       throw new BadRequestException(
-        `Bu unvan ${usageCount} personel tarafından kullanılıyor. Önce personellerin unvanını değiştirin.`
+        `Bu unvan ${usageCount} personel tarafından kullanılıyor. Önce personellerin unvanını değiştirin.`,
       );
     }
 
@@ -3035,7 +3034,7 @@ export class StaffService {
       color?: string;
       isActive?: boolean;
       sortOrder?: number;
-    }
+    },
   ): Promise<Department> {
     const department = await this.departmentRepository.findOne({
       where: { id },
@@ -3074,7 +3073,7 @@ export class StaffService {
     });
     if (usageCount > 0) {
       throw new BadRequestException(
-        `Bu bölüm ${usageCount} personel tarafından kullanılıyor. Önce personellerin bölümünü değiştirin.`
+        `Bu bölüm ${usageCount} personel tarafından kullanılıyor. Önce personellerin bölümünü değiştirin.`,
       );
     }
 
@@ -3132,7 +3131,7 @@ export class StaffService {
       address?: string;
       isActive?: boolean;
       sortOrder?: number;
-    }
+    },
   ): Promise<WorkLocation> {
     const workLocation = await this.workLocationRepository.findOne({
       where: { id },
@@ -3171,7 +3170,7 @@ export class StaffService {
     });
     if (usageCount > 0) {
       throw new BadRequestException(
-        `Bu görev yeri ${usageCount} personel tarafından kullanılıyor. Önce personellerin görev yerini değiştirin.`
+        `Bu görev yeri ${usageCount} personel tarafından kullanılıyor. Önce personellerin görev yerini değiştirin.`,
       );
     }
 
@@ -3207,7 +3206,7 @@ export class StaffService {
    */
   async addPositionToDepartment(
     departmentId: string,
-    positionId: string
+    positionId: string,
   ): Promise<DepartmentPosition> {
     const existing = await this.departmentPositionRepository.findOne({
       where: { departmentId, positionId },
@@ -3228,7 +3227,7 @@ export class StaffService {
    */
   async removePositionFromDepartment(
     departmentId: string,
-    positionId: string
+    positionId: string,
   ): Promise<void> {
     await this.departmentPositionRepository.delete({
       departmentId,
@@ -3241,14 +3240,14 @@ export class StaffService {
    */
   async updateDepartmentPositions(
     departmentId: string,
-    positionIds: string[]
+    positionIds: string[],
   ): Promise<void> {
     // Mevcut ilişkileri sil
     await this.departmentPositionRepository.delete({ departmentId });
 
     // Yeni ilişkileri ekle
     const relations = positionIds.map((positionId) =>
-      this.departmentPositionRepository.create({ departmentId, positionId })
+      this.departmentPositionRepository.create({ departmentId, positionId }),
     );
     await this.departmentPositionRepository.save(relations);
   }
@@ -3259,7 +3258,7 @@ export class StaffService {
    * Departmana ait görev yerlerini getir
    */
   async getLocationsByDepartment(
-    departmentId: string
+    departmentId: string,
   ): Promise<WorkLocation[]> {
     const relations = await this.departmentLocationRepository.find({
       where: { departmentId },
@@ -3272,7 +3271,7 @@ export class StaffService {
    * Görev yerine ait departmanları getir
    */
   async getDepartmentsByLocation(
-    workLocationId: string
+    workLocationId: string,
   ): Promise<Department[]> {
     const relations = await this.departmentLocationRepository.find({
       where: { workLocationId },
@@ -3286,7 +3285,7 @@ export class StaffService {
    */
   async addLocationToDepartment(
     departmentId: string,
-    workLocationId: string
+    workLocationId: string,
   ): Promise<DepartmentLocation> {
     const existing = await this.departmentLocationRepository.findOne({
       where: { departmentId, workLocationId },
@@ -3307,7 +3306,7 @@ export class StaffService {
    */
   async removeLocationFromDepartment(
     departmentId: string,
-    workLocationId: string
+    workLocationId: string,
   ): Promise<void> {
     await this.departmentLocationRepository.delete({
       departmentId,
@@ -3320,14 +3319,17 @@ export class StaffService {
    */
   async updateDepartmentLocations(
     departmentId: string,
-    workLocationIds: string[]
+    workLocationIds: string[],
   ): Promise<void> {
     // Mevcut ilişkileri sil
     await this.departmentLocationRepository.delete({ departmentId });
 
     // Yeni ilişkileri ekle
     const relations = workLocationIds.map((workLocationId) =>
-      this.departmentLocationRepository.create({ departmentId, workLocationId })
+      this.departmentLocationRepository.create({
+        departmentId,
+        workLocationId,
+      }),
     );
     await this.departmentLocationRepository.save(relations);
   }
@@ -3371,8 +3373,8 @@ export class StaffService {
           this.departmentPositionRepository.create({
             departmentId: r.departmentId,
             positionId: r.positionId,
-          })
-        )
+          }),
+        ),
       );
     }
 
@@ -3382,8 +3384,8 @@ export class StaffService {
           this.departmentLocationRepository.create({
             departmentId: r.departmentId,
             workLocationId: r.workLocationId,
-          })
-        )
+          }),
+        ),
       );
     }
 
@@ -3439,7 +3441,7 @@ export class StaffService {
         });
 
         return { department, positions, locations, staffCount };
-      })
+      }),
     );
 
     return result;

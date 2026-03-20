@@ -98,6 +98,9 @@ class SocketService {
   }
 
   leaveEvent() {
+    if (this.eventId) {
+      this.socket?.emit("leaveEvent", { eventId: this.eventId });
+    }
     this.eventId = null;
   }
 

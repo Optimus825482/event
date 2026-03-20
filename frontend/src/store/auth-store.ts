@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { authApi } from "@/lib/api";
+import type { User } from "@/types";
 
 // Modül tipleri - admin modülü eklendi
 export type ModuleType =
@@ -62,24 +63,6 @@ export const MODULES: Record<ModuleType, ModuleInfo> = {
   },
 };
 
-export interface User {
-  id: string;
-  username: string;
-  fullName: string;
-  role:
-    | "admin"
-    | "organizer"
-    | "leader"
-    | "staff"
-    | "venue_owner"
-    | "controller";
-  allowedModules: ModuleType[];
-  avatar?: string;
-  email?: string;
-  phone?: string;
-  position?: string;
-}
-
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -133,7 +116,7 @@ export const useAuthStore = create<AuthState>()(
           if (!accessToken) {
             console.error(
               "Login response'da accessToken bulunamadı:",
-              response.data
+              response.data,
             );
             return false;
           }
@@ -181,7 +164,7 @@ export const useAuthStore = create<AuthState>()(
       setActiveModule: (module: ModuleType) => {
         const { user } = get();
         // Modül erişim kontrolü
-        if (user && user.allowedModules.includes(module)) {
+        if (user && user.allowedModules?.includes(module)) {
           set({ activeModule: module });
         } else {
           console.warn(`Unauthorized module access attempt: ${module}`);
@@ -196,8 +179,8 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get();
         if (!user) return [];
 
-        return user.allowedModules
-          .map((moduleId) => MODULES[moduleId])
+        return (user.allowedModules ?? [])
+          .map((moduleId) => MODULES[moduleId as ModuleType])
           .filter(Boolean);
       },
 
@@ -217,6 +200,6 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         activeModule: state.activeModule,
       }),
-    }
-  )
+    },
+  ),
 );

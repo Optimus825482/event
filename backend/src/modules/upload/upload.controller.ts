@@ -6,7 +6,9 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  UseGuards,
 } from "@nestjs/common";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UploadService } from "./upload.service";
 import { memoryStorage } from "multer";
@@ -21,13 +23,14 @@ const multerOptions = {
     if (!file.mimetype.match(/^image\/(jpeg|jpg|png)$/)) {
       return cb(
         new BadRequestException("Sadece JPG ve PNG dosyaları kabul edilir"),
-        false
+        false,
       );
     }
     cb(null, true);
   },
 };
 
+@UseGuards(JwtAuthGuard)
 @Controller("upload")
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
@@ -105,7 +108,7 @@ export class UploadController {
     const result = await this.uploadService.uploadImage(
       file,
       "event-images",
-      1200
+      1200,
     );
 
     return {
@@ -126,7 +129,7 @@ export class UploadController {
     const result = await this.uploadService.uploadImage(
       file,
       "invitation-images",
-      800
+      800,
     );
 
     return {

@@ -121,8 +121,8 @@ export default function SelectModulePage() {
   };
 
   // Kullanıcının erişebildiği modüller
-  const allowedModules = user.allowedModules
-    .map((id) => MODULES[id])
+  const allowedModules = (user.allowedModules ?? [])
+    .map((id) => MODULES[id as ModuleType])
     .filter(Boolean);
 
   return (

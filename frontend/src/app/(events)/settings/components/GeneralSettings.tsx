@@ -5,7 +5,7 @@ import { Building, Globe, Clock, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function GeneralSettings() {
-  const { systemSettings, fetchSettings, updateSettings, loading } =
+  const { systemSettings, fetchSettings, updateSettings, isFetching } =
     useSettingsStore();
   const [localSettings, setLocalSettings] = useState(systemSettings);
   const [saving, setSaving] = useState(false);
@@ -38,7 +38,7 @@ export function GeneralSettings() {
     }
   };
 
-  if (loading || !localSettings) {
+  if (isFetching || !localSettings) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />

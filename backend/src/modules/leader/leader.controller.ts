@@ -8,12 +8,23 @@ import {
   UseGuards,
   Request,
 } from "@nestjs/common";
+import { ApiTags, ApiBearerAuth, ApiOperation } from "@nestjs/swagger";
 import { LeaderService } from "./leader.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import { CategoryScores } from "../../entities/staff-performance-review.entity";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { UserRole } from "../../entities/user.entity";
+import {
+  AutoSaveReviewDto,
+  CreateReviewDto,
+  CreateBulkReviewsDto,
+} from "./dto/leader.dto";
 
+@ApiTags("Leader")
+@ApiBearerAuth()
 @Controller("leader")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.LEADER, UserRole.ORGANIZER, UserRole.ADMIN)
 export class LeaderController {
   constructor(private readonly leaderService: LeaderService) {}
 
@@ -27,7 +38,7 @@ export class LeaderController {
   @Get("events/:eventId")
   getEventDetails(
     @Request() req: { user: { id: string } },
-    @Param("eventId") eventId: string
+    @Param("eventId") eventId: string,
   ) {
     return this.leaderService.getEventDetails(req.user.id, eventId);
   }
@@ -36,7 +47,7 @@ export class LeaderController {
   @Get("events/:eventId/review-permissions")
   getEventReviewPermissions(
     @Request() req: { user: { id: string } },
-    @Param("eventId") eventId: string
+    @Param("eventId") eventId: string,
   ) {
     return this.leaderService.getEventReviewPermissions(req.user.id, eventId);
   }
@@ -45,7 +56,7 @@ export class LeaderController {
   @Get("events/:eventId/team-members")
   getTeamMembersForReview(
     @Request() req: { user: { id: string } },
-    @Param("eventId") eventId: string
+    @Param("eventId") eventId: string,
   ) {
     return this.leaderService.getTeamMembersForReview(req.user.id, eventId);
   }
@@ -54,7 +65,7 @@ export class LeaderController {
   @Get("events/:eventId/reviews")
   getEventReviews(
     @Request() req: { user: { id: string } },
-    @Param("eventId") eventId: string
+    @Param("eventId") eventId: string,
   ) {
     return this.leaderService.getEventReviews(req.user.id, eventId);
   }
@@ -63,7 +74,7 @@ export class LeaderController {
   @Get("events/:eventId/performance-summary")
   getEventPerformanceSummary(
     @Request() req: { user: { id: string } },
-    @Param("eventId") eventId: string
+    @Param("eventId") eventId: string,
   ) {
     return this.leaderService.getEventPerformanceSummary(req.user.id, eventId);
   }
@@ -72,17 +83,7 @@ export class LeaderController {
   @Post("reviews/auto-save")
   autoSaveReview(
     @Request() req: { user: { id: string } },
-    @Body()
-    dto: {
-      staffId: string;
-      eventId: string;
-      categoryScores?: CategoryScores;
-      strengths?: string[];
-      improvements?: string[];
-      comment?: string;
-      privateNotes?: string;
-      nextEventNotes?: string;
-    }
+    @Body() dto: AutoSaveReviewDto,
   ) {
     return this.leaderService.autoSaveReview(req.user.id, dto);
   }
@@ -91,18 +92,7 @@ export class LeaderController {
   @Post("reviews")
   createReview(
     @Request() req: { user: { id: string } },
-    @Body()
-    dto: {
-      staffId: string;
-      eventId: string;
-      categoryScores?: CategoryScores;
-      strengths?: string[];
-      improvements?: string[];
-      comment?: string;
-      privateNotes?: string;
-      nextEventNotes?: string;
-      isCompleted?: boolean;
-    }
+    @Body() dto: CreateReviewDto,
   ) {
     return this.leaderService.createReview(req.user.id, dto);
   }
@@ -112,24 +102,12 @@ export class LeaderController {
   createBulkReviews(
     @Request() req: { user: { id: string } },
     @Param("eventId") eventId: string,
-    @Body()
-    dto: {
-      reviews: Array<{
-        staffId: string;
-        categoryScores?: CategoryScores;
-        strengths?: string[];
-        improvements?: string[];
-        comment?: string;
-        privateNotes?: string;
-        nextEventNotes?: string;
-        isCompleted?: boolean;
-      }>;
-    }
+    @Body() dto: CreateBulkReviewsDto,
   ) {
     return this.leaderService.createBulkReviews(
       req.user.id,
       eventId,
-      dto.reviews
+      dto.reviews,
     );
   }
 
@@ -138,7 +116,7 @@ export class LeaderController {
   completeReview(
     @Request() req: { user: { id: string } },
     @Param("eventId") eventId: string,
-    @Param("staffId") staffId: string
+    @Param("staffId") staffId: string,
   ) {
     return this.leaderService.completeReview(req.user.id, eventId, staffId);
   }
@@ -147,7 +125,7 @@ export class LeaderController {
   @Patch("events/:eventId/reviews/complete-all")
   completeAllReviews(
     @Request() req: { user: { id: string } },
-    @Param("eventId") eventId: string
+    @Param("eventId") eventId: string,
   ) {
     return this.leaderService.completeAllReviews(req.user.id, eventId);
   }

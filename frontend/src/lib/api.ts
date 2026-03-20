@@ -1,12 +1,9 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { useAuthStore } from "@/store/auth-store";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 export const API_BASE = API_URL.replace("/api", ""); // http://localhost:4000
-
-// Simple in-memory cache for API responses
-const apiCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL = 60000; // 60 saniye cache süresi (OPTİMİZE: 30s -> 60s)
 
 // Token refresh state
 let isRefreshing = false;
@@ -26,30 +23,6 @@ const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Cache helper functions
-const getCached = <T>(key: string): T | null => {
-  const cached = apiCache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data as T;
-  }
-  apiCache.delete(key);
-  return null;
-};
-
-const setCache = (key: string, data: any) => {
-  apiCache.set(key, { data, timestamp: Date.now() });
-};
-
-export const clearApiCache = (pattern?: string) => {
-  if (pattern) {
-    for (const key of apiCache.keys()) {
-      if (key.includes(pattern)) apiCache.delete(key);
-    }
-  } else {
-    apiCache.clear();
-  }
-};
-
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -60,22 +33,9 @@ export const api = axios.create({
 // Token interceptor
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    // Zustand persist storage'dan token al
-    const authStorage = localStorage.getItem("auth-storage");
-    if (authStorage) {
-      try {
-        const parsed = JSON.parse(authStorage);
-        const token = parsed?.state?.token;
-
-        // DEBUG: Token kontrolü - Production'da kaldırılmalı
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-      } catch (e) {
-        // JSON parse error - skip
-      }
-    } else {
-      // No auth-storage in localStorage
+    const { token } = useAuthStore.getState();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
   }
   return config;
@@ -117,14 +77,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Refresh token'ı localStorage'dan al
-        const authStorage = localStorage.getItem("auth-storage");
-        if (!authStorage) {
-          throw new Error("No auth storage");
-        }
-
-        const parsed = JSON.parse(authStorage);
-        const refreshToken = parsed?.state?.refreshToken;
+        const { refreshToken } = useAuthStore.getState();
 
         if (!refreshToken) {
           throw new Error("No refresh token");
@@ -137,12 +90,8 @@ api.interceptors.response.use(
 
         const { accessToken, refreshToken: newRefreshToken } = response.data;
 
-        // Yeni token'ları localStorage'a kaydet
-        parsed.state.token = accessToken;
-        if (newRefreshToken) {
-          parsed.state.refreshToken = newRefreshToken;
-        }
-        localStorage.setItem("auth-storage", JSON.stringify(parsed));
+        // Yeni token'ları Zustand store'a kaydet
+        useAuthStore.getState().setTokens(accessToken, newRefreshToken);
 
         // Bekleyen istekleri işle
         processQueue(null, accessToken);
@@ -154,22 +103,8 @@ api.interceptors.response.use(
         console.error("[API] Token refresh failed:", refreshError);
         processQueue(refreshError as Error, null);
 
-        // Refresh başarısız - sadece state'i temizle
-        // Yönlendirme layout'larda yapılacak
-        const authStorage = localStorage.getItem("auth-storage");
-        if (authStorage) {
-          try {
-            const parsed = JSON.parse(authStorage);
-            parsed.state.token = null;
-            parsed.state.refreshToken = null;
-            parsed.state.isAuthenticated = false;
-            parsed.state.user = null;
-            localStorage.setItem("auth-storage", JSON.stringify(parsed));
-          } catch (e) {
-            // JSON parse hatası - storage'ı tamamen temizle
-            localStorage.removeItem("auth-storage");
-          }
-        }
+        // Refresh başarısız - state'i temizle
+        useAuthStore.getState().logout();
 
         return Promise.reject(refreshError);
       } finally {
@@ -178,7 +113,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 // Auth API
@@ -201,35 +136,15 @@ export const authApi = {
     api.post("/auth/change-password", { currentPassword, newPassword }),
 };
 
-// Events API - Cache destekli
+// Events API
 export const eventsApi = {
-  getAll: async (useCache = true) => {
-    const cacheKey = "events:all";
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get("/events?all=true");
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  getAll: () => api.get("/events?all=true"),
   getOne: (id: string) => api.get(`/events/${id}`),
-  create: async (data: any) => {
-    clearApiCache("events"); // Cache'i temizle
-    return api.post("/events", data);
-  },
-  update: async (id: string, data: any) => {
-    clearApiCache("events");
-    return api.put(`/events/${id}`, data);
-  },
-  delete: async (id: string) => {
-    clearApiCache("events");
-    return api.delete(`/events/${id}`);
-  },
-  updateLayout: async (id: string, data: { venueLayout: any }) => {
-    clearApiCache("events");
-    return api.patch(`/events/${id}/layout`, data);
-  },
+  create: (data: any) => api.post("/events", data),
+  update: (id: string, data: any) => api.put(`/events/${id}`, data),
+  delete: (id: string) => api.delete(`/events/${id}`),
+  updateLayout: (id: string, data: { venueLayout: any }) =>
+    api.patch(`/events/${id}/layout`, data),
 };
 
 // Tables API
@@ -266,7 +181,7 @@ export const customersApi = {
     api.get(
       `/customers/search/autocomplete?q=${query}${
         limit ? `&limit=${limit}` : ""
-      }`
+      }`,
     ),
   create: (data: any) => api.post("/customers", data),
   update: (id: string, data: any) => api.put(`/customers/${id}`, data),
@@ -280,7 +195,7 @@ export const customersApi = {
       noteType?: string;
       eventId?: string;
       reservationId?: string;
-    }
+    },
   ) => api.post(`/customers/${customerId}/notes`, data),
   getNotesForEvent: (customerId: string, eventId: string) =>
     api.get(`/customers/${customerId}/notes/event/${eventId}`),
@@ -332,7 +247,7 @@ export const reservationsApi = {
       specialRequests?: string;
       totalAmount?: number;
       isPaid?: boolean;
-    }
+    },
   ) => api.put(`/reservations/${id}`, data),
   delete: (id: string) => api.delete(`/reservations/${id}`),
   cancel: (id: string) => api.post(`/reservations/${id}/cancel`),
@@ -383,36 +298,15 @@ export const reservationsApi = {
     api.get(`/reservations/customer/${customerId}/info`),
 };
 
-// Venues API - Cache destekli
+// Venues API
 export const venuesApi = {
-  getAll: async (useCache = true) => {
-    const cacheKey = "venues:all";
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get("/venues");
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  getAll: () => api.get("/venues"),
   getMarketplace: () => api.get("/venues/marketplace"),
   getOne: (id: string) => api.get(`/venues/${id}`),
-  create: async (data: any) => {
-    clearApiCache("venues");
-    return api.post("/venues", data);
-  },
-  update: async (id: string, data: any) => {
-    clearApiCache("venues");
-    return api.put(`/venues/${id}`, data);
-  },
-  delete: async (id: string) => {
-    clearApiCache("venues");
-    return api.delete(`/venues/${id}`);
-  },
-  incrementUsage: async (id: string) => {
-    clearApiCache("venues");
-    return api.post(`/venues/${id}/use`);
-  },
+  create: (data: any) => api.post("/venues", data),
+  update: (id: string, data: any) => api.put(`/venues/${id}`, data),
+  delete: (id: string) => api.delete(`/venues/${id}`),
+  incrementUsage: (id: string) => api.post(`/venues/${id}/use`),
 };
 
 // Staff pozisyon tipleri
@@ -423,21 +317,13 @@ export type StaffPosition =
   | "komi"
   | "debarasor";
 
-// Staff API - Cache destekli
+// Staff API
 export const staffApi = {
-  // Personel CRUD - Cache destekli
-  getAll: async (activeOnly?: boolean, useCache = true) => {
-    const cacheKey = `staff:all:${activeOnly || "all"}`;
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get(`/staff${activeOnly ? "?active=true" : ""}`);
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  // Personel CRUD
+  getAll: (activeOnly?: boolean) =>
+    api.get(`/staff${activeOnly ? "?active=true" : ""}`),
   getOne: (id: string) => api.get(`/staff/${id}`),
-  create: async (data: {
+  create: (data: {
     email: string;
     fullName: string;
     password: string;
@@ -445,11 +331,8 @@ export const staffApi = {
     color?: string;
     position?: StaffPosition;
     avatar?: string;
-  }) => {
-    clearApiCache("staff");
-    return api.post("/staff", data);
-  },
-  update: async (
+  }) => api.post("/staff", data),
+  update: (
     id: string,
     data: {
       fullName?: string;
@@ -458,54 +341,26 @@ export const staffApi = {
       position?: StaffPosition;
       avatar?: string;
       isActive?: boolean;
-    }
-  ) => {
-    clearApiCache("staff");
-    return api.put(`/staff/${id}`, data);
-  },
-  delete: async (id: string) => {
-    clearApiCache("staff");
-    return api.delete(`/staff/${id}`);
-  },
+    },
+  ) => api.put(`/staff/${id}`, data),
+  delete: (id: string) => api.delete(`/staff/${id}`),
 
-  // Ekipleri getir - Cache destekli
-  getTeams: async (useCache = true) => {
-    const cacheKey = "staff:teams";
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get("/staff/teams");
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  // Ekipleri getir
+  getTeams: () => api.get("/staff/teams"),
 
   // Alias for getAllTeams (React Query hooks compatibility)
-  getAllTeams: async (useCache = true) => {
-    const cacheKey = "staff:teams";
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get("/staff/teams");
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  getAllTeams: () => api.get("/staff/teams"),
 
   // Etkinlik için personel getir
   getForEvent: (eventId: string) => api.get(`/staff/event/${eventId}`),
 
   // Ekibe üye ekle (alias)
-  addTeamMember: async (teamId: string, staffId: string) => {
-    clearApiCache("staff:teams");
-    return api.post(`/staff/teams/${teamId}/members`, { memberId: staffId });
-  },
+  addTeamMember: (teamId: string, staffId: string) =>
+    api.post(`/staff/teams/${teamId}/members`, { memberId: staffId }),
 
   // Ekipten üye çıkar (alias)
-  removeTeamMember: async (teamId: string, staffId: string) => {
-    clearApiCache("staff:teams");
-    return api.delete(`/staff/teams/${teamId}/members/${staffId}`);
-  },
+  removeTeamMember: (teamId: string, staffId: string) =>
+    api.delete(`/staff/teams/${teamId}/members/${staffId}`),
 
   // Etkinliğe personel ata (alias)
   assignToEvent: (eventId: string, assignments: any[]) =>
@@ -531,13 +386,13 @@ export const staffApi = {
   // Otomatik atama
   autoAssign: (
     eventId: string,
-    data: { staffIds: string[]; strategy?: "balanced" | "zone" | "random" }
+    data: { staffIds: string[]; strategy?: "balanced" | "zone" | "random" },
   ) => api.post(`/staff/event/${eventId}/auto-assign`, data),
 
   // Atamaları kaydet
   saveAssignments: (
     eventId: string,
-    assignments: Array<{ staffId: string; tableIds: string[]; color?: string }>
+    assignments: Array<{ staffId: string; tableIds: string[]; color?: string }>,
   ) => api.post(`/staff/event/${eventId}/save`, { assignments }),
 
   // ==================== TEAM API ====================
@@ -554,54 +409,38 @@ export const staffApi = {
   }) => api.post("/staff/teams", data),
 
   // Ekip güncelle
-  updateTeam: async (
+  updateTeam: (
     teamId: string,
     data: {
       name?: string;
       color?: string;
       memberIds?: string[];
       leaderId?: string;
-    }
-  ) => {
-    clearApiCache("staff:teams");
-    return api.put(`/staff/teams/${teamId}`, data);
-  },
+    },
+  ) => api.put(`/staff/teams/${teamId}`, data),
 
   // Ekip liderini ata/değiştir - HIZLI ENDPOINT
-  setTeamLeader: async (teamId: string, leaderId: string | null) => {
-    clearApiCache("staff:teams");
-    return api.put(`/staff/teams/${teamId}/leader`, { leaderId });
-  },
+  setTeamLeader: (teamId: string, leaderId: string | null) =>
+    api.put(`/staff/teams/${teamId}/leader`, { leaderId }),
 
   // Ekip sil
-  deleteTeam: async (teamId: string) => {
-    clearApiCache("staff:teams");
-    return api.delete(`/staff/teams/${teamId}`);
-  },
+  deleteTeam: (teamId: string) => api.delete(`/staff/teams/${teamId}`),
 
   // Toplu ekip sil
-  bulkDeleteTeams: async (teamIds: string[]) => {
-    clearApiCache("staff:teams");
-    return api.delete(`/staff/teams/bulk/delete`, { data: { teamIds } });
-  },
+  bulkDeleteTeams: (teamIds: string[]) =>
+    api.delete(`/staff/teams/bulk/delete`, { data: { teamIds } }),
 
   // Ekibe üye ekle
-  addMemberToTeam: async (teamId: string, data: { memberId: string }) => {
-    clearApiCache("staff:teams");
-    return api.post(`/staff/teams/${teamId}/members`, data);
-  },
+  addMemberToTeam: (teamId: string, data: { memberId: string }) =>
+    api.post(`/staff/teams/${teamId}/members`, data),
 
   // Ekibe toplu üye ekle
-  addMembersToTeamBulk: async (teamId: string, memberIds: string[]) => {
-    clearApiCache("staff:teams");
-    return api.post(`/staff/teams/${teamId}/members/bulk`, { memberIds });
-  },
+  addMembersToTeamBulk: (teamId: string, memberIds: string[]) =>
+    api.post(`/staff/teams/${teamId}/members/bulk`, { memberIds }),
 
   // Ekipten üye çıkar
-  removeMemberFromTeam: async (teamId: string, memberId: string) => {
-    clearApiCache("staff:teams");
-    return api.delete(`/staff/teams/${teamId}/members/${memberId}`);
-  },
+  removeMemberFromTeam: (teamId: string, memberId: string) =>
+    api.delete(`/staff/teams/${teamId}/members/${memberId}`),
 
   // Ekibe masa ata
   assignTablesToTeam: (teamId: string, tableIds: string[]) =>
@@ -617,7 +456,7 @@ export const staffApi = {
       members: any[];
       leaderId?: string;
       tableIds: string[];
-    }>
+    }>,
   ) => api.post(`/staff/event/${eventId}/teams/save`, { teams }),
 
   // ==================== TABLE GROUP API ====================
@@ -648,7 +487,7 @@ export const staffApi = {
       assignedTeamId?: string;
       assignedSupervisorId?: string;
       sortOrder?: number;
-    }
+    },
   ) => api.put(`/staff/table-groups/${groupId}`, data),
 
   // Masa grubu sil
@@ -688,7 +527,7 @@ export const staffApi = {
       assignedSupervisorId?: string;
       notes?: string;
       sortOrder?: number;
-    }>
+    }>,
   ) => api.post(`/staff/event/${eventId}/table-groups/save`, { groups }),
 
   // Süpervizörleri getir
@@ -721,7 +560,7 @@ export const staffApi = {
       badgeColor?: string;
       bgColor?: string;
       sortOrder?: number;
-    }
+    },
   ) => api.put(`/staff/roles/${id}`, data),
 
   // Rol sil (soft delete)
@@ -757,7 +596,7 @@ export const staffApi = {
       startTime: string;
       endTime: string;
       color?: string;
-    }>
+    }>,
   ) => api.post(`/staff/events/${eventId}/shifts/bulk`, { shifts }),
 
   // Çalışma saati güncelle
@@ -769,7 +608,7 @@ export const staffApi = {
       endTime?: string;
       color?: string;
       sortOrder?: number;
-    }
+    },
   ) => api.put(`/staff/shifts/${id}`, data),
 
   // Çalışma saati sil
@@ -794,7 +633,7 @@ export const staffApi = {
       memberIds?: string[];
       leaderId?: string;
       sortOrder?: number;
-    }
+    },
   ) => api.put(`/staff/teams/${id}`, data),
 
   // Ekip sil
@@ -831,7 +670,7 @@ export const staffApi = {
       specialTaskLocation?: string;
       specialTaskStartTime?: string;
       specialTaskEndTime?: string;
-    }
+    },
   ) => api.post(`/staff/events/${eventId}/assignments`, data),
 
   // Personel atamasını güncelle
@@ -843,7 +682,7 @@ export const staffApi = {
       teamId?: string;
       color?: string;
       notes?: string;
-    }
+    },
   ) => api.put(`/staff/assignments/${assignmentId}`, data),
 
   // Personel atamasını kaldır
@@ -859,7 +698,7 @@ export const staffApi = {
       shiftId?: string;
       teamId?: string;
       color?: string;
-    }>
+    }>,
   ) => api.post(`/staff/events/${eventId}/assignments/save`, { assignments }),
 
   // ==================== ORGANIZATION TEMPLATE API ====================
@@ -893,16 +732,13 @@ export const staffApi = {
   // ==================== PERSONNEL (HR STAFF) API ====================
 
   // Tüm personeli listele (yeni Staff tablosundan)
-  getPersonnel: async (
-    filters?: {
-      department?: string;
-      workLocation?: string;
-      position?: string;
-      isActive?: boolean;
-      status?: string;
-    },
-    useCache = true
-  ) => {
+  getPersonnel: async (filters?: {
+    department?: string;
+    workLocation?: string;
+    position?: string;
+    isActive?: boolean;
+    status?: string;
+  }) => {
     const params = new URLSearchParams();
     if (filters?.department) params.append("department", filters.department);
     if (filters?.workLocation)
@@ -912,14 +748,7 @@ export const staffApi = {
       params.append("isActive", String(filters.isActive));
     if (filters?.status) params.append("status", filters.status);
 
-    const cacheKey = `personnel:${params.toString()}`;
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get(`/staff/personnel?${params.toString()}`);
-    setCache(cacheKey, response.data);
-    return response;
+    return api.get(`/staff/personnel?${params.toString()}`);
   },
 
   // Personel istatistikleri
@@ -928,56 +757,20 @@ export const staffApi = {
   // ==================== LAZY LOADING API ====================
 
   // Pozisyon bazlı özet (sadece pozisyon adı ve sayısı) - İlk yüklemede kullan
-  getPersonnelSummaryByPosition: async (useCache = true) => {
-    const cacheKey = "personnel:summary:position";
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get("/staff/personnel/summary/by-position");
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  getPersonnelSummaryByPosition: () =>
+    api.get("/staff/personnel/summary/by-position"),
 
   // Departman bazlı özet
-  getPersonnelSummaryByDepartment: async (useCache = true) => {
-    const cacheKey = "personnel:summary:department";
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get("/staff/personnel/summary/by-department");
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  getPersonnelSummaryByDepartment: () =>
+    api.get("/staff/personnel/summary/by-department"),
 
   // Pozisyona göre personel listesi (lazy loading - tıklandığında yükle)
-  getPersonnelByPosition: async (position: string, useCache = true) => {
-    const cacheKey = `personnel:position:${position}`;
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get(
-      `/staff/personnel/by-position/${encodeURIComponent(position)}`
-    );
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  getPersonnelByPosition: (position: string) =>
+    api.get(`/staff/personnel/by-position/${encodeURIComponent(position)}`),
 
   // Departmana göre personel listesi (lazy loading)
-  getPersonnelByDepartment: async (department: string, useCache = true) => {
-    const cacheKey = `personnel:department:${department}`;
-    if (useCache) {
-      const cached = getCached<any>(cacheKey);
-      if (cached) return { data: cached };
-    }
-    const response = await api.get(
-      `/staff/personnel/by-department/${encodeURIComponent(department)}`
-    );
-    setCache(cacheKey, response.data);
-    return response;
-  },
+  getPersonnelByDepartment: (department: string) =>
+    api.get(`/staff/personnel/by-department/${encodeURIComponent(department)}`),
 
   // Tek personel getir (ID ile)
   getPersonnelById: (id: string) => api.get(`/staff/personnel/${id}`),
@@ -1010,13 +803,10 @@ export const staffApi = {
     yearsAtCompany?: number;
     isActive?: boolean;
     status?: "active" | "inactive" | "terminated";
-  }) => {
-    clearApiCache("personnel");
-    return api.post("/staff/personnel", data);
-  },
+  }) => api.post("/staff/personnel", data),
 
   // Personel güncelle
-  updatePersonnel: async (
+  updatePersonnel: (
     id: string,
     data: {
       sicilNo?: string;
@@ -1041,17 +831,11 @@ export const staffApi = {
       yearsAtCompany?: number;
       isActive?: boolean;
       status?: "active" | "inactive" | "terminated";
-    }
-  ) => {
-    clearApiCache("personnel");
-    return api.put(`/staff/personnel/${id}`, data);
-  },
+    },
+  ) => api.put(`/staff/personnel/${id}`, data),
 
   // Personel sil (soft delete)
-  deletePersonnel: async (id: string) => {
-    clearApiCache("personnel");
-    return api.delete(`/staff/personnel/${id}`);
-  },
+  deletePersonnel: (id: string) => api.delete(`/staff/personnel/${id}`),
 
   // Avatar yükle (Base64 - Coolify için)
   uploadPersonnelAvatar: async (id: string, file: File) => {
@@ -1063,15 +847,12 @@ export const staffApi = {
       reader.readAsDataURL(file);
     });
 
-    clearApiCache("personnel");
     return api.post(`/staff/personnel/${id}/avatar-base64`, { avatar: base64 });
   },
 
   // CSV'den toplu personel import et
-  importPersonnelCSV: async (data: Array<Record<string, string>>) => {
-    clearApiCache("personnel");
-    return api.post("/staff/personnel/import-csv", { data });
-  },
+  importPersonnelCSV: (data: Array<Record<string, string>>) =>
+    api.post("/staff/personnel/import-csv", { data }),
 
   // Users tablosundan Staff tablosuna migration
   migrateUsersToStaff: () => api.post("/staff/personnel/migrate"),

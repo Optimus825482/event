@@ -86,8 +86,8 @@ export function OfflineIndicator({
       const status = await getQueueStatus();
       setQueueStatus(status);
 
-      // Clear result after 3 seconds
-      setTimeout(() => setLastSyncResult(null), 3000);
+      // Clear result after 5 seconds
+      setTimeout(() => setLastSyncResult(null), 5000);
     } catch (error) {
       setLastSyncResult("error");
     } finally {

@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from "typeorm";
+import { Exclude } from "class-transformer";
 
 @Entity("system_settings")
 export class SystemSettings {
@@ -56,6 +57,14 @@ export class SystemSettings {
   @Column({ default: true })
   showTableDirections: boolean;
 
+  // QR Kod Sistemi
+  @Column({ default: true })
+  qrCodeSystemEnabled: boolean;
+
+  // Davetiye Sistemi
+  @Column({ default: true })
+  invitationSystemEnabled: boolean;
+
   // Bildirim Ayarları
   @Column({ default: true })
   emailNotifications: boolean;
@@ -73,6 +82,7 @@ export class SystemSettings {
   @Column({ nullable: true })
   smtpUser: string;
 
+  @Exclude()
   @Column({ nullable: true })
   smtpPassword: string;
 

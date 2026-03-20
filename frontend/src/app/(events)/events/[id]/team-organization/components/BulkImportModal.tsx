@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   ClipboardPaste,
   Check,
@@ -191,6 +191,8 @@ function findStaffMatch(name: string, allStaff: Staff[]): Staff | null {
 
 function parseShiftTime(raw: string): { start: string; end: string } {
   let cleaned = raw.trim().replace(/\s+/g, "");
+  // Normalize dot to colon in time: 16.00 → 16:00
+  cleaned = cleaned.replace(/(\d{1,2})\.(\d{2})/g, "$1:$2");
   cleaned = cleaned.replace(/--+/g, "-");
 
   const parts = cleaned.split(/(?<=\d)-(?=\d|K)/i);
@@ -220,13 +222,10 @@ function parseClipboardData(text: string): ParsedRow[] {
 
   for (const line of lines) {
     const lower = line.toLowerCase();
-    if (
-      lower.includes("personel") &&
-      (lower.includes("pozisyon") ||
-        lower.includes("posta") ||
-        lower.includes("saat"))
-    )
-      continue;
+    // Skip header lines (broader detection)
+    const headerWords = ['personel', 'pozisyon', 'posta', 'saat', 'vardiya', 'masa', 'isim', 'adı', 'sicil', 'bölüm', 'unvan', 'görev'];
+    const headerMatchCount = headerWords.filter(w => lower.includes(w)).length;
+    if (headerMatchCount >= 2) continue;
     if (/^\d{2}\/\d{2}\/\d{4}/.test(line)) continue;
 
     let parts = line
@@ -242,9 +241,9 @@ function parseClipboardData(text: string): ParsedRow[] {
 
     if (parts.length < 3) {
       const timeMatch = line.match(
-        /(\d{1,2}:\d{2}\s*[-–]\s*(?:\d{1,2}:\d{2}|K))/i,
+        /(\d{1,2}[:.]\d{2}\s*[-–]\s*(?:\d{1,2}[:.]\d{2}|K))/i,
       );
-      const tableMatch = line.match(/(\d{1,4}(?:\s*\/\s*\d{1,4})+)/);
+      const tableMatch = line.match(/(\d{1,4}(?:\s*[\/,\-]\s*\d{1,4})+)/);
       if (timeMatch && tableMatch) {
         const timeStr = timeMatch[0];
         const tableStr = tableMatch[0];
@@ -256,7 +255,7 @@ function parseClipboardData(text: string): ParsedRow[] {
             staffName: nameStr,
             position: "PERSONEL",
             tableNumbers: tableStr
-              .split("/")
+              .split(/[\/,\-]/)
               .map((t) => t.trim())
               .filter(Boolean),
             shiftStart: shift.start,
@@ -272,11 +271,31 @@ function parseClipboardData(text: string): ParsedRow[] {
     let posIdx = -1,
       tableIdx = -1,
       timeIdx = -1;
+    // First pass: identify time columns (contain ':' or '.') and position columns
     for (let i = 0; i < parts.length; i++) {
-      if (/^\d{1,4}(\/\d{1,4})+$/.test(parts[i].replace(/\s/g, "")))
-        tableIdx = i;
-      else if (/\d{1,2}:\d{2}/.test(parts[i])) timeIdx = i;
+      if (/\d{1,2}[:.]\d{2}/.test(parts[i])) timeIdx = i;
       else if (/^personel$/i.test(parts[i])) posIdx = i;
+    }
+    // Second pass: identify table column (digits separated by /,- but NOT a time column)
+    for (let i = 0; i < parts.length; i++) {
+      if (i === timeIdx || i === posIdx) continue;
+      const cleaned = parts[i].replace(/\s/g, "");
+      if (/^\d{1,4}([\/,\-]\d{1,4})+$/.test(cleaned)) {
+        tableIdx = i;
+        break;
+      }
+    }
+
+    // If no multi-table found, look for single table number
+    if (tableIdx === -1) {
+      for (let i = 0; i < parts.length; i++) {
+        if (i === timeIdx || i === posIdx) continue;
+        const cleaned = parts[i].replace(/\s/g, "");
+        if (/^\d{1,4}$/.test(cleaned)) {
+          tableIdx = i;
+          break;
+        }
+      }
     }
 
     const nameParts: string[] = [];
@@ -296,7 +315,7 @@ function parseClipboardData(text: string): ParsedRow[] {
       position: posIdx >= 0 ? parts[posIdx] : "PERSONEL",
       tableNumbers: tableStr
         .replace(/\s/g, "")
-        .split("/")
+        .split(/[\/,\-]/)
         .map((t) => t.trim())
         .filter(Boolean),
       shiftStart: shift.start,
@@ -375,7 +394,7 @@ function parseLocaClipboardData(text: string): ParsedRow[] {
   normalized = normalized.replace(/(?<=\S)(LOCA\s)/gi, "\n$1");
 
   // Split by newlines first
-  let lines = normalized
+  const lines = normalized
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
@@ -396,7 +415,7 @@ function parseLocaClipboardData(text: string): ParsedRow[] {
     // Time ends with: HH:MM or K
     // Name starts with: Turkish uppercase letter
     const parts = line.split(
-      /(?<=\d{1,2}:\d{2}|(?<=[-–])K)(?=[A-ZÇĞİÖŞÜa-zçğıöşü]{2})/,
+      /(?<=\d{1,2}[:.]\d{2}|(?<=[-–])K)(?=[A-ZÇĞİÖŞÜa-zçğıöşü]{2})/,
     );
 
     if (parts.length > 1) {
@@ -445,7 +464,7 @@ function parseLocaClipboardData(text: string): ParsedRow[] {
     }
     // Split where a time ends and a new name begins
     const parts = line.split(
-      /(?<=\d{2}:\d{2})(?=[A-ZÇĞİÖŞÜ])|(?<=[-–]K)(?=[A-ZÇĞİÖŞÜ])/,
+      /(?<=\d{2}[:.\u002E]\d{2})(?=[A-ZÇĞİÖŞÜ])|(?<=[-–]K)(?=[A-ZÇĞİÖŞÜ])/,
     );
     for (const part of parts) {
       const trimmed = part.trim();
@@ -473,29 +492,44 @@ function parseLocaClipboardData(text: string): ParsedRow[] {
     }
 
     // This should be a staff line: NAME + TIME (possibly tab-separated)
-    // First try tab-separated: "NAME\tTIME"
+    // Supports both "NAME\tTIME" and tabular "NAME\tLOCA X\tTIME"
     const tabParts = line
       .split("\t")
       .map((p) => p.trim())
       .filter(Boolean);
     let nameStr = "";
     let timeStr = "";
+    let inlineLocas: string[] = [];
 
     if (tabParts.length >= 2) {
-      // Last part with time pattern is the time
+      // Find time column (last column matching a time pattern)
+      let timeIdx = -1;
       for (let i = tabParts.length - 1; i >= 0; i--) {
-        if (/\d{1,2}:\d{2}/.test(tabParts[i])) {
+        if (/\d{1,2}[:.]\d{2}/.test(tabParts[i])) {
+          timeIdx = i;
           timeStr = tabParts[i];
-          nameStr = tabParts.slice(0, i).join(" ").trim();
           break;
         }
+      }
+
+      if (timeIdx >= 0) {
+        // Check remaining columns for inline LOCA info (tabular format)
+        const nameParts: string[] = [];
+        for (let i = 0; i < timeIdx; i++) {
+          if (/LOCA/i.test(tabParts[i])) {
+            inlineLocas = parseLocaNumbers(tabParts[i]);
+          } else {
+            nameParts.push(tabParts[i]);
+          }
+        }
+        nameStr = nameParts.join(" ").trim();
       }
     }
 
     // Fallback: extract time from anywhere in the line
     if (!timeStr) {
       const timeMatch = line.match(
-        /(\d{1,2}:\d{2}\s*[-–]+\s*(?:\d{1,2}:\d{2}|K))/i,
+        /(\d{1,2}[:.]\d{2}\s*[-–]+\s*(?:\d{1,2}[:.]\d{2}|K))/i,
       );
       if (!timeMatch) continue;
       timeStr = timeMatch[0];
@@ -508,11 +542,13 @@ function parseLocaClipboardData(text: string): ParsedRow[] {
 
     const shift = parseShiftTime(timeStr);
 
-    if (currentLocas.length > 0) {
+    // Use inline locas (tabular format) or current header locas
+    const locasToUse = inlineLocas.length > 0 ? inlineLocas : currentLocas;
+    if (locasToUse.length > 0) {
       rows.push({
         staffName: nameStr,
         position: "Loca Personeli",
-        tableNumbers: [...currentLocas],
+        tableNumbers: [...locasToUse],
         shiftStart: shift.start,
         shiftEnd: shift.end,
         raw: line,
@@ -520,6 +556,29 @@ function parseLocaClipboardData(text: string): ParsedRow[] {
     }
   }
   return rows;
+}
+
+// Helper: API call with retry on 429
+async function apiCallWithRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  baseDelay = 1000,
+): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const isRateLimit =
+        err && typeof err === "object" && "response" in err &&
+        (err as { response?: { status?: number } }).response?.status === 429;
+      if (isRateLimit && attempt < retries) {
+        await new Promise((r) => setTimeout(r, baseDelay * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Max retries exceeded");
 }
 
 export function BulkImportModal({
@@ -546,6 +605,15 @@ export function BulkImportModal({
   const [importedCount, setImportedCount] = useState(0);
   const [createdCount, setCreatedCount] = useState(0);
   const [matchedRows, setMatchedRows] = useState<MatchedRow[]>([]);
+  const [pasteError, setPasteError] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-focus textarea when paste step is shown
+  useEffect(() => {
+    if (step === "paste") {
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  }, [step]);
 
   // Table label -> id map (includes loca name variants)
   const labelToIdMap = useMemo(() => {
@@ -657,11 +725,16 @@ export function BulkImportModal({
 
   // Paste from clipboard
   const handlePasteFromClipboard = useCallback(async () => {
+    setPasteError("");
     try {
       const text = await navigator.clipboard.readText();
-      if (text) setPasteText(text);
+      if (text) {
+        setPasteText(text);
+      } else {
+        setPasteError("Panoda veri bulunamadı. Ctrl+V ile yapıştırın.");
+      }
     } catch {
-      /* user can paste manually */
+      setPasteError("Pano erişimi reddedildi. Lütfen Ctrl+V ile yapıştırın.");
     }
   }, []);
 
@@ -669,6 +742,11 @@ export function BulkImportModal({
   const handleParse = useCallback(() => {
     if (pasteText.trim()) {
       const rows = computeMatchedRows(pasteText);
+      if (rows.length === 0) {
+        setPasteError("Veri algılanamadı. Lütfen formatı kontrol edin. Örnek: İSİM  MASALAR  SAAT");
+        return;
+      }
+      setPasteError("");
       setMatchedRows(rows);
       setStep("preview");
     }
@@ -698,15 +776,13 @@ export function BulkImportModal({
 
         for (const { row } of toCreateExtra) {
           try {
-            await staffApi.createPersonnel({
+            await apiCallWithRetry(() => staffApi.createPersonnel({
               sicilNo: generateSicilNo(),
               fullName: row.staffName,
               position: "Personel",
               isActive: true,
-            });
+            }));
             created++;
-            // Rate limit koruması
-            await new Promise((r) => setTimeout(r, 200));
           } catch (err) {
             console.error(`Failed to create staff: ${row.staffName}`, err);
           }
@@ -779,13 +855,13 @@ export function BulkImportModal({
                     : "Crystal"
                   : undefined;
 
-            const res = await staffApi.createPersonnel({
+            const res = await apiCallWithRetry(() => staffApi.createPersonnel({
               sicilNo: generateSicilNo(),
               fullName: row.staffName,
               position: "Personel",
               workLocation,
               isActive: true,
-            });
+            }));
 
             if (res.data) {
               const newStaff: Staff = {
@@ -800,8 +876,6 @@ export function BulkImportModal({
               };
               newStaffMap.set(idx, newStaff);
               created++;
-              // Rate limit koruması - 429 hatalarını önle
-              await new Promise((r) => setTimeout(r, 200));
             }
           } catch (err) {
             console.error(`Failed to create staff: ${row.staffName}`, err);
@@ -1042,10 +1116,14 @@ export function BulkImportModal({
                   <ClipboardPaste className="w-4 h-4 mr-1" /> Panodan Yapıştır
                 </Button>
               </div>
+              {pasteError && (
+                <p className="text-sm text-amber-400 bg-amber-950/30 border border-amber-800/50 rounded-lg px-3 py-2">{pasteError}</p>
+              )}
               <textarea
+                ref={textareaRef}
                 value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-                placeholder="Veriyi buraya yapıştırın..."
+                onChange={(e) => { setPasteText(e.target.value); setPasteError(""); }}
+                placeholder="Veriyi buraya yapıştırın veya Ctrl+V kullanın..."
                 className="w-full h-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-sm text-white font-mono resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 spellCheck={false}
               />

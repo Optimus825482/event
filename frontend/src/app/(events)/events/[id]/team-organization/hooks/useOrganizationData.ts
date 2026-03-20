@@ -6,7 +6,6 @@ import {
   staffApi,
   servicePointsApi,
   eventExtraStaffApi,
-  clearApiCache,
 } from "@/lib/api";
 import {
   EventData,
@@ -53,7 +52,7 @@ interface UseOrganizationDataReturn {
   saveOrganization: (
     groups: TableGroup[],
     teams: TeamDefinition[],
-    extraStaff?: ExtraStaff[]
+    extraStaff?: ExtraStaff[],
   ) => Promise<boolean>;
   // Extra Staff CRUD
   setExtraStaffList: React.Dispatch<React.SetStateAction<ExtraStaff[]>>;
@@ -68,7 +67,7 @@ interface UseOrganizationDataReturn {
   }) => Promise<ServicePoint | null>;
   updateServicePoint: (
     id: string,
-    data: Partial<ServicePoint>
+    data: Partial<ServicePoint>,
   ) => Promise<boolean>;
   deleteServicePoint: (id: string) => Promise<boolean>;
   // Service Point Staff Assignment
@@ -77,11 +76,11 @@ interface UseOrganizationDataReturn {
     staffId: string,
     role: string,
     shiftStart: string,
-    shiftEnd: string
+    shiftEnd: string,
   ) => Promise<boolean>;
   removeStaffFromServicePoint: (
     servicePointId: string,
-    assignmentId: string
+    assignmentId: string,
   ) => Promise<boolean>;
   saveServicePointStaffAssignments: (
     servicePointId: string,
@@ -92,12 +91,12 @@ interface UseOrganizationDataReturn {
       shiftId?: string;
       shiftStart: string;
       shiftEnd: string;
-    }>
+    }>,
   ) => Promise<boolean>;
 }
 
 export function useOrganizationData(
-  eventId: string
+  eventId: string,
 ): UseOrganizationDataReturn {
   const [event, setEvent] = useState<EventData | null>(null);
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
@@ -151,7 +150,7 @@ export function useOrganizationData(
       // Önce kritik verileri yükle (event + staff)
       const [eventRes, staffRes] = await Promise.all([
         eventsApi.getOne(eventId),
-        staffApi.getPersonnel({ isActive: true }, true),
+        staffApi.getPersonnel({ isActive: true }),
       ]);
 
       // Sonra event'e bağlı verileri yükle (rate limiting'i önlemek için)
@@ -182,7 +181,7 @@ export function useOrganizationData(
           sortOrder: es.sortOrder,
           isActive: es.isActive,
           workLocation: "Ekstra Personel",
-        })
+        }),
       );
       setExtraStaffList(loadedExtraStaff);
 
@@ -223,7 +222,7 @@ export function useOrganizationData(
               if (!seenStaffIds.has(assignment.staffId)) {
                 seenStaffIds.add(assignment.staffId);
                 const staff = staffRes.data?.find(
-                  (s: any) => s.id === assignment.staffId
+                  (s: any) => s.id === assignment.staffId,
                 );
 
                 // Position'ı StaffRole'a çevir
@@ -292,7 +291,7 @@ export function useOrganizationData(
           groups.forEach((group) => {
             // Grup masalarından herhangi biri takımın masalarında varsa, bu grup takıma ait
             const hasCommonTable = group.tableIds.some((tid: string) =>
-              teamTableIds.includes(tid)
+              teamTableIds.includes(tid),
             );
             if (hasCommonTable) {
               assignedGroupIds.push(group.id);
@@ -337,7 +336,7 @@ export function useOrganizationData(
     async (
       groups: TableGroup[],
       teams: TeamDefinition[],
-      extraStaff?: ExtraStaff[]
+      extraStaff?: ExtraStaff[],
     ): Promise<boolean> => {
       try {
         // 1. Önce takımları kaydet ve yeni ID'leri al
@@ -362,12 +361,12 @@ export function useOrganizationData(
                       }
                     : null;
                 })
-                .filter(Boolean)
+                .filter(Boolean),
             ),
             tableIds: groups
               .filter((g) => g.assignedTeamId === t.id)
               .flatMap((g) => g.tableIds),
-          }))
+          })),
         );
 
         // Frontend ID -> Backend ID eşleştirme map'i oluştur
@@ -378,7 +377,7 @@ export function useOrganizationData(
               if (t.originalId) {
                 teamIdMap.set(t.originalId, t.id);
               }
-            }
+            },
           );
         }
 
@@ -402,7 +401,7 @@ export function useOrganizationData(
               groupType: "standard",
               sortOrder: 0,
             };
-          })
+          }),
         );
 
         // 3. Personel atamalarını kaydet (staffAssignments)
@@ -424,7 +423,7 @@ export function useOrganizationData(
 
               // Aynı staffId için mevcut atamayı bul veya yeni oluştur
               const existing = allAssignments.find(
-                (a) => a.staffId === assignment.staffId
+                (a) => a.staffId === assignment.staffId,
               );
               if (existing) {
                 // Masaları ekle
@@ -472,8 +471,7 @@ export function useOrganizationData(
           await eventExtraStaffApi.saveBulk(eventId, []);
         }
 
-        // Events cache'ini temizle - dashboard'da güncel veri gösterilsin
-        clearApiCache("events");
+        // Events cache temizleme artık TanStack Query tarafından yönetiliyor
 
         return true;
       } catch (err: any) {
@@ -481,7 +479,7 @@ export function useOrganizationData(
         return false;
       }
     },
-    [eventId, allStaff, extraStaffList]
+    [eventId, allStaff, extraStaffList],
   );
 
   // ==================== SERVICE POINTS CRUD ====================
@@ -524,7 +522,7 @@ export function useOrganizationData(
         return null;
       }
     },
-    [eventId, servicePoints]
+    [eventId, servicePoints],
   );
 
   // Hizmet noktasını güncelle
@@ -534,7 +532,7 @@ export function useOrganizationData(
         await servicePointsApi.update(eventId, id, data);
 
         setServicePoints((prev) =>
-          prev.map((sp) => (sp.id === id ? { ...sp, ...data } : sp))
+          prev.map((sp) => (sp.id === id ? { ...sp, ...data } : sp)),
         );
         return true;
       } catch (err: any) {
@@ -542,7 +540,7 @@ export function useOrganizationData(
         return false;
       }
     },
-    [eventId]
+    [eventId],
   );
 
   // Hizmet noktasını sil
@@ -558,7 +556,7 @@ export function useOrganizationData(
         return false;
       }
     },
-    [eventId]
+    [eventId],
   );
 
   // ==================== SERVICE POINT STAFF ASSIGNMENT ====================
@@ -570,14 +568,14 @@ export function useOrganizationData(
       staffId: string,
       role: string,
       shiftStart: string,
-      shiftEnd: string
+      shiftEnd: string,
     ): Promise<boolean> => {
       try {
         // Ekstra personel kontrolü - backend UUID bekliyor
         if (staffId.startsWith("extra-")) {
           console.warn(
             "⚠️ Ekstra personel hizmet noktasına atanamaz:",
-            staffId
+            staffId,
           );
           return false;
         }
@@ -617,7 +615,7 @@ export function useOrganizationData(
               };
             }
             return sp;
-          })
+          }),
         );
         return true;
       } catch (err: any) {
@@ -625,7 +623,7 @@ export function useOrganizationData(
         return false;
       }
     },
-    [eventId, allStaff]
+    [eventId, allStaff],
   );
 
   // Hizmet noktasından personel kaldır
@@ -641,16 +639,16 @@ export function useOrganizationData(
               return {
                 ...sp,
                 staffAssignments: (sp.staffAssignments || []).filter(
-                  (sa) => sa.id !== assignmentId
+                  (sa) => sa.id !== assignmentId,
                 ),
                 assignedStaffCount: Math.max(
                   (sp.assignedStaffCount || 1) - 1,
-                  0
+                  0,
                 ),
               };
             }
             return sp;
-          })
+          }),
         );
         return true;
       } catch (err: any) {
@@ -658,7 +656,7 @@ export function useOrganizationData(
         return false;
       }
     },
-    [eventId]
+    [eventId],
   );
 
   // Hizmet noktası personel atamalarını toplu kaydet
@@ -672,7 +670,7 @@ export function useOrganizationData(
         shiftId?: string;
         shiftStart: string;
         shiftEnd: string;
-      }>
+      }>,
     ): Promise<boolean> => {
       try {
         // Mevcut service point'i bul
@@ -684,7 +682,7 @@ export function useOrganizationData(
 
         // Mevcut atamaları sil (yeni listede olmayanlar)
         const existingIds = new Set(
-          (sp.staffAssignments || []).map((a) => a.id)
+          (sp.staffAssignments || []).map((a) => a.id),
         );
         const newIds = new Set(
           assignments
@@ -693,9 +691,9 @@ export function useOrganizationData(
                 a.id &&
                 !a.id.startsWith("temp-") &&
                 !a.id.startsWith("extra-") &&
-                !a.id.startsWith("sp-assign-")
+                !a.id.startsWith("sp-assign-"),
             )
-            .map((a) => a.id)
+            .map((a) => a.id),
         );
 
         // Silinecek atamalar
@@ -704,7 +702,7 @@ export function useOrganizationData(
             !newIds.has(a.id) &&
             !a.id.startsWith("temp-") &&
             !a.id.startsWith("extra-") &&
-            !a.id.startsWith("sp-assign-")
+            !a.id.startsWith("sp-assign-"),
         );
 
         // Sil
@@ -723,12 +721,12 @@ export function useOrganizationData(
             a.id.startsWith("temp-") ||
             a.id.startsWith("extra-") ||
             a.id.startsWith("sp-assign-") ||
-            !existingIds.has(a.id)
+            !existingIds.has(a.id),
         );
 
         // Ekstra personel olmayan yeni atamaları backend'e gönder
         const validAssignments = toCreate.filter(
-          (a) => !a.staffId.startsWith("extra-")
+          (a) => !a.staffId.startsWith("extra-"),
         );
 
         if (validAssignments.length > 0) {
@@ -741,7 +739,7 @@ export function useOrganizationData(
               shiftId: a.shiftId,
               shiftStart: a.shiftStart,
               shiftEnd: a.shiftEnd,
-            }))
+            })),
           );
         }
 
@@ -776,24 +774,24 @@ export function useOrganizationData(
               };
             }
             return s;
-          })
+          }),
         );
 
         console.log(
           "✅ Hizmet noktası personel atamaları kaydedildi:",
           servicePointId,
-          assignments.length
+          assignments.length,
         );
         return true;
       } catch (err: any) {
         console.error(
           "❌ Hizmet noktası personel atamaları kaydedilemedi:",
-          err
+          err,
         );
         return false;
       }
     },
-    [eventId, servicePoints, allStaff]
+    [eventId, servicePoints, allStaff],
   );
 
   return {

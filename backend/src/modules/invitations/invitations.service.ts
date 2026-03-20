@@ -3,10 +3,10 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import {
   InvitationTemplate,
-  EventInvitation,
   InvitationElement,
   INVITATION_SIZES,
 } from "../../entities/invitation-template.entity";
+import { EventInvitation } from "../../entities/event-invitation.entity";
 import { Reservation } from "../../entities/reservation.entity";
 import { Event } from "../../entities/event.entity";
 import { SystemSettings } from "../../entities/settings.entity";

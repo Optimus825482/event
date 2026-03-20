@@ -106,10 +106,12 @@ export function DepartmentCard({
                             person.status === "active" ? "#22c55e" : "#ef4444",
                         }}
                       >
-                        <AvatarImage
-                          src={getAvatarUrl(person.avatar)}
-                          alt={person.fullName}
-                        />
+                        {person.avatar ? (
+                          <AvatarImage
+                            src={getAvatarUrl(person.avatar)}
+                            alt={person.fullName}
+                          />
+                        ) : null}
                         <AvatarFallback className="text-white font-bold text-xs bg-slate-600">
                           {getInitials(person.fullName)}
                         </AvatarFallback>

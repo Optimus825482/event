@@ -46,6 +46,9 @@ export interface SystemSettings {
   smtpFromEmail?: string;
   smtpFromName?: string;
   smtpSecure?: boolean;
+  // Özellik Bayrakları
+  qrCodeSystemEnabled: boolean;
+  invitationSystemEnabled: boolean;
 }
 
 interface SettingsState {
@@ -53,9 +56,10 @@ interface SettingsState {
   tableTypes: TableTypeConfig[];
   staffColors: StaffColor[];
   systemSettings: SystemSettings | null;
-  
+
   // Loading states
-  loading: boolean;
+  isFetching: boolean;
+  isSaving: boolean;
   error: string | null;
 
   // Actions - System Settings
@@ -64,22 +68,27 @@ interface SettingsState {
 
   // Actions - Table Types
   fetchTableTypes: () => Promise<void>;
-  addTableType: (type: Omit<TableTypeConfig, 'id' | 'isActive'>) => Promise<void>;
-  updateTableType: (id: string, updates: Partial<TableTypeConfig>) => Promise<void>;
+  addTableType: (
+    type: Omit<TableTypeConfig, "id" | "isActive">,
+  ) => Promise<void>;
+  updateTableType: (
+    id: string,
+    updates: Partial<TableTypeConfig>,
+  ) => Promise<void>;
   deleteTableType: (id: string) => Promise<void>;
 
   // Actions - Staff Colors
   fetchStaffColors: () => Promise<void>;
-  addStaffColor: (color: Omit<StaffColor, 'id'>) => Promise<void>;
+  addStaffColor: (color: Omit<StaffColor, "id">) => Promise<void>;
   updateStaffColor: (id: string, updates: Partial<StaffColor>) => Promise<void>;
   deleteStaffColor: (id: string) => Promise<void>;
 }
 
 // Varsayılan sistem ayarları (API'den veri gelmezse)
 const defaultSystemSettings: SystemSettings = {
-  companyName: 'Test Firması',
-  timezone: 'Europe/Istanbul',
-  language: 'tr',
+  companyName: "Test Firması",
+  timezone: "Europe/Istanbul",
+  language: "tr",
   defaultGridSize: 20,
   snapToGrid: true,
   showGridByDefault: true,
@@ -92,36 +101,39 @@ const defaultSystemSettings: SystemSettings = {
   showTableDirections: true,
   emailNotifications: true,
   smsNotifications: false,
+  qrCodeSystemEnabled: true,
+  invitationSystemEnabled: true,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   tableTypes: [],
   staffColors: [],
   systemSettings: null,
-  loading: false,
+  isFetching: false,
+  isSaving: false,
   error: null,
 
   // ============ SYSTEM SETTINGS ============
 
   fetchSettings: async () => {
-    set({ loading: true, error: null });
+    set({ isFetching: true, error: null });
     try {
       const response = await settingsApi.get();
-      set({ systemSettings: response.data, loading: false });
+      set({ systemSettings: response.data, isFetching: false });
     } catch (error: any) {
-      console.error('Settings fetch error:', error);
+      console.error("Settings fetch error:", error);
       // API hatası durumunda varsayılan ayarları kullan
-      set({ systemSettings: defaultSystemSettings, loading: false });
+      set({ systemSettings: defaultSystemSettings, isFetching: false });
     }
   },
 
   updateSettings: async (updates) => {
-    set({ loading: true, error: null });
+    set({ isSaving: true, error: null });
     try {
       const response = await settingsApi.update(updates);
-      set({ systemSettings: response.data, loading: false });
+      set({ systemSettings: response.data, isSaving: false });
     } catch (error: any) {
-      set({ error: error.message, loading: false });
+      set({ error: error.message, isSaving: false });
       throw error;
     }
   },
@@ -133,7 +145,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const response = await settingsApi.getTableTypes();
       set({ tableTypes: response.data });
     } catch (error: any) {
-      console.error('Table types fetch error:', error);
+      console.error("Table types fetch error:", error);
     }
   },
 
@@ -152,7 +164,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const response = await settingsApi.updateTableType(id, updates);
       set((state) => ({
         tableTypes: state.tableTypes.map((t) =>
-          t.id === id ? response.data : t
+          t.id === id ? response.data : t,
         ),
       }));
     } catch (error: any) {
@@ -180,7 +192,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const response = await settingsApi.getStaffColors();
       set({ staffColors: response.data });
     } catch (error: any) {
-      console.error('Staff colors fetch error:', error);
+      console.error("Staff colors fetch error:", error);
     }
   },
 
@@ -199,7 +211,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const response = await settingsApi.updateStaffColor(id, updates);
       set((state) => ({
         staffColors: state.staffColors.map((c) =>
-          c.id === id ? response.data : c
+          c.id === id ? response.data : c,
         ),
       }));
     } catch (error: any) {

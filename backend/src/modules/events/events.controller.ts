@@ -10,7 +10,6 @@ import {
   UseGuards,
   Request,
   Query,
-  SetMetadata,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -18,7 +17,6 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from "@nestjs/swagger";
-import { SkipThrottle } from "@nestjs/throttler";
 import { EventsService } from "./events.service";
 import {
   CreateEventDto,
@@ -31,18 +29,14 @@ import {
   BulkSaveEventExtraStaffDto,
 } from "./dto/event-extra-staff.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { Public } from "../auth/decorators/public.decorator";
 import { EventStatus } from "../../entities/event.entity";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
-
-// Public decorator - check-in endpoint'leri için auth bypass
-const IS_PUBLIC_KEY = "isPublic";
-const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 @ApiTags("Events")
 @ApiBearerAuth("JWT-auth")
 @Controller("events")
 @UseGuards(JwtAuthGuard)
-@SkipThrottle() // Events modülü için rate limiting devre dışı
 export class EventsController {
   constructor(private eventsService: EventsService) {}
 
@@ -88,7 +82,7 @@ export class EventsController {
     @Request() req,
     @Query("all") all: string,
     @Query("page") page?: number,
-    @Query("limit") limit?: number
+    @Query("limit") limit?: number,
   ) {
     const userId = req.user?.id;
     const pageNum = page && page > 0 ? page : 1;
@@ -97,7 +91,7 @@ export class EventsController {
     return this.eventsService.findAll(
       all === "true" ? undefined : userId,
       pageNum,
-      limitNum
+      limitNum,
     );
   }
 
@@ -118,7 +112,7 @@ export class EventsController {
   updateLayout(
     @Param("id") id: string,
     @Body() dto: UpdateLayoutDto,
-    @Request() req
+    @Request() req,
   ) {
     const userId = req.user?.id;
     return this.eventsService.updateLayout(id, dto, userId);
@@ -154,7 +148,7 @@ export class EventsController {
   @ApiOperation({ summary: "Ekstra personel ekle" })
   createExtraStaff(
     @Param("id") id: string,
-    @Body() dto: CreateEventExtraStaffDto
+    @Body() dto: CreateEventExtraStaffDto,
   ) {
     return this.eventsService.createExtraStaff(id, dto);
   }
@@ -164,7 +158,7 @@ export class EventsController {
   updateExtraStaff(
     @Param("id") id: string,
     @Param("extraStaffId") extraStaffId: string,
-    @Body() dto: UpdateEventExtraStaffDto
+    @Body() dto: UpdateEventExtraStaffDto,
   ) {
     return this.eventsService.updateExtraStaff(id, extraStaffId, dto);
   }
@@ -173,7 +167,7 @@ export class EventsController {
   @ApiOperation({ summary: "Ekstra personel sil" })
   deleteExtraStaff(
     @Param("id") id: string,
-    @Param("extraStaffId") extraStaffId: string
+    @Param("extraStaffId") extraStaffId: string,
   ) {
     return this.eventsService.deleteExtraStaff(id, extraStaffId);
   }
@@ -182,7 +176,7 @@ export class EventsController {
   @ApiOperation({ summary: "Toplu ekstra personel kaydet" })
   saveExtraStaffBulk(
     @Param("id") id: string,
-    @Body() dto: BulkSaveEventExtraStaffDto
+    @Body() dto: BulkSaveEventExtraStaffDto,
   ) {
     return this.eventsService.saveExtraStaffBulk(id, dto.extraStaff);
   }

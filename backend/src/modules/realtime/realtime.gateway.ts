@@ -8,6 +8,8 @@ import {
   OnGatewayDisconnect,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
+import * as jwt from "jsonwebtoken";
+import { ConfigService } from "@nestjs/config";
 
 /**
  * EventStats interface - Dashboard istatistikleri için
@@ -62,13 +64,40 @@ export class RealtimeGateway
   @WebSocketServer()
   server: Server;
 
+  constructor(private readonly configService: ConfigService) {}
+
   private connectedClients: Map<
     string,
     { eventId?: string; role?: string; userId?: string }
   > = new Map();
 
   handleConnection(client: Socket) {
-    this.connectedClients.set(client.id, {});
+    try {
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.replace("Bearer ", "");
+
+      if (!token) {
+        client.emit("error", { message: "Authentication required" });
+        client.disconnect();
+        return;
+      }
+
+      const secret = this.configService.get<string>("JWT_SECRET");
+      if (!secret) {
+        client.disconnect();
+        return;
+      }
+
+      const decoded = jwt.verify(token, secret) as Record<string, unknown>;
+      this.connectedClients.set(client.id, {
+        userId: (decoded.sub || decoded.id) as string,
+        role: decoded.role as string,
+      });
+    } catch {
+      client.emit("error", { message: "Invalid token" });
+      client.disconnect();
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -79,8 +108,15 @@ export class RealtimeGateway
   @SubscribeMessage("joinUser")
   handleJoinUser(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { userId: string; role: string }
+    @MessageBody() data: { userId: string; role: string },
   ) {
+    const clientData = this.connectedClients.get(client.id) || {};
+
+    // Verify the user matches their authenticated identity
+    if (clientData?.userId && clientData.userId !== data.userId) {
+      return { success: false, message: "Unauthorized: userId mismatch" };
+    }
+
     // Kullanıcı kendi odasına katılır
     client.join(`user:${data.userId}`);
     // Role bazlı odaya da katılır
@@ -88,7 +124,6 @@ export class RealtimeGateway
     // Genel bildirimler için
     client.join("notifications:all");
 
-    const clientData = this.connectedClients.get(client.id) || {};
     this.connectedClients.set(client.id, {
       ...clientData,
       userId: data.userId,
@@ -105,7 +140,7 @@ export class RealtimeGateway
   @SubscribeMessage("joinEvent")
   handleJoinEvent(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { eventId: string; role: string }
+    @MessageBody() data: { eventId: string; role: string },
   ) {
     client.join(`event:${data.eventId}`);
     const clientData = this.connectedClients.get(client.id) || {};
@@ -128,7 +163,7 @@ export class RealtimeGateway
       x: number;
       y: number;
       rotation: number;
-    }
+    },
   ) {
     // Aynı etkinlikteki diğer kullanıcılara yayınla
     client.to(`event:${data.eventId}`).emit("tableUpdated", {
@@ -145,7 +180,7 @@ export class RealtimeGateway
   @SubscribeMessage("reservationUpdate")
   handleReservationUpdate(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { eventId: string; reservation: unknown }
+    @MessageBody() data: { eventId: string; reservation: unknown },
   ) {
     this.server
       .to(`event:${data.eventId}`)
@@ -170,7 +205,7 @@ export class RealtimeGateway
       tableLabel?: string;
       customerName?: string;
       guestCount?: number;
-    }
+    },
   ) {
     const checkInRecord: CheckInRecord = {
       reservationId: data.reservationId,
@@ -212,7 +247,7 @@ export class RealtimeGateway
   broadcastCheckInWithStats(
     eventId: string,
     stats: EventStats,
-    checkInRecord: CheckInRecord
+    checkInRecord: CheckInRecord,
   ): void {
     // Önce check-in bildirimini gönder
     this.server.to(`event:${eventId}`).emit("guestCheckedIn", checkInRecord);
@@ -232,7 +267,7 @@ export class RealtimeGateway
    */
   broadcastRecentCheckIns(
     eventId: string,
-    recentCheckIns: CheckInRecord[]
+    recentCheckIns: CheckInRecord[],
   ): void {
     this.server.to(`event:${eventId}`).emit("recentCheckIns", {
       checkIns: recentCheckIns,
@@ -270,7 +305,7 @@ export class RealtimeGateway
    */
   broadcastNotificationToRole(
     role: string,
-    notification: NotificationPayload
+    notification: NotificationPayload,
   ): void {
     this.server.to(`role:${role}`).emit("newNotification", notification);
   }
@@ -282,7 +317,7 @@ export class RealtimeGateway
    */
   broadcastNotificationToUser(
     userId: string,
-    notification: NotificationPayload
+    notification: NotificationPayload,
   ): void {
     this.server.to(`user:${userId}`).emit("newNotification", notification);
   }
@@ -294,7 +329,7 @@ export class RealtimeGateway
    */
   broadcastNotification(
     targetRole: string,
-    notification: NotificationPayload
+    notification: NotificationPayload,
   ): void {
     if (targetRole === "all") {
       this.broadcastNotificationToAll(notification);

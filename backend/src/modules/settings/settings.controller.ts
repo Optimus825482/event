@@ -15,6 +15,14 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { UserRole } from "../../entities/user.entity";
 import { SettingsService } from "./settings.service";
 import { MailService } from "../mail/mail.service";
+import {
+  UpdateGeneralSettingsDto,
+  CreateStaffColorDto,
+  UpdateStaffColorDto,
+  CreateTableTypeDto,
+  UpdateTableTypeDto,
+  SendTestEmailDto,
+} from "./dto/settings.dto";
 
 @ApiTags("Settings")
 @ApiBearerAuth()
@@ -24,7 +32,7 @@ import { MailService } from "../mail/mail.service";
 export class SettingsController {
   constructor(
     private readonly settingsService: SettingsService,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
   ) {}
 
   // ============ SYSTEM SETTINGS ============
@@ -37,7 +45,7 @@ export class SettingsController {
 
   @Put()
   @ApiOperation({ summary: "Sistem ayarlarını güncelle" })
-  async updateSettings(@Body() updates: any) {
+  async updateSettings(@Body() updates: UpdateGeneralSettingsDto) {
     return this.settingsService.updateSettings(updates);
   }
 
@@ -51,13 +59,16 @@ export class SettingsController {
 
   @Post("staff-colors")
   @ApiOperation({ summary: "Yeni personel rengi ekle" })
-  async createStaffColor(@Body() data: { name: string; color: string }) {
+  async createStaffColor(@Body() data: CreateStaffColorDto) {
     return this.settingsService.createStaffColor(data);
   }
 
   @Put("staff-colors/:id")
   @ApiOperation({ summary: "Personel rengini güncelle" })
-  async updateStaffColor(@Param("id") id: string, @Body() updates: any) {
+  async updateStaffColor(
+    @Param("id") id: string,
+    @Body() updates: UpdateStaffColorDto,
+  ) {
     return this.settingsService.updateStaffColor(id, updates);
   }
 
@@ -77,13 +88,16 @@ export class SettingsController {
 
   @Post("table-types")
   @ApiOperation({ summary: "Yeni masa tipi ekle" })
-  async createTableType(@Body() data: any) {
+  async createTableType(@Body() data: CreateTableTypeDto) {
     return this.settingsService.createTableType(data);
   }
 
   @Put("table-types/:id")
   @ApiOperation({ summary: "Masa tipini güncelle" })
-  async updateTableType(@Param("id") id: string, @Body() updates: any) {
+  async updateTableType(
+    @Param("id") id: string,
+    @Body() updates: UpdateTableTypeDto,
+  ) {
     return this.settingsService.updateTableType(id, updates);
   }
 
@@ -91,6 +105,20 @@ export class SettingsController {
   @ApiOperation({ summary: "Masa tipini sil" })
   async deleteTableType(@Param("id") id: string) {
     return this.settingsService.deleteTableType(id);
+  }
+
+  // ============ SMTP / MAIL ============
+
+  // ============ FEATURE FLAGS ============
+
+  @Get("feature-flags")
+  @ApiOperation({ summary: "Özellik bayraklarını getir" })
+  async getFeatureFlags() {
+    const settings = await this.settingsService.getSettings();
+    return {
+      qrCodeSystemEnabled: settings.qrCodeSystemEnabled,
+      invitationSystemEnabled: settings.invitationSystemEnabled,
+    };
   }
 
   // ============ SMTP / MAIL ============
@@ -105,7 +133,7 @@ export class SettingsController {
   @Post("smtp/test-email")
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "Test e-postası gönder (Sadece Admin)" })
-  async sendTestEmail(@Body() body: { email: string }) {
+  async sendTestEmail(@Body() body: SendTestEmailDto) {
     return this.mailService.sendMail({
       to: body.email,
       subject: "🧪 EventFlow PRO - SMTP Test",
@@ -114,7 +142,7 @@ export class SettingsController {
           <h2 style="color: #2563eb;">✅ SMTP Bağlantısı Başarılı!</h2>
           <p>Bu e-posta EventFlow PRO sisteminden gönderilmiştir.</p>
           <p style="color: #6b7280; font-size: 12px;">Test zamanı: ${new Date().toLocaleString(
-            "tr-TR"
+            "tr-TR",
           )}</p>
         </div>
       `,

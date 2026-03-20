@@ -459,7 +459,7 @@ export const EventAssignmentTab = forwardRef<
   const showNotification = useCallback(
     (type: "success" | "error", message: string) => {
       setNotification({ type, message });
-      setTimeout(() => setNotification(null), 3000);
+      setTimeout(() => setNotification(null), 5000);
     },
     []
   );
@@ -476,8 +476,8 @@ export const EventAssignmentTab = forwardRef<
 
         // İkinci grup: Staff ve Teams (cache kullan)
         const [staffRes, teamsRes] = await Promise.all([
-          staffApi.getPersonnel({ isActive: true }, true), // Staff tablosundan, useCache=true
-          staffApi.getTeams(true), // useCache=true
+          staffApi.getPersonnel({ isActive: true }), // Staff tablosundan
+          staffApi.getTeams(), // teams
         ]);
 
         const staffList = staffRes.data || [];
@@ -1952,12 +1952,12 @@ export const EventAssignmentTab = forwardRef<
       {/* Main Layout - Venue ile aynı yapı */}
       <div
         className={`grid gap-0 ${
-          isFullscreen ? "grid-cols-1" : "grid-cols-12"
+          isFullscreen ? "grid-cols-1" : "grid-cols-1 md:grid-cols-12"
         }`}
       >
         {/* Left Panel */}
         {!isFullscreen && (
-          <div className="col-span-3 border-r border-slate-700 bg-slate-800/30 p-3 space-y-3 h-[580px] overflow-y-auto">
+          <div className="hidden md:block col-span-3 border-r border-slate-700 bg-slate-800/30 p-3 space-y-3 h-[580px] overflow-y-auto">
             {/* Ekipler - Accordion */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader
@@ -2631,16 +2631,16 @@ export const EventAssignmentTab = forwardRef<
         )}
 
         {/* Canvas - Venue ile birebir aynı yapı */}
-        <div className={isFullscreen ? "col-span-1" : "col-span-9"}>
+        <div className={isFullscreen ? "col-span-1" : "col-span-1 md:col-span-9"}>
           <Card className="bg-slate-800 border-slate-700 overflow-hidden rounded-none">
             <div
               ref={canvasRef}
-              className={`relative bg-slate-900 overflow-hidden ${
+              className={`relative bg-slate-900 overflow-auto ${
                 activeTool === "pan" ? "cursor-grab" : "cursor-default"
               } ${isPanning ? "cursor-grabbing" : ""}`}
               style={{
                 width: "100%",
-                height: isFullscreen ? "calc(100vh - 50px)" : 580,
+                height: isFullscreen ? "calc(100vh - 50px)" : "min(580px, 70vh)",
               }}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}

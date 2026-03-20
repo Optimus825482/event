@@ -6,7 +6,7 @@ import { Ticket, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function ReservationSettings() {
-  const { systemSettings, fetchSettings, updateSettings, loading } =
+  const { systemSettings, fetchSettings, updateSettings, isFetching } =
     useSettingsStore();
   const [localSettings, setLocalSettings] = useState(systemSettings);
   const [saving, setSaving] = useState(false);
@@ -31,6 +31,7 @@ export function ReservationSettings() {
     setNotification(null);
     try {
       await updateSettings({
+        invitationSystemEnabled: localSettings.invitationSystemEnabled,
         defaultGuestCount: localSettings.defaultGuestCount,
         allowOverbooking: localSettings.allowOverbooking,
         requirePhoneNumber: localSettings.requirePhoneNumber,
@@ -44,7 +45,7 @@ export function ReservationSettings() {
     }
   };
 
-  if (loading || !localSettings) {
+  if (isFetching || !localSettings) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -73,6 +74,34 @@ export function ReservationSettings() {
       </div>
 
       <div className="space-y-4">
+        <div className="space-y-3">
+          <label className="flex items-center justify-between p-4 bg-slate-700 rounded-lg cursor-pointer border border-slate-600">
+            <div>
+              <p className="font-medium">Davetiye Sistemi</p>
+              <p className="text-sm text-slate-400">
+                Davetiye oluşturma ve gönderme sistemini aç/kapat
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={localSettings.invitationSystemEnabled}
+              onChange={(e) =>
+                setLocalSettings({
+                  ...localSettings,
+                  invitationSystemEnabled: e.target.checked,
+                })
+              }
+              className="w-5 h-5 rounded bg-slate-600 border-slate-500"
+            />
+          </label>
+
+          {!localSettings.invitationSystemEnabled && (
+            <div className="p-3 bg-amber-900/30 border border-amber-700 rounded-lg text-amber-300 text-sm">
+              Davetiye sistemi devre dışı. Davetiye oluşturma ve gönderme işlemleri yapılamaz.
+            </div>
+          )}
+        </div>
+
         <div>
           <label className="block text-sm text-slate-400 mb-2">
             Varsayılan Kişi Sayısı

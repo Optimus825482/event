@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Upload, FileSpreadsheet, AlertCircle } from "lucide-react";
+import { useState, useRef } from "react";
+import {
+  Upload,
+  FileSpreadsheet,
+  AlertCircle,
+  ClipboardPaste,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CSVImportModalProps {
   open: boolean;
@@ -33,52 +39,92 @@ export function CSVImportModal({
   onImport,
 }: CSVImportModalProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [pasteText, setPasteText] = useState("");
+  const [parsedData, setParsedData] = useState<Array<Record<string, string>>>(
+    [],
+  );
   const [preview, setPreview] = useState<Array<Record<string, string>>>([]);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("paste");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const headerMap: Record<string, string> = {
-    "Sicil No": "sicilNo",
-    "İsim Soyisim": "fullName",
-    Unvan: "position",
-    "Çalıştığı Bölüm": "department",
-    "Görev Yeri": "workLocation",
-    Mentor: "mentor",
-    Cinsiyet: "gender",
-    "Doğum Tarihi": "birthDate",
-    Yaş: "age",
-    "Kan Grubu": "bloodType",
-    "Ayakkabı No": "shoeSize",
-    "Çorap Bedeni": "sockSize",
-    "İşe Giriş Tarihi": "hireDate",
-    Kıdem: "yearsAtCompany",
+  // Detect delimiter: tab (from spreadsheet), semicolon, or comma
+  const detectDelimiter = (firstLine: string): string => {
+    if (firstLine.includes("\t")) return "\t";
+    if (firstLine.includes(";")) return ";";
+    return ",";
   };
 
-  const parseCSV = (text: string): Array<Record<string, string>> => {
-    const lines = text.split("\n").filter((line) => line.trim());
+  // Clean header: remove newlines, extra spaces, quotes, BOM
+  const cleanHeader = (h: string): string =>
+    h
+      .replace(/\uFEFF/g, "")
+      .replace(/\r/g, "")
+      .replace(/\n/g, " ")
+      .replace(/"/g, "")
+      .trim();
+
+  const parseText = (text: string): Array<Record<string, string>> => {
+    const lines = text
+      .split(/\r?\n/)
+      .filter((line) => line.trim());
     if (lines.length < 2) {
-      throw new Error(
-        "CSV dosyası en az başlık ve bir veri satırı içermelidir"
-      );
+      throw new Error("En az başlık ve bir veri satırı gereklidir");
     }
 
-    const headers = lines[0].split(";").map((h) => h.trim().replace(/"/g, ""));
-    const mappedHeaders = headers.map((h) => headerMap[h] || h);
+    const delimiter = detectDelimiter(lines[0]);
+    const headers = lines[0].split(delimiter).map(cleanHeader);
 
     const data: Array<Record<string, string>> = [];
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(";").map((v) => v.trim().replace(/"/g, ""));
+      const values = lines[i]
+        .split(delimiter)
+        .map((v) => v.replace(/"/g, "").trim());
       const row: Record<string, string> = {};
-      mappedHeaders.forEach((header, index) => {
+      headers.forEach((header, index) => {
         if (values[index]) {
           row[header] = values[index];
         }
       });
-      if (row.sicilNo && row.fullName) {
+      // Accept row if it has at least Sicil No OR İsim Soyisim
+      if (row["Sicil No"] || row["İsim Soyisim"]) {
         data.push(row);
       }
     }
     return data;
+  };
+
+  const handlePasteChange = (text: string) => {
+    setPasteText(text);
+    setError(null);
+    if (!text.trim()) {
+      setPreview([]);
+      setParsedData([]);
+      return;
+    }
+    try {
+      const data = parseText(text);
+      setParsedData(data);
+      setPreview(data.slice(0, 5));
+      if (data.length === 0) {
+        setError(
+          'Veri algılanamadı. Başlık satırında "Sicil No" ve "İsim Soyisim" sütunları olmalıdır.',
+        );
+      }
+    } catch (err: any) {
+      setError(err.message || "Veri okunamadı");
+      setParsedData([]);
+      setPreview([]);
+    }
+  };
+
+  const handleTextareaPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData("text/plain");
+    if (pasted) {
+      e.preventDefault();
+      handlePasteChange(pasted);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,7 +138,8 @@ export function CSVImportModal({
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const data = parseCSV(text);
+        const data = parseText(text);
+        setParsedData(data);
         setPreview(data.slice(0, 5));
       } catch (err: any) {
         setError(err.message || "CSV dosyası okunamadı");
@@ -102,74 +149,135 @@ export function CSVImportModal({
   };
 
   const handleImport = async () => {
-    if (!file) return;
+    if (parsedData.length === 0) return;
 
     setImporting(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const text = event.target?.result as string;
-          const data = parseCSV(text);
-          const success = await onImport(data);
-          if (success) {
-            setFile(null);
-            setPreview([]);
-            onClose();
-          }
-        } catch (err: any) {
-          setError(err.message || "İçe aktarma başarısız");
-        } finally {
-          setImporting(false);
-        }
-      };
-      reader.readAsText(file, "UTF-8");
-    } catch (err) {
-      setError("İçe aktarma başarısız");
+      const success = await onImport(parsedData);
+      if (success) {
+        handleClose();
+      }
+    } catch (err: any) {
+      setError(err.message || "İçe aktarma başarısız");
+    } finally {
       setImporting(false);
     }
   };
 
   const handleClose = () => {
     setFile(null);
+    setPasteText("");
+    setParsedData([]);
     setPreview([]);
     setError(null);
+    setActiveTab("paste");
     onClose();
   };
 
+  const previewHeaders =
+    preview.length > 0 ? Object.keys(preview[0]).slice(0, 6) : [];
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-green-400" />
-            CSV İçe Aktar
+            Toplu Personel İçe Aktar
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Personel verilerini CSV dosyasından içe aktarın
+            Excel/tablolardan yapıştırın veya CSV dosyası yükleyin
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* File Upload */}
-          <div className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center">
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              className="hidden"
-              id="csv-upload"
-            />
-            <label htmlFor="csv-upload" className="cursor-pointer">
-              <Upload className="w-10 h-10 mx-auto text-slate-500 mb-2" />
-              <p className="text-slate-400">
-                {file ? file.name : "CSV dosyası seçin veya sürükleyin"}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Beklenen sütunlar: Sicil No, İsim Soyisim, Unvan, Çalıştığı
-                Bölüm, Görev Yeri...
-              </p>
-            </label>
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => {
+              setActiveTab(v);
+              setError(null);
+              setPreview([]);
+              setParsedData([]);
+              setFile(null);
+              setPasteText("");
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-2 bg-slate-700">
+              <TabsTrigger
+                value="paste"
+                className="data-[state=active]:bg-slate-600 flex items-center gap-2"
+              >
+                <ClipboardPaste className="w-4 h-4" />
+                Panodan Yapıştır
+              </TabsTrigger>
+              <TabsTrigger
+                value="file"
+                className="data-[state=active]:bg-slate-600 flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Dosya Yükle
+              </TabsTrigger>
+            </TabsList>
+
+            {/* PASTE TAB */}
+            <TabsContent value="paste" className="space-y-3 mt-3">
+              <div className="space-y-2">
+                <p className="text-sm text-slate-400">
+                  Excel&apos;den verileri kopyalayıp (Ctrl+C) aşağıdaki alana
+                  yapıştırın (Ctrl+V):
+                </p>
+                <textarea
+                  ref={textareaRef}
+                  value={pasteText}
+                  onChange={(e) => handlePasteChange(e.target.value)}
+                  onPaste={handleTextareaPaste}
+                  placeholder={
+                    "Sicil No\tİsim Soyisim\tUnvan\tÇalıştığı Bölüm\n1001\tAhmet Yılmaz\tGarson\tServis\n1002\tMehmet Kaya\tAşçı\tMutfak"
+                  }
+                  className="w-full h-40 bg-slate-900 border border-slate-600 rounded-lg p-3 text-sm text-white font-mono placeholder:text-slate-600 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none resize-y"
+                  spellCheck={false}
+                />
+                {pasteText && parsedData.length > 0 && (
+                  <p className="text-xs text-green-400">
+                    {parsedData.length} satır algılandı
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* FILE TAB */}
+            <TabsContent value="file" className="space-y-3 mt-3">
+              <div className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center">
+                <input
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="csv-upload"
+                />
+                <label htmlFor="csv-upload" className="cursor-pointer">
+                  <Upload className="w-10 h-10 mx-auto text-slate-500 mb-2" />
+                  <p className="text-slate-400">
+                    {file ? file.name : "CSV dosyası seçin"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    .csv veya .txt dosyaları desteklenir
+                  </p>
+                </label>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Beklenen sütunlar bilgisi */}
+          <div className="bg-slate-700/40 rounded-lg p-3 text-xs text-slate-400">
+            <p className="font-medium text-slate-300 mb-1">
+              Beklenen sütunlar:
+            </p>
+            <p>
+              Sicil No, İsim Soyisim, Unvan, Çalıştığı Bölüm, Görev Yeri,
+              Miçolar, Cinsiyet, Doğum Tarihi, Yaş, Kan Grubu, Ayakkabı
+              Numarası, Kadın Çorap Bedenleri, İşe Giriş Tarihi, Kıdem, Durum
+            </p>
           </div>
 
           {error && (
@@ -185,33 +293,34 @@ export function CSVImportModal({
           {preview.length > 0 && (
             <div>
               <p className="text-sm text-slate-400 mb-2">
-                Önizleme ({preview.length} kayıt gösteriliyor)
+                Önizleme (ilk {preview.length} kayıt, toplam{" "}
+                {parsedData.length})
               </p>
-              <div className="border border-slate-700 rounded-lg overflow-hidden">
+              <div className="border border-slate-700 rounded-lg overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-700/50">
-                      <TableHead className="text-slate-300">Sicil No</TableHead>
-                      <TableHead className="text-slate-300">Ad Soyad</TableHead>
-                      <TableHead className="text-slate-300">Pozisyon</TableHead>
-                      <TableHead className="text-slate-300">Bölüm</TableHead>
+                      {previewHeaders.map((h) => (
+                        <TableHead
+                          key={h}
+                          className="text-slate-300 text-xs whitespace-nowrap"
+                        >
+                          {h}
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {preview.map((row, i) => (
                       <TableRow key={i} className="border-slate-700">
-                        <TableCell className="text-white">
-                          {row.sicilNo}
-                        </TableCell>
-                        <TableCell className="text-white">
-                          {row.fullName}
-                        </TableCell>
-                        <TableCell className="text-slate-400">
-                          {row.position || "-"}
-                        </TableCell>
-                        <TableCell className="text-slate-400">
-                          {row.department || "-"}
-                        </TableCell>
+                        {previewHeaders.map((h) => (
+                          <TableCell
+                            key={h}
+                            className="text-white text-xs"
+                          >
+                            {row[h] || "-"}
+                          </TableCell>
+                        ))}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -232,9 +341,11 @@ export function CSVImportModal({
           <Button
             onClick={handleImport}
             className="bg-green-600 hover:bg-green-700"
-            disabled={!file || importing}
+            disabled={parsedData.length === 0 || importing}
           >
-            {importing ? "İçe Aktarılıyor..." : "İçe Aktar"}
+            {importing
+              ? "İçe Aktarılıyor..."
+              : `İçe Aktar (${parsedData.length} kayıt)`}
           </Button>
         </DialogFooter>
       </DialogContent>

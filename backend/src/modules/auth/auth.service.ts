@@ -23,11 +23,16 @@ export class AuthService implements OnModuleInit {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private jwtService: JwtService,
-    private configService: ConfigService
+    private configService: ConfigService,
   ) {
     // Refresh secret: önce JWT_REFRESH_SECRET, yoksa JWT_SECRET kullan
     const refreshSecret = this.configService.get<string>("JWT_REFRESH_SECRET");
     const jwtSecret = this.configService.get<string>("JWT_SECRET");
+    if (!refreshSecret) {
+      console.warn(
+        "⚠️ JWT_REFRESH_SECRET tanımlı değil, JWT_SECRET kullanılıyor. Production'da ayrı bir secret tanımlayın.",
+      );
+    }
     this.refreshSecret = refreshSecret || jwtSecret || "";
 
     this.refreshExpiresIn =
@@ -50,7 +55,7 @@ export class AuthService implements OnModuleInit {
         if (!adminPassword || adminPassword.length < 12) {
           console.warn(
             "⚠️ DEFAULT_ADMIN_PASSWORD tanımlı değil veya çok kısa. " +
-              "Admin kullanıcısı oluşturulmadı."
+              "Admin kullanıcısı oluşturulmadı.",
           );
           return;
         }
@@ -73,7 +78,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async register(
-    dto: RegisterDto
+    dto: RegisterDto,
   ): Promise<{ user: Partial<User>; tokens: TokenResponseDto }> {
     const existingUsername = await this.userRepository.findOne({
       where: { username: dto.username },
@@ -103,7 +108,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async login(
-    dto: LoginDto
+    dto: LoginDto,
   ): Promise<{ user: Partial<User>; tokens: TokenResponseDto }> {
     const user = await this.userRepository.findOne({
       where: { username: dto.username },
@@ -142,14 +147,14 @@ export class AuthService implements OnModuleInit {
       return this.generateTokens(user);
     } catch {
       throw new UnauthorizedException(
-        "Geçersiz veya süresi dolmuş refresh token"
+        "Geçersiz veya süresi dolmuş refresh token",
       );
     }
   }
 
   async changePassword(
     userId: string,
-    dto: ChangePasswordDto
+    dto: ChangePasswordDto,
   ): Promise<{ success: boolean; message: string }> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -161,7 +166,7 @@ export class AuthService implements OnModuleInit {
 
     const isCurrentPasswordValid = await bcrypt.compare(
       dto.currentPassword,
-      user.password
+      user.password,
     );
     if (!isCurrentPasswordValid) {
       throw new BadRequestException("Mevcut şifre yanlış");
@@ -185,11 +190,11 @@ export class AuthService implements OnModuleInit {
   private generateTokens(user: User): TokenResponseDto {
     const payload = { sub: user.id, username: user.username, role: user.role };
 
-    // Controller rolü için sonsuz session (100 yıl)
+    // Controller rolü için uzun session (30 gün)
     const isController = user.role === UserRole.CONTROLLER;
-    const accessTokenExpiry = isController ? "100y" : "15m";
-    const refreshTokenExpiry = isController ? "100y" : this.refreshExpiresIn;
-    const expiresInSeconds = isController ? 3153600000 : 900; // 100 yıl veya 15 dakika
+    const accessTokenExpiry = isController ? "30d" : "2h";
+    const refreshTokenExpiry = isController ? "90d" : this.refreshExpiresIn;
+    const expiresInSeconds = isController ? 2592000 : 7200; // 30 gün veya 2 saat
 
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: accessTokenExpiry,

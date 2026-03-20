@@ -60,3 +60,11 @@ backend/uploads/invitation-images/*
 optimist-projects/
 eventflowproject/
 minibarproject/
+
+# AI/IDE Agent configs
+.agent/
+.claude/
+.kiro/
+.kilocode/
+.agentic-tools-mcp/
+ULTRA_CODEBASE_AUDIT_REPORT.md

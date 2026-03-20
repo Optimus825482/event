@@ -15,13 +15,13 @@ import type { ElementType } from "./types";
 
 // ==================== GRID SETTINGS ====================
 export const GRID_COLS = 26;
-export const GRID_ROWS = 20;
+export const GRID_ROWS = 24;
 export const CELL_SIZE = 40;
 export const CANVAS_WIDTH = GRID_COLS * CELL_SIZE;
 export const CANVAS_HEIGHT = GRID_ROWS * CELL_SIZE;
 export const HEADER_SIZE = 24;
 export const DEFAULT_TABLE_SIZE = 40;
-export const MAX_TABLE_COUNT = 144; // Maksimum masa sayısı
+export const MAX_TABLE_COUNT = 200; // Maksimum masa sayısı
 
 export const COLUMN_LETTERS = Array.from({ length: 26 }, (_, i) =>
   String.fromCharCode(65 + i),
@@ -214,7 +214,7 @@ export const pixelToGrid = (x: number, y: number) => {
   const rowIndex = Math.floor(y / CELL_SIZE);
   return {
     col: COLUMN_LETTERS[Math.min(Math.max(colIndex, 0), 25)],
-    row: Math.min(Math.max(rowIndex + 1, 1), 20),
+    row: Math.min(Math.max(rowIndex + 1, 1), GRID_ROWS),
   };
 };
 

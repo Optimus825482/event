@@ -16,7 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { settingsApi } from "@/lib/api";
 
 export function NotificationSettings() {
-  const { systemSettings, fetchSettings, updateSettings, loading } =
+  const { systemSettings, fetchSettings, updateSettings, isFetching } =
     useSettingsStore();
   const [localSettings, setLocalSettings] = useState(systemSettings);
   const [saving, setSaving] = useState(false);
@@ -136,7 +136,7 @@ export function NotificationSettings() {
     }
   };
 
-  if (loading || !localSettings) {
+  if (isFetching || !localSettings) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />

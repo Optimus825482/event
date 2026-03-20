@@ -21,7 +21,7 @@ import {
   ChevronRight,
   Bell,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore, MODULES, ModuleType } from "@/store/auth-store";
 import { NotificationCenter } from "./NotificationCenter";
@@ -158,6 +158,20 @@ export function Navbar() {
   } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Click-outside handler for profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    if (profileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [profileMenuOpen]);
 
   // Breadcrumb oluştur
   const breadcrumbs = useMemo(() => {
@@ -239,7 +253,7 @@ export function Navbar() {
 
   // Kullanıcının erişebildiği modüller
   const userModules = MODULE_STRIP_CONFIG.filter((m) =>
-    user?.allowedModules.includes(m.id)
+    user?.allowedModules?.includes(m.id)
   );
 
   return (
@@ -286,9 +300,12 @@ export function Navbar() {
             <NotificationCenter />
 
             {/* Profil Dropdown */}
-            <div className="relative">
+            <div className="relative" ref={profileDropdownRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                aria-haspopup="true"
+                aria-expanded={profileMenuOpen ? "true" : "false"}
+                aria-label="Profil menüsünü aç"
                 className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
               >
                 <div
@@ -304,8 +321,11 @@ export function Navbar() {
 
               {/* Profil Dropdown Menu */}
               {profileMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-slate-800 rounded-lg border border-slate-700 shadow-xl py-2 z-50">
-                  <div className="px-4 py-2 border-b border-slate-700">
+                <div
+                  role="dialog"
+                  aria-label="Kullanıcı menüsü"
+                  className="absolute right-0 top-full mt-2 w-56 bg-slate-800 rounded-lg border border-slate-700 shadow-xl py-2 z-50"
+                >                  <div className="px-4 py-2 border-b border-slate-700">
                     <p className="font-medium text-white">{user?.fullName}</p>
                     <p className="text-sm text-slate-400">@{user?.username}</p>
                     {user?.role === "admin" && (
@@ -396,6 +416,8 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Menüyü kapat" : "Menüyü aç"}
+            aria-expanded={mobileMenuOpen ? "true" : "false"}
             className="md:hidden p-2 text-slate-400 hover:text-white"
           >
             {mobileMenuOpen ? (
@@ -490,6 +512,11 @@ export function Navbar() {
                   </Link>
                 );
               })}
+            </div>
+
+            {/* Bildirimler - Mobil */}
+            <div className="px-4 mb-4 mx-4">
+              <NotificationCenter />
             </div>
 
             {/* Modül Değiştir - Mobil */}

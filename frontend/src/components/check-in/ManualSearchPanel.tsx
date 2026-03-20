@@ -40,7 +40,7 @@ export function ManualSearchPanel({
   const [lastCheckInResult, setLastCheckInResult] =
     useState<CheckInResult | null>(null);
 
-  const { searchReservations, checkIn, selectedEvent, soundEnabled } =
+  const { searchReservations, checkInManual, selectedEvent, soundEnabled } =
     useCheckInStore();
 
   // Debounced search
@@ -72,7 +72,7 @@ export function ManualSearchPanel({
       setSelectedReservation(reservation);
 
       try {
-        const result = await checkIn(reservation.qrCodeHash);
+        const result = await checkInManual(reservation.id);
 
         if ("code" in result) {
           const error = result as CheckInError;
@@ -123,7 +123,7 @@ export function ManualSearchPanel({
         setSelectedReservation(null);
       }
     },
-    [checkIn, soundEnabled, onCheckInSuccess, onCheckInError]
+    [checkInManual, soundEnabled, onCheckInSuccess, onCheckInError]
   );
 
   const clearSearch = () => {

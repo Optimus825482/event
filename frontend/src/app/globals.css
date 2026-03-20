@@ -151,3 +151,28 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Focus indicators for keyboard accessibility */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* High contrast mode helper */
+.high-contrast .text-slate-500 {
+  color: rgb(203 213 225);
+}
+
+.high-contrast .text-slate-400 {
+  color: rgb(203 213 225);
+}

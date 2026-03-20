@@ -55,13 +55,16 @@ export function useSessionTimeout(
 
   // Session'ı uzat
   const extendSession = useCallback(async (): Promise<boolean> => {
-    if (!refreshToken) {
+    // Closure'daki stale değer yerine store'dan güncel refreshToken'ı oku
+    const currentRefreshToken =
+      refreshToken || useAuthStore.getState().refreshToken;
+    if (!currentRefreshToken) {
       console.error("Refresh token bulunamadı");
       return false;
     }
     try {
       const response = await axios.post(`${API_URL}/auth/refresh`, {
-        refreshToken,
+        refreshToken: currentRefreshToken,
       });
 
       const { accessToken, refreshToken: newRefreshToken } = response.data;

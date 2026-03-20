@@ -55,6 +55,8 @@ export class SettingsService implements OnModuleInit {
       companyName: "Test Firması",
       timezone: "Europe/Nicosia",
       language: "tr",
+      qrCodeSystemEnabled: true,
+      invitationSystemEnabled: true,
     });
     return this.settingsRepo.save(settings);
   }

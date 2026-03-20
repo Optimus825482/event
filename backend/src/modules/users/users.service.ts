@@ -65,7 +65,7 @@ export class UsersService {
     }
 
     // Şifreyi hashle
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 12);
 
     const user = this.userRepository.create({
       ...dto,
@@ -141,7 +141,7 @@ export class UsersService {
       }
     }
 
-    user.password = await bcrypt.hash(dto.newPassword, 10);
+    user.password = await bcrypt.hash(dto.newPassword, 12);
     await this.userRepository.save(user);
     return { success: true };
   }

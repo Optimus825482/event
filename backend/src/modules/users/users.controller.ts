@@ -9,12 +9,23 @@ import {
   Param,
   UseGuards,
 } from "@nestjs/common";
+import { ApiTags, ApiBearerAuth, ApiOperation } from "@nestjs/swagger";
 import { UsersService } from "./users.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
 import { UserRole } from "../../entities/user.entity";
+import {
+  CreateUserDto,
+  UpdateUserDto,
+  ChangePasswordDto,
+} from "./dto/users.dto";
 
+@ApiTags("Users")
+@ApiBearerAuth()
 @Controller("users")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -30,12 +41,6 @@ export class UsersController {
     return this.usersService.getStats();
   }
 
-  // Username olmayan kullanıcılara username ata (migration)
-  @Post("migrate-usernames")
-  migrateUsernames() {
-    return this.usersService.migrateUsernames();
-  }
-
   // Tek kullanıcı getir
   @Get(":id")
   findOne(@Param("id") id: string) {
@@ -44,46 +49,22 @@ export class UsersController {
 
   // Yeni kullanıcı oluştur
   @Post()
-  create(
-    @Body()
-    dto: {
-      username: string;
-      email?: string;
-      password: string;
-      fullName: string;
-      role?: UserRole;
-      phone?: string;
-      position?: string;
-    }
-  ) {
+  @ApiOperation({ summary: "Yeni kullanıcı oluştur" })
+  create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
 
   // Kullanıcı güncelle
   @Put(":id")
-  update(
-    @Param("id") id: string,
-    @Body()
-    dto: {
-      username?: string;
-      email?: string;
-      fullName?: string;
-      role?: UserRole;
-      phone?: string;
-      position?: string;
-      isActive?: boolean;
-      color?: string;
-    }
-  ) {
+  @ApiOperation({ summary: "Kullanıcı güncelle" })
+  update(@Param("id") id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
   }
 
   // Şifre değiştir
   @Patch(":id/password")
-  changePassword(
-    @Param("id") id: string,
-    @Body() dto: { currentPassword?: string; newPassword: string }
-  ) {
+  @ApiOperation({ summary: "Şifre değiştir" })
+  changePassword(@Param("id") id: string, @Body() dto: ChangePasswordDto) {
     return this.usersService.changePassword(id, dto);
   }
 

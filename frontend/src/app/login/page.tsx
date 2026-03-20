@@ -18,6 +18,7 @@ export default function LoginPage() {
     password: "",
   });
   const [error, setError] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Hydration tamamlanana kadar bekle
   useEffect(() => {
@@ -156,9 +157,11 @@ export default function LoginPage() {
           </div>
 
           <div className="flex items-center text-sm">
-            <label className="flex items-center gap-2 text-slate-400">
+            <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
               <input
                 type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
                 className="rounded bg-slate-700 border-slate-600"
               />
               Beni hatırla

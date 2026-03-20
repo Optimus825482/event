@@ -4,7 +4,6 @@ import {
   Geist_Mono,
   Roboto,
   Playfair_Display,
-  Oswald,
 } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -27,12 +26,6 @@ const roboto = Roboto({
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-});
-
-const oswald = Oswald({
-  variable: "--font-oswald",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
 });
@@ -95,8 +88,8 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default function RootLayout({
@@ -107,7 +100,7 @@ export default function RootLayout({
   return (
     <html lang="tr" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} ${playfair.variable} ${oswald.variable} antialiased bg-slate-900 text-white`}
+        className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} ${playfair.variable} antialiased bg-slate-900 text-white`}
       >
         <Providers>{children}</Providers>
       </body>

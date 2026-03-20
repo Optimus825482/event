@@ -35,7 +35,7 @@ export class ReservationsService {
     private customerRepository: Repository<Customer>,
     private qrEngineService: QREngineService,
     private realtimeGateway: RealtimeGateway,
-    private mailService: MailService
+    private mailService: MailService,
   ) {}
 
   /**
@@ -46,7 +46,7 @@ export class ReservationsService {
    */
   private async getTableCapacity(
     eventId: string,
-    tableId: string
+    tableId: string,
   ): Promise<number | null> {
     const event = await this.eventRepository.findOne({
       where: { id: eventId },
@@ -67,7 +67,7 @@ export class ReservationsService {
   async isTableAvailable(
     eventId: string,
     tableId: string,
-    excludeReservationId?: string
+    excludeReservationId?: string,
   ): Promise<boolean> {
     const queryBuilder = this.reservationRepository
       .createQueryBuilder("reservation")
@@ -101,7 +101,7 @@ export class ReservationsService {
   private async validateCapacity(
     eventId: string,
     tableId: string,
-    guestCount: number
+    guestCount: number,
   ): Promise<void> {
     const capacity = await this.getTableCapacity(eventId, tableId);
 
@@ -192,7 +192,7 @@ export class ReservationsService {
     const qrCodeHash = await this.qrEngineService.generateHash(
       dto.eventId,
       dto.tableId,
-      uniqueId
+      uniqueId,
     );
 
     const reservation = this.reservationRepository.create({
@@ -224,14 +224,14 @@ export class ReservationsService {
    */
   private async sendTicketEmailAsync(
     reservation: Reservation,
-    guestEmail?: string
+    guestEmail?: string,
   ): Promise<void> {
     try {
       // E-posta adresi yoksa gönderme
       const email = guestEmail || reservation.guestEmail;
       if (!email) {
         this.logger.log(
-          `Rezervasyon ${reservation.id}: E-posta adresi yok, mail gönderilmedi`
+          `Rezervasyon ${reservation.id}: E-posta adresi yok, mail gönderilmedi`,
         );
         return;
       }
@@ -249,7 +249,7 @@ export class ReservationsService {
       let tableLabel = reservation.tableId;
       if (event.venueLayout?.tables) {
         const table = event.venueLayout.tables.find(
-          (t) => t.id === reservation.tableId
+          (t) => t.id === reservation.tableId,
         );
         if (table?.label) {
           tableLabel = table.label;
@@ -281,7 +281,7 @@ export class ReservationsService {
 
       if (result.success) {
         this.logger.log(
-          `Bilet e-postası gönderildi: ${email} (${reservation.id})`
+          `Bilet e-postası gönderildi: ${email} (${reservation.id})`,
         );
       } else {
         this.logger.warn(`Bilet e-postası gönderilemedi: ${result.error}`);
@@ -298,7 +298,17 @@ export class ReservationsService {
    * @param filters Filtreleme parametreleri
    * @returns Filtrelenmiş rezervasyon listesi
    */
-  async findAll(filters?: ReservationFiltersDto): Promise<Reservation[]> {
+  async findAll(
+    filters?: ReservationFiltersDto,
+    page = 1,
+    limit = 50,
+  ): Promise<{
+    data: Reservation[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
     const query = this.reservationRepository
       .createQueryBuilder("reservation")
       .leftJoinAndSelect("reservation.customer", "customer")
@@ -338,11 +348,15 @@ export class ReservationsService {
       const searchTerm = `%${filters.searchQuery}%`;
       query.andWhere(
         "(LOWER(customer.fullName) LIKE LOWER(:searchTerm) OR customer.phone LIKE :searchTerm OR LOWER(reservation.guestName) LIKE LOWER(:searchTerm) OR reservation.guestPhone LIKE :searchTerm)",
-        { searchTerm }
+        { searchTerm },
       );
     }
 
-    return query.getMany();
+    const skip = (page - 1) * limit;
+    query.skip(skip).take(limit);
+
+    const [data, total] = await query.getManyAndCount();
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   /**
@@ -352,26 +366,19 @@ export class ReservationsService {
    * @param eventId Opsiyonel event filtresi
    * @returns Eşleşen rezervasyonlar
    */
-  async search(searchQuery: string, eventId?: string): Promise<Reservation[]> {
-    const query = this.reservationRepository
-      .createQueryBuilder("reservation")
-      .leftJoinAndSelect("reservation.customer", "customer")
-      .leftJoinAndSelect("reservation.event", "event")
-      .orderBy("reservation.createdAt", "DESC");
-
-    // Case-insensitive partial match arama
-    const searchTerm = `%${searchQuery}%`;
-    query.where(
-      "(LOWER(customer.fullName) LIKE LOWER(:searchTerm) OR customer.phone LIKE :searchTerm)",
-      { searchTerm }
-    );
-
-    // Opsiyonel event filtresi
-    if (eventId) {
-      query.andWhere("reservation.eventId = :eventId", { eventId });
-    }
-
-    return query.getMany();
+  async search(
+    searchQuery: string,
+    eventId?: string,
+    page = 1,
+    limit = 50,
+  ): Promise<{
+    data: Reservation[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    return this.findAll({ searchQuery, eventId }, page, limit);
   }
 
   /**
@@ -380,39 +387,22 @@ export class ReservationsService {
    * @param filters Filtre parametreleri
    * @returns Filtrelenmiş rezervasyonlar
    */
-  async filter(filters: {
-    status?: ReservationStatus;
-    eventId?: string;
-    tableId?: string;
-  }): Promise<Reservation[]> {
-    const query = this.reservationRepository
-      .createQueryBuilder("reservation")
-      .leftJoinAndSelect("reservation.customer", "customer")
-      .leftJoinAndSelect("reservation.event", "event")
-      .orderBy("reservation.createdAt", "DESC");
-
-    // Status filtresi (Requirement 7.3)
-    if (filters.status) {
-      query.andWhere("reservation.status = :status", {
-        status: filters.status,
-      });
-    }
-
-    // Event filtresi (Requirement 7.4)
-    if (filters.eventId) {
-      query.andWhere("reservation.eventId = :eventId", {
-        eventId: filters.eventId,
-      });
-    }
-
-    // Masa filtresi
-    if (filters.tableId) {
-      query.andWhere("reservation.tableId = :tableId", {
-        tableId: filters.tableId,
-      });
-    }
-
-    return query.getMany();
+  async filter(
+    filters: {
+      status?: ReservationStatus;
+      eventId?: string;
+      tableId?: string;
+    },
+    page = 1,
+    limit = 50,
+  ): Promise<{
+    data: Reservation[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    return this.findAll(filters, page, limit);
   }
 
   async findOne(id: string): Promise<Reservation> {
@@ -459,7 +449,7 @@ export class ReservationsService {
     let tableLocation: { x: number; y: number; label: string } | null = null;
     if (reservation.event?.venueLayout?.tables) {
       const table = reservation.event.venueLayout.tables.find(
-        (t) => t.id === reservation.tableId
+        (t) => t.id === reservation.tableId,
       );
       if (table) {
         tableLocation = {
@@ -491,7 +481,7 @@ export class ReservationsService {
       const isAvailable = await this.isTableAvailable(
         reservation.eventId,
         dto.tableId,
-        id // Mevcut rezervasyonu hariç tut
+        id, // Mevcut rezervasyonu hariç tut
       );
       if (!isAvailable) {
         throw new TableNotAvailableException(dto.tableId);
@@ -575,7 +565,7 @@ export class ReservationsService {
     let tableLocation: { x: number; y: number; label: string } | null = null;
     if (reservation.event?.venueLayout?.tables) {
       const table = reservation.event.venueLayout.tables.find(
-        (t) => t.id === reservation.tableId
+        (t) => t.id === reservation.tableId,
       );
       if (table) {
         tableLocation = {
@@ -603,7 +593,7 @@ export class ReservationsService {
       this.realtimeGateway.broadcastCheckInWithStats(
         reservation.eventId,
         stats,
-        checkInRecord
+        checkInRecord,
       );
     } catch (error) {
       // Socket.io hatası check-in işlemini engellemez
@@ -645,14 +635,14 @@ export class ReservationsService {
 
   async getByTable(
     eventId: string,
-    tableId: string
+    tableId: string,
   ): Promise<Reservation | null> {
     return this.reservationRepository.findOne({
       where: {
         eventId,
         tableId,
         status: Not(
-          In([ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW])
+          In([ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW]),
         ),
       },
       relations: ["customer"],
@@ -917,7 +907,7 @@ export class ReservationsService {
     const totalCapacity =
       event.venueLayout?.tables?.reduce(
         (sum, t) => sum + (t.capacity || 0),
-        0
+        0,
       ) || 0;
 
     return {
@@ -943,7 +933,7 @@ export class ReservationsService {
    */
   async getCheckInHistory(
     eventId: string,
-    limit = 20
+    limit = 20,
   ): Promise<
     Array<{
       reservationId: string;
@@ -986,7 +976,7 @@ export class ReservationsService {
    * Requirement: Check-in Module 11.3
    */
   async getAvailableTables(
-    eventId: string
+    eventId: string,
   ): Promise<Array<{ id: string; label: string; capacity: number }>> {
     const event = await this.eventRepository.findOne({
       where: { id: eventId },
@@ -1001,7 +991,7 @@ export class ReservationsService {
       where: {
         eventId,
         status: Not(
-          In([ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW])
+          In([ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW]),
         ),
       },
       select: ["tableId"],
@@ -1047,7 +1037,7 @@ export class ReservationsService {
     const qrCodeHash = await this.qrEngineService.generateHash(
       dto.eventId,
       dto.tableId,
-      `walkin-${Date.now()}`
+      `walkin-${Date.now()}`,
     );
 
     // Rezervasyon oluştur ve direkt check-in yap
@@ -1095,7 +1085,7 @@ export class ReservationsService {
       this.realtimeGateway.broadcastCheckInWithStats(
         dto.eventId,
         stats,
-        checkInRecord
+        checkInRecord,
       );
     } catch (error) {
       this.logger.warn("Walk-in real-time broadcast hatası:", error);
@@ -1113,14 +1103,14 @@ export class ReservationsService {
    */
   async updateGuestCount(
     reservationId: string,
-    guestCount: number
+    guestCount: number,
   ): Promise<Reservation> {
     const reservation = await this.findOne(reservationId);
 
     // Kapasite kontrolü (uyarı ver ama engelleme)
     const capacity = await this.getTableCapacity(
       reservation.eventId,
-      reservation.tableId
+      reservation.tableId,
     );
 
     reservation.guestCount = guestCount;
@@ -1129,7 +1119,7 @@ export class ReservationsService {
     // Kapasite aşımı uyarısı
     if (capacity && guestCount > capacity) {
       this.logger.warn(
-        `Kapasite aşımı: Rezervasyon ${reservationId}, ${guestCount}/${capacity}`
+        `Kapasite aşımı: Rezervasyon ${reservationId}, ${guestCount}/${capacity}`,
       );
     }
 

@@ -30,7 +30,7 @@ export class EventsService {
     @InjectRepository(EventExtraStaff)
     private eventExtraStaffRepository: Repository<EventExtraStaff>,
     @Inject(forwardRef(() => NotificationsService))
-    private notificationsService: NotificationsService
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateEventDto, organizerId: string) {
@@ -46,10 +46,14 @@ export class EventsService {
     try {
       await this.notificationsService.notifyEventCreated(
         savedEvent,
-        organizerId
+        organizerId,
       );
-    } catch {
-      // Bildirim hatası ana işlemi etkilemesin
+    } catch (error) {
+      // Bildirim hatası ana işlemi etkilemez ama loglansın
+      console.warn(
+        "Event creation notification failed:",
+        (error as Error).message,
+      );
     }
 
     return savedEvent;
@@ -79,7 +83,7 @@ export class EventsService {
       .loadRelationCountAndMap("event.serviceTeamCount", "event.serviceTeams")
       .loadRelationCountAndMap(
         "event.staffAssignmentCount",
-        "event.staffAssignments"
+        "event.staffAssignments",
       )
       // eventStaffAssignments için isActive=true filtresi
       .loadRelationCountAndMap(
@@ -89,7 +93,7 @@ export class EventsService {
         (qb) =>
           qb.andWhere("activeStaffAssignments.isActive = :isActive", {
             isActive: true,
-          })
+          }),
       )
       .loadRelationCountAndMap("event.tableGroupCount", "event.tableGroups")
       .orderBy("event.eventDate", "DESC")
@@ -142,7 +146,6 @@ export class EventsService {
       where: { id },
       relations: [
         "organizer",
-        "reservations",
         "staffAssignments",
         "serviceTeams",
         "tableGroups",
@@ -211,7 +214,7 @@ export class EventsService {
     if (dto.venueLayout?.placedTables) {
       event.totalCapacity = dto.venueLayout.placedTables.reduce(
         (sum: number, table: any) => sum + (table.capacity || 0),
-        0
+        0,
       );
     }
     const savedEvent = await this.eventRepository.save(event);
@@ -222,10 +225,14 @@ export class EventsService {
       try {
         await this.notificationsService.notifyVenueLayoutCompleted(
           savedEvent,
-          userId
+          userId,
         );
-      } catch {
-        // Bildirim hatası ana işlemi etkilemesin
+      } catch (error) {
+        // Bildirim hatası ana işlemi etkilemez ama loglansın
+        console.warn(
+          "Venue layout notification failed:",
+          (error as Error).message,
+        );
       }
     }
 
@@ -284,7 +291,7 @@ export class EventsService {
    */
   async createExtraStaff(
     eventId: string,
-    dto: CreateEventExtraStaffDto
+    dto: CreateEventExtraStaffDto,
   ): Promise<EventExtraStaff> {
     const extraStaff = this.eventExtraStaffRepository.create({
       ...dto,
@@ -299,7 +306,7 @@ export class EventsService {
   async updateExtraStaff(
     eventId: string,
     extraStaffId: string,
-    dto: UpdateEventExtraStaffDto
+    dto: UpdateEventExtraStaffDto,
   ): Promise<EventExtraStaff> {
     const extraStaff = await this.eventExtraStaffRepository.findOne({
       where: { id: extraStaffId, eventId },
@@ -333,7 +340,7 @@ export class EventsService {
    */
   async saveExtraStaffBulk(
     eventId: string,
-    extraStaffList: CreateEventExtraStaffDto[]
+    extraStaffList: CreateEventExtraStaffDto[],
   ): Promise<EventExtraStaff[]> {
     // Mevcut ekstra personelleri sil
     await this.eventExtraStaffRepository.delete({ eventId });
@@ -348,16 +355,16 @@ export class EventsService {
         ...dto,
         eventId,
         sortOrder: index,
-      })
+      }),
     );
 
     return this.eventExtraStaffRepository.save(entities);
   }
 
   /**
-   * Check-in modülü için etkinlikleri getir
-   * TÜM DRAFT ve PUBLISHED etkinlikleri döndürür
-   * Tarih kısıtlaması YOK - tüm etkinlikler görünür
+   * Check-in modülü için bugünkü aktif etkinlikleri getir
+   * Sadece bugünün etkinliklerini döndürür (tarih filtreli)
+   * N+1 sorgu problemi düzeltildi: count kullanılıyor
    */
   async getActiveEventsToday(): Promise<
     Array<{
@@ -371,28 +378,44 @@ export class EventsService {
       hasReservations: boolean;
     }>
   > {
-    // Tüm DRAFT ve PUBLISHED etkinlikleri getir
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
     const events = await this.eventRepository
       .createQueryBuilder("event")
-      .leftJoinAndSelect("event.reservations", "reservation")
-      .leftJoinAndSelect("event.staffAssignments", "staffAssignment")
+      .loadRelationCountAndMap("event._reservationCount", "event.reservations")
+      .loadRelationCountAndMap(
+        "event._checkedInCount",
+        "event.reservations",
+        "checkedIn",
+        (qb) => qb.andWhere("checkedIn.status = :cis", { cis: "checked_in" }),
+      )
+      .loadRelationCountAndMap(
+        "event._staffAssignmentCount",
+        "event.staffAssignments",
+      )
       .where("event.status IN (:...statuses)", {
-        statuses: [EventStatus.DRAFT, EventStatus.PUBLISHED],
+        statuses: [
+          EventStatus.DRAFT,
+          EventStatus.PUBLISHED,
+          EventStatus.ACTIVE,
+        ],
       })
-      .orderBy("event.eventDate", "DESC") // En yeni etkinlikler önce
+      .andWhere("event.eventDate >= :today AND event.eventDate < :tomorrow", {
+        today,
+        tomorrow,
+      })
+      .orderBy("event.eventDate", "ASC")
+      .take(100)
       .getMany();
 
-    // Her etkinlik için istatistikleri hesapla
-    return events.map((event) => {
-      const reservations = event.reservations || [];
-      const staffAssignments = event.staffAssignments || [];
-      const checkedInCount = reservations.filter(
-        (r) => r.status === "checked_in"
-      ).length;
+    return events.map((event: any) => {
       const totalCapacity =
         event.venueLayout?.tables?.reduce(
           (sum: number, t: any) => sum + (t.capacity || 0),
-          0
+          0,
         ) || 0;
 
       return {
@@ -400,10 +423,10 @@ export class EventsService {
         name: event.name,
         eventDate: event.eventDate,
         totalCapacity,
-        checkedInCount,
+        checkedInCount: event._checkedInCount || 0,
         venueLayout: event.venueLayout,
-        hasStaffAssignments: staffAssignments.length > 0,
-        hasReservations: reservations.length > 0,
+        hasStaffAssignments: (event._staffAssignmentCount || 0) > 0,
+        hasReservations: (event._reservationCount || 0) > 0,
       };
     });
   }

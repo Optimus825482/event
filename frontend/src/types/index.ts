@@ -233,7 +233,8 @@ export interface StaffAssignment {
 // Kullanıcı
 export interface User {
   id: string;
-  email: string;
+  username?: string;
+  email?: string;
   fullName: string;
   role:
     | "admin"
@@ -242,8 +243,11 @@ export interface User {
     | "venue_owner"
     | "leader"
     | "controller";
+  allowedModules?: string[];
   avatar?: string;
   color?: string;
+  phone?: string;
+  position?: string;
 }
 
 // Mekan Şablonu

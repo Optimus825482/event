@@ -15,11 +15,15 @@ import {
   ApiBearerAuth,
 } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { UserRole } from "../../entities/user.entity";
 import { AdminService } from "./admin.service";
 
 @ApiTags("Admin")
 @ApiBearerAuth("JWT-auth")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller("admin")
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
@@ -65,12 +69,12 @@ export class AdminController {
     @Param("eventId") eventId: string,
     @Body()
     settings: { reviewEnabled?: boolean; reviewHistoryVisible?: boolean },
-    @Request() req: { user: { id: string } }
+    @Request() req: { user: { id: string } },
   ) {
     return this.adminService.updateEventReviewSettings(
       eventId,
       settings,
-      req.user.id
+      req.user.id,
     );
   }
 
@@ -85,11 +89,11 @@ export class AdminController {
     body: {
       eventIds: string[];
       settings: { reviewEnabled?: boolean; reviewHistoryVisible?: boolean };
-    }
+    },
   ) {
     return this.adminService.bulkUpdateReviewSettings(
       body.eventIds,
-      body.settings
+      body.settings,
     );
   }
 }

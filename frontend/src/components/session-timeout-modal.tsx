@@ -31,10 +31,16 @@ export function SessionTimeoutModal() {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={(e) => e.stopPropagation()}
+      />
 
       {/* Modal */}
-      <div className="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md mx-4 overflow-hidden">
+      <div
+        className="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md mx-4 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close button */}
         <button
           onClick={dismissWarning}

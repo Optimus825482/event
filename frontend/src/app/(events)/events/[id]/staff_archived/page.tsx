@@ -500,7 +500,7 @@ export default function StaffOrganizationPage() {
 
     setAssignments((prev) => {
       // Önce bu masaları diğer personellerden kaldır
-      let updated = prev.map((a) => ({
+      const updated = prev.map((a) => ({
         ...a,
         tableIds: a.tableIds.filter((id) => !tableIds.includes(id)),
       }));

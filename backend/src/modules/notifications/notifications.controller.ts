@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   UseGuards,
@@ -26,7 +27,7 @@ export class NotificationsController {
     @Request() req: { user: { id: string } },
     @Query("limit") limit?: string,
     @Query("offset") offset?: string,
-    @Query("unreadOnly") unreadOnly?: string
+    @Query("unreadOnly") unreadOnly?: string,
   ) {
     return this.notificationsService.getUserNotifications(req.user.id, {
       limit: limit ? parseInt(limit, 10) : 20,
@@ -40,7 +41,7 @@ export class NotificationsController {
   async getUnreadCount(@Request() req: { user: { id: string } }) {
     const result = await this.notificationsService.getUserNotifications(
       req.user.id,
-      { limit: 1 }
+      { limit: 1 },
     );
     return { unreadCount: result.unreadCount };
   }
@@ -49,7 +50,7 @@ export class NotificationsController {
   @Get(":id")
   async getNotification(
     @Param("id", ParseUUIDPipe) id: string,
-    @Request() req: { user: { id: string } }
+    @Request() req: { user: { id: string } },
   ) {
     return this.notificationsService.getNotificationById(id, req.user.id);
   }
@@ -58,7 +59,7 @@ export class NotificationsController {
   @Post(":id/read")
   async markAsRead(
     @Param("id", ParseUUIDPipe) id: string,
-    @Request() req: { user: { id: string } }
+    @Request() req: { user: { id: string } },
   ) {
     await this.notificationsService.markAsRead(id, req.user.id);
     return { success: true };
@@ -80,7 +81,7 @@ export class NotificationsController {
   async getAllNotifications(
     @Query("limit") limit?: string,
     @Query("offset") offset?: string,
-    @Query("type") type?: NotificationType
+    @Query("type") type?: NotificationType,
   ) {
     return this.notificationsService.getAllNotifications({
       limit: limit ? parseInt(limit, 10) : 50,
@@ -98,7 +99,7 @@ export class NotificationsController {
   }
 
   // Bildirimi sil (admin)
-  @Post("admin/:id/delete")
+  @Delete("admin/:id")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async deleteNotification(@Param("id", ParseUUIDPipe) id: string) {

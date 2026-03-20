@@ -296,7 +296,7 @@ export default function CheckInPage() {
       </header>
 
       {/* Tab Navigation */}
-      <nav className="bg-slate-800/50 border-b border-slate-700 sticky top-[140px] z-30">
+      <nav className="bg-slate-800/50 border-b border-slate-700 sticky top-0 z-30">
         <div className="flex">
           {TABS.map((tab) => (
             <button

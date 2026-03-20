@@ -7,51 +7,61 @@ import {
   ManyToOne,
   JoinColumn,
 } from "typeorm";
-import { InvitationTemplate } from "./invitation-template.entity";
+import {
+  InvitationTemplate,
+  InvitationElement,
+  InvitationSize,
+} from "./invitation-template.entity";
 
+// Etkinliğe özel davetiye ayarları
 @Entity("event_invitations")
 export class EventInvitation {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: "varchar", length: 255 })
+  @Column()
   eventId: string;
 
-  @Column({ type: "uuid", nullable: true })
-  templateId: string | null;
+  // Kullanılan şablon (null ise özel tasarım)
+  @Column({ nullable: true })
+  templateId: string;
 
   @ManyToOne(() => InvitationTemplate, { nullable: true })
   @JoinColumn({ name: "templateId" })
   template: InvitationTemplate;
 
+  // Özelleştirilmiş elementler (şablondan farklıysa)
   @Column({ type: "jsonb", nullable: true })
-  customElements: Record<string, any> | null;
+  customElements: InvitationElement[];
 
-  @Column({ type: "varchar", length: 10, default: "A5" })
-  size: string;
+  // Boyut
+  @Column({ type: "varchar", default: "A5" })
+  size: InvitationSize;
 
-  @Column({ type: "int", default: 559 })
+  @Column({ default: 559 })
   width: number;
 
-  @Column({ type: "int", default: 794 })
+  @Column({ default: 794 })
   height: number;
 
-  @Column({ type: "varchar", length: 50, nullable: true })
-  backgroundColor: string | null;
+  @Column({ nullable: true })
+  backgroundColor: string;
 
-  @Column({ type: "varchar", length: 500, nullable: true })
-  backgroundImage: string | null;
+  @Column({ nullable: true })
+  backgroundImage: string;
 
-  @Column({ type: "varchar", length: 255, nullable: true })
-  backgroundGradient: string | null;
+  @Column({ nullable: true })
+  backgroundGradient: string;
 
+  // Etkinliğe özel yüklenen görseller
   @Column({ type: "jsonb", default: [] })
   eventImages: string[];
 
-  @Column({ type: "varchar", length: 500, nullable: true })
-  companyLogo: string | null;
+  // Firma logosu
+  @Column({ nullable: true })
+  companyLogo: string;
 
-  @Column({ type: "boolean", default: true })
+  @Column({ default: true })
   isActive: boolean;
 
   @CreateDateColumn()

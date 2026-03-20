@@ -8,12 +8,14 @@ import { Event } from "../../entities/event.entity";
 import { Customer } from "../../entities/customer.entity";
 import { RealtimeModule } from "../realtime/realtime.module";
 import { MailModule } from "../mail/mail.module";
+import { SettingsModule } from "../settings/settings.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Reservation, Event, Customer]),
     RealtimeModule,
     MailModule,
+    SettingsModule,
   ],
   controllers: [ReservationsController],
   providers: [ReservationsService, QREngineService],

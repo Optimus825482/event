@@ -26,5 +26,6 @@ export * from "./department-location.entity";
 export * from "./service-point.entity";
 export * from "./service-point-staff-assignment.entity";
 export * from "./event-extra-staff.entity";
-// Not: event-invitation, staff-color ve staff-performance-log ayrı dosyalarda duplicate tanımlı
-// Bu yüzden sadece ana dosyalardan export ediliyor (invitation-template, settings, staff-assignment içinde)
+export * from "./event-invitation.entity";
+// Not: staff-color ve staff-performance-log ayrı dosyalarda duplicate tanımlı
+// (settings.entity ve staff-assignment.entity içinde de var)

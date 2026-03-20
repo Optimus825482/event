@@ -1112,7 +1112,7 @@ export function useVenueState(eventId?: string) {
     // İlk satırın başlangıç pozisyonunu al
     const firstRowFirstTable = rows[0]?.[0];
     let currentY = firstRowFirstTable?.y ?? 0;
-    let startX = firstRowFirstTable?.x ?? CELL_SIZE;
+    const startX = firstRowFirstTable?.x ?? CELL_SIZE;
 
     // Her satır için masaları yeniden konumlandır
     rows.forEach((tablesInRow, rowIdx) => {

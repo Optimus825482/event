@@ -1,36 +1,33 @@
 "use client";
 
 import { useEffect, useState, memo, useMemo } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Calendar,
   Users,
   Clock,
-  CheckCircle2,
-  Timer,
   ArrowRight,
-  Sparkles,
   Ticket,
   Search,
   MapPin,
   UserCheck,
-  AlertCircle,
-  CalendarDays,
+  QrCode,
 } from "lucide-react";
-import { eventsApi, reservationsApi } from "@/lib/api";
+import { eventsApi } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth-store";
 
 interface Event {
   id: string;
   name: string;
   eventDate: string;
   status: string;
+  totalCapacity?: number;
   venueLayout?: {
     tables?: any[];
   };
@@ -38,16 +35,8 @@ interface Event {
   checkedInCount?: number;
 }
 
-interface DashboardStats {
-  totalEvents: number;
-  upcomingEvents: number;
-  todayEvents: number;
-  totalReservations: number;
-  totalCheckedIn: number;
-}
-
-// Geri Sayım Component
-const CountdownDisplay = memo(function CountdownDisplay({
+// Geri Sayım — tablet için optimize edilmiş hero versiyonu
+const HeroCountdown = memo(function HeroCountdown({
   eventDate,
 }: {
   eventDate: string;
@@ -60,426 +49,462 @@ const CountdownDisplay = memo(function CountdownDisplay({
   });
 
   useEffect(() => {
-    const updateCountdown = () => {
-      const now = new Date().getTime();
-      const eventTime = new Date(eventDate).getTime();
-      const diff = eventTime - now;
-
+    const update = () => {
+      const diff = new Date(eventDate).getTime() - Date.now();
       if (diff <= 0) {
         setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         return;
       }
-
       setCountdown({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+        days: Math.floor(diff / 86400000),
+        hours: Math.floor((diff % 86400000) / 3600000),
+        minutes: Math.floor((diff % 3600000) / 60000),
+        seconds: Math.floor((diff % 60000) / 1000),
       });
     };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
   }, [eventDate]);
 
+  const units = [
+    { value: countdown.days, label: "GÜN" },
+    { value: countdown.hours, label: "SAAT" },
+    { value: countdown.minutes, label: "DAKİKA" },
+    { value: countdown.seconds, label: "SANİYE" },
+  ];
+
   return (
-    <div className="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5">
-      <div className="text-center">
-        <span className="text-lg font-bold text-purple-400 tabular-nums">
-          {String(countdown.days).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">GÜN</span>
-      </div>
-      <span className="text-purple-500 font-bold">:</span>
-      <div className="text-center">
-        <span className="text-lg font-bold text-purple-400 tabular-nums">
-          {String(countdown.hours).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">SAAT</span>
-      </div>
-      <span className="text-purple-500 font-bold">:</span>
-      <div className="text-center">
-        <span className="text-lg font-bold text-purple-400 tabular-nums">
-          {String(countdown.minutes).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">DK</span>
-      </div>
-      <span className="text-purple-500 font-bold">:</span>
-      <div className="text-center">
-        <span className="text-lg font-bold text-purple-400 tabular-nums">
-          {String(countdown.seconds).padStart(2, "0")}
-        </span>
-        <span className="text-[9px] text-slate-500 block">SN</span>
-      </div>
+    <div className="flex items-center justify-center md:justify-start gap-2 sm:gap-4 md:gap-6">
+      {units.map((u, i) => (
+        <div key={u.label} className="flex items-center gap-2 sm:gap-4">
+          <div className="text-center">
+            <div className="relative">
+              {/* Tablet için daha büyük sayılar */}
+              <span className="text-5xl sm:text-6xl md:text-7xl font-bold tabular-nums bg-gradient-to-b from-white via-purple-100 to-purple-300 bg-clip-text text-transparent drop-shadow-2xl">
+                {String(u.value).padStart(2, "0")}
+              </span>
+              {/* Glow efekti */}
+              <div className="absolute inset-0 text-5xl sm:text-6xl md:text-7xl font-bold tabular-nums text-purple-500/20 blur-xl select-none">
+                {String(u.value).padStart(2, "0")}
+              </div>
+            </div>
+            <span className="text-[10px] sm:text-xs tracking-[0.2em] text-purple-300/80 mt-2 block font-medium">
+              {u.label}
+            </span>
+          </div>
+          {i < units.length - 1 && (
+            <span className="text-3xl sm:text-4xl text-purple-500/60 font-light -mt-6 drop-shadow-lg">
+              :
+            </span>
+          )}
+        </div>
+      ))}
     </div>
   );
 });
 
 export default function ReservationsDashboardPage() {
   const router = useRouter();
+  const { setActiveModule } = useAuthStore();
   const [events, setEvents] = useState<Event[]>([]);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const eventsRes = await eventsApi.getAll();
-        // API response formatı: { items: [], meta: {} } veya doğrudan array
-        const data = eventsRes.data;
+        const res = await eventsApi.getAll();
+        const data = res.data;
         const allEvents = Array.isArray(data) ? data : data?.items || [];
 
         const now = new Date();
         now.setHours(0, 0, 0, 0);
 
-        // Sadece bugün ve gelecekteki etkinlikler
-        const upcomingEvents = allEvents
+        const upcoming = allEvents
           .filter((e: Event) => {
-            const eventDate = new Date(e.eventDate);
-            eventDate.setHours(0, 0, 0, 0);
-            return eventDate >= now && e.status !== "cancelled";
+            const d = new Date(e.eventDate);
+            d.setHours(0, 0, 0, 0);
+            return d >= now && e.status !== "cancelled";
           })
           .sort(
             (a: Event, b: Event) =>
-              new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+              new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime(),
           );
 
-        // Bugünkü etkinlikler
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-
-        const todayEvents = upcomingEvents.filter((e: Event) => {
-          const eventDate = new Date(e.eventDate);
-          eventDate.setHours(0, 0, 0, 0);
-          return eventDate >= today && eventDate < tomorrow;
-        });
-
-        setEvents(upcomingEvents);
-        setStats({
-          totalEvents: allEvents.length,
-          upcomingEvents: upcomingEvents.length,
-          todayEvents: todayEvents.length,
-          totalReservations: 0,
-          totalCheckedIn: 0,
-        });
-      } catch (error) {
-        console.error("Veriler yüklenemedi:", error);
+        setEvents(upcoming);
+      } catch (err) {
+        console.error("Veriler yüklenemedi:", err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
-  // Filtrelenmiş etkinlikler
   const filteredEvents = useMemo(() => {
     if (!searchQuery) return events;
-    const query = searchQuery.toLowerCase();
-    return events.filter((e) => e.name.toLowerCase().includes(query));
+    const q = searchQuery.toLowerCase();
+    return events.filter((e) => e.name.toLowerCase().includes(q));
   }, [events, searchQuery]);
 
-  // En yakın etkinlik
   const nextEvent = events[0];
 
-  if (loading) {
-    return <DashboardSkeleton />;
-  }
+  // Bugünkü etkinlikler
+  const todayCount = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return events.filter((e) => {
+      const d = new Date(e.eventDate);
+      d.setHours(0, 0, 0, 0);
+      return d >= today && d < tomorrow;
+    }).length;
+  }, [events]);
+
+  if (loading) return <DashboardSkeleton />;
 
   return (
     <PageContainer>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="text-center py-4">
-          <h1 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
-            <Ticket className="w-6 h-6 text-purple-400" />
-            Rezervasyon Yönetimi
-          </h1>
-          <p className="text-slate-400 mt-1">
-            Etkinlik seçin ve rezervasyonları yönetin
-          </p>
-        </div>
+      <div className="space-y-6 md:space-y-8 pb-8">
+        {/* Hero — Yaklaşan Etkinlik (Tablet için optimize) */}
+        {nextEvent ? (
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-purple-950/50 to-slate-900 border border-purple-500/30 shadow-2xl shadow-purple-500/10">
+            {/* Dekoratif arka plan - tablet için daha belirgin */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute -top-32 -right-32 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
+              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-violet-500/5 rounded-full blur-3xl" />
+              {/* Grid pattern overlay */}
+              <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:32px_32px]" />
+            </div>
 
-        {/* Yaklaşan Etkinlik - Geri Sayım */}
-        {nextEvent && (
-          <Card className="bg-gradient-to-r from-purple-600/10 via-pink-600/10 to-rose-600/10 border-purple-500/30">
-            <CardContent className="py-3 px-4">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="relative p-6 sm:p-8 md:p-10">
+              {/* Üst kısım — Etiket + Check-in butonu */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 md:mb-8">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                    <Timer className="w-5 h-5 text-purple-400" />
+                  <div className="relative">
+                    <div className="w-3 h-3 rounded-full bg-purple-400" />
+                    <div className="absolute inset-0 w-3 h-3 rounded-full bg-purple-400 animate-ping" />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">
-                      {nextEvent.name}
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      {formatDate(nextEvent.eventDate)}
-                    </p>
-                  </div>
+                  <span className="text-sm tracking-[0.2em] text-purple-300/80 uppercase font-medium">
+                    Yaklaşan Etkinlik
+                  </span>
                 </div>
-
-                <CountdownDisplay eventDate={nextEvent.eventDate} />
-
                 <Button
-                  size="sm"
-                  className="bg-purple-600 hover:bg-purple-700 h-8"
-                  onClick={() => router.push(`/reservations/${nextEvent.id}`)}
+                  size="lg"
+                  className="w-full sm:w-auto h-14 px-6 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white gap-3 shadow-lg shadow-emerald-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98]"
+                  onClick={() => {
+                    setActiveModule("checkin");
+                    setTimeout(() => router.push("/check-in"), 50);
+                  }}
                 >
-                  Rezervasyonlar
-                  <ArrowRight className="w-3 h-3 ml-1" />
+                  <QrCode className="w-5 h-5" />
+                  <span className="font-semibold">Check-in Modülü</span>
                 </Button>
               </div>
+
+              {/* Etkinlik adı - tablet için daha büyük */}
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2 md:mb-3 tracking-tight leading-tight">
+                {nextEvent.name}
+              </h2>
+              <p className="text-base sm:text-lg text-purple-300/70 mb-8 md:mb-10 font-medium">
+                {formatDate(nextEvent.eventDate, "long")}
+              </p>
+
+              {/* Geri sayım */}
+              <div className="mb-8 md:mb-10">
+                <HeroCountdown eventDate={nextEvent.eventDate} />
+              </div>
+
+              {/* Alt bilgi çubuğu - tablet için 2 satır */}
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4">
+                <Button
+                  size="lg"
+                  className="h-14 px-8 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white gap-3 shadow-lg shadow-purple-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98]"
+                  onClick={() => router.push(`/reservations/${nextEvent.id}`)}
+                >
+                  <Ticket className="w-5 h-5" />
+                  <span className="font-semibold">Rezervasyonları Yönet</span>
+                  <ArrowRight className="w-5 h-5 ml-1" />
+                </Button>
+
+                <div className="flex flex-wrap items-center gap-4 md:gap-6 text-sm md:text-base text-slate-400">
+                  {nextEvent.venueLayout?.tables && (
+                    <span className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
+                      <MapPin className="w-4 h-4 text-purple-400" />
+                      <span className="font-medium">{nextEvent.venueLayout.tables.length}</span> masa
+                    </span>
+                  )}
+                  {nextEvent.totalCapacity && (
+                    <span className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
+                      <Users className="w-4 h-4 text-purple-400" />
+                      <span className="font-medium">{nextEvent.totalCapacity}</span> kapasite
+                    </span>
+                  )}
+                  <span className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
+                    <Ticket className="w-4 h-4 text-purple-400" />
+                    <span className="font-medium">{nextEvent.reservationCount || 0}</span> rezervasyon
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="py-20 text-center">
+              <Calendar className="w-16 h-16 text-slate-600 mx-auto mb-6" />
+              <p className="text-lg text-slate-400">Yaklaşan etkinlik bulunmuyor</p>
             </CardContent>
           </Card>
         )}
 
-        {/* İstatistikler */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            icon={<Calendar className="w-5 h-5" />}
-            label="Toplam Etkinlik"
-            value={stats?.totalEvents || 0}
-            color="blue"
-          />
-          <StatCard
-            icon={<CalendarDays className="w-5 h-5" />}
-            label="Yaklaşan"
-            value={stats?.upcomingEvents || 0}
+        {/* Hızlı İstatistikler - Tablet için 2x2 grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <QuickStat
+            icon={<Calendar className="w-5 h-5 md:w-6 md:h-6" />}
+            value={events.length}
+            label="Yaklaşan Etkinlik"
             color="purple"
+            trend={events.length > 0 ? "up" : "neutral"}
           />
-          <StatCard
-            icon={<Clock className="w-5 h-5" />}
+          <QuickStat
+            icon={<Clock className="w-5 h-5 md:w-6 md:h-6" />}
+            value={todayCount}
             label="Bugün"
-            value={stats?.todayEvents || 0}
             color="amber"
-            highlight
+            trend={todayCount > 0 ? "hot" : "neutral"}
           />
-          <StatCard
-            icon={<UserCheck className="w-5 h-5" />}
+          <QuickStat
+            icon={<UserCheck className="w-5 h-5 md:w-6 md:h-6" />}
+            value={0}
             label="Check-in"
-            value={stats?.totalCheckedIn || 0}
-            color="green"
+            color="emerald"
+            trend="neutral"
+            className="col-span-2 md:col-span-1"
           />
         </div>
 
-        {/* Arama */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Etkinlik ara..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:border-purple-500 transition-colors"
-          />
-        </div>
+        {/* Etkinlik Listesi — tablet için card-based */}
+        {events.length > 1 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-base md:text-lg font-semibold text-white tracking-wide">
+                Tüm Yaklaşan Etkinlikler
+              </h3>
+              <Badge
+                variant="outline"
+                className="text-sm border-purple-500/30 text-purple-300 px-3 py-1"
+              >
+                {filteredEvents.length}
+              </Badge>
+            </div>
 
-        {/* Etkinlik Listesi */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-purple-400" />
-            Etkinlikler
-            <Badge variant="secondary" className="ml-2">
-              {filteredEvents.length}
-            </Badge>
-          </h2>
+            {/* Arama — tablet için daha büyük */}
+            {events.length > 2 && (
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Etkinlik ara..."
+                  className="w-full h-14 bg-slate-800/50 border border-slate-700/50 rounded-2xl pl-12 pr-4 text-base text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                />
+              </div>
+            )}
 
-          {filteredEvents.length === 0 ? (
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardContent className="py-12 text-center">
-                <AlertCircle className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                <p className="text-slate-400">
-                  {searchQuery
-                    ? "Arama kriterlerine uygun etkinlik bulunamadı"
-                    : "Yaklaşan etkinlik bulunmuyor"}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-3">
-              {filteredEvents.map((event) => (
+            {/* Grid layout - tablet için 2 sütun */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredEvents.slice(1).map((event) => (
                 <EventCard key={event.id} event={event} />
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </PageContainer>
   );
 }
 
-// Etkinlik Kartı
+// Etkinlik kartı - tablet için card-based tasarım
 function EventCard({ event }: { event: Event }) {
   const router = useRouter();
   const eventDate = new Date(event.eventDate);
   const now = new Date();
   const isToday = eventDate.toDateString() === now.toDateString();
-  const isPast = eventDate < now;
+
+  // Kalan gün hesapla
+  const diffDays = Math.ceil((eventDate.getTime() - now.getTime()) / 86400000);
 
   const tableCount = event.venueLayout?.tables?.length || 0;
+  const reservationRate = event.totalCapacity
+    ? Math.round(((event.reservationCount || 0) / event.totalCapacity) * 100)
+    : 0;
 
   return (
-    <Card
-      className={`bg-slate-800/50 border-slate-700 hover:border-purple-500/50 transition-all cursor-pointer ${
-        isToday ? "ring-2 ring-purple-500/50" : ""
-      }`}
+    <div
+      className={`group relative overflow-hidden rounded-2xl cursor-pointer transition-all duration-300
+        ${
+          isToday
+            ? "bg-gradient-to-br from-purple-500/20 via-purple-600/10 to-slate-800/80 border-2 border-purple-500/40 hover:border-purple-400/60 shadow-lg shadow-purple-500/10"
+            : "bg-slate-800/60 border border-slate-700/50 hover:bg-slate-800/80 hover:border-slate-600/50 hover:shadow-lg"
+        }`}
       onClick={() => router.push(`/reservations/${event.id}`)}
     >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0">
-            <div
-              className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                isToday
-                  ? "bg-purple-500/20"
-                  : isPast
-                  ? "bg-slate-600/20"
-                  : "bg-blue-500/20"
-              }`}
-            >
-              <Calendar
-                className={`w-6 h-6 ${
-                  isToday
-                    ? "text-purple-400"
-                    : isPast
-                    ? "text-slate-400"
-                    : "text-blue-400"
-                }`}
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-white truncate">
-                  {event.name}
-                </h3>
-                {isToday && (
-                  <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
-                    Bugün
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-slate-400">
-                {formatDate(event.eventDate)}
-              </p>
-            </div>
-          </div>
+      {/* Gradient overlay */}
+      <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${isToday ? "bg-gradient-to-t from-purple-500/10 to-transparent" : "bg-gradient-to-t from-slate-700/20 to-transparent"}`} />
 
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <div className="flex items-center gap-1 text-slate-400 text-sm">
-                <MapPin className="w-4 h-4" />
-                <span>{tableCount} masa</span>
-              </div>
-              <div className="flex items-center gap-1 text-slate-400 text-sm">
-                <Users className="w-4 h-4" />
-                <span>{event.reservationCount || 0} rezervasyon</span>
-              </div>
-            </div>
-            <ArrowRight className="w-5 h-5 text-slate-500" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// İstatistik Kartı
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  color: "blue" | "green" | "amber" | "purple";
-  highlight?: boolean;
-}
-
-const statColors = {
-  blue: {
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/30",
-    text: "text-blue-400",
-    icon: "bg-blue-500/20",
-  },
-  green: {
-    bg: "bg-green-500/10",
-    border: "border-green-500/30",
-    text: "text-green-400",
-    icon: "bg-green-500/20",
-  },
-  amber: {
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/30",
-    text: "text-amber-400",
-    icon: "bg-amber-500/20",
-  },
-  purple: {
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/30",
-    text: "text-purple-400",
-    icon: "bg-purple-500/20",
-  },
-};
-
-const StatCard = memo(function StatCard({
-  icon,
-  label,
-  value,
-  color,
-  highlight,
-}: StatCardProps) {
-  const colors = statColors[color];
-  return (
-    <Card
-      className={`${highlight ? colors.bg : "bg-slate-800/50"} ${
-        colors.border
-      } border`}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
+      <div className="relative p-5 md:p-6">
+        {/* Üst kısım - Tarih ve Badge */}
+        <div className="flex items-start justify-between mb-4">
+          {/* Tarih bloğu - tablet için daha büyük */}
           <div
-            className={`w-10 h-10 rounded-lg ${colors.icon} flex items-center justify-center ${colors.text}`}
+            className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-2xl flex flex-col items-center justify-center shadow-lg
+            ${isToday ? "bg-purple-500/30 border border-purple-400/30" : "bg-slate-700/50 border border-slate-600/30"}`}
           >
-            {icon}
-          </div>
-          <div>
-            <p
-              className={`text-2xl font-bold ${
-                highlight ? colors.text : "text-white"
-              }`}
+            <span
+              className={`text-2xl md:text-3xl font-bold leading-none
+              ${isToday ? "text-purple-200" : "text-white"}`}
             >
-              {value}
-            </p>
-            <p className="text-xs text-slate-400">{label}</p>
+              {eventDate.getDate()}
+            </span>
+            <span className="text-xs text-slate-400 uppercase mt-1 font-medium">
+              {eventDate.toLocaleDateString("tr-TR", { month: "short" })}
+            </span>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            {isToday && (
+              <Badge className="bg-purple-500/30 text-purple-200 border border-purple-400/30 text-xs px-3 py-1 font-medium">
+                BUGÜN
+              </Badge>
+            )}
+            <span className={`text-sm font-medium px-3 py-1 rounded-lg ${
+              diffDays <= 1 ? "bg-amber-500/20 text-amber-300" :
+              diffDays <= 3 ? "bg-blue-500/20 text-blue-300" :
+              "bg-slate-700/50 text-slate-400"
+            }`}>
+              {diffDays === 0 ? "Bugün" : diffDays === 1 ? "Yarın" : `${diffDays} gün`}
+            </span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Etkinlik adı */}
+        <h4 className="text-lg md:text-xl font-semibold text-white mb-3 group-hover:text-purple-300 transition-colors line-clamp-2">
+          {event.name}
+        </h4>
+
+        {/* Alt bilgiler */}
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400 mb-4">
+          <span className="flex items-center gap-1.5 bg-slate-700/30 px-2.5 py-1 rounded-lg">
+            <Clock className="w-3.5 h-3.5" />
+            {eventDate.toLocaleTimeString("tr-TR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+          {tableCount > 0 && (
+            <span className="flex items-center gap-1.5 bg-slate-700/30 px-2.5 py-1 rounded-lg">
+              <MapPin className="w-3.5 h-3.5" />
+              {tableCount} masa
+            </span>
+          )}
+        </div>
+
+        {/* Doluluk çubuğu */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">Rezervasyon</span>
+            <span className="font-semibold text-white">{event.reservationCount || 0}</span>
+          </div>
+          <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                reservationRate >= 80 ? "bg-gradient-to-r from-red-500 to-orange-500" :
+                reservationRate >= 50 ? "bg-gradient-to-r from-amber-500 to-yellow-500" :
+                "bg-gradient-to-r from-emerald-500 to-teal-500"
+              }`}
+              style={{ width: `${Math.min(reservationRate, 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Action hint */}
+        <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+            <ArrowRight className="w-5 h-5 text-purple-400" />
+          </div>
+        </div>
+      </div>
+    </div>
   );
-});
+}
+
+// Hızlı istatistik kartı - tablet için optimize
+function QuickStat({
+  icon,
+  value,
+  label,
+  color,
+  trend,
+  className = "",
+}: {
+  icon: React.ReactNode;
+  value: number;
+  label: string;
+  color: "purple" | "amber" | "emerald";
+  trend?: "up" | "down" | "hot" | "neutral";
+  className?: string;
+}) {
+  const colors = {
+    purple: "text-purple-400 bg-purple-500/10 border-purple-500/30 shadow-purple-500/10",
+    amber: "text-amber-400 bg-amber-500/10 border-amber-500/30 shadow-amber-500/10",
+    emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30 shadow-emerald-500/10",
+  };
+
+  const trendColors = {
+    up: "bg-gradient-to-br from-emerald-500/20 to-transparent",
+    down: "bg-gradient-to-br from-red-500/20 to-transparent",
+    hot: "bg-gradient-to-br from-amber-500/20 to-transparent",
+    neutral: "",
+  };
+
+  return (
+    <div
+      className={`relative overflow-hidden flex items-center gap-4 p-4 md:p-5 rounded-2xl border ${colors[color]} shadow-lg transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${className}`}
+    >
+      {/* Trend gradient */}
+      {trend && trend !== "neutral" && (
+        <div className={`absolute inset-0 ${trendColors[trend]} opacity-50`} />
+      )}
+
+      <div className="relative flex-shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-xl bg-slate-800/50 flex items-center justify-center">
+        {icon}
+      </div>
+      <div className="relative">
+        <span className="text-3xl md:text-4xl font-bold text-white">{value}</span>
+        <span className="block text-sm text-slate-400 mt-0.5 font-medium">{label}</span>
+      </div>
+    </div>
+  );
+}
 
 // Skeleton
 function DashboardSkeleton() {
   return (
     <PageContainer>
       <div className="space-y-6">
-        <div className="text-center py-4">
-          <Skeleton className="h-8 w-64 mx-auto mb-2 bg-slate-700" />
-          <Skeleton className="h-4 w-48 mx-auto bg-slate-700" />
-        </div>
-        <Skeleton className="h-20 w-full bg-slate-700 rounded-xl" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24 bg-slate-700 rounded-xl" />
+        <Skeleton className="h-64 w-full bg-slate-800 rounded-2xl" />
+        <div className="grid grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 bg-slate-800 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-12 w-full bg-slate-700 rounded-xl" />
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 bg-slate-700 rounded-xl" />
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-20 bg-slate-800 rounded-xl" />
           ))}
         </div>
       </div>

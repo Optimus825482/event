@@ -5,9 +5,7 @@ import {
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { Reflector } from "@nestjs/core";
-
-// Public decorator key - controller'da da aynı değer kullanılmalı
-export const IS_PUBLIC_KEY = "isPublic";
+import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard("jwt") {

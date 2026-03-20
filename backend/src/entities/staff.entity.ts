@@ -83,9 +83,18 @@ export class Staff {
   @Column({ type: "date", nullable: true })
   birthDate: Date;
 
-  // Yaş (hesaplanabilir ama cache için)
-  @Column({ type: "int", nullable: true })
-  age: number;
+  // Yaş — birthDate'ten hesaplanır, DB'de saklanmaz
+  get age(): number | null {
+    if (!this.birthDate) return null;
+    const today = new Date();
+    const birth = new Date(this.birthDate);
+    let calculatedAge = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      calculatedAge--;
+    }
+    return calculatedAge;
+  }
 
   // Kan grubu
   @Column({ nullable: true })

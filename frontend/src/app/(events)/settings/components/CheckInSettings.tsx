@@ -6,7 +6,7 @@ import { QrCode, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function CheckInSettings() {
-  const { systemSettings, fetchSettings, updateSettings, loading } =
+  const { systemSettings, fetchSettings, updateSettings, isFetching } =
     useSettingsStore();
   const [localSettings, setLocalSettings] = useState(systemSettings);
   const [saving, setSaving] = useState(false);
@@ -31,6 +31,7 @@ export function CheckInSettings() {
     setNotification(null);
     try {
       await updateSettings({
+        qrCodeSystemEnabled: localSettings.qrCodeSystemEnabled,
         autoCheckInEnabled: localSettings.autoCheckInEnabled,
         checkInSoundEnabled: localSettings.checkInSoundEnabled,
         showTableDirections: localSettings.showTableDirections,
@@ -43,7 +44,7 @@ export function CheckInSettings() {
     }
   };
 
-  if (loading || !localSettings) {
+  if (isFetching || !localSettings) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -72,6 +73,32 @@ export function CheckInSettings() {
       </div>
 
       <div className="space-y-3">
+        <label className="flex items-center justify-between p-4 bg-slate-700 rounded-lg cursor-pointer border border-slate-600">
+          <div>
+            <p className="font-medium">QR Kod Sistemi</p>
+            <p className="text-sm text-slate-400">
+              QR kod ile check-in sistemini aç/kapat
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={localSettings.qrCodeSystemEnabled}
+            onChange={(e) =>
+              setLocalSettings({
+                ...localSettings,
+                qrCodeSystemEnabled: e.target.checked,
+              })
+            }
+            className="w-5 h-5 rounded bg-slate-600 border-slate-500"
+          />
+        </label>
+
+        {!localSettings.qrCodeSystemEnabled && (
+          <div className="p-3 bg-amber-900/30 border border-amber-700 rounded-lg text-amber-300 text-sm">
+            QR kod sistemi devre dışı. Check-in işlemleri QR kod olmadan yapılacaktır.
+          </div>
+        )}
+
         <label className="flex items-center justify-between p-4 bg-slate-700 rounded-lg cursor-pointer">
           <div>
             <p className="font-medium">Otomatik Check-in</p>

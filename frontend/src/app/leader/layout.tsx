@@ -24,34 +24,17 @@ export default function LeaderLayout({
   useEffect(() => {
     if (!isHydrated) return;
 
-    // localStorage'dan direkt kontrol et
-    const authStorage = localStorage.getItem("auth-storage");
-    if (authStorage) {
-      try {
-        const parsed = JSON.parse(authStorage);
-        const storedUser = parsed?.state?.user;
-
-        if (!storedUser) {
-          router.push("/login");
-          return;
-        }
-
-        if (storedUser.role !== "leader") {
-          router.push("/select-module");
-          return;
-        }
-
-        setIsAuthorized(true);
-      } catch {
-        router.push("/login");
-      }
-    } else if (!user) {
+    if (!user) {
       router.push("/login");
-    } else if (user.role !== "leader") {
-      router.push("/select-module");
-    } else {
-      setIsAuthorized(true);
+      return;
     }
+
+    if (user.role !== "leader") {
+      router.push("/select-module");
+      return;
+    }
+
+    setIsAuthorized(true);
   }, [isHydrated, user, router]);
 
   // Loading state
