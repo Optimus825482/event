@@ -6,6 +6,7 @@ import {
   IsEnum,
   MinLength,
   MaxLength,
+  Matches,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { UserRole } from "../../../entities/user.entity";
@@ -97,15 +98,22 @@ export class UpdateUserDto {
   color?: string;
 }
 
-export class ChangePasswordDto {
-  @ApiPropertyOptional({ description: "Mevcut şifre" })
+export class AdminChangePasswordDto {
+  @ApiPropertyOptional({ description: "Mevcut şifre (admin için opsiyonel)" })
   @IsOptional()
   @IsString()
   currentPassword?: string;
 
   @ApiProperty({ description: "Yeni şifre" })
   @IsString()
-  @MinLength(4)
+  @MinLength(12, { message: "Yeni şifre en az 12 karakter olmalı" })
   @MaxLength(128)
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#+\-_=])[A-Za-z\d@$!%*?&#+\-_=]{12,}$/,
+    {
+      message:
+        "Şifre en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir",
+    },
+  )
   newPassword: string;
 }

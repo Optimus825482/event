@@ -18,7 +18,7 @@ import { UserRole } from "../../entities/user.entity";
 import {
   CreateUserDto,
   UpdateUserDto,
-  ChangePasswordDto,
+  AdminChangePasswordDto,
 } from "./dto/users.dto";
 
 @ApiTags("Users")
@@ -64,7 +64,7 @@ export class UsersController {
   // Şifre değiştir
   @Patch(":id/password")
   @ApiOperation({ summary: "Şifre değiştir" })
-  changePassword(@Param("id") id: string, @Body() dto: ChangePasswordDto) {
+  changePassword(@Param("id") id: string, @Body() dto: AdminChangePasswordDto) {
     return this.usersService.changePassword(id, dto);
   }
 
