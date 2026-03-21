@@ -451,8 +451,9 @@ export function Step2TeamAssignment({
     }
 
     // 1. Create group with selected tables (actual IDs, not labels)
+    const groupNumber = tableGroups.length + 1;
     const newGroup = onAddTableGroup(
-      `${selectedStaff.fullName} Masaları`,
+      `Grup ${groupNumber}`,
       formTableIds,
       color,
     );

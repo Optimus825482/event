@@ -141,7 +141,8 @@ export function StaffAssignmentStep({
         const newTableIds = groupMap.get("__new__")!;
         const staff = allStaff.find((s) => s.id === data.staffId);
         const colorIndex = tableGroups.length % DEFAULT_COLORS.length;
-        const groupName = `${data.staffName} Grubu`;
+        const groupNumber = tableGroups.length + 1;
+        const groupName = `Grup ${groupNumber}`;
         const newGroup = onAddTableGroup(
           groupName,
           newTableIds,

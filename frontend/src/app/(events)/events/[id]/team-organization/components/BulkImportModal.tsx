@@ -223,8 +223,23 @@ function parseClipboardData(text: string): ParsedRow[] {
   for (const line of lines) {
     const lower = line.toLowerCase();
     // Skip header lines (broader detection)
-    const headerWords = ['personel', 'pozisyon', 'posta', 'saat', 'vardiya', 'masa', 'isim', 'adı', 'sicil', 'bölüm', 'unvan', 'görev'];
-    const headerMatchCount = headerWords.filter(w => lower.includes(w)).length;
+    const headerWords = [
+      "personel",
+      "pozisyon",
+      "posta",
+      "saat",
+      "vardiya",
+      "masa",
+      "isim",
+      "adı",
+      "sicil",
+      "bölüm",
+      "unvan",
+      "görev",
+    ];
+    const headerMatchCount = headerWords.filter((w) =>
+      lower.includes(w),
+    ).length;
     if (headerMatchCount >= 2) continue;
     if (/^\d{2}\/\d{2}\/\d{4}/.test(line)) continue;
 
@@ -561,15 +576,17 @@ function parseLocaClipboardData(text: string): ParsedRow[] {
 // Helper: API call with retry on 429
 async function apiCallWithRetry<T>(
   fn: () => Promise<T>,
-  retries = 3,
-  baseDelay = 1000,
+  retries = 5,
+  baseDelay = 2000,
 ): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err: unknown) {
       const isRateLimit =
-        err && typeof err === "object" && "response" in err &&
+        err &&
+        typeof err === "object" &&
+        "response" in err &&
         (err as { response?: { status?: number } }).response?.status === 429;
       if (isRateLimit && attempt < retries) {
         await new Promise((r) => setTimeout(r, baseDelay * (attempt + 1)));
@@ -743,7 +760,9 @@ export function BulkImportModal({
     if (pasteText.trim()) {
       const rows = computeMatchedRows(pasteText);
       if (rows.length === 0) {
-        setPasteError("Veri algılanamadı. Lütfen formatı kontrol edin. Örnek: İSİM  MASALAR  SAAT");
+        setPasteError(
+          "Veri algılanamadı. Lütfen formatı kontrol edin. Örnek: İSİM  MASALAR  SAAT",
+        );
         return;
       }
       setPasteError("");
@@ -776,12 +795,14 @@ export function BulkImportModal({
 
         for (const { row } of toCreateExtra) {
           try {
-            await apiCallWithRetry(() => staffApi.createPersonnel({
-              sicilNo: generateSicilNo(),
-              fullName: row.staffName,
-              position: "Personel",
-              isActive: true,
-            }));
+            await apiCallWithRetry(() =>
+              staffApi.createPersonnel({
+                sicilNo: generateSicilNo(),
+                fullName: row.staffName,
+                position: "Personel",
+                isActive: true,
+              }),
+            );
             created++;
           } catch (err) {
             console.error(`Failed to create staff: ${row.staffName}`, err);
@@ -855,13 +876,15 @@ export function BulkImportModal({
                     : "Crystal"
                   : undefined;
 
-            const res = await apiCallWithRetry(() => staffApi.createPersonnel({
-              sicilNo: generateSicilNo(),
-              fullName: row.staffName,
-              position: "Personel",
-              workLocation,
-              isActive: true,
-            }));
+            const res = await apiCallWithRetry(() =>
+              staffApi.createPersonnel({
+                sicilNo: generateSicilNo(),
+                fullName: row.staffName,
+                position: "Personel",
+                workLocation,
+                isActive: true,
+              }),
+            );
 
             if (res.data) {
               const newStaff: Staff = {
@@ -911,8 +934,9 @@ export function BulkImportModal({
           ];
 
         // Create group with actual table IDs (not labels)
+        const groupNumber = tableGroups.length + imported + 1;
         const newGroup = onAddTableGroup(
-          `${staff.fullName} Masaları`,
+          `Grup ${groupNumber}`,
           tableIds,
           color,
         );
@@ -1117,12 +1141,17 @@ export function BulkImportModal({
                 </Button>
               </div>
               {pasteError && (
-                <p className="text-sm text-amber-400 bg-amber-950/30 border border-amber-800/50 rounded-lg px-3 py-2">{pasteError}</p>
+                <p className="text-sm text-amber-400 bg-amber-950/30 border border-amber-800/50 rounded-lg px-3 py-2">
+                  {pasteError}
+                </p>
               )}
               <textarea
                 ref={textareaRef}
                 value={pasteText}
-                onChange={(e) => { setPasteText(e.target.value); setPasteError(""); }}
+                onChange={(e) => {
+                  setPasteText(e.target.value);
+                  setPasteError("");
+                }}
                 placeholder="Veriyi buraya yapıştırın veya Ctrl+V kullanın..."
                 className="w-full h-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-sm text-white font-mono resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 spellCheck={false}

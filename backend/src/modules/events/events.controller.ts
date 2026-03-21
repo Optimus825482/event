@@ -30,9 +30,11 @@ import {
 } from "./dto/event-extra-staff.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Public } from "../auth/decorators/public.decorator";
+import { SkipThrottle } from "@nestjs/throttler";
 import { EventStatus } from "../../entities/event.entity";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
+@SkipThrottle()
 @ApiTags("Events")
 @ApiBearerAuth("JWT-auth")
 @Controller("events")

@@ -139,10 +139,10 @@ const TableItem = memo(function TableItem({
           borderColor: isSelected
             ? "#fbbf24"
             : assignedStaff
-            ? "#10b981"
-            : group
-            ? TABLE_TYPE_COLORS[tableType]?.border || "#9ca3af"
-            : "#9ca3af",
+              ? "#10b981"
+              : group
+                ? TABLE_TYPE_COLORS[tableType]?.border || "#9ca3af"
+                : "#9ca3af",
         }}
       >
         <span className="text-[9px] font-bold">{table.label}</span>
@@ -215,8 +215,8 @@ const LocaItem = memo(function LocaItem({
           borderColor: isSelected
             ? "#fbbf24"
             : assignedStaff
-            ? "#10b981"
-            : "#9ca3af",
+              ? "#10b981"
+              : "#9ca3af",
         }}
       >
         <Sofa className="w-3 h-3 mr-1" />
@@ -285,7 +285,7 @@ export const EventAssignmentTab = forwardRef<
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
   const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
   const [draggingSupervisor, setDraggingSupervisor] = useState<Staff | null>(
-    null
+    null,
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeTool, setActiveTool] = useState<CanvasTool>("select");
@@ -461,7 +461,7 @@ export const EventAssignmentTab = forwardRef<
       setNotification({ type, message });
       setTimeout(() => setNotification(null), 5000);
     },
-    []
+    [],
   );
 
   // Veri yükle - Rate limit'i önlemek için sıralı ve cache'li
@@ -484,7 +484,7 @@ export const EventAssignmentTab = forwardRef<
         setAllStaff(staffList);
 
         const supervisorList = staffList.filter(
-          (s: Staff) => s.position === "supervizor" && s.isActive
+          (s: Staff) => s.position === "supervizor" && s.isActive,
         );
         setSupervisors(supervisorList);
 
@@ -511,9 +511,8 @@ export const EventAssignmentTab = forwardRef<
           const groupsRes = await staffApi.getEventTableGroups(eventId);
           setTableGroups(groupsRes.data || []);
 
-          const assignmentsRes = await staffApi.getEventStaffAssignments(
-            eventId
-          );
+          const assignmentsRes =
+            await staffApi.getEventStaffAssignments(eventId);
           setStaffAssignments(assignmentsRes.data || []);
         } catch {
           setTableGroups([]);
@@ -619,7 +618,7 @@ export const EventAssignmentTab = forwardRef<
     (tableId: string): TableGroup | undefined => {
       return tableToGroupMap.get(tableId);
     },
-    [tableToGroupMap]
+    [tableToGroupMap],
   );
 
   // Grubun süpervizörünü bul - O(1)
@@ -629,7 +628,7 @@ export const EventAssignmentTab = forwardRef<
       if (!group?.assignedSupervisorId) return undefined;
       return supervisorMap.get(group.assignedSupervisorId);
     },
-    [tableGroups, supervisorMap]
+    [tableGroups, supervisorMap],
   );
 
   // Masaya atanmış personeli bul - O(1)
@@ -637,7 +636,7 @@ export const EventAssignmentTab = forwardRef<
     (tableId: string) => {
       return tableToAssignmentMap.get(tableId);
     },
-    [tableToAssignmentMap]
+    [tableToAssignmentMap],
   );
 
   // Gruba atanmış tüm personelleri bul - Optimized
@@ -651,10 +650,10 @@ export const EventAssignmentTab = forwardRef<
 
       // Filter assignments that have any table in this group
       return staffAssignments.filter((a: any) =>
-        (a.tableIds || []).some((tid: string) => groupTableSet.has(tid))
+        (a.tableIds || []).some((tid: string) => groupTableSet.has(tid)),
       );
     },
-    [tableGroups, staffAssignments]
+    [tableGroups, staffAssignments],
   );
 
   // Filtrelenmiş personel listesi (arama için)
@@ -664,7 +663,7 @@ export const EventAssignmentTab = forwardRef<
     return allStaff.filter(
       (s) =>
         s.fullName.toLowerCase().includes(query) ||
-        s.position?.toLowerCase().includes(query)
+        s.position?.toLowerCase().includes(query),
     );
   }, [allStaff, staffSearchQuery]);
 
@@ -673,7 +672,7 @@ export const EventAssignmentTab = forwardRef<
     if (selectedTableIds.length === 0) return null;
 
     const selectedTables = tables.filter((t) =>
-      selectedTableIds.includes(t.id)
+      selectedTableIds.includes(t.id),
     );
 
     // Tip ve kapasiteye göre grupla
@@ -701,7 +700,7 @@ export const EventAssignmentTab = forwardRef<
     // Toplam kapasite
     const totalCapacity = selectedTables.reduce(
       (sum, t) => sum + (t.capacity || 12),
-      0
+      0,
     );
 
     return {
@@ -747,7 +746,7 @@ export const EventAssignmentTab = forwardRef<
         }
       }
     },
-    [activeTool, canvasOffset, zoom]
+    [activeTool, canvasOffset, zoom],
   );
 
   // Throttle ref for mouse move optimization
@@ -818,7 +817,7 @@ export const EventAssignmentTab = forwardRef<
       zoom,
       lassoStart,
       tables,
-    ]
+    ],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -846,7 +845,7 @@ export const EventAssignmentTab = forwardRef<
         setSelectedTableIds((prev) =>
           prev.includes(tableId)
             ? prev.filter((id) => id !== tableId)
-            : [...prev, tableId]
+            : [...prev, tableId],
         );
         setContextMenu((prev) => ({ ...prev, visible: false }));
         return;
@@ -862,7 +861,7 @@ export const EventAssignmentTab = forwardRef<
         "group:",
         group,
         "tableGroups count:",
-        tableGroups.length
+        tableGroups.length,
       );
 
       // Seçilecek ID'ler - grup varsa tüm grup, yoksa tek masa
@@ -888,7 +887,7 @@ export const EventAssignmentTab = forwardRef<
       }
       setContextMenu((prev) => ({ ...prev, visible: false }));
     },
-    [getTableGroup, activeTool, tableGroups.length]
+    [getTableGroup, activeTool, tableGroups.length],
   );
 
   // Sağ tık menü
@@ -920,7 +919,7 @@ export const EventAssignmentTab = forwardRef<
         });
       }
     },
-    [selectedTableIds]
+    [selectedTableIds],
   );
 
   const closeContextMenu = useCallback(() => {
@@ -929,33 +928,13 @@ export const EventAssignmentTab = forwardRef<
 
   // ==================== GRUP İŞLEMLERİ ====================
 
-  // Otomatik grup ismi oluştur (seçili masalardan)
+  // Otomatik grup ismi oluştur (sıralı: Grup-1, Grup-2, ...)
   const generateAutoGroupName = useCallback(
-    (tableIds: string[]): string => {
-      if (tableIds.length === 0) return "Yeni Grup";
-
-      // Seçili masaların numaralarını al
-      const tableNumbers = tableIds
-        .map((id) => {
-          const table = tables.find((t) => t.id === id);
-          if (!table) return null;
-          // Label'dan numara çıkar (örn: "5" -> 5, "L1" -> null)
-          const num = parseInt(table.label, 10);
-          return isNaN(num) ? null : num;
-        })
-        .filter((n): n is number => n !== null)
-        .sort((a, b) => a - b);
-
-      if (tableNumbers.length === 0) return "Yeni Grup";
-
-      if (tableNumbers.length === 1) {
-        return `${tableNumbers[0]}. Masa`;
-      }
-
-      // Tüm numaraları artan sırada virgülle ayırarak yaz
-      return `${tableNumbers.join(", ")} Masalar`;
+    (_tableIds: string[]): string => {
+      const existingCount = tableGroups.length;
+      return `Grup-${existingCount + 1}`;
     },
-    [tables]
+    [tableGroups.length],
   );
 
   // Modal açıldığında otomatik isim oluştur
@@ -987,7 +966,7 @@ export const EventAssignmentTab = forwardRef<
     setShowGroupModal(false);
     setNewGroupName("");
     setNewGroupColor(
-      DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)]
+      DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)],
     );
     setHasChanges(true);
     showNotification("success", `"${newGroup.name}" grubu oluşturuldu`);
@@ -1010,14 +989,14 @@ export const EventAssignmentTab = forwardRef<
             ...group,
             tableIds: group.tableIds.filter((id) => !tableIds.includes(id)),
           }))
-          .filter((group) => group.tableIds.length > 0)
+          .filter((group) => group.tableIds.length > 0),
       );
       setSelectedTableIds([]);
       setHasChanges(true);
       showNotification("success", "Masalar gruptan çıkarıldı");
       closeContextMenu();
     },
-    [showNotification, closeContextMenu]
+    [showNotification, closeContextMenu],
   );
 
   const handleDeleteGroup = useCallback(
@@ -1027,7 +1006,7 @@ export const EventAssignmentTab = forwardRef<
       showNotification("success", "Grup silindi");
       closeContextMenu();
     },
-    [showNotification, closeContextMenu]
+    [showNotification, closeContextMenu],
   );
 
   const handleAddToExistingGroup = useCallback(
@@ -1043,17 +1022,17 @@ export const EventAssignmentTab = forwardRef<
           return {
             ...group,
             tableIds: group.tableIds.filter(
-              (id) => !selectedTableIds.includes(id)
+              (id) => !selectedTableIds.includes(id),
             ),
           };
-        })
+        }),
       );
       setSelectedTableIds([]);
       setHasChanges(true);
       showNotification("success", "Masalar gruba eklendi");
       closeContextMenu();
     },
-    [selectedTableIds, showNotification, closeContextMenu]
+    [selectedTableIds, showNotification, closeContextMenu],
   );
 
   // ==================== SÜPERVİZÖR İŞLEMLERİ ====================
@@ -1072,13 +1051,13 @@ export const EventAssignmentTab = forwardRef<
             return { ...group, assignedSupervisorId: undefined };
           }
           return group;
-        })
+        }),
       );
       setHasChanges(true);
       showNotification("success", `${supervisor.fullName} gruba atandı`);
       setDraggingSupervisor(null);
     },
-    [showNotification]
+    [showNotification],
   );
 
   const handleRemoveSupervisor = useCallback(
@@ -1091,13 +1070,13 @@ export const EventAssignmentTab = forwardRef<
                 assignedSupervisorId: undefined,
                 color: DEFAULT_COLORS[0],
               }
-            : g
-        )
+            : g,
+        ),
       );
       setHasChanges(true);
       showNotification("success", "Süpervizör gruptan kaldırıldı");
     },
-    [showNotification]
+    [showNotification],
   );
 
   // ==================== ÖZEL VARDİYA OLUŞTURMA ====================
@@ -1112,7 +1091,7 @@ export const EventAssignmentTab = forwardRef<
       try {
         // Mevcut özel vardiya sayısını bul
         const existingCustomShifts = shifts.filter(
-          (s: any) => s.name?.startsWith("Özel-") && s.eventId === eventId
+          (s: any) => s.name?.startsWith("Özel-") && s.eventId === eventId,
         );
         const nextNumber = existingCustomShifts.length + 1;
         const shiftName = `Özel-${nextNumber}`;
@@ -1142,8 +1121,8 @@ export const EventAssignmentTab = forwardRef<
         // Personelin vardiyasını yeni oluşturulan vardiyaya ayarla
         setSelectedStaffList((prev) =>
           prev.map((s) =>
-            s.staffId === staffId ? { ...s, shiftId: newShift.id } : s
-          )
+            s.staffId === staffId ? { ...s, shiftId: newShift.id } : s,
+          ),
         );
 
         // State'leri sıfırla
@@ -1159,7 +1138,7 @@ export const EventAssignmentTab = forwardRef<
         setCreatingCustomShift(false);
       }
     },
-    [customShiftStart, customShiftEnd, shifts, eventId, showNotification]
+    [customShiftStart, customShiftEnd, shifts, eventId, showNotification],
   );
 
   // ==================== PERSONEL ATAMA İŞLEMLERİ ====================
@@ -1189,7 +1168,7 @@ export const EventAssignmentTab = forwardRef<
         setStaffAssignments((prev) => {
           // Aynı personelin önceki atamasını güncelle veya yeni ekle
           const existingIndex = prev.findIndex(
-            (a: any) => a.staffId === staffId
+            (a: any) => a.staffId === staffId,
           );
           if (existingIndex >= 0) {
             const updated = [...prev];
@@ -1228,7 +1207,7 @@ export const EventAssignmentTab = forwardRef<
       setHasChanges(true);
       showNotification(
         "success",
-        `${selectedStaffList.length} personel ${selectedTableIds.length} masaya atandı`
+        `${selectedStaffList.length} personel ${selectedTableIds.length} masaya atandı`,
       );
     } catch (error) {
       console.error("Atama hatası:", error);
@@ -1250,7 +1229,7 @@ export const EventAssignmentTab = forwardRef<
       try {
         // Masayı atamadan çıkar
         const newTableIds = (assignment.tableIds || []).filter(
-          (id: string) => id !== tableId
+          (id: string) => id !== tableId,
         );
 
         // Geçici ID kontrolü - temp- ile başlıyorsa sadece local state güncelle
@@ -1263,7 +1242,7 @@ export const EventAssignmentTab = forwardRef<
             await staffApi.removeStaffAssignment(assignment.id);
           }
           setStaffAssignments((prev) =>
-            prev.filter((a: any) => a.id !== assignment.id)
+            prev.filter((a: any) => a.id !== assignment.id),
           );
         } else {
           // Güncelle
@@ -1274,8 +1253,8 @@ export const EventAssignmentTab = forwardRef<
           }
           setStaffAssignments((prev) =>
             prev.map((a: any) =>
-              a.id === assignment.id ? { ...a, tableIds: newTableIds } : a
-            )
+              a.id === assignment.id ? { ...a, tableIds: newTableIds } : a,
+            ),
           );
         }
 
@@ -1286,7 +1265,7 @@ export const EventAssignmentTab = forwardRef<
         showNotification("error", "Personel kaldırılamadı");
       }
     },
-    [getTableStaffAssignment, showNotification]
+    [getTableStaffAssignment, showNotification],
   );
 
   // ==================== EKİBE ATAMA İŞLEMLERİ ====================
@@ -1320,12 +1299,12 @@ export const EventAssignmentTab = forwardRef<
             };
           }
           return group;
-        })
+        }),
       );
 
       // Eğer seçili masalar hiçbir gruba ait değilse, yeni grup oluştur
       const ungroupedTables = selectedTableIds.filter(
-        (tableId) => !tableGroups.some((g) => g.tableIds.includes(tableId))
+        (tableId) => !tableGroups.some((g) => g.tableIds.includes(tableId)),
       );
 
       if (ungroupedTables.length > 0) {
@@ -1372,12 +1351,12 @@ export const EventAssignmentTab = forwardRef<
             };
           }
           return group;
-        })
+        }),
       );
       setHasChanges(true);
       showNotification("success", "Gruplar ekipten çıkarıldı");
     },
-    [showNotification]
+    [showNotification],
   );
 
   // Ekibe ait masaları seç VE Takım Personel Atama Modal'ını aç
@@ -1394,12 +1373,12 @@ export const EventAssignmentTab = forwardRef<
         // Mevcut atamaları yükle
         const existingAssignments = staffAssignments
           .filter((a: any) =>
-            teamTableIds.some((tid: string) => a.tableIds?.includes(tid))
+            teamTableIds.some((tid: string) => a.tableIds?.includes(tid)),
           )
           .map((a: any) => {
             const groupId =
               tableGroups.find((g) =>
-                g.tableIds.some((tid) => a.tableIds?.includes(tid))
+                g.tableIds.some((tid) => a.tableIds?.includes(tid)),
               )?.id || "";
             return {
               staffId: a.staffId,
@@ -1413,7 +1392,7 @@ export const EventAssignmentTab = forwardRef<
         setShowTeamStaffAssignModal(true);
       }
     },
-    [tableGroups, teams, staffAssignments]
+    [tableGroups, teams, staffAssignments],
   );
 
   // ==================== KAYDET / SIFIRLA ====================
@@ -1432,7 +1411,7 @@ export const EventAssignmentTab = forwardRef<
           assignedSupervisorId: g.assignedSupervisorId,
           notes: g.notes,
           sortOrder: g.sortOrder,
-        }))
+        })),
       );
       setHasChanges(false);
       showNotification("success", "Ekip organizasyonu kaydedildi");
@@ -1518,7 +1497,7 @@ export const EventAssignmentTab = forwardRef<
         showNotification("error", "Şablon uygulanamadı");
       }
     },
-    [templates, eventId, showNotification]
+    [templates, eventId, showNotification],
   );
 
   const handleDeleteTemplate = useCallback(
@@ -1532,7 +1511,7 @@ export const EventAssignmentTab = forwardRef<
         showNotification("error", "Şablon silinemedi");
       }
     },
-    [showNotification]
+    [showNotification],
   );
 
   // ==================== ÖZEL GÖREV ATAMA ====================
@@ -1591,7 +1570,7 @@ export const EventAssignmentTab = forwardRef<
       setHasChanges(true);
       showNotification(
         "success",
-        `${selectedStaffForTask.length} personele özel görev atandı`
+        `${selectedStaffForTask.length} personele özel görev atandı`,
       );
     } catch (error) {
       console.error("Özel görev atama hatası:", error);
@@ -1613,7 +1592,7 @@ export const EventAssignmentTab = forwardRef<
     return allStaff.filter(
       (s) =>
         s.fullName.toLowerCase().includes(query) ||
-        s.position?.toLowerCase().includes(query)
+        s.position?.toLowerCase().includes(query),
     );
   }, [allStaff, specialTaskSearchQuery]);
 
@@ -1633,7 +1612,7 @@ export const EventAssignmentTab = forwardRef<
       // Personelin atandığı masa grubunu bul
       const assignedTableIds = assignment.tableIds || [];
       const assignedGroup = tableGroups.find((g) =>
-        g.tableIds.some((tid) => assignedTableIds.includes(tid))
+        g.tableIds.some((tid) => assignedTableIds.includes(tid)),
       );
 
       setSelectedStaffForLocation({
@@ -1644,7 +1623,7 @@ export const EventAssignmentTab = forwardRef<
       });
       setShowStaffLocationModal(true);
     },
-    [allStaff, tableGroups]
+    [allStaff, tableGroups],
   );
 
   // Atama vardiyasını güncelle
@@ -1662,8 +1641,8 @@ export const EventAssignmentTab = forwardRef<
       // Local state güncelle
       setStaffAssignments((prev) =>
         prev.map((a: any) =>
-          a.id === selectedAssignment.id ? { ...a, shiftId: newShiftId } : a
-        )
+          a.id === selectedAssignment.id ? { ...a, shiftId: newShiftId } : a,
+        ),
       );
 
       setHasChanges(true);
@@ -1684,7 +1663,7 @@ export const EventAssignmentTab = forwardRef<
       await staffApi.removeStaffAssignment(selectedAssignment.id);
 
       setStaffAssignments((prev) =>
-        prev.filter((a: any) => a.id !== selectedAssignment.id)
+        prev.filter((a: any) => a.id !== selectedAssignment.id),
       );
 
       setHasChanges(true);
@@ -1713,7 +1692,7 @@ export const EventAssignmentTab = forwardRef<
       openSaveTemplateModal: () => setShowSaveTemplateModal(true),
       openLoadTemplateModal: () => setShowLoadTemplateModal(true),
     }),
-    [handleSave, handleReset, hasChanges, saving]
+    [handleSave, handleReset, hasChanges, saving],
   );
 
   // ==================== MEMOIZED RENDER DATA (MUST BE BEFORE EARLY RETURNS) ====================
@@ -1991,15 +1970,15 @@ export const EventAssignmentTab = forwardRef<
                   ) : (
                     teams.map((team) => {
                       const leader = allStaff.find(
-                        (s) => s.id === team.leaderId
+                        (s) => s.id === team.leaderId,
                       );
                       // Ekibe atanmış grupları bul
                       const teamGroups = tableGroups.filter(
-                        (g) => g.assignedTeamId === team.id
+                        (g) => g.assignedTeamId === team.id,
                       );
                       // Ekibe ait tüm masa ID'lerini topla
                       const teamTableIds = teamGroups.flatMap(
-                        (g) => g.tableIds
+                        (g) => g.tableIds,
                       );
                       const teamTableCount = teamTableIds.length;
 
@@ -2010,8 +1989,8 @@ export const EventAssignmentTab = forwardRef<
                         teamGroups.length > 0 &&
                         teamGroups.every((g) =>
                           g.tableIds.every((id) =>
-                            selectedTableIds.includes(id)
-                          )
+                            selectedTableIds.includes(id),
+                          ),
                         );
 
                       return (
@@ -2139,7 +2118,7 @@ export const EventAssignmentTab = forwardRef<
                 <CardContent className="space-y-2">
                   {supervisors.map((supervisor) => {
                     const assignedGroup = tableGroups.find(
-                      (g) => g.assignedSupervisorId === supervisor.id
+                      (g) => g.assignedSupervisorId === supervisor.id,
                     );
                     return (
                       <div
@@ -2224,7 +2203,7 @@ export const EventAssignmentTab = forwardRef<
                       .map((a: any) => allStaff.find((s) => s.id === a.staffId))
                       .filter(Boolean);
                     const isGroupSelected = group.tableIds.every((id) =>
-                      selectedTableIds.includes(id)
+                      selectedTableIds.includes(id),
                     );
 
                     return (
@@ -2250,8 +2229,8 @@ export const EventAssignmentTab = forwardRef<
                           isGroupSelected
                             ? "bg-blue-600/20 border-blue-500"
                             : draggingSupervisor
-                            ? "bg-slate-700/50 border-purple-500 border-dashed"
-                            : "bg-slate-700/50 border-slate-600 hover:border-blue-400"
+                              ? "bg-slate-700/50 border-purple-500 border-dashed"
+                              : "bg-slate-700/50 border-slate-600 hover:border-blue-400"
                         }`}
                         style={{
                           borderLeftColor: group.color,
@@ -2412,7 +2391,7 @@ export const EventAssignmentTab = forwardRef<
                 {(() => {
                   // Seçili masaların kaçı gruplanmış kontrol et
                   const groupedCount = selectedTableIds.filter((id) =>
-                    getTableGroup(id)
+                    getTableGroup(id),
                   ).length;
                   const ungroupedCount = selectedTableIds.length - groupedCount;
                   const allGrouped = ungroupedCount === 0;
@@ -2423,7 +2402,7 @@ export const EventAssignmentTab = forwardRef<
                     ...new Set(
                       selectedTableIds
                         .map((id) => getTableGroup(id))
-                        .filter(Boolean)
+                        .filter(Boolean),
                     ),
                   ] as TableGroup[];
 
@@ -2520,10 +2499,10 @@ export const EventAssignmentTab = forwardRef<
                   <CardContent className="space-y-2">
                     {staffAssignments.map((assignment: any) => {
                       const staff = allStaff.find(
-                        (s) => s.id === assignment.staffId
+                        (s) => s.id === assignment.staffId,
                       );
                       const shift = shifts.find(
-                        (sh: any) => sh.id === assignment.shiftId
+                        (sh: any) => sh.id === assignment.shiftId,
                       );
                       if (!staff) return null;
 
@@ -2631,7 +2610,9 @@ export const EventAssignmentTab = forwardRef<
         )}
 
         {/* Canvas - Venue ile birebir aynı yapı */}
-        <div className={isFullscreen ? "col-span-1" : "col-span-1 md:col-span-9"}>
+        <div
+          className={isFullscreen ? "col-span-1" : "col-span-1 md:col-span-9"}
+        >
           <Card className="bg-slate-800 border-slate-700 overflow-hidden rounded-none">
             <div
               ref={canvasRef}
@@ -2640,7 +2621,9 @@ export const EventAssignmentTab = forwardRef<
               } ${isPanning ? "cursor-grabbing" : ""}`}
               style={{
                 width: "100%",
-                height: isFullscreen ? "calc(100vh - 50px)" : "min(580px, 70vh)",
+                height: isFullscreen
+                  ? "calc(100vh - 50px)"
+                  : "min(580px, 70vh)",
               }}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -2723,8 +2706,8 @@ export const EventAssignmentTab = forwardRef<
                         element.type === "stage"
                           ? "bg-blue-600"
                           : element.type === "system_control"
-                          ? "bg-amber-600"
-                          : "bg-purple-500"
+                            ? "bg-amber-600"
+                            : "bg-purple-500"
                       }`}
                     >
                       <span className="text-xs font-medium text-white">
@@ -2746,7 +2729,7 @@ export const EventAssignmentTab = forwardRef<
                       onClick={handleTableClick}
                       onContextMenu={handleContextMenu}
                     />
-                  )
+                  ),
                 )}
 
                 {/* Locas - Memoized Components */}
@@ -2761,7 +2744,7 @@ export const EventAssignmentTab = forwardRef<
                       onClick={handleTableClick}
                       onContextMenu={handleContextMenu}
                     />
-                  )
+                  ),
                 )}
 
                 {/* Lasso Selection */}
@@ -2807,14 +2790,14 @@ export const EventAssignmentTab = forwardRef<
                 (() => {
                   // Seçili masaların tiplerini kontrol et
                   const selectedTables = tables.filter((t) =>
-                    contextMenu.targetIds.includes(t.id)
+                    contextMenu.targetIds.includes(t.id),
                   );
 
                   // Her masa için: VIP/Loca mı VEYA bir grupta mı?
                   const canAssignToTeam = selectedTables.every((t) => {
                     const isVipOrLoca = t.type === "vip" || t.type === "loca";
                     const isInGroup = tableGroups.some((g) =>
-                      g.tableIds.includes(t.id)
+                      g.tableIds.includes(t.id),
                     );
                     return isVipOrLoca || isInGroup;
                   });
@@ -2890,7 +2873,7 @@ export const EventAssignmentTab = forwardRef<
                     const allSameGroup =
                       firstGroup &&
                       contextMenu.targetIds.every(
-                        (id) => getTableGroup(id)?.id === firstGroup.id
+                        (id) => getTableGroup(id)?.id === firstGroup.id,
                       );
                     if (allSameGroup && firstGroup) {
                       return (
@@ -2919,7 +2902,7 @@ export const EventAssignmentTab = forwardRef<
 
               {/* Personel Kaldır - atanmış masalar için */}
               {contextMenu.targetIds.some((id) =>
-                getTableStaffAssignment(id)
+                getTableStaffAssignment(id),
               ) && (
                 <>
                   <div className="border-t border-slate-700 my-1" />
@@ -3201,7 +3184,7 @@ export const EventAssignmentTab = forwardRef<
                 ) : (
                   filteredStaff.map((staff) => {
                     const isSelected = selectedStaffList.some(
-                      (s) => s.staffId === staff.id
+                      (s) => s.staffId === staff.id,
                     );
                     return (
                       <div
@@ -3209,7 +3192,7 @@ export const EventAssignmentTab = forwardRef<
                         onClick={() => {
                           if (isSelected) {
                             setSelectedStaffList((prev) =>
-                              prev.filter((s) => s.staffId !== staff.id)
+                              prev.filter((s) => s.staffId !== staff.id),
                             );
                           } else {
                             setSelectedStaffList((prev) => [
@@ -3359,8 +3342,8 @@ export const EventAssignmentTab = forwardRef<
                                   prev.map((s) =>
                                     s.staffId === staffId
                                       ? { ...s, shiftId: value }
-                                      : s
-                                  )
+                                      : s,
+                                  ),
                                 );
                               }
                             }}
@@ -3414,7 +3397,7 @@ export const EventAssignmentTab = forwardRef<
                           className="h-6 w-6 text-red-400 hover:text-red-300"
                           onClick={() => {
                             setSelectedStaffList((prev) =>
-                              prev.filter((s) => s.staffId !== staffId)
+                              prev.filter((s) => s.staffId !== staffId),
                             );
                           }}
                         >
@@ -3500,7 +3483,7 @@ export const EventAssignmentTab = forwardRef<
                     const leader = allStaff.find((s) => s.id === team.leaderId);
                     // Ekibe atanmış grupları bul
                     const teamGroups = tableGroups.filter(
-                      (g) => g.assignedTeamId === team.id
+                      (g) => g.assignedTeamId === team.id,
                     );
                     // Ekibe ait tüm masa ID'lerini topla
                     const teamTableIds = teamGroups.flatMap((g) => g.tableIds);
@@ -3796,7 +3779,7 @@ export const EventAssignmentTab = forwardRef<
                 ) : (
                   filteredStaffForTask.map((staff) => {
                     const isSelected = selectedStaffForTask.some(
-                      (s) => s.staffId === staff.id
+                      (s) => s.staffId === staff.id,
                     );
                     return (
                       <div
@@ -3804,7 +3787,7 @@ export const EventAssignmentTab = forwardRef<
                         onClick={() => {
                           if (isSelected) {
                             setSelectedStaffForTask((prev) =>
-                              prev.filter((s) => s.staffId !== staff.id)
+                              prev.filter((s) => s.staffId !== staff.id),
                             );
                           } else {
                             setSelectedStaffForTask((prev) => [
@@ -3890,8 +3873,8 @@ export const EventAssignmentTab = forwardRef<
                               prev.map((s) =>
                                 s.staffId === staffId
                                   ? { ...s, shiftId: value }
-                                  : s
-                              )
+                                  : s,
+                              ),
                             );
                           }}
                         >
@@ -3928,7 +3911,7 @@ export const EventAssignmentTab = forwardRef<
                           className="h-6 w-6 text-red-400 hover:text-red-300"
                           onClick={() => {
                             setSelectedStaffForTask((prev) =>
-                              prev.filter((s) => s.staffId !== staffId)
+                              prev.filter((s) => s.staffId !== staffId),
                             );
                           }}
                         >
@@ -3987,7 +3970,7 @@ export const EventAssignmentTab = forwardRef<
             {selectedGroupForStaff &&
               (() => {
                 const groupAssignments = getGroupStaffAssignments(
-                  selectedGroupForStaff.id
+                  selectedGroupForStaff.id,
                 );
 
                 if (groupAssignments.length === 0) {
@@ -4008,10 +3991,10 @@ export const EventAssignmentTab = forwardRef<
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {groupAssignments.map((assignment: any) => {
                       const staff = allStaff.find(
-                        (s) => s.id === assignment.staffId
+                        (s) => s.id === assignment.staffId,
                       );
                       const shift = shifts.find(
-                        (sh: any) => sh.id === assignment.shiftId
+                        (sh: any) => sh.id === assignment.shiftId,
                       );
                       if (!staff) return null;
 
@@ -4059,23 +4042,23 @@ export const EventAssignmentTab = forwardRef<
                             onClick={async () => {
                               try {
                                 await staffApi.removeStaffAssignment(
-                                  assignment.id
+                                  assignment.id,
                                 );
                                 setStaffAssignments((prev) =>
                                   prev.filter(
-                                    (a: any) => a.id !== assignment.id
-                                  )
+                                    (a: any) => a.id !== assignment.id,
+                                  ),
                                 );
                                 setHasChanges(true);
                                 showNotification(
                                   "success",
-                                  `${staff.fullName} gruptan kaldırıldı`
+                                  `${staff.fullName} gruptan kaldırıldı`,
                                 );
                               } catch (error) {
                                 console.error("Kaldırma hatası:", error);
                                 showNotification(
                                   "error",
-                                  "Personel kaldırılamadı"
+                                  "Personel kaldırılamadı",
                                 );
                               }
                             }}
@@ -4149,10 +4132,10 @@ export const EventAssignmentTab = forwardRef<
           {selectedAssignment &&
             (() => {
               const staff = allStaff.find(
-                (s) => s.id === selectedAssignment.staffId
+                (s) => s.id === selectedAssignment.staffId,
               );
               const currentShift = shifts.find(
-                (sh: any) => sh.id === editingShiftId
+                (sh: any) => sh.id === editingShiftId,
               );
               const isSpecialTask =
                 selectedAssignment.assignmentType === "special_task";
@@ -4226,7 +4209,7 @@ export const EventAssignmentTab = forwardRef<
                             .slice(0, 15)
                             .map((tableId: string) => {
                               const table = tables.find(
-                                (t) => t.id === tableId
+                                (t) => t.id === tableId,
                               );
                               return (
                                 <Badge
@@ -4426,8 +4409,8 @@ export const EventAssignmentTab = forwardRef<
                             element.type === "stage"
                               ? "bg-blue-600"
                               : element.type === "system_control"
-                              ? "bg-amber-600"
-                              : "bg-purple-500"
+                                ? "bg-amber-600"
+                                : "bg-purple-500"
                           }`}
                         >
                           <span className="text-xs font-medium text-white">
@@ -4441,7 +4424,7 @@ export const EventAssignmentTab = forwardRef<
                     {normalTables.map((table) => {
                       const isAssignedToThisStaff =
                         selectedStaffForLocation.assignedTableIds?.includes(
-                          table.id
+                          table.id,
                         );
                       const staffColor =
                         selectedStaffForLocation.staff?.color || "#10b981";
@@ -4491,7 +4474,7 @@ export const EventAssignmentTab = forwardRef<
                     {locaTables.map((loca) => {
                       const isAssignedToThisStaff =
                         selectedStaffForLocation.assignedTableIds?.includes(
-                          loca.id
+                          loca.id,
                         );
                       const groupColor =
                         selectedStaffForLocation.assignedGroup?.color ||
@@ -4667,7 +4650,7 @@ export const EventAssignmentTab = forwardRef<
 
               {(() => {
                 const teamGroups = tableGroups.filter(
-                  (g) => g.assignedTeamId === selectedTeamForStaffAssign?.id
+                  (g) => g.assignedTeamId === selectedTeamForStaffAssign?.id,
                 );
 
                 // VIP ve Loca masaları da ekle (tek başına atanabilir)
@@ -4675,7 +4658,7 @@ export const EventAssignmentTab = forwardRef<
                 const vipLocaTables = tables.filter(
                   (t) =>
                     (t.type === "vip" || t.type === "loca") &&
-                    teamTableIds.includes(t.id)
+                    teamTableIds.includes(t.id),
                 );
 
                 if (teamGroups.length === 0 && vipLocaTables.length === 0) {
@@ -4697,7 +4680,7 @@ export const EventAssignmentTab = forwardRef<
                     {teamGroups.map((group) => {
                       // Bu gruba atanmış personeller
                       const groupAssignments = pendingStaffAssignments.filter(
-                        (a) => a.groupId === group.id
+                        (a) => a.groupId === group.id,
                       );
 
                       // Görev toplamlarını hesapla
@@ -4719,20 +4702,20 @@ export const EventAssignmentTab = forwardRef<
                             e.preventDefault();
                             e.currentTarget.classList.add(
                               "ring-2",
-                              "ring-purple-500"
+                              "ring-purple-500",
                             );
                           }}
                           onDragLeave={(e) => {
                             e.currentTarget.classList.remove(
                               "ring-2",
-                              "ring-purple-500"
+                              "ring-purple-500",
                             );
                           }}
                           onDrop={(e) => {
                             e.preventDefault();
                             e.currentTarget.classList.remove(
                               "ring-2",
-                              "ring-purple-500"
+                              "ring-purple-500",
                             );
                             const staffId = e.dataTransfer.getData("staffId");
                             if (staffId) {
@@ -4763,7 +4746,7 @@ export const EventAssignmentTab = forwardRef<
                               {Object.entries(roleCounts).map(
                                 ([role, count]) => {
                                   const roleOption = roleOptions.find(
-                                    (r) => r.value === role
+                                    (r) => r.value === role,
                                   );
                                   return (
                                     <Badge
@@ -4777,7 +4760,7 @@ export const EventAssignmentTab = forwardRef<
                                       {count} {roleOption?.label || role}
                                     </Badge>
                                   );
-                                }
+                                },
                               )}
                             </div>
                           )}
@@ -4787,13 +4770,13 @@ export const EventAssignmentTab = forwardRef<
                             <div className="space-y-2">
                               {groupAssignments.map((assignment) => {
                                 const staff = allStaff.find(
-                                  (s) => s.id === assignment.staffId
+                                  (s) => s.id === assignment.staffId,
                                 );
                                 const shift = shifts.find(
-                                  (s) => s.id === assignment.shiftId
+                                  (s) => s.id === assignment.shiftId,
                                 );
                                 const roleOption = roleOptions.find(
-                                  (r) => r.value === assignment.role
+                                  (r) => r.value === assignment.role,
                                 );
                                 if (!staff) return null;
 
@@ -4802,17 +4785,17 @@ export const EventAssignmentTab = forwardRef<
                                   assignment.shiftId === "custom"
                                     ? `${assignment.shiftStart} - ${assignment.shiftEnd}`
                                     : assignment.shiftId === "event-default"
-                                    ? event?.eventDate
-                                      ? new Date(
-                                          event.eventDate
-                                        ).toLocaleTimeString("tr-TR", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })
-                                      : "Etkinlik Saati"
-                                    : shift
-                                    ? `${shift.startTime} - ${shift.endTime}`
-                                    : "Belirtilmemiş";
+                                      ? event?.eventDate
+                                        ? new Date(
+                                            event.eventDate,
+                                          ).toLocaleTimeString("tr-TR", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })
+                                        : "Etkinlik Saati"
+                                      : shift
+                                        ? `${shift.startTime} - ${shift.endTime}`
+                                        : "Belirtilmemiş";
 
                                 return (
                                   <div
@@ -4870,8 +4853,8 @@ export const EventAssignmentTab = forwardRef<
                                                 a.staffId ===
                                                   assignment.staffId &&
                                                 a.groupId === assignment.groupId
-                                              )
-                                          )
+                                              ),
+                                          ),
                                         );
                                       }}
                                     >
@@ -4919,10 +4902,10 @@ export const EventAssignmentTab = forwardRef<
                   const teamMemberIds =
                     selectedTeamForStaffAssign?.memberIds || [];
                   const teamMembers = allStaff.filter((s) =>
-                    teamMemberIds.includes(s.id)
+                    teamMemberIds.includes(s.id),
                   );
                   const otherStaff = allStaff.filter(
-                    (s) => !teamMemberIds.includes(s.id) && s.isActive
+                    (s) => !teamMemberIds.includes(s.id) && s.isActive,
                   );
 
                   const filteredTeamMembers = staffSearchQuery
@@ -4933,7 +4916,7 @@ export const EventAssignmentTab = forwardRef<
                             .includes(staffSearchQuery.toLowerCase()) ||
                           s.position
                             ?.toLowerCase()
-                            .includes(staffSearchQuery.toLowerCase())
+                            .includes(staffSearchQuery.toLowerCase()),
                       )
                     : teamMembers;
 
@@ -4945,7 +4928,7 @@ export const EventAssignmentTab = forwardRef<
                             .includes(staffSearchQuery.toLowerCase()) ||
                           s.position
                             ?.toLowerCase()
-                            .includes(staffSearchQuery.toLowerCase())
+                            .includes(staffSearchQuery.toLowerCase()),
                       )
                     : otherStaff;
 
@@ -4959,7 +4942,7 @@ export const EventAssignmentTab = forwardRef<
                           </p>
                           {filteredTeamMembers.map((staff) => {
                             const isAssigned = pendingStaffAssignments.some(
-                              (a) => a.staffId === staff.id
+                              (a) => a.staffId === staff.id,
                             );
 
                             return (
@@ -5012,7 +4995,7 @@ export const EventAssignmentTab = forwardRef<
                           </p>
                           {filteredOtherStaff.slice(0, 20).map((staff) => {
                             const isAssigned = pendingStaffAssignments.some(
-                              (a) => a.staffId === staff.id
+                              (a) => a.staffId === staff.id,
                             );
 
                             return (
@@ -5088,12 +5071,12 @@ export const EventAssignmentTab = forwardRef<
 
                   // Her grup için atamaları kaydet
                   const teamGroups = tableGroups.filter(
-                    (g) => g.assignedTeamId === selectedTeamForStaffAssign?.id
+                    (g) => g.assignedTeamId === selectedTeamForStaffAssign?.id,
                   );
 
                   for (const group of teamGroups) {
                     const groupAssignments = pendingStaffAssignments.filter(
-                      (a) => a.groupId === group.id
+                      (a) => a.groupId === group.id,
                     );
 
                     for (const assignment of groupAssignments) {
