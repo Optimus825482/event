@@ -142,48 +142,70 @@ export class EventsService {
   }
 
   async findOne(id: string) {
-    const event = await this.eventRepository.findOne({
-      where: { id },
-      relations: [
-        "organizer",
-        "staffAssignments",
-        "serviceTeams",
-        "tableGroups",
-      ],
-    });
+    // Ana event + organizer (password hariç) — tek sorgu, JOIN yok relation'lara
+    const event = await this.eventRepository
+      .createQueryBuilder("event")
+      .leftJoin("event.organizer", "organizer")
+      .addSelect([
+        "organizer.id",
+        "organizer.username",
+        "organizer.email",
+        "organizer.fullName",
+        "organizer.phone",
+        "organizer.role",
+        "organizer.avatar",
+        "organizer.position",
+        "organizer.color",
+        "organizer.isActive",
+      ])
+      .where("event.id = :id", { id })
+      .getOne();
+
     if (!event) throw new NotFoundException("Etkinlik bulunamadı");
 
-    // Aktif personel atamalarını ayrı sorgula (isActive = true)
-    const activeStaffAssignments =
-      await this.eventStaffAssignmentRepository.find({
+    // Relation'ları paralel ayrı sorgularla al (venueLayout JSONB çarpımını önler)
+    const [
+      staffAssignments,
+      serviceTeams,
+      tableGroups,
+      activeStaffAssignments,
+    ] = await Promise.all([
+      this.eventRepository
+        .createQueryBuilder()
+        .relation(Event, "staffAssignments")
+        .of(id)
+        .loadMany(),
+      this.eventRepository
+        .createQueryBuilder()
+        .relation(Event, "serviceTeams")
+        .of(id)
+        .loadMany(),
+      this.eventRepository
+        .createQueryBuilder()
+        .relation(Event, "tableGroups")
+        .of(id)
+        .loadMany(),
+      this.eventStaffAssignmentRepository.find({
         where: { eventId: id, isActive: true },
-      });
+      }),
+    ]);
 
     // hasVenueLayout ve hasTeamAssignment hesapla
     const placedTables = (event.venueLayout as any)?.placedTables || [];
-
-    // table_groups tablosundan gelen grupları kullan
-    const tableGroups = (event as any).tableGroups || [];
-
-    // Tüm masaların ID'lerini al
     const allTableIds = placedTables.map((t: any) => t.id);
-
-    // Gruplara atanmış masa ID'lerini al
     const groupedTableIds = tableGroups.flatMap((g: any) => g.tableIds || []);
-
-    // Tüm masalar gruplara atanmış mı kontrol et
     const allTablesGrouped =
       allTableIds.length > 0 &&
-      allTableIds.every((id: string) => groupedTableIds.includes(id));
-
-    // Aktif personel ataması var mı kontrol et
-    const hasStaffAssignments = activeStaffAssignments.length > 0;
+      allTableIds.every((tid: string) => groupedTableIds.includes(tid));
 
     return {
       ...event,
+      staffAssignments,
+      serviceTeams,
+      tableGroups,
       eventStaffAssignments: activeStaffAssignments,
-      hasVenueLayout: !!(placedTables.length > 0),
-      hasTeamAssignment: allTablesGrouped && hasStaffAssignments,
+      hasVenueLayout: placedTables.length > 0,
+      hasTeamAssignment: allTablesGrouped && activeStaffAssignments.length > 0,
     };
   }
 
@@ -204,7 +226,9 @@ export class EventsService {
   }
 
   async updateLayout(id: string, dto: UpdateLayoutDto, userId?: string) {
-    const event = await this.findOne(id);
+    const event = await this.eventRepository.findOne({ where: { id } });
+    if (!event) throw new NotFoundException("Etkinlik bulunamadı");
+
     const hadLayoutBefore = !!(
       event.venueLayout && (event.venueLayout as any).placedTables?.length > 0
     );
@@ -240,13 +264,15 @@ export class EventsService {
   }
 
   async updateStatus(id: string, status: EventStatus) {
-    const event = await this.findOne(id);
+    const event = await this.eventRepository.findOne({ where: { id } });
+    if (!event) throw new NotFoundException("Etkinlik bulunamadı");
     event.status = status;
     return this.eventRepository.save(event);
   }
 
   async delete(id: string) {
-    const event = await this.findOne(id);
+    const event = await this.eventRepository.findOne({ where: { id } });
+    if (!event) throw new NotFoundException("Etkinlik bulunamadı");
     await this.eventRepository.remove(event);
     return { message: "Etkinlik silindi" };
   }
