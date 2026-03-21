@@ -104,10 +104,17 @@ const TableItem = memo(function TableItem({
   const tableType = table.type || "unassigned";
   const isVipOrLoca = tableType === "vip" || tableType === "loca";
   const isGrouped = !!group;
-  const tableColor = "#6b7280";
-  const groupBgColor = group
-    ? TABLE_TYPE_COLORS[tableType]?.bg || "#6b7280"
-    : "transparent";
+  // Personel atanmissa personelin rengini kullan, yoksa grup rengi, yoksa default gri
+  const tableColor = assignedStaff
+    ? assignedStaff.color
+    : group
+      ? group.color
+      : "#6b7280";
+  const groupBgColor = assignedStaff
+    ? assignedStaff.color
+    : group
+      ? group.color
+      : "transparent";
 
   return (
     <div
@@ -139,16 +146,17 @@ const TableItem = memo(function TableItem({
           borderColor: isSelected
             ? "#fbbf24"
             : assignedStaff
-              ? "#10b981"
+              ? assignedStaff.color
               : group
-                ? TABLE_TYPE_COLORS[tableType]?.border || "#9ca3af"
+                ? group.color
                 : "#9ca3af",
         }}
       >
         <span className="text-[9px] font-bold">{table.label}</span>
         {assignedStaff && (
           <div
-            className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border border-white flex items-center justify-center"
+            className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-white flex items-center justify-center"
+            style={{ backgroundColor: assignedStaff.color }}
             title={assignedStaff.fullName}
           >
             <span className="text-[6px] font-bold text-white">
@@ -187,7 +195,9 @@ const LocaItem = memo(function LocaItem({
   onClick,
   onContextMenu,
 }: LocaItemProps) {
-  const groupBgColor = group ? group.color : "#6b7280";
+  const groupBgColor = assignedStaff
+    ? assignedStaff.color
+    : group ? group.color : "#6b7280";
 
   return (
     <div
@@ -215,8 +225,10 @@ const LocaItem = memo(function LocaItem({
           borderColor: isSelected
             ? "#fbbf24"
             : assignedStaff
-              ? "#10b981"
-              : "#9ca3af",
+              ? assignedStaff.color
+              : group
+                ? group.color
+                : "#9ca3af",
         }}
       >
         <Sofa className="w-3 h-3 mr-1" />
@@ -225,7 +237,8 @@ const LocaItem = memo(function LocaItem({
         </span>
         {assignedStaff && (
           <div
-            className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border border-white flex items-center justify-center"
+            className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-white flex items-center justify-center"
+            style={{ backgroundColor: assignedStaff.color }}
             title={assignedStaff.fullName}
           >
             <span className="text-[6px] font-bold text-white">
@@ -1200,6 +1213,27 @@ export const EventAssignmentTab = forwardRef<
         });
       }
 
+
+      // Otomatik grup olustur: Atanan masalar henuz bir gruba ait degilse yeni grup olustur
+      const ungroupedTableIds = selectedTableIds.filter(
+        (tid) => !tableGroups.some((g) => g.tableIds.includes(tid)),
+      );
+      if (ungroupedTableIds.length > 0) {
+        const nextGroupNumber = tableGroups.length + 1;
+        const firstStaff = allStaff.find((s) => s.id === selectedStaffList[0].staffId);
+        const autoGroupColor = firstStaff?.color || DEFAULT_COLORS[nextGroupNumber % DEFAULT_COLORS.length];
+        const autoGroup: TableGroup = {
+          id: `group-${Date.now()}`,
+          eventId,
+          name: `Grup ${nextGroupNumber}`,
+          color: autoGroupColor,
+          tableIds: [...ungroupedTableIds],
+          groupType: "standard",
+          sortOrder: tableGroups.length,
+        };
+        setTableGroups((prev) => [...prev, autoGroup]);
+      }
+
       setShowStaffAssignModal(false);
       setSelectedStaffList([]);
       setStaffSearchQuery("");
@@ -1219,6 +1253,7 @@ export const EventAssignmentTab = forwardRef<
     allStaff,
     eventId,
     showNotification,
+    tableGroups,
   ]);
 
   const handleRemoveStaffFromTable = useCallback(
@@ -2575,6 +2610,24 @@ export const EventAssignmentTab = forwardRef<
                                   </>
                                 ) : (
                                   <>
+                                    {(() => {
+                                      const assignedGroups = tableGroups.filter((g: TableGroup) =>
+                                        (assignment.tableIds || []).some((tid: string) => g.tableIds.includes(tid))
+                                      );
+                                      return assignedGroups.length > 0 ? (
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-[9px]"
+                                          style={{
+                                            backgroundColor: assignedGroups[0].color + "30",
+                                            color: assignedGroups[0].color,
+                                            borderColor: assignedGroups[0].color + "50",
+                                          }}
+                                        >
+                                          {assignedGroups.map((g: TableGroup) => g.name).join(", ")}
+                                        </Badge>
+                                      ) : null;
+                                    })()}
                                     <Badge
                                       variant="secondary"
                                       className="text-[9px] bg-slate-600 text-slate-300"
