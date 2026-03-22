@@ -165,6 +165,8 @@ function computeStaffGroups(
 
     // Personelleri ekle
     group.staffAssignments.forEach((a) => {
+      // Duplicate kontrolu - ayni staff zaten eklenmisse atla
+      if (entry.staff.some((s) => s.id === a.id)) return;
       const staff = allStaff.find((s) => s.id === a.staffId);
       const roleInfo = STAFF_ROLES.find((r) => r.value === a.role);
       entry.staff.push({
@@ -535,9 +537,9 @@ const GroupBreakdown = memo(function GroupBreakdown({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {group.staff.map((s) => (
+                  {group.staff.map((s, idx) => (
                     <tr
-                      key={s.id}
+                      key={`${s.id}-${idx}`}
                       className={cn(
                         "transition-colors",
                         s.isExtra

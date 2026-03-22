@@ -9,6 +9,9 @@ import { Repository } from "typeorm";
 import { Event, EventStatus } from "../../entities/event.entity";
 import { EventStaffAssignment } from "../../entities/event-staff-assignment.entity";
 import { EventExtraStaff } from "../../entities/event-extra-staff.entity";
+import { StaffAssignment } from "../../entities/staff-assignment.entity";
+import { ServiceTeam } from "../../entities/service-team.entity";
+import { TableGroup } from "../../entities/table-group.entity";
 import {
   CreateEventDto,
   UpdateEventDto,
@@ -29,6 +32,12 @@ export class EventsService {
     private eventStaffAssignmentRepository: Repository<EventStaffAssignment>,
     @InjectRepository(EventExtraStaff)
     private eventExtraStaffRepository: Repository<EventExtraStaff>,
+    @InjectRepository(StaffAssignment)
+    private staffAssignmentRepository: Repository<StaffAssignment>,
+    @InjectRepository(ServiceTeam)
+    private serviceTeamRepository: Repository<ServiceTeam>,
+    @InjectRepository(TableGroup)
+    private tableGroupRepository: Repository<TableGroup>,
     @Inject(forwardRef(() => NotificationsService))
     private notificationsService: NotificationsService,
   ) {}
@@ -163,28 +172,19 @@ export class EventsService {
 
     if (!event) throw new NotFoundException("Etkinlik bulunamadı");
 
-    // Relation'ları paralel ayrı sorgularla al (venueLayout JSONB çarpımını önler)
+    // Relation'ları paralel ayrı sorgularla al — her biri bağımsız SELECT, cartesian product YOK
     const [
       staffAssignments,
       serviceTeams,
       tableGroups,
       activeStaffAssignments,
     ] = await Promise.all([
-      this.eventRepository
-        .createQueryBuilder()
-        .relation(Event, "staffAssignments")
-        .of(id)
-        .loadMany(),
-      this.eventRepository
-        .createQueryBuilder()
-        .relation(Event, "serviceTeams")
-        .of(id)
-        .loadMany(),
-      this.eventRepository
-        .createQueryBuilder()
-        .relation(Event, "tableGroups")
-        .of(id)
-        .loadMany(),
+      this.staffAssignmentRepository.find({ where: { eventId: id } }),
+      this.serviceTeamRepository.find({ where: { eventId: id } }),
+      this.tableGroupRepository.find({
+        where: { eventId: id },
+        order: { sortOrder: "ASC" },
+      }),
       this.eventStaffAssignmentRepository.find({
         where: { eventId: id, isActive: true },
       }),

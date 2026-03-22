@@ -7,6 +7,9 @@ import { ServicePointsService } from "./service-points.service";
 import { Event } from "../../entities/event.entity";
 import { EventStaffAssignment } from "../../entities/event-staff-assignment.entity";
 import { EventExtraStaff } from "../../entities/event-extra-staff.entity";
+import { StaffAssignment } from "../../entities/staff-assignment.entity";
+import { ServiceTeam } from "../../entities/service-team.entity";
+import { TableGroup } from "../../entities/table-group.entity";
 import { ServicePoint } from "../../entities/service-point.entity";
 import { ServicePointStaffAssignment } from "../../entities/service-point-staff-assignment.entity";
 import { NotificationsModule } from "../notifications/notifications.module";
@@ -17,6 +20,9 @@ import { NotificationsModule } from "../notifications/notifications.module";
       Event,
       EventStaffAssignment,
       EventExtraStaff,
+      StaffAssignment,
+      ServiceTeam,
+      TableGroup,
       ServicePoint,
       ServicePointStaffAssignment,
     ]),
