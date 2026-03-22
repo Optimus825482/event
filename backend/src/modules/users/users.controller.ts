@@ -20,6 +20,11 @@ import {
   UpdateUserDto,
   AdminChangePasswordDto,
 } from "./dto/users.dto";
+import {
+  AssignPermissionsDto,
+  UpdatePermissionDto,
+  PermissionResponseDto,
+} from "./dto/permission.dto";
 
 @ApiTags("Users")
 @ApiBearerAuth()
@@ -78,5 +83,44 @@ export class UsersController {
   @Delete(":id")
   delete(@Param("id") id: string) {
     return this.usersService.delete(id);
+  }
+
+  // Kullanıcıya yetki ata
+  @Post(":id/permissions")
+  @ApiOperation({ summary: "Kullanıcıya yetki ata" })
+  assignPermissions(
+    @Param("id") id: string,
+    @Body() dto: AssignPermissionsDto,
+  ) {
+    return this.usersService.assignPermissions(id, dto.permissions);
+  }
+
+  // Kullanıcının yetkilerini getir
+  @Get(":id/permissions")
+  @ApiOperation({ summary: "Kullanıcının yetkilerini getir" })
+  getPermissions(@Param("id") id: string) {
+    return this.usersService.getPermissions(id);
+  }
+
+  // Belirli bir modül yetkisini güncelle
+  @Put(":id/permissions/:module")
+  @ApiOperation({ summary: "Modül yetkisini güncelle" })
+  updatePermission(
+    @Param("id") id: string,
+    @Param("module") module: string,
+    @Body() dto: UpdatePermissionDto,
+  ) {
+    return this.usersService.updatePermission(id, module, dto);
+  }
+
+  // Belirli bir modül yetkisini sil
+  @Delete(":id/permissions/:module")
+  @ApiOperation({ summary: "Modül yetkisini sil" })
+  async removePermission(
+    @Param("id") id: string,
+    @Param("module") module: string,
+  ) {
+    await this.usersService.removePermission(id, module);
+    return { success: true };
   }
 }

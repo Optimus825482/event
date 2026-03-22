@@ -6,11 +6,13 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtStrategy } from "./strategies/jwt.strategy";
+import { PermissionsService } from "./services/permissions.service";
 import { User } from "../../entities/user.entity";
+import { UserPermission } from "../../entities/user-permission.entity";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, UserPermission]),
     PassportModule.register({ defaultStrategy: "jwt" }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -19,7 +21,7 @@ import { User } from "../../entities/user.entity";
         if (!secret || secret.length < 32) {
           throw new Error(
             "JWT_SECRET must be defined and at least 32 characters long. " +
-              "Please set a secure JWT_SECRET in your environment variables."
+              "Please set a secure JWT_SECRET in your environment variables.",
           );
         }
         return {
@@ -31,7 +33,7 @@ import { User } from "../../entities/user.entity";
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtStrategy, PassportModule],
+  providers: [AuthService, JwtStrategy, PermissionsService],
+  exports: [AuthService, JwtStrategy, PassportModule, PermissionsService],
 })
 export class AuthModule {}

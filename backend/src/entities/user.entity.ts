@@ -9,6 +9,7 @@ import {
 } from "typeorm";
 import { Event } from "./event.entity";
 import { StaffAssignment } from "./staff-assignment.entity";
+import { UserPermission } from "./user-permission.entity";
 
 export enum UserRole {
   ADMIN = "admin",
@@ -63,6 +64,11 @@ export class User {
 
   @OneToMany(() => StaffAssignment, (assignment) => assignment.staff)
   staffAssignments: StaffAssignment[];
+
+  @OneToMany(() => UserPermission, (permission) => permission.user, {
+    cascade: true,
+  })
+  permissions: UserPermission[];
 
   @CreateDateColumn()
   createdAt: Date;

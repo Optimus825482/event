@@ -8,12 +8,16 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import * as bcrypt from "bcrypt";
 import { User, UserRole } from "../../entities/user.entity";
+import { UserPermission } from "../../entities/user-permission.entity";
+import { AssignPermissionDto, UpdatePermissionDto } from "./dto/permission.dto";
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>
+    private userRepository: Repository<User>,
+    @InjectRepository(UserPermission)
+    private permissionRepository: Repository<UserPermission>,
   ) {}
 
   // Tüm kullanıcıları getir
@@ -90,7 +94,7 @@ export class UsersService {
       position?: string;
       isActive?: boolean;
       color?: string;
-    }
+    },
   ): Promise<Partial<User>> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
@@ -126,7 +130,7 @@ export class UsersService {
   // Şifre değiştir
   async changePassword(
     id: string,
-    dto: { currentPassword?: string; newPassword: string }
+    dto: { currentPassword?: string; newPassword: string },
   ): Promise<{ success: boolean }> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
@@ -236,5 +240,95 @@ export class UsersService {
     }
 
     return { migrated, skipped };
+  }
+
+  // Kullanıcıya yetki ata
+  async assignPermissions(
+    userId: string,
+    permissions: AssignPermissionDto[],
+  ): Promise<UserPermission[]> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("Kullanıcı bulunamadı");
+    }
+
+    const results: UserPermission[] = [];
+
+    for (const permDto of permissions) {
+      // Mevcut yetki var mı kontrol et
+      let permission = await this.permissionRepository.findOne({
+        where: { userId, module: permDto.module },
+      });
+
+      if (permission) {
+        // Güncelle
+        Object.assign(permission, permDto);
+      } else {
+        // Yeni oluştur
+        permission = this.permissionRepository.create({
+          userId,
+          ...permDto,
+        });
+      }
+
+      const saved = await this.permissionRepository.save(permission);
+      results.push(saved);
+    }
+
+    return results;
+  }
+
+  // Kullanıcının yetkilerini getir
+  async getPermissions(userId: string): Promise<UserPermission[]> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("Kullanıcı bulunamadı");
+    }
+
+    return this.permissionRepository.find({
+      where: { userId },
+      order: { module: "ASC" },
+    });
+  }
+
+  // Belirli bir modül yetkisini güncelle
+  async updatePermission(
+    userId: string,
+    module: string,
+    dto: UpdatePermissionDto,
+  ): Promise<UserPermission> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("Kullanıcı bulunamadı");
+    }
+
+    const permission = await this.permissionRepository.findOne({
+      where: { userId, module: module as any },
+    });
+
+    if (!permission) {
+      throw new NotFoundException("Bu modül için yetki bulunamadı");
+    }
+
+    Object.assign(permission, dto);
+    return this.permissionRepository.save(permission);
+  }
+
+  // Belirli bir modül yetkisini sil
+  async removePermission(userId: string, module: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("Kullanıcı bulunamadı");
+    }
+
+    const permission = await this.permissionRepository.findOne({
+      where: { userId, module: module as any },
+    });
+
+    if (!permission) {
+      throw new NotFoundException("Bu modül için yetki bulunamadı");
+    }
+
+    await this.permissionRepository.remove(permission);
   }
 }

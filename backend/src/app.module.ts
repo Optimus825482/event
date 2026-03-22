@@ -42,6 +42,7 @@ import {
 } from "./entities";
 import { StaffPerformanceReview } from "./entities/staff-performance-review.entity";
 import { Notification, NotificationRead } from "./entities/notification.entity";
+import { UserPermission } from "./entities/user-permission.entity";
 
 // Modules
 import { AuthModule } from "./modules/auth/auth.module";
@@ -140,6 +141,7 @@ import { ExcelImportModule } from "./modules/excel-import/excel-import.module";
           ServicePoint,
           ServicePointStaffAssignment,
           EventExtraStaff,
+          UserPermission,
         ],
         // UYARI: Production'da synchronize: false olmalı!
         synchronize: false,
@@ -150,7 +152,7 @@ import { ExcelImportModule } from "./modules/excel-import/excel-import.module";
         // Slow query logging - threshold üzeri sorguları logla
         maxQueryExecutionTime: parseInt(
           configService.get("SLOW_QUERY_THRESHOLD") || "500",
-          10
+          10,
         ),
         // Connection pool ayarları - Optimize edilmiş
         extra: {
