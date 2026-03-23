@@ -599,7 +599,7 @@ export const CanvasToolbar = memo(function CanvasToolbar({
         <TooltipContent>Uzaklaştır</TooltipContent>
       </Tooltip>
 
-      <span className="text-xs text-slate-400 min-w-[40px] text-center">
+      <span className="text-xs text-slate-400 min-w-10 text-center">
         {Math.round(zoom * 100)}%
       </span>
 
@@ -793,17 +793,18 @@ export const CanvasRenderer = forwardRef<HTMLDivElement, CanvasRendererProps>(
     // Table -> Group map (UUID bazlı)
     const tableToGroupMap = useMemo(() => {
       const map = new Map<string, TableGroup>();
+      const validIds = new Set(tables.map((t) => t.id));
       tableGroups.forEach((group) => {
-        group.tableIds.forEach((tableLabel) => {
-          // tableLabel masa numarası ("1", "2", "3"), UUID'ye çevir
-          const tableId = labelToIdMap.get(tableLabel);
-          if (tableId) {
-            map.set(tableId, group);
+        group.tableIds.forEach((tid) => {
+          // tid label ("1", "2") veya UUID olabilir
+          const uuid = labelToIdMap.get(tid) || (validIds.has(tid) ? tid : null);
+          if (uuid) {
+            map.set(uuid, group);
           }
         });
       });
       return map;
-    }, [tableGroups, labelToIdMap]);
+    }, [tableGroups, labelToIdMap, tables]);
 
     // Group -> Team map
     const groupToTeamMap = useMemo(() => {

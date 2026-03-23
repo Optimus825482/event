@@ -35,7 +35,7 @@ export class QREngineService {
 
   constructor(
     @InjectRepository(Reservation)
-    private reservationRepository: Repository<Reservation>
+    private reservationRepository: Repository<Reservation>,
   ) {}
 
   /**
@@ -50,50 +50,19 @@ export class QREngineService {
   async generateHash(
     eventId: string,
     tableId: string,
-    customerId: string
+    customerId: string,
   ): Promise<string> {
-    let hash: string;
-    let attempts = 0;
-    const maxAttempts = 10;
+    // SHA-256 + 16 random bytes + timestamp = collision ihtimali ~1/2^128
+    // unique constraint (qrCodeHash) DB seviyesinde son koruma saglar
+    const uniqueData = `${eventId}-${tableId}-${customerId}-${Date.now()}-${crypto
+      .randomBytes(16)
+      .toString("hex")}`;
 
-    do {
-      // Benzersizlik için timestamp ve random değer ekle
-      const uniqueData = `${eventId}-${tableId}-${customerId}-${Date.now()}-${crypto
-        .randomBytes(16)
-        .toString("hex")}`;
-
-      hash = crypto
-        .createHash("sha256")
-        .update(uniqueData)
-        .digest("hex")
-        .substring(0, 32);
-
-      attempts++;
-
-      // Collision kontrolü - veritabanında bu hash var mı?
-      const existing = await this.reservationRepository.findOne({
-        where: { qrCodeHash: hash },
-      });
-
-      if (!existing) {
-        this.logger.debug(`QR hash oluşturuldu: ${hash} (${attempts}. deneme)`);
-        return hash;
-      }
-
-      this.logger.warn(
-        `QR hash collision tespit edildi, yeniden deneniyor... (${attempts}/${maxAttempts})`
-      );
-    } while (attempts < maxAttempts);
-
-    // Son çare: UUID ekle
-    const fallbackHash = crypto
+    return crypto
       .createHash("sha256")
-      .update(`${eventId}-${tableId}-${customerId}-${crypto.randomUUID()}`)
+      .update(uniqueData)
       .digest("hex")
       .substring(0, 32);
-
-    this.logger.warn(`Fallback hash kullanıldı: ${fallbackHash}`);
-    return fallbackHash;
   }
 
   /**

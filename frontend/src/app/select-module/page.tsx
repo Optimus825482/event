@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -70,12 +70,8 @@ const iconColors: Record<ModuleType, string> = {
 export default function SelectModulePage() {
   const router = useRouter();
   const { user, isAuthenticated, setActiveModule, logout } = useAuthStore();
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  // Hydration tamamlanana kadar bekle
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
+  const emptySubscribe = () => () => { };
+  const isHydrated = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   useEffect(() => {
     // Hydration tamamlanmadan kontrol yapma
@@ -197,7 +193,7 @@ export default function SelectModulePage() {
                   onClick={() => handleSelectModule(module.id)}
                   className={`
                     relative overflow-hidden
-                    bg-gradient-to-br ${colors.gradient} 
+                    bg-linear-to-br ${colors.gradient} 
                     p-5 sm:p-6 lg:p-7
                     rounded-xl sm:rounded-2xl 
                     border ${colors.border} 
@@ -212,7 +208,7 @@ export default function SelectModulePage() {
                   {/* Subtle glow effect */}
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
                     <div
-                      className={`absolute -inset-1 bg-gradient-to-br ${colors.gradient} blur-xl`}
+                      className={`absolute -inset-1 bg-linear-to-br ${colors.gradient} blur-xl`}
                     />
                   </div>
 

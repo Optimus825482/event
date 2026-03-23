@@ -269,6 +269,7 @@ export const GroupCard = memo(function GroupCard({
               )}
               style={{ backgroundColor: color }}
               onClick={() => handleColorSelect(color)}
+              aria-label={`Renk seç: ${color}`}
             />
           ))}
         </div>

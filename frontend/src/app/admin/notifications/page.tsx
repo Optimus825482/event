@@ -179,6 +179,7 @@ export default function AdminNotificationsPage() {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <select
+              aria-label="Bildirim tipi filtresi"
               value={filterType}
               onChange={(e) => {
                 setFilterType(e.target.value);

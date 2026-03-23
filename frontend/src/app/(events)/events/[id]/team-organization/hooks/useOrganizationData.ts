@@ -288,18 +288,6 @@ export function useOrganizationData(
           const assignedGroupIds: string[] = [];
           const teamTableIds = t.tableIds || [];
 
-          groups.forEach((group) => {
-            // Grup masalarından herhangi biri takımın masalarında varsa, bu grup takıma ait
-            const hasCommonTable = group.tableIds.some((tid: string) =>
-              teamTableIds.includes(tid),
-            );
-            if (hasCommonTable) {
-              assignedGroupIds.push(group.id);
-              // Grubun assignedTeamId'sini de güncelle
-              group.assignedTeamId = t.id;
-            }
-          });
-
           return {
             id: t.id,
             name: t.name,

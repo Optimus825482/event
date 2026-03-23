@@ -5,7 +5,7 @@
  * Requirements: 10.1, 10.4
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import {
   QrCode,
   Search,
@@ -47,11 +47,12 @@ const TABS: { id: TabType; label: string; icon: React.ReactNode }[] = [
   { id: "walkin", label: "Walk-in", icon: <UserPlus className="w-5 h-5" /> },
 ];
 
+const emptySubscribe = () => () => { };
+
 export default function CheckInPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("scanner");
-  const [showEventSelector, setShowEventSelector] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const isInitialized = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   const { user, logout } = useAuthStore();
   const isController = user?.role === "controller";
@@ -63,7 +64,6 @@ export default function CheckInPage() {
     soundEnabled,
     toggleSound,
     selectEvent,
-    clearEvent,
     isLoading,
     error,
     subscribeToUpdates,
@@ -79,6 +79,10 @@ export default function CheckInPage() {
     setOnlineStatus(isOnline);
   }, [isOnline, setOnlineStatus]);
 
+  const [showEventSelector, setShowEventSelector] = useState(
+    () => !selectedEventId
+  );
+
   // Initialize on mount
   useEffect(() => {
     // Preload sounds
@@ -87,18 +91,11 @@ export default function CheckInPage() {
     // Initialize offline queue manager
     initOfflineQueueManager();
 
-    // If no event selected, show selector
-    if (!selectedEventId) {
-      setShowEventSelector(true);
-    }
-
-    setIsInitialized(true);
-
     return () => {
       cleanupOfflineQueueManager();
       unsubscribeFromUpdates();
     };
-  }, [selectedEventId, unsubscribeFromUpdates]);
+  }, [unsubscribeFromUpdates]);
 
   // Subscribe to real-time updates when event is selected
   useEffect(() => {

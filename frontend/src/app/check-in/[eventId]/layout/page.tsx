@@ -154,7 +154,7 @@ export default function CheckInLayoutPage() {
   const [teams, setTeams] = useState<TeamData[]>([]);
 
   // Kamera sabit kalma ayarı
-  const [lockCamera, setLockCamera] = useState(true);
+  const [lockCamera] = useState(true);
 
   // Tıklanan masanın görevli bilgisi (sol üst panel)
   const [selectedTableInfo, setSelectedTableInfo] = useState<{
@@ -203,7 +203,7 @@ export default function CheckInLayoutPage() {
         // Grupları ayarla
         if (groupsRes.data) {
           setTableGroups(
-            groupsRes.data.map((g: any) => ({
+            groupsRes.data.map((g: { id: string; name: string; tableIds?: string[]; color?: string }) => ({
               id: g.id,
               name: g.name,
               tableIds: g.tableIds || [],
@@ -215,7 +215,7 @@ export default function CheckInLayoutPage() {
         // Staff atamalarını ayarla
         if (assignmentsRes.data) {
           setStaffAssignments(
-            assignmentsRes.data.map((a: any) => ({
+            assignmentsRes.data.map((a: { id: string; staffId: string; staffName?: string; staff?: { fullName: string }; tableIds?: string[] }) => ({
               id: a.id,
               staffId: a.staffId,
               staffName: a.staffName || a.staff?.fullName || "Personel",
@@ -227,7 +227,7 @@ export default function CheckInLayoutPage() {
         // Takımları ayarla
         if (teamsRes.data) {
           setTeams(
-            teamsRes.data.map((t: any) => ({
+            teamsRes.data.map((t: { id: string; name: string; color: string; members?: Array<{ id: string; name: string; role?: string }>; leaderId?: string; tableIds?: string[] }) => ({
               id: t.id,
               name: t.name,
               color: t.color,
@@ -589,18 +589,19 @@ export default function CheckInLayoutPage() {
   return (
     <div className="fixed inset-0 bg-slate-900 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700 px-4 py-2 flex-shrink-0">
+      <header className="bg-linear-to-r from-slate-800 to-slate-900 border-b border-slate-700 px-4 py-2 shrink-0">
         <div className="flex items-center justify-between gap-3">
           {/* Left: Back + Event Info */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/check-in")}
               className="p-2 rounded-lg hover:bg-slate-700 transition-colors"
+              aria-label="Geri dön"
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
             </button>
             <div className="hidden md:flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-linear-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
                 <MapPin className="w-4 h-4 text-white" />
               </div>
               <div>
@@ -637,6 +638,7 @@ export default function CheckInLayoutPage() {
                 <button
                   onClick={() => setSearchQuery("")}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  aria-label="Aramayı temizle"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1002,7 +1004,7 @@ export default function CheckInLayoutPage() {
                     <div className="w-8 h-8 bg-green-500 rounded-full border-4 border-white shadow-lg flex items-center justify-center animate-bounce">
                       <User className="w-4 h-4 text-white" />
                     </div>
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-t-[12px] border-l-transparent border-r-transparent border-t-green-500" />
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-12 border-l-transparent border-r-transparent border-t-green-500" />
                     <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg">
                       BEN
                     </div>
@@ -1068,7 +1070,7 @@ export default function CheckInLayoutPage() {
       {selectedTableInfo && (
         <div className="fixed top-16 left-4 z-50 animate-fadeIn">
           <div
-            className="bg-slate-900/95 border-2 rounded-xl p-4 shadow-2xl backdrop-blur-sm min-w-[240px] max-w-[320px]"
+            className="bg-slate-900/95 border-2 rounded-xl p-4 shadow-2xl backdrop-blur-sm min-w-60 max-w-[320px]"
             style={{ borderColor: selectedTableInfo.groupColor }}
           >
             {/* Header */}
@@ -1203,7 +1205,7 @@ export default function CheckInLayoutPage() {
                 return (
                   <div key={group.id} className="flex items-start gap-2">
                     <div
-                      className="w-3 h-3 rounded-full mt-0.5 flex-shrink-0"
+                      className="w-3 h-3 rounded-full mt-0.5 shrink-0"
                       style={{ backgroundColor: groupColor }}
                     />
                     <div className="flex-1 min-w-0">

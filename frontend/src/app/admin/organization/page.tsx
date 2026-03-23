@@ -115,7 +115,7 @@ export default function OrganizationManagementPage() {
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<{
     type: string;
-    item: any;
+    item: Position | Department | WorkLocation;
   } | null>(null);
 
   // Sync state
@@ -145,6 +145,7 @@ export default function OrganizationManagementPage() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync relations from staff data
@@ -156,7 +157,7 @@ export default function OrganizationManagementPage() {
         `İlişkiler senkronize edildi: ${res.data.departmentPositions} pozisyon, ${res.data.departmentLocations} görev yeri`
       );
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Senkronizasyon başarısız");
     } finally {
       setSyncing(false);
@@ -170,14 +171,15 @@ export default function OrganizationManagementPage() {
         await positionsApi.update(editingPosition.id, data);
         toast.success("Unvan güncellendi");
       } else {
-        await positionsApi.create(data as any);
+        await positionsApi.create(data as Omit<Position, 'id'>);
         toast.success("Unvan eklendi");
       }
       setShowPositionModal(false);
       setEditingPosition(null);
       loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "İşlem başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "İşlem başarısız");
     }
   };
 
@@ -187,8 +189,9 @@ export default function OrganizationManagementPage() {
       toast.success("Unvan silindi");
       setDeleteConfirm(null);
       loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Silme başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Silme başarısız");
     }
   };
 
@@ -199,14 +202,15 @@ export default function OrganizationManagementPage() {
         await departmentsApi.update(editingDepartment.id, data);
         toast.success("Bölüm güncellendi");
       } else {
-        await departmentsApi.create(data as any);
+        await departmentsApi.create(data as Omit<Department, 'id'>);
         toast.success("Bölüm eklendi");
       }
       setShowDepartmentModal(false);
       setEditingDepartment(null);
       loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "İşlem başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "İşlem başarısız");
     }
   };
 
@@ -216,8 +220,9 @@ export default function OrganizationManagementPage() {
       toast.success("Bölüm silindi");
       setDeleteConfirm(null);
       loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Silme başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Silme başarısız");
     }
   };
 
@@ -228,14 +233,15 @@ export default function OrganizationManagementPage() {
         await workLocationsApi.update(editingLocation.id, data);
         toast.success("Görev yeri güncellendi");
       } else {
-        await workLocationsApi.create(data as any);
+        await workLocationsApi.create(data as Omit<WorkLocation, 'id'>);
         toast.success("Görev yeri eklendi");
       }
       setShowLocationModal(false);
       setEditingLocation(null);
       loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "İşlem başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "İşlem başarısız");
     }
   };
 
@@ -245,8 +251,9 @@ export default function OrganizationManagementPage() {
       toast.success("Görev yeri silindi");
       setDeleteConfirm(null);
       loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Silme başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Silme başarısız");
     }
   };
 
@@ -265,8 +272,9 @@ export default function OrganizationManagementPage() {
       setShowRelationsModal(false);
       setEditingDeptRelations(null);
       loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Güncelleme başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Güncelleme başarısız");
     }
   };
 
@@ -1036,6 +1044,7 @@ function DepartmentModal({
               {colorOptions.map((color) => (
                 <button
                   key={color}
+                  aria-label={`Renk seç: ${color}`}
                   onClick={() => setFormData({ ...formData, color })}
                   className={`w-8 h-8 rounded-full border-2 transition-all ${
                     formData.color === color

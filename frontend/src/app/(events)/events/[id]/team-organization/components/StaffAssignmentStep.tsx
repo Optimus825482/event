@@ -56,44 +56,10 @@ export function StaffAssignmentStep({
   const [showModal, setShowModal] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
-  // Tüm gruplardaki atanmış personelleri topla
-  const allAssignments = useMemo(() => {
-    const assignments: Array<{
-      groupId: string;
-      groupName: string;
-      groupColor: string;
-      assignment: GroupStaffAssignment;
-      tableLabels: string[];
-    }> = [];
-
-    tableGroups.forEach((group) => {
-      (group.staffAssignments || []).forEach((a) => {
-        const tableLabels = group.tableIds
-          .map((tid) => {
-            const t = tables.find((tb) => tb.id === tid);
-            return t?.label || tid;
-          })
-          .sort((a, b) => a.localeCompare(b, "tr", { numeric: true }));
-
-        assignments.push({
-          groupId: group.id,
-          groupName: group.name,
-          groupColor: group.color,
-          assignment: a,
-          tableLabels,
-        });
-      });
-    });
-
-    return assignments;
-  }, [tableGroups, tables]);
-
-  // Atanmamış masaları bul
+  // Atanmamış masaları bul (gruba dahil olan tüm masalar atanmış sayılır)
   const unassignedTables = useMemo(() => {
     const assignedTableIds = new Set(
-      tableGroups.flatMap((g) =>
-        (g.staffAssignments?.length || 0) > 0 ? g.tableIds : [],
-      ),
+      tableGroups.flatMap((g) => g.tableIds),
     );
     return tables.filter((t) => !assignedTableIds.has(t.id));
   }, [tables, tableGroups]);
@@ -209,16 +175,13 @@ export function StaffAssignmentStep({
       <div className="grid grid-cols-4 gap-3">
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-white">
-            {allAssignments.length}
+            {tableGroups.reduce((sum, g) => sum + (g.staffAssignments?.length || 0), 0)}
           </div>
           <div className="text-xs text-slate-400">Atanan Personel</div>
         </div>
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-emerald-400">
-            {
-              tableGroups.filter((g) => (g.staffAssignments?.length || 0) > 0)
-                .length
-            }
+            {tableGroups.length}
           </div>
           <div className="text-xs text-slate-400">Aktif Grup</div>
         </div>
@@ -238,7 +201,7 @@ export function StaffAssignmentStep({
 
       {/* Atanmış Personel Listesi */}
       <div className="flex-1 overflow-y-auto space-y-3">
-        {allAssignments.length === 0 ? (
+        {tableGroups.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
             <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p className="text-sm">Henüz personel atanmadı</p>
@@ -248,8 +211,7 @@ export function StaffAssignmentStep({
           </div>
         ) : (
           /* Gruplara göre göster */
-          tableGroups
-            .filter((g) => (g.staffAssignments?.length || 0) > 0)
+            tableGroups
             .map((group) => {
               const isExpanded = expandedGroups.has(group.id);
               const groupTables = group.tableIds

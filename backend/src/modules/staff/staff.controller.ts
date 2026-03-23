@@ -17,7 +17,11 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { extname } from "path";
-import { StaffService } from "./staff.service";
+import { DepartmentService } from "./department.service";
+import { StaffConfigService } from "./staff-config.service";
+import { StaffCrudService } from "./staff-crud.service";
+import { StaffAssignmentService } from "./staff-assignment.service";
+import { TeamOrganizationService } from "./team-organization.service";
 import { StaffPosition } from "../../entities/user.entity";
 import { Staff, Gender, StaffStatus } from "../../entities/staff.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -62,7 +66,13 @@ interface BulkAssignDto {
 @UseGuards(JwtAuthGuard)
 @Controller("staff")
 export class StaffController {
-  constructor(private readonly staffService: StaffService) {}
+  constructor(
+    private readonly departmentService: DepartmentService,
+    private readonly staffConfigService: StaffConfigService,
+    private readonly staffCrudService: StaffCrudService,
+    private readonly staffAssignmentService: StaffAssignmentService,
+    private readonly teamOrganizationService: TeamOrganizationService,
+  ) {}
 
   // ==================== STAFF ROLE ENDPOINT'LERİ (ÖNCELİKLİ) ====================
   // NOT: Bu endpoint'ler :id parametreli endpoint'lerden ÖNCE olmalı!
@@ -70,7 +80,7 @@ export class StaffController {
   // Tüm rolleri getir
   @Get("roles")
   getAllRoles() {
-    return this.staffService.getAllRoles();
+    return this.staffConfigService.getAllRoles();
   }
 
   // ==================== POSITIONS (UNVANLAR) ====================
@@ -80,13 +90,13 @@ export class StaffController {
   @Get("positions")
   getAllPositions(@Query("all") all?: string) {
     const onlyActive = all !== "true";
-    return this.staffService.getAllPositions(onlyActive);
+    return this.departmentService.getAllPositions(onlyActive);
   }
 
   // Yeni unvan ekle
   @Post("positions")
   createPosition(@Body() dto: { name: string; description?: string }) {
-    return this.staffService.createPosition(dto);
+    return this.departmentService.createPosition(dto);
   }
 
   // Unvan güncelle
@@ -101,13 +111,13 @@ export class StaffController {
       sortOrder?: number;
     },
   ) {
-    return this.staffService.updatePosition(id, dto);
+    return this.departmentService.updatePosition(id, dto);
   }
 
   // Unvan sil
   @Delete("positions/:id")
   deletePosition(@Param("id") id: string) {
-    return this.staffService.deletePosition(id);
+    return this.departmentService.deletePosition(id);
   }
 
   // ==================== DEPARTMENTS (BÖLÜMLER) ====================
@@ -117,7 +127,7 @@ export class StaffController {
   @Get("departments")
   getAllDepartments(@Query("all") all?: string) {
     const onlyActive = all !== "true";
-    return this.staffService.getAllDepartments(onlyActive);
+    return this.departmentService.getAllDepartments(onlyActive);
   }
 
   // Yeni bölüm ekle
@@ -125,7 +135,7 @@ export class StaffController {
   createDepartment(
     @Body() dto: { name: string; description?: string; color?: string },
   ) {
-    return this.staffService.createDepartment(dto);
+    return this.departmentService.createDepartment(dto);
   }
 
   // Bölüm güncelle
@@ -141,13 +151,13 @@ export class StaffController {
       sortOrder?: number;
     },
   ) {
-    return this.staffService.updateDepartment(id, dto);
+    return this.departmentService.updateDepartment(id, dto);
   }
 
   // Bölüm sil
   @Delete("departments/:id")
   deleteDepartment(@Param("id") id: string) {
-    return this.staffService.deleteDepartment(id);
+    return this.departmentService.deleteDepartment(id);
   }
 
   // ==================== WORK LOCATIONS (GÖREV YERLERİ) ====================
@@ -157,7 +167,7 @@ export class StaffController {
   @Get("work-locations")
   getAllWorkLocations(@Query("all") all?: string) {
     const onlyActive = all !== "true";
-    return this.staffService.getAllWorkLocations(onlyActive);
+    return this.departmentService.getAllWorkLocations(onlyActive);
   }
 
   // Yeni görev yeri ekle
@@ -165,7 +175,7 @@ export class StaffController {
   createWorkLocation(
     @Body() dto: { name: string; description?: string; address?: string },
   ) {
-    return this.staffService.createWorkLocation(dto);
+    return this.departmentService.createWorkLocation(dto);
   }
 
   // Görev yeri güncelle
@@ -181,13 +191,13 @@ export class StaffController {
       sortOrder?: number;
     },
   ) {
-    return this.staffService.updateWorkLocation(id, dto);
+    return this.departmentService.updateWorkLocation(id, dto);
   }
 
   // Görev yeri sil
   @Delete("work-locations/:id")
   deleteWorkLocation(@Param("id") id: string) {
-    return this.staffService.deleteWorkLocation(id);
+    return this.departmentService.deleteWorkLocation(id);
   }
 
   // ==================== İLİŞKİ ENDPOINT'LERİ ====================
@@ -195,25 +205,25 @@ export class StaffController {
   // Departmana ait pozisyonları getir
   @Get("departments/:id/positions")
   getPositionsByDepartment(@Param("id") id: string) {
-    return this.staffService.getPositionsByDepartment(id);
+    return this.departmentService.getPositionsByDepartment(id);
   }
 
   // Departmana ait görev yerlerini getir
   @Get("departments/:id/locations")
   getLocationsByDepartment(@Param("id") id: string) {
-    return this.staffService.getLocationsByDepartment(id);
+    return this.departmentService.getLocationsByDepartment(id);
   }
 
   // Departman detaylarını ilişkileriyle getir
   @Get("departments/:id/details")
   getDepartmentWithRelations(@Param("id") id: string) {
-    return this.staffService.getDepartmentWithRelations(id);
+    return this.departmentService.getDepartmentWithRelations(id);
   }
 
   // Tüm departmanları ilişkileriyle getir
   @Get("departments-with-relations")
   getAllDepartmentsWithRelations() {
-    return this.staffService.getAllDepartmentsWithRelations();
+    return this.departmentService.getAllDepartmentsWithRelations();
   }
 
   // Departmanın pozisyonlarını güncelle
@@ -222,7 +232,10 @@ export class StaffController {
     @Param("id") id: string,
     @Body() dto: { positionIds: string[] },
   ) {
-    return this.staffService.updateDepartmentPositions(id, dto.positionIds);
+    return this.departmentService.updateDepartmentPositions(
+      id,
+      dto.positionIds,
+    );
   }
 
   // Departmanın görev yerlerini güncelle
@@ -231,19 +244,22 @@ export class StaffController {
     @Param("id") id: string,
     @Body() dto: { locationIds: string[] },
   ) {
-    return this.staffService.updateDepartmentLocations(id, dto.locationIds);
+    return this.departmentService.updateDepartmentLocations(
+      id,
+      dto.locationIds,
+    );
   }
 
   // İlişkileri staff verilerinden senkronize et
   @Post("sync-relations")
   syncRelationsFromStaffData() {
-    return this.staffService.syncRelationsFromStaffData();
+    return this.departmentService.syncRelationsFromStaffData();
   }
 
   // Süpervizörleri getir
   @Get("supervisors")
   getSupervisors() {
-    return this.staffService.getSupervisors();
+    return this.teamOrganizationService.getSupervisors();
   }
 
   // ==================== WORK SHIFT (ÇALIŞMA SAATLERİ) GET ====================
@@ -252,13 +268,13 @@ export class StaffController {
   // Tüm çalışma saatlerini getir (global + opsiyonel eventId)
   @Get("shifts")
   getAllShifts(@Query("eventId") eventId?: string) {
-    return this.staffService.getAllShifts(eventId);
+    return this.staffConfigService.getAllShifts(eventId);
   }
 
   // Etkinliğe özel vardiyaları getir
   @Get("events/:eventId/shifts")
   getEventShifts(@Param("eventId") eventId: string) {
-    return this.staffService.getEventShifts(eventId);
+    return this.staffConfigService.getEventShifts(eventId);
   }
 
   // Etkinliğe özel toplu vardiya oluştur
@@ -275,7 +291,7 @@ export class StaffController {
       }>;
     },
   ) {
-    return this.staffService.createBulkShifts(eventId, dto.shifts);
+    return this.staffConfigService.createBulkShifts(eventId, dto.shifts);
   }
 
   // ==================== TEAM (EKİP) GET ====================
@@ -284,7 +300,7 @@ export class StaffController {
   // Tüm ekipleri getir
   @Get("teams")
   getAllTeams() {
-    return this.staffService.getAllTeams();
+    return this.teamOrganizationService.getAllTeams();
   }
 
   // ==================== ORGANIZATION TEMPLATE GET ====================
@@ -293,13 +309,13 @@ export class StaffController {
   // Tüm şablonları getir
   @Get("organization-templates")
   getOrganizationTemplates() {
-    return this.staffService.getOrganizationTemplates();
+    return this.teamOrganizationService.getOrganizationTemplates();
   }
 
   // Tek şablon getir
   @Get("organization-templates/:id")
   getOrganizationTemplateById(@Param("id") id: string) {
-    return this.staffService.getOrganizationTemplateById(id);
+    return this.teamOrganizationService.getOrganizationTemplateById(id);
   }
 
   // ==================== PERSONNEL (YENİ STAFF ENTITY) GET ENDPOINT'LERİ ====================
@@ -314,7 +330,7 @@ export class StaffController {
     @Query("isActive") isActive?: string,
     @Query("status") status?: string,
   ) {
-    return this.staffService.findAllPersonnel({
+    return this.staffCrudService.findAllPersonnel({
       department,
       workLocation,
       position,
@@ -327,7 +343,7 @@ export class StaffController {
   // Personel istatistikleri
   @Get("personnel/stats")
   getPersonnelStats() {
-    return this.staffService.getPersonnelStats();
+    return this.staffCrudService.getPersonnelStats();
   }
 
   // ==================== LAZY LOADING ENDPOINT'LERİ ====================
@@ -335,19 +351,19 @@ export class StaffController {
   // Pozisyon bazlı özet (sadece pozisyon adı ve sayısı)
   @Get("personnel/summary/by-position")
   getPersonnelSummaryByPosition() {
-    return this.staffService.getPersonnelSummaryByPosition();
+    return this.staffCrudService.getPersonnelSummaryByPosition();
   }
 
   // Departman bazlı özet
   @Get("personnel/summary/by-department")
   getPersonnelSummaryByDepartment() {
-    return this.staffService.getPersonnelSummaryByDepartment();
+    return this.staffCrudService.getPersonnelSummaryByDepartment();
   }
 
   // Pozisyona göre personel listesi (lazy loading)
   @Get("personnel/by-position/:position")
   getPersonnelByPosition(@Param("position") position: string) {
-    return this.staffService.getPersonnelByPosition(
+    return this.staffCrudService.getPersonnelByPosition(
       decodeURIComponent(position),
     );
   }
@@ -355,7 +371,7 @@ export class StaffController {
   // Departmana göre personel listesi (lazy loading)
   @Get("personnel/by-department/:department")
   getPersonnelByDepartment(@Param("department") department: string) {
-    return this.staffService.getPersonnelByDepartment(
+    return this.staffCrudService.getPersonnelByDepartment(
       decodeURIComponent(department),
     );
   }
@@ -363,20 +379,20 @@ export class StaffController {
   // Sicil numarası ile personel getir
   @Get("personnel/sicil/:sicilNo")
   getPersonnelBySicilNo(@Param("sicilNo") sicilNo: string) {
-    return this.staffService.getPersonnelBySicilNo(sicilNo);
+    return this.staffCrudService.getPersonnelBySicilNo(sicilNo);
   }
 
   // Tek personel getir (ID ile) - Bu :id'den önce olmalı
   @Get("personnel/:id")
   getPersonnelById(@Param("id") id: string) {
-    return this.staffService.getPersonnelById(id);
+    return this.staffCrudService.getPersonnelById(id);
   }
 
   // Tüm personeli listele
   @Get()
   findAll(@Query("active") active?: string) {
     const onlyActive = active === "true";
-    return this.staffService.findAllStaff(onlyActive);
+    return this.staffCrudService.findAllStaff(onlyActive);
   }
 
   // ==================== EVENT STAFF ASSIGNMENT ENDPOINT'LERİ ====================
@@ -385,7 +401,7 @@ export class StaffController {
   // Etkinlik için tüm personel atamalarını getir
   @Get("events/:eventId/assignments")
   getEventStaffAssignments(@Param("eventId") eventId: string) {
-    return this.staffService.getEventStaffAssignments(eventId);
+    return this.staffAssignmentService.getEventStaffAssignments(eventId);
   }
 
   // Personel ata (masa/masalara veya özel görev)
@@ -405,7 +421,7 @@ export class StaffController {
       specialTaskEndTime?: string;
     },
   ) {
-    return this.staffService.assignStaffToTables({ eventId, ...dto });
+    return this.staffAssignmentService.assignStaffToTables({ eventId, ...dto });
   }
 
   // Tüm etkinlik atamalarını kaydet (toplu)
@@ -426,7 +442,7 @@ export class StaffController {
     @Request() req,
   ) {
     const userId = req.user?.id;
-    return this.staffService.saveEventStaffAssignments(
+    return this.staffAssignmentService.saveEventStaffAssignments(
       eventId,
       dto.assignments,
       userId,
@@ -450,13 +466,13 @@ export class StaffController {
       specialTaskEndTime?: string;
     },
   ) {
-    return this.staffService.updateStaffAssignment(assignmentId, dto);
+    return this.staffAssignmentService.updateStaffAssignment(assignmentId, dto);
   }
 
   // Personel atamasını kaldır
   @Delete("assignments/:assignmentId")
   removeStaffAssignment(@Param("assignmentId") assignmentId: string) {
-    return this.staffService.removeStaffAssignment(assignmentId);
+    return this.staffAssignmentService.removeStaffAssignment(assignmentId);
   }
 
   // ==================== END EVENT STAFF ASSIGNMENT ====================
@@ -465,7 +481,7 @@ export class StaffController {
   @Post()
   async createStaff(@Body() dto: CreateStaffDto) {
     try {
-      return await this.staffService.createStaff(dto);
+      return await this.staffCrudService.createStaff(dto);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -478,7 +494,7 @@ export class StaffController {
   @Put(":id")
   async updateStaff(@Param("id") id: string, @Body() dto: UpdateStaffDto) {
     try {
-      return await this.staffService.updateStaff(id, dto);
+      return await this.staffCrudService.updateStaff(id, dto);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -490,25 +506,25 @@ export class StaffController {
   // Personel sil (soft delete - isActive = false)
   @Delete(":id")
   async deleteStaff(@Param("id") id: string) {
-    return this.staffService.deactivateStaff(id);
+    return this.staffCrudService.deactivateStaff(id);
   }
 
   // Tek bir personelin detayları
   @Get(":id")
   getStaffById(@Param("id") id: string) {
-    return this.staffService.getStaffById(id);
+    return this.staffCrudService.getStaffById(id);
   }
 
   // Personelin tüm etkinliklerdeki atamalarını getir
   @Get(":id/event-assignments")
   getStaffEventAssignments(@Param("id") staffId: string) {
-    return this.staffService.getStaffEventAssignments(staffId);
+    return this.staffAssignmentService.getStaffEventAssignments(staffId);
   }
 
   // Masa ataması yap
   @Post("assign")
   assignTables(@Body() dto: AssignTablesDto) {
-    return this.staffService.assignTables(
+    return this.staffAssignmentService.assignTables(
       dto.eventId,
       dto.staffId,
       dto.tableIds,
@@ -519,7 +535,10 @@ export class StaffController {
   // Toplu atama yap
   @Post("assign/bulk")
   bulkAssignTables(@Body() dto: BulkAssignDto) {
-    return this.staffService.bulkAssignTables(dto.eventId, dto.assignments);
+    return this.staffAssignmentService.bulkAssignTables(
+      dto.eventId,
+      dto.assignments,
+    );
   }
 
   // Atama kaldır
@@ -528,19 +547,19 @@ export class StaffController {
     @Param("eventId") eventId: string,
     @Param("staffId") staffId: string,
   ) {
-    return this.staffService.removeAssignment(eventId, staffId);
+    return this.staffAssignmentService.removeAssignment(eventId, staffId);
   }
 
   // Etkinlik için tüm atamaları getir
   @Get("event/:eventId")
   getEventAssignments(@Param("eventId") eventId: string) {
-    return this.staffService.getEventAssignments(eventId);
+    return this.staffAssignmentService.getEventAssignments(eventId);
   }
 
   // Etkinlik için atama özeti (istatistikler)
   @Get("event/:eventId/summary")
   getEventAssignmentSummary(@Param("eventId") eventId: string) {
-    return this.staffService.getEventAssignmentSummary(eventId);
+    return this.staffAssignmentService.getEventAssignmentSummary(eventId);
   }
 
   // Personelin baktığı masaları getir
@@ -549,7 +568,7 @@ export class StaffController {
     @Param("eventId") eventId: string,
     @Param("staffId") staffId: string,
   ) {
-    return this.staffService.getStaffTables(eventId, staffId);
+    return this.staffAssignmentService.getStaffTables(eventId, staffId);
   }
 
   // Otomatik atama önerisi
@@ -559,7 +578,7 @@ export class StaffController {
     @Body()
     dto: { staffIds: string[]; strategy?: "balanced" | "zone" | "random" },
   ) {
-    return this.staffService.autoAssignTables(
+    return this.staffAssignmentService.autoAssignTables(
       eventId,
       dto.staffIds,
       dto.strategy || "balanced",
@@ -579,7 +598,10 @@ export class StaffController {
       }>;
     },
   ) {
-    return this.staffService.saveEventAssignments(eventId, dto.assignments);
+    return this.staffAssignmentService.saveEventAssignments(
+      eventId,
+      dto.assignments,
+    );
   }
 
   // ==================== SERVICE TEAM ENDPOINT'LERİ (ETKİNLİK BAZLI) ====================
@@ -587,7 +609,7 @@ export class StaffController {
   // Etkinlik için tüm servis ekiplerini getir
   @Get("event/:eventId/teams")
   getEventTeams(@Param("eventId") eventId: string) {
-    return this.staffService.getEventTeams(eventId);
+    return this.teamOrganizationService.getEventTeams(eventId);
   }
 
   // Yeni servis ekibi oluştur (etkinlik bazlı)
@@ -603,7 +625,7 @@ export class StaffController {
       tableIds?: string[];
     },
   ) {
-    return this.staffService.createServiceTeam(dto);
+    return this.teamOrganizationService.createServiceTeam(dto);
   }
 
   // Servis ekibi güncelle
@@ -619,19 +641,19 @@ export class StaffController {
       tableIds?: string[];
     },
   ) {
-    return this.staffService.updateServiceTeam(teamId, dto);
+    return this.teamOrganizationService.updateServiceTeam(teamId, dto);
   }
 
   // Servis ekibi sil
   @Delete("service-teams/:teamId")
   deleteServiceTeam(@Param("teamId") teamId: string) {
-    return this.staffService.deleteServiceTeam(teamId);
+    return this.teamOrganizationService.deleteServiceTeam(teamId);
   }
 
   // Servis ekibine üye ekle
   @Post("service-teams/:teamId/members")
   addMemberToServiceTeam(@Param("teamId") teamId: string, @Body() member: any) {
-    return this.staffService.addMemberToServiceTeam(teamId, member);
+    return this.teamOrganizationService.addMemberToServiceTeam(teamId, member);
   }
 
   // Servis ekibinden üye çıkar
@@ -640,7 +662,10 @@ export class StaffController {
     @Param("teamId") teamId: string,
     @Param("memberId") memberId: string,
   ) {
-    return this.staffService.removeMemberFromServiceTeam(teamId, memberId);
+    return this.teamOrganizationService.removeMemberFromServiceTeam(
+      teamId,
+      memberId,
+    );
   }
 
   // Servis ekibine masa ata
@@ -649,7 +674,10 @@ export class StaffController {
     @Param("teamId") teamId: string,
     @Body() dto: { tableIds: string[] },
   ) {
-    return this.staffService.assignTablesToServiceTeam(teamId, dto.tableIds);
+    return this.teamOrganizationService.assignTablesToServiceTeam(
+      teamId,
+      dto.tableIds,
+    );
   }
 
   // Servis ekibinden masa kaldır
@@ -658,7 +686,10 @@ export class StaffController {
     @Param("teamId") teamId: string,
     @Body() dto: { tableIds: string[] },
   ) {
-    return this.staffService.removeTablesFromServiceTeam(teamId, dto.tableIds);
+    return this.teamOrganizationService.removeTablesFromServiceTeam(
+      teamId,
+      dto.tableIds,
+    );
   }
 
   // Tüm ekipleri toplu kaydet
@@ -677,7 +708,7 @@ export class StaffController {
       }>;
     },
   ) {
-    return this.staffService.saveEventTeams(eventId, dto.teams);
+    return this.teamOrganizationService.saveEventTeams(eventId, dto.teams);
   }
 
   // ==================== TABLE GROUP ENDPOINT'LERİ ====================
@@ -685,7 +716,7 @@ export class StaffController {
   // Etkinlik için tüm masa gruplarını getir
   @Get("event/:eventId/table-groups")
   getEventTableGroups(@Param("eventId") eventId: string) {
-    return this.staffService.getEventTableGroups(eventId);
+    return this.teamOrganizationService.getEventTableGroups(eventId);
   }
 
   // Yeni masa grubu oluştur
@@ -701,7 +732,7 @@ export class StaffController {
       notes?: string;
     },
   ) {
-    return this.staffService.createTableGroup(dto);
+    return this.teamOrganizationService.createTableGroup(dto);
   }
 
   // Masa grubu güncelle
@@ -720,13 +751,13 @@ export class StaffController {
       sortOrder?: number;
     },
   ) {
-    return this.staffService.updateTableGroup(groupId, dto);
+    return this.teamOrganizationService.updateTableGroup(groupId, dto);
   }
 
   // Masa grubu sil
   @Delete("table-groups/:groupId")
   deleteTableGroup(@Param("groupId") groupId: string) {
-    return this.staffService.deleteTableGroup(groupId);
+    return this.teamOrganizationService.deleteTableGroup(groupId);
   }
 
   // Gruba masa ekle
@@ -735,7 +766,7 @@ export class StaffController {
     @Param("groupId") groupId: string,
     @Body() dto: { tableIds: string[] },
   ) {
-    return this.staffService.addTablesToGroup(groupId, dto.tableIds);
+    return this.teamOrganizationService.addTablesToGroup(groupId, dto.tableIds);
   }
 
   // Gruptan masa çıkar
@@ -744,7 +775,10 @@ export class StaffController {
     @Param("groupId") groupId: string,
     @Body() dto: { tableIds: string[] },
   ) {
-    return this.staffService.removeTablesFromGroup(groupId, dto.tableIds);
+    return this.teamOrganizationService.removeTablesFromGroup(
+      groupId,
+      dto.tableIds,
+    );
   }
 
   // Gruba süpervizör ata
@@ -753,13 +787,16 @@ export class StaffController {
     @Param("groupId") groupId: string,
     @Body() dto: { supervisorId: string },
   ) {
-    return this.staffService.assignSupervisorToGroup(groupId, dto.supervisorId);
+    return this.teamOrganizationService.assignSupervisorToGroup(
+      groupId,
+      dto.supervisorId,
+    );
   }
 
   // Gruptan süpervizör kaldır
   @Delete("table-groups/:groupId/supervisor")
   removeSupervisorFromGroup(@Param("groupId") groupId: string) {
-    return this.staffService.removeSupervisorFromGroup(groupId);
+    return this.teamOrganizationService.removeSupervisorFromGroup(groupId);
   }
 
   // Gruba ekip ata
@@ -768,7 +805,7 @@ export class StaffController {
     @Param("groupId") groupId: string,
     @Body() dto: { teamId: string },
   ) {
-    return this.staffService.assignTeamToGroup(groupId, dto.teamId);
+    return this.teamOrganizationService.assignTeamToGroup(groupId, dto.teamId);
   }
 
   // Tüm masa gruplarını toplu kaydet
@@ -790,13 +827,16 @@ export class StaffController {
       }>;
     },
   ) {
-    return this.staffService.saveEventTableGroups(eventId, dto.groups);
+    return this.teamOrganizationService.saveEventTableGroups(
+      eventId,
+      dto.groups,
+    );
   }
 
   // Etkinlik organizasyon özeti
   @Get("event/:eventId/organization-summary")
   getEventOrganizationSummary(@Param("eventId") eventId: string) {
-    return this.staffService.getEventOrganizationSummary(eventId);
+    return this.teamOrganizationService.getEventOrganizationSummary(eventId);
   }
 
   // ==================== STAFF ROLE CRUD (POST/PUT/DELETE) ====================
@@ -813,7 +853,7 @@ export class StaffController {
       bgColor?: string;
     },
   ) {
-    return this.staffService.createRole(dto);
+    return this.staffConfigService.createRole(dto);
   }
 
   // Rol güncelle
@@ -829,19 +869,19 @@ export class StaffController {
       sortOrder?: number;
     },
   ) {
-    return this.staffService.updateRole(id, dto);
+    return this.staffConfigService.updateRole(id, dto);
   }
 
   // Rol sil (soft delete)
   @Delete("roles/:id")
   deleteRole(@Param("id") id: string) {
-    return this.staffService.deleteRole(id);
+    return this.staffConfigService.deleteRole(id);
   }
 
   // Rol kalıcı sil
   @Delete("roles/:id/hard")
   hardDeleteRole(@Param("id") id: string) {
-    return this.staffService.hardDeleteRole(id);
+    return this.staffConfigService.hardDeleteRole(id);
   }
 
   // ==================== WORK SHIFT (ÇALIŞMA SAATLERİ) CRUD ====================
@@ -858,7 +898,7 @@ export class StaffController {
       eventId?: string;
     },
   ) {
-    return this.staffService.createShift(dto);
+    return this.staffConfigService.createShift(dto);
   }
 
   // Çalışma saati güncelle
@@ -874,13 +914,13 @@ export class StaffController {
       sortOrder?: number;
     },
   ) {
-    return this.staffService.updateShift(id, dto);
+    return this.staffConfigService.updateShift(id, dto);
   }
 
   // Çalışma saati sil
   @Delete("shifts/:id")
   deleteShift(@Param("id") id: string) {
-    return this.staffService.deleteShift(id);
+    return this.staffConfigService.deleteShift(id);
   }
 
   // ==================== TEAM (EKİP) CRUD ====================
@@ -896,7 +936,7 @@ export class StaffController {
       leaderId?: string;
     },
   ) {
-    return this.staffService.createTeam(dto);
+    return this.teamOrganizationService.createTeam(dto);
   }
 
   // Ekip güncelle
@@ -912,19 +952,19 @@ export class StaffController {
       sortOrder?: number;
     },
   ) {
-    return this.staffService.updateTeam(id, dto);
+    return this.teamOrganizationService.updateTeam(id, dto);
   }
 
   // Ekip sil
   @Delete("teams/:id")
   deleteTeamById(@Param("id") id: string) {
-    return this.staffService.deleteTeam(id);
+    return this.teamOrganizationService.deleteTeam(id);
   }
 
   // Toplu ekip sil
   @Delete("teams/bulk/delete")
   bulkDeleteTeams(@Body() dto: { teamIds: string[] }) {
-    return this.staffService.bulkDeleteTeams(dto.teamIds);
+    return this.teamOrganizationService.bulkDeleteTeams(dto.teamIds);
   }
 
   // Ekip liderini ata/değiştir - HIZLI ENDPOINT
@@ -933,7 +973,7 @@ export class StaffController {
     @Param("id") teamId: string,
     @Body() dto: { leaderId: string | null },
   ) {
-    return this.staffService.setTeamLeader(teamId, dto.leaderId);
+    return this.teamOrganizationService.setTeamLeader(teamId, dto.leaderId);
   }
 
   // Ekibe üye ekle
@@ -942,7 +982,7 @@ export class StaffController {
     @Param("id") teamId: string,
     @Body() dto: { memberId: string },
   ) {
-    return this.staffService.addMemberToTeam(teamId, dto.memberId);
+    return this.teamOrganizationService.addMemberToTeam(teamId, dto.memberId);
   }
 
   // Ekibe toplu üye ekle
@@ -951,7 +991,10 @@ export class StaffController {
     @Param("id") teamId: string,
     @Body() dto: { memberIds: string[] },
   ) {
-    return this.staffService.addMembersToTeamBulk(teamId, dto.memberIds);
+    return this.teamOrganizationService.addMembersToTeamBulk(
+      teamId,
+      dto.memberIds,
+    );
   }
 
   // Ekipten üye çıkar
@@ -960,7 +1003,7 @@ export class StaffController {
     @Param("id") teamId: string,
     @Param("memberId") memberId: string,
   ) {
-    return this.staffService.removeMemberFromTeam(teamId, memberId);
+    return this.teamOrganizationService.removeMemberFromTeam(teamId, memberId);
   }
 
   // ==================== ORGANIZATION TEMPLATE ENDPOINT'LERİ (POST/DELETE) ====================
@@ -976,7 +1019,7 @@ export class StaffController {
       eventId: string;
     },
   ) {
-    return this.staffService.createOrganizationTemplate(dto);
+    return this.teamOrganizationService.createOrganizationTemplate(dto);
   }
 
   // Şablonu etkinliğe uygula
@@ -985,19 +1028,22 @@ export class StaffController {
     @Param("id") templateId: string,
     @Body() dto: { eventId: string },
   ) {
-    return this.staffService.applyOrganizationTemplate(templateId, dto.eventId);
+    return this.teamOrganizationService.applyOrganizationTemplate(
+      templateId,
+      dto.eventId,
+    );
   }
 
   // Şablon sil
   @Delete("organization-templates/:id")
   deleteOrganizationTemplate(@Param("id") id: string) {
-    return this.staffService.deleteOrganizationTemplate(id);
+    return this.teamOrganizationService.deleteOrganizationTemplate(id);
   }
 
   // Varsayılan şablon yap
   @Post("organization-templates/:id/set-default")
   setDefaultTemplate(@Param("id") id: string) {
-    return this.staffService.setDefaultTemplate(id);
+    return this.teamOrganizationService.setDefaultTemplate(id);
   }
 
   // ==================== PERSONNEL (YENİ STAFF ENTITY) POST/PUT/DELETE ENDPOINT'LERİ ====================
@@ -1040,7 +1086,7 @@ export class StaffController {
         ? new Date(dto.terminationDate)
         : undefined,
     };
-    return this.staffService.createPersonnel(staffData);
+    return this.staffCrudService.createPersonnel(staffData);
   }
 
   // Personel güncelle
@@ -1082,13 +1128,13 @@ export class StaffController {
         ? new Date(dto.terminationDate)
         : undefined,
     };
-    return this.staffService.updatePersonnel(id, staffData);
+    return this.staffCrudService.updatePersonnel(id, staffData);
   }
 
   // Personel sil (soft delete)
   @Delete("personnel/:id")
   deletePersonnel(@Param("id") id: string) {
-    return this.staffService.deletePersonnel(id);
+    return this.staffCrudService.deletePersonnel(id);
   }
 
   // Avatar yükle (Base64 - Coolify için)
@@ -1108,7 +1154,7 @@ export class StaffController {
     if (dto.avatar.length > 7 * 1024 * 1024) {
       throw new BadRequestException("Dosya boyutu çok büyük (max 5MB)");
     }
-    return this.staffService.updatePersonnelAvatar(id, dto.avatar);
+    return this.staffCrudService.updatePersonnelAvatar(id, dto.avatar);
   }
 
   // Avatar yükle (File upload - legacy)
@@ -1145,12 +1191,12 @@ export class StaffController {
       throw new BadRequestException("Dosya yüklenemedi");
     }
     const avatarPath = `/uploads/avatars/${file.filename}`;
-    return this.staffService.updatePersonnelAvatar(id, avatarPath);
+    return this.staffCrudService.updatePersonnelAvatar(id, avatarPath);
   }
 
   // CSV'den toplu personel import et
   @Post("personnel/import-csv")
   importPersonnelFromCSV(@Body() dto: { data: Array<Record<string, string>> }) {
-    return this.staffService.importPersonnelFromCSV(dto.data);
+    return this.staffCrudService.importPersonnelFromCSV(dto.data);
   }
 }

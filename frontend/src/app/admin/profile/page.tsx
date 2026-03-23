@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   User,
   Mail,
@@ -135,14 +136,16 @@ export default function AdminProfilePage() {
         {/* Profile Card */}
         <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
           {/* Avatar Section */}
-          <div className="relative h-32 bg-gradient-to-r from-blue-500/20 to-indigo-500/20">
+          <div className="relative h-32 bg-linear-to-r from-blue-500/20 to-indigo-500/20">
             <div className="absolute -bottom-12 left-6">
               <div className="relative">
                 <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center border-4 border-slate-800">
                   {user?.avatar ? (
-                    <img
+                    <Image
                       src={user.avatar}
                       alt={user.fullName}
+                      width={96}
+                      height={96}
                       className="w-full h-full rounded-full object-cover"
                     />
                   ) : (
@@ -151,7 +154,10 @@ export default function AdminProfilePage() {
                     </span>
                   )}
                 </div>
-                <button className="absolute bottom-0 right-0 p-2 bg-blue-500 rounded-full text-white hover:bg-blue-600 transition-colors">
+                <button
+                  aria-label="Profil fotoğrafını değiştir"
+                  className="absolute bottom-0 right-0 p-2 bg-blue-500 rounded-full text-white hover:bg-blue-600 transition-colors"
+                >
                   <Camera className="w-4 h-4" />
                 </button>
               </div>
@@ -193,6 +199,7 @@ export default function AdminProfilePage() {
                 </label>
                 {isEditing ? (
                   <input
+                    aria-label="Ad Soyad"
                     type="text"
                     value={formData.fullName}
                     onChange={(e) =>
@@ -214,6 +221,7 @@ export default function AdminProfilePage() {
                 </label>
                 {isEditing ? (
                   <input
+                    aria-label="E-posta"
                     type="email"
                     value={formData.email}
                     onChange={(e) =>
@@ -235,6 +243,7 @@ export default function AdminProfilePage() {
                 </label>
                 {isEditing ? (
                   <input
+                    aria-label="Telefon"
                     type="tel"
                     value={formData.phone}
                     onChange={(e) =>
@@ -318,6 +327,7 @@ export default function AdminProfilePage() {
                 </label>
                 <div className="relative">
                   <input
+                    aria-label="Mevcut Şifre"
                     type={showCurrentPassword ? "text" : "password"}
                     value={passwordData.currentPassword}
                     onChange={(e) =>
@@ -348,6 +358,7 @@ export default function AdminProfilePage() {
                 </label>
                 <div className="relative">
                   <input
+                    aria-label="Yeni Şifre"
                     type={showNewPassword ? "text" : "password"}
                     value={passwordData.newPassword}
                     onChange={(e) =>
@@ -377,6 +388,7 @@ export default function AdminProfilePage() {
                   Yeni Şifre (Tekrar)
                 </label>
                 <input
+                  aria-label="Yeni Şifre (Tekrar)"
                   type="password"
                   value={passwordData.confirmPassword}
                   onChange={(e) =>

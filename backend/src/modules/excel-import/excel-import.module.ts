@@ -5,6 +5,9 @@ import { ExcelImportController } from "./excel-import.controller";
 import { AIExcelParserService } from "./ai-excel-parser.service";
 import { ExcelConverterService } from "./excel-converter.service";
 import { ReservationImportService } from "./reservation-import.service";
+import { StaffMatcherService } from "./staff-matcher.service";
+import { ExcelParserService } from "./excel-parser.service";
+import { ExcelResultMergerService } from "./excel-result-merger.service";
 import { Staff } from "../../entities/staff.entity";
 import { Event } from "../../entities/event.entity";
 import { TableGroup } from "../../entities/table-group.entity";
@@ -29,6 +32,9 @@ import { Customer } from "../../entities/customer.entity";
     AIExcelParserService,
     ExcelConverterService,
     ReservationImportService,
+    StaffMatcherService,
+    ExcelParserService,
+    ExcelResultMergerService,
   ],
   exports: [
     ExcelImportService,

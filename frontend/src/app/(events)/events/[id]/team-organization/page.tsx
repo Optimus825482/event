@@ -12,6 +12,7 @@ import {
   Loader2,
   RotateCcw,
   FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,7 @@ import {
   StaffAssignmentStep,
   Step5Summary,
   TutorialModal,
+  TemplateLoadModal,
 } from "./components";
 
 // Hooks
@@ -60,6 +62,7 @@ export default function TeamOrganizationPage() {
   const eventId = params.id as string;
 
   const [saving, setSaving] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [canvasToolbar, setCanvasToolbar] = useState<CanvasToolbarState | null>(
     null,
   );
@@ -114,15 +117,6 @@ export default function TeamOrganizationPage() {
     const hasExistingData =
       existingGroups.length > 0 || existingTeams.length > 0;
 
-    console.log("🔄 Team Organization Init:", {
-      urlStep,
-      computedInitialStep,
-      hasExistingData,
-      existingGroupsCount: existingGroups.length,
-      existingTeamsCount: existingTeams.length,
-      currentStep: wizard.currentStep,
-    });
-
     if (hasExistingData) {
       // Mevcut veriyi yükle (step zaten hook'ta ayarlandı)
       wizard.loadFromTemplate(existingGroups, existingTeams);
@@ -141,6 +135,8 @@ export default function TeamOrganizationPage() {
   // Kaydet
   const handleSave = useCallback(async () => {
     setSaving(true);
+    const staffCount = wizard.tableGroups.reduce((sum, g) => sum + (g.staffAssignments?.length || 0), 0);
+    console.log("💾 handleSave:", { groups: wizard.tableGroups.length, teams: wizard.teams.length, staffAssignments: staffCount });
     try {
       const success = await saveOrganization(
         wizard.tableGroups,
@@ -336,6 +332,15 @@ export default function TeamOrganizationPage() {
               <Button
                 size="sm"
                 variant="outline"
+                onClick={() => setShowTemplateModal(true)}
+                className="border-purple-600 text-purple-400 hover:bg-purple-600/10"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Şablondan Yükle
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 asChild
                 className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/10"
               >
@@ -403,6 +408,17 @@ export default function TeamOrganizationPage() {
 
         {/* Tutorial Modal - İlk girişte gösterilir */}
         <TutorialModal />
+
+        {/* Template Load Modal */}
+        <TemplateLoadModal
+          open={showTemplateModal}
+          onOpenChange={setShowTemplateModal}
+          eventId={eventId}
+          onTemplateApplied={() => {
+            setDataLoaded(false);
+            reloadData();
+          }}
+        />
       </PageContainer>
     </TooltipProvider>
   );

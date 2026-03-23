@@ -24,3 +24,4 @@ export { Step5Summary } from "./Step5Summary";
 export { TutorialModal } from "./TutorialModal";
 export { ExcelImportModal } from "./ExcelImportModal";
 export { BulkImportModal } from "./BulkImportModal";
+export { TemplateLoadModal } from "./TemplateLoadModal";

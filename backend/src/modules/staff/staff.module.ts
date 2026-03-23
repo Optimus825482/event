@@ -1,7 +1,11 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { StaffService } from "./staff.service";
 import { StaffController } from "./staff.controller";
+import { DepartmentService } from "./department.service";
+import { StaffConfigService } from "./staff-config.service";
+import { StaffCrudService } from "./staff-crud.service";
+import { StaffAssignmentService } from "./staff-assignment.service";
+import { TeamOrganizationService } from "./team-organization.service";
 import {
   StaffAssignment,
   User,
@@ -45,7 +49,19 @@ import { NotificationsModule } from "../notifications/notifications.module";
     forwardRef(() => NotificationsModule),
   ],
   controllers: [StaffController],
-  providers: [StaffService],
-  exports: [StaffService],
+  providers: [
+    DepartmentService,
+    StaffConfigService,
+    StaffCrudService,
+    StaffAssignmentService,
+    TeamOrganizationService,
+  ],
+  exports: [
+    DepartmentService,
+    StaffConfigService,
+    StaffCrudService,
+    StaffAssignmentService,
+    TeamOrganizationService,
+  ],
 })
 export class StaffModule {}

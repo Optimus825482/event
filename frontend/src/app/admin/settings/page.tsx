@@ -74,7 +74,7 @@ export default function AdminSettingsPage() {
   const [smtpTestResult, setSmtpTestResult] = useState<
     "success" | "error" | null
   >(null);
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [, setSettings] = useState<SystemSettings | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Canlı saat için useEffect

@@ -76,8 +76,8 @@ export function useWizardState(options?: UseWizardStateOptions) {
   const canGoNext = useMemo(() => {
     switch (currentStep) {
       case "team-assignment":
-        // En az 1 personel ataması yapılmışsa (grup'ta staffAssignment olmalı)
-        return tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0);
+        // En az 1 grup oluşturulmuşsa ileri gidilebilir
+        return tableGroups.length > 0;
       case "staff-assignment":
         // Personel ataması yapılmışsa (en az 1 grup'ta staffAssignment olmalı)
         return tableGroups.some((g) => (g.staffAssignments?.length || 0) > 0);

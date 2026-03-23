@@ -404,10 +404,13 @@ export class EventsService {
       hasReservations: boolean;
     }>
   > {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const now = new Date();
+    const windowStart = new Date(now);
+    windowStart.setDate(windowStart.getDate() - 1); // 1 gün önce
+    windowStart.setHours(0, 0, 0, 0);
+    const windowEnd = new Date(now);
+    windowEnd.setDate(windowEnd.getDate() + 3); // 3 gün sonra
+    windowEnd.setHours(23, 59, 59, 999);
 
     const events = await this.eventRepository
       .createQueryBuilder("event")
@@ -429,10 +432,13 @@ export class EventsService {
           EventStatus.ACTIVE,
         ],
       })
-      .andWhere("event.eventDate >= :today AND event.eventDate < :tomorrow", {
-        today,
-        tomorrow,
-      })
+      .andWhere(
+        "event.eventDate >= :windowStart AND event.eventDate <= :windowEnd",
+        {
+          windowStart,
+          windowEnd,
+        },
+      )
       .orderBy("event.eventDate", "ASC")
       .take(100)
       .getMany();

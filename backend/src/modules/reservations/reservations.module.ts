@@ -2,6 +2,9 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ReservationsController } from "./reservations.controller";
 import { ReservationsService } from "./reservations.service";
+import { CheckInService } from "./check-in.service";
+import { ReservationCrmService } from "./reservation-crm.service";
+import { ReservationStatsService } from "./reservation-stats.service";
 import { QREngineService } from "./qr-engine.service";
 import { Reservation } from "../../entities/reservation.entity";
 import { Event } from "../../entities/event.entity";
@@ -18,7 +21,19 @@ import { SettingsModule } from "../settings/settings.module";
     SettingsModule,
   ],
   controllers: [ReservationsController],
-  providers: [ReservationsService, QREngineService],
-  exports: [ReservationsService, QREngineService],
+  providers: [
+    ReservationsService,
+    CheckInService,
+    ReservationCrmService,
+    ReservationStatsService,
+    QREngineService,
+  ],
+  exports: [
+    ReservationsService,
+    CheckInService,
+    ReservationCrmService,
+    ReservationStatsService,
+    QREngineService,
+  ],
 })
 export class ReservationsModule {}

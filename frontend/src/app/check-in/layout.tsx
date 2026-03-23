@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { Navbar } from "@/components/ui/Navbar";
+
+const emptySubscribe = () => () => { };
 
 export default function CheckInLayout({
   children,
@@ -12,14 +14,10 @@ export default function CheckInLayout({
 }) {
   const router = useRouter();
   const { isAuthenticated, activeModule, user } = useAuthStore();
-  const [isHydrated, setIsHydrated] = useState(false);
+  const isHydrated = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   // Controller rolü için activeModule kontrolü bypass edilir
   const isController = user?.role === "controller";
-
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
 
   useEffect(() => {
     if (!isHydrated) return;

@@ -1464,17 +1464,14 @@ export const checkInApi = {
   getEventForCheckIn: (eventId: string) =>
     api.get(`/reservations/event/${eventId}/check-in-data`),
 
-  // QR kod ile check-in (mevcut reservationsApi.checkIn kullanır)
-  checkIn: (qrCodeHash: string) =>
-    api.post(`/reservations/check-in/${qrCodeHash}`),
+  // Paylaşılan endpoint'ler - reservationsApi'den referans (duplikasyon yerine)
+  checkIn: (qrCodeHash: string) => reservationsApi.checkIn(qrCodeHash),
+  getByQRCode: (qrCodeHash: string) => reservationsApi.getByQRCode(qrCodeHash),
+  getEventStats: (eventId: string) => reservationsApi.getEventStats(eventId),
+  searchForCheckIn: (query: string, eventId: string) =>
+    reservationsApi.search(query, eventId),
 
-  // Manuel arama (isim veya telefon ile)
-  searchForCheckIn: (query: string, eventId: string) => {
-    const params = new URLSearchParams({ q: query, eventId });
-    return api.get(`/reservations/search?${params.toString()}`);
-  },
-
-  // Walk-in misafir kaydı
+  // Check-in'e özgü endpoint'ler
   registerWalkIn: (data: {
     eventId: string;
     guestName: string;
@@ -1483,23 +1480,12 @@ export const checkInApi = {
     phone?: string;
   }) => api.post("/reservations/walk-in", data),
 
-  // Check-in geçmişi
   getCheckInHistory: (eventId: string, limit = 20) =>
     api.get(`/reservations/event/${eventId}/check-in-history?limit=${limit}`),
 
-  // Etkinlik istatistikleri (mevcut reservationsApi.getEventStats kullanır)
-  getEventStats: (eventId: string) =>
-    api.get(`/reservations/event/${eventId}/stats`),
-
-  // Kişi sayısı güncelle
   updateGuestCount: (reservationId: string, guestCount: number) =>
     api.patch(`/reservations/${reservationId}/guest-count`, { guestCount }),
 
-  // QR kod ile rezervasyon getir (mevcut reservationsApi.getByQRCode kullanır)
-  getByQRCode: (qrCodeHash: string) =>
-    api.get(`/reservations/qr/${qrCodeHash}`),
-
-  // Müsait masaları getir (walk-in için)
   getAvailableTables: (eventId: string) =>
     api.get(`/reservations/event/${eventId}/available-tables`),
 };

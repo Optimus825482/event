@@ -1241,7 +1241,7 @@ export function BulkImportModal({
                           {canCreateNew ? (
                             <button
                               onClick={() => toggleCreateNew(idx)}
-                              className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                              className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${
                                 row.createNew
                                   ? "bg-emerald-600 border-emerald-500"
                                   : "border-amber-600 hover:border-amber-400"
@@ -1252,7 +1252,7 @@ export function BulkImportModal({
                               )}
                             </button>
                           ) : (
-                            <X className="w-3 h-3 text-red-400 flex-shrink-0" />
+                              <X className="w-3 h-3 text-red-400 shrink-0" />
                           )}
                           <span className="font-medium">{row.staffName}</span>
                           <span className="text-slate-500">

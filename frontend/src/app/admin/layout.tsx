@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { Navbar } from "@/components/ui/Navbar";
 import { ToastProvider } from "@/components/ui/toast-notification";
+
+const emptySubscribe = () => () => { };
 
 export default function AdminModuleLayout({
   children,
@@ -13,11 +15,7 @@ export default function AdminModuleLayout({
 }) {
   const router = useRouter();
   const { isAuthenticated, activeModule, user } = useAuthStore();
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
+  const isHydrated = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   useEffect(() => {
     if (!isHydrated) return;

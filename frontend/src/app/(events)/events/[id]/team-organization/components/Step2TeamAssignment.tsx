@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardPaste,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,6 +164,15 @@ export function Step2TeamAssignment({
   const [showStaffDropdown, setShowStaffDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // Captain/Supervisor assignment
+  const [leaderSearch, setLeaderSearch] = useState("");
+  const [showLeaderDropdown, setShowLeaderDropdown] = useState(false);
+  const [selectedLeader, setSelectedLeader] = useState<Staff | null>(null);
+  const [leaderRole, setLeaderRole] = useState<"captain" | "supervisor">(
+    "captain",
+  );
+  const leaderSearchRef = useRef<HTMLDivElement>(null);
+
   // Positions from DB
   const [positions, setPositions] = useState<{ id: string; name: string }[]>(
     [],
@@ -229,6 +239,12 @@ export function Step2TeamAssignment({
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowStaffDropdown(false);
       }
+      if (
+        leaderSearchRef.current &&
+        !leaderSearchRef.current.contains(e.target as Node)
+      ) {
+        setShowLeaderDropdown(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -271,30 +287,66 @@ export function Step2TeamAssignment({
     [labelToIdMap],
   );
 
-  // ==================== DERIVED DATA ====================
-
-  // Flatten all staff assignments across all groups for display
-  const allAssignments = useMemo(() => {
-    const result: Array<{
-      groupId: string;
-      assignment: GroupStaffAssignment;
-      tableLabels: string[];
-      tableIds: string[];
-      teamId?: string;
-    }> = [];
-    tableGroups.forEach((g) => {
-      (g.staffAssignments || []).forEach((a) => {
-        result.push({
-          groupId: g.id,
-          assignment: a,
-          tableLabels: g.tableIds.map((id) => idToLabelMap.get(id) || id),
-          tableIds: g.tableIds,
-          teamId: g.assignedTeamId,
-        });
+  // UUID -> group mapping (grup icindeki masalari bulmak icin)
+  const tableIdToGroupMap = useMemo(() => {
+    const map = new Map<string, TableGroup>();
+    tableGroups.forEach((group) => {
+      group.tableIds.forEach((tid) => {
+        // tid label veya UUID olabilir
+        const uuid = labelToIdMap.get(tid) || tid;
+        map.set(uuid, group);
       });
     });
-    return result;
-  }, [tableGroups, idToLabelMap]);
+    return map;
+  }, [tableGroups, labelToIdMap]);
+
+  // Bir grubun tum masa UUID'lerini dondur
+  const getGroupTableUUIDs = useCallback(
+    (group: TableGroup): string[] => {
+      const tableSet = new Set(tables.map((t) => t.id));
+      return group.tableIds
+        .map((tid) => labelToIdMap.get(tid) || tid)
+        .filter((uuid) => tableSet.has(uuid));
+    },
+    [labelToIdMap, tables],
+  );
+
+  // ==================== DERIVED DATA ====================
+
+  // Canvas'ta secilen gruplari hesapla
+  const selectedGroups = useMemo(() => {
+    const groups: TableGroup[] = [];
+    const seen = new Set<string>();
+    selectedTableIds.forEach((tableId) => {
+      const group = tableIdToGroupMap.get(tableId);
+      if (group && !seen.has(group.id)) {
+        seen.add(group.id);
+        const groupUUIDs = getGroupTableUUIDs(group);
+        if (groupUUIDs.every((id) => selectedTableIds.includes(id))) {
+          groups.push(group);
+        }
+      }
+    });
+    return groups;
+  }, [selectedTableIds, tableIdToGroupMap, getGroupTableUUIDs]);
+
+  // Group-based display data for left panel
+  const groupDisplayList = useMemo(() => {
+    return tableGroups.map((g) => {
+      const team = teams.find((t) => t.id === g.assignedTeamId);
+      return {
+        group: g,
+        teamName: team?.name,
+        tableLabels: g.tableIds.map((id) => ({ id, label: idToLabelMap.get(id) || id })),
+        staffCount: g.staffAssignments?.length || 0,
+      };
+    });
+  }, [tableGroups, teams, idToLabelMap]);
+
+  // Flatten all staff assignments across all groups for footer stats
+  const totalStaffCount = useMemo(() => {
+    return tableGroups.reduce((sum, g) => sum + (g.staffAssignments?.length || 0), 0);
+  }, [tableGroups]);
 
   // Filtered staff for search
   const filteredStaff = useMemo(() => {
@@ -473,6 +525,7 @@ export function Step2TeamAssignment({
       shiftStart: formShiftStart,
       shiftEnd: formShiftEnd,
     };
+    console.log("🔧 handleSave:", { groupId: newGroup.id, staffId: selectedStaff.id, staffName: selectedStaff.fullName, tableCount: formTableIds.length });
     onAssignStaffToGroup(newGroup.id, [assignment]);
 
     // Reset form but keep modal open for next person
@@ -510,6 +563,40 @@ export function Step2TeamAssignment({
 
   const canSave = selectedStaff && formTableIds.length > 0;
 
+  // Captain/Supervisor atama
+  const handleAssignLeader = useCallback(() => {
+    if (!selectedLeader || selectedGroups.length === 0) return;
+
+    selectedGroups.forEach((group) => {
+      const alreadyAssigned = group.staffAssignments?.some(
+        (a) =>
+          a.staffId === selectedLeader.id &&
+          (a.role === "captain" || a.role === "supervisor"),
+      );
+      if (!alreadyAssigned) {
+        onAssignStaffToGroup(group.id, [
+          {
+            id: `leader-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            staffId: selectedLeader.id,
+            staffName: selectedLeader.fullName,
+            role: leaderRole,
+            shiftStart: "18:00",
+            shiftEnd: "02:00",
+          },
+        ]);
+      }
+    });
+    setSelectedLeader(null);
+    setLeaderSearch("");
+    handleClearSelection();
+  }, [
+    selectedLeader,
+    selectedGroups,
+    leaderRole,
+    onAssignStaffToGroup,
+    handleClearSelection,
+  ]);
+
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -532,7 +619,7 @@ export function Step2TeamAssignment({
         tabIndex={0}
       >
         {/* Left Panel - Assigned Staff List */}
-        <div className="w-80 bg-slate-800/50 rounded-lg border border-slate-700 flex flex-col flex-shrink-0 h-full">
+        <div className="w-80 bg-slate-800/50 rounded-lg border border-slate-700 flex flex-col shrink-0 h-full">
           {/* Header */}
           <div className="p-3 border-b border-slate-700">
             <div className="flex items-center justify-between mb-2">
@@ -562,114 +649,252 @@ export function Step2TeamAssignment({
             </p>
           </div>
 
-          {/* Assignments List */}
+          {/* Assignments List - Group Based */}
           <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5">
-            {allAssignments.length === 0 ? (
+            {groupDisplayList.length === 0 ? (
               <div className="text-center py-12 text-slate-500">
                 <Users className="w-12 h-12 mx-auto mb-3 opacity-40" />
                 <p className="text-sm font-medium">Henüz atama yok</p>
                 <p className="text-xs mt-1 text-slate-600">
-                  "Personel Ata" butonuna tıklayarak başlayın
+                  &quot;Personel Ata&quot; butonuna tıklayarak başlayın
                 </p>
               </div>
             ) : (
-              allAssignments.map(
-                ({ groupId, assignment, tableLabels, tableIds }) => {
-                  const roleConfig = STAFF_ROLES.find(
-                    (r) => r.value === assignment.role,
-                  );
-                  const staffInfo = allStaff.find(
-                    (s) => s.id === assignment.staffId,
-                  );
+                groupDisplayList.map(({ group, teamName, tableLabels }) => {
+                  const staffAssignments = group.staffAssignments || [];
 
                   return (
                     <div
-                      key={`${groupId}-${assignment.id}`}
+                      key={group.id}
                       className="rounded-lg border border-slate-700 bg-slate-800/60 overflow-hidden"
                     >
-                      <div className="flex items-center gap-2 px-3 py-2">
-                        {/* Avatar */}
+                      {/* Group header */}
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-700/30">
                         <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                          style={{
-                            backgroundColor: staffInfo?.color || "#6366f1",
-                          }}
-                        >
-                          {(assignment.staffName || "?")
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .slice(0, 2)}
-                        </div>
-
-                        {/* Info */}
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: group.color || "#6366f1" }}
+                        />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-white font-medium truncate">
-                            {assignment.staffName || staffInfo?.fullName}
-                          </div>
-                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                            <Badge
-                              className="text-[9px] px-1 py-0"
-                              style={{
-                                backgroundColor: `${roleConfig?.color || "#6366f1"}25`,
-                                color: roleConfig?.color || "#6366f1",
-                              }}
-                            >
-                              {roleConfig?.label || assignment.role}
-                            </Badge>
-                            <span>{tableLabels.length} masa</span>
-                            <span>
-                              {assignment.shiftStart}-{assignment.shiftEnd}
-                            </span>
+                          <div className="text-xs font-medium text-white truncate">
+                            {teamName || group.name}
                           </div>
                         </div>
-
+                        <span className="text-[10px] text-slate-400">
+                          {tableLabels.length} masa
+                        </span>
                         {/* Actions */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() =>
-                              handleOpenEdit(groupId, assignment, tableIds)
-                            }
-                            className="h-6 w-6 text-slate-400 hover:text-white"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDelete(groupId)}
-                            className="h-6 w-6 text-red-400 hover:text-red-300"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDelete(group.id)}
+                          className="h-5 w-5 text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
                       </div>
 
                       {/* Table chips */}
-                      <div className="px-3 pb-2 flex flex-wrap gap-1">
-                        {tableLabels.map((label) => (
+                      <div className="px-3 py-1 flex flex-wrap gap-1">
+                        {tableLabels.map(({ id, label }) => (
                           <span
-                            key={label}
+                            key={id}
                             className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300"
                           >
                             {label}
                           </span>
                         ))}
                       </div>
+
+                      {/* Staff list */}
+                      {staffAssignments.length > 0 && (
+                        <div className="px-3 pb-1.5 space-y-1">
+                          {staffAssignments.map((a) => {
+                            const roleConfig = STAFF_ROLES.find(
+                              (r) => r.value === a.role,
+                            );
+                            const staffInfo = allStaff.find(
+                            (s) => s.id === a.staffId,
+                          );
+                            return (
+                              <div
+                              key={a.id}
+                              className="flex items-center gap-1.5"
+                            >
+                              <div
+                                className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0"
+                                style={{
+                                  backgroundColor:
+                                    staffInfo?.color || "#6366f1",
+                                }}
+                              >
+                                {(a.staffName || "?")
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .slice(0, 2)}
+                              </div>
+                              <span className="text-[11px] text-white truncate flex-1">
+                                {a.staffName || staffInfo?.fullName}
+                              </span>
+                              <Badge
+                                className="text-[8px] px-1 py-0"
+                                style={{
+                                  backgroundColor: `${roleConfig?.color || "#6366f1"}25`,
+                                  color: roleConfig?.color || "#6366f1",
+                                }}
+                              >
+                                {roleConfig?.label || a.role}
+                              </Badge>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() =>
+                                  handleOpenEdit(group.id, a, group.tableIds)
+                                }
+                                  className="h-5 w-5 text-slate-400 hover:text-white"
+                                >
+                                  <Edit3 className="w-2.5 h-2.5" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
-                },
-              )
+                })
             )}
           </div>
+
+          {/* Captain/Supervisor Atama */}
+          {selectedGroups.length > 0 && (
+            <div className="p-3 border-t border-slate-700 bg-slate-900/50 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
+                <Shield className="w-3.5 h-3.5" />
+                Kaptan / Süpervizör Ata
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {selectedGroups.map((g) => (
+                  <Badge
+                    key={g.id}
+                    className="text-[9px] px-1.5 py-0.5"
+                    style={{
+                      backgroundColor: `${g.color || "#6366f1"}30`,
+                      color: g.color || "#6366f1",
+                    }}
+                  >
+                    {g.name}
+                  </Badge>
+                ))}
+              </div>
+              {/* Rol secimi */}
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant={leaderRole === "captain" ? "default" : "outline"}
+                  className={cn(
+                    "h-6 text-[10px] flex-1",
+                    leaderRole === "captain"
+                      ? "bg-amber-600 hover:bg-amber-700 text-white"
+                      : "border-slate-600 text-slate-400",
+                  )}
+                  onClick={() => setLeaderRole("captain")}
+                >
+                  Kaptan
+                </Button>
+                <Button
+                  size="sm"
+                  variant={leaderRole === "supervisor" ? "default" : "outline"}
+                  className={cn(
+                    "h-6 text-[10px] flex-1",
+                    leaderRole === "supervisor"
+                      ? "bg-purple-600 hover:bg-purple-700 text-white"
+                      : "border-slate-600 text-slate-400",
+                  )}
+                  onClick={() => setLeaderRole("supervisor")}
+                >
+                  Süpervizör
+                </Button>
+              </div>
+              {/* Personel secimi */}
+              <div ref={leaderSearchRef} className="relative">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                  <Input
+                    value={selectedLeader ? selectedLeader.fullName : leaderSearch}
+                    onChange={(e) => {
+                      setLeaderSearch(e.target.value);
+                      setShowLeaderDropdown(true);
+                      if (selectedLeader) setSelectedLeader(null);
+                    }}
+                    onFocus={() => setShowLeaderDropdown(true)}
+                    placeholder="Personel ara..."
+                    className="h-7 text-xs pl-7 bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                {showLeaderDropdown && !selectedLeader && (
+                  <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-md shadow-lg max-h-32 overflow-y-auto">
+                    {allStaff
+                      .filter(
+                        (s) =>
+                          s.fullName
+                            .toLowerCase()
+                            .includes(leaderSearch.toLowerCase()) ||
+                          (s.position || "")
+                            .toLowerCase()
+                            .includes(leaderSearch.toLowerCase()),
+                      )
+                      .slice(0, 8)
+                      .map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className="w-full text-left px-2 py-1.5 text-xs hover:bg-slate-700 flex items-center gap-2"
+                          onClick={() => {
+                            setSelectedLeader(s);
+                            setLeaderSearch("");
+                            setShowLeaderDropdown(false);
+                          }}
+                        >
+                          <div
+                            className="w-5 h-5 rounded-full shrink-0"
+                            style={{
+                              backgroundColor: s.color || "#6366f1",
+                            }}
+                          />
+                          <div className="min-w-0">
+                            <div className="text-white truncate">
+                              {s.fullName}
+                            </div>
+                            {s.position && (
+                              <div className="text-[9px] text-slate-400">
+                                {s.position}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <Button
+                size="sm"
+                disabled={!selectedLeader}
+                onClick={handleAssignLeader}
+                className="w-full h-7 text-xs bg-amber-600 hover:bg-amber-700 disabled:opacity-40"
+              >
+                <Check className="w-3 h-3 mr-1" />
+                {selectedGroups.length} gruba{" "}
+                {leaderRole === "captain" ? "Kaptan" : "Süpervizör"} ata
+              </Button>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="p-3 border-t border-slate-700 bg-slate-800/30">
             <div className="text-xs text-slate-400">
-              {allAssignments.length} personel atanmış •{" "}
-              {new Set(allAssignments.flatMap((a) => a.tableLabels)).size} masa
+              {tableGroups.length} grup • {totalStaffCount} personel •{" "}
+              {new Set(tableGroups.flatMap((g) => g.tableIds.map((id) => idToLabelMap.get(id) || id))).size} masa
               kapsanıyor
             </div>
           </div>
@@ -697,12 +922,26 @@ export function Step2TeamAssignment({
               isLassoSelecting={isLassoSelecting}
               lassoStart={lassoStart}
               lassoEnd={lassoEnd}
-              onTableClick={(tableId) => {
-                setSelectedTableIds((prev) =>
-                  prev.includes(tableId)
-                    ? prev.filter((id) => id !== tableId)
-                    : [...prev, tableId],
-                );
+              onTableClick={(tableId: string) => {
+                const group = tableIdToGroupMap.get(tableId);
+                if (group) {
+                  // Gruptaki tum masalari sec/kaldir
+                  const groupUUIDs = getGroupTableUUIDs(group);
+                  const allSelected = groupUUIDs.every((id) =>
+                    selectedTableIds.includes(id),
+                  );
+                  setSelectedTableIds((prev) =>
+                    allSelected
+                      ? prev.filter((id) => !groupUUIDs.includes(id))
+                      : [...new Set([...prev, ...groupUUIDs])],
+                  );
+                } else {
+                  setSelectedTableIds((prev) =>
+                    prev.includes(tableId)
+                      ? prev.filter((id) => id !== tableId)
+                      : [...prev, tableId],
+                  );
+                }
               }}
               onCanvasMouseDown={handleCanvasMouseDown}
               onCanvasMouseMove={handleCanvasMouseMove}
@@ -808,6 +1047,7 @@ export function Step2TeamAssignment({
                 <select
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value as StaffRole)}
+                  aria-label="Görev seçimi"
                   className="w-full rounded-md bg-slate-900 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {STAFF_ROLES.map((r) => (
@@ -870,7 +1110,7 @@ export function Step2TeamAssignment({
 
               {/* 4. Vardiya Saatleri */}
               <div>
-                <label className="text-sm font-medium text-slate-300 mb-1 block flex items-center gap-2">
+                <label className="text-sm font-medium text-slate-300 mb-1 flex items-center gap-2">
                   <Clock className="w-4 h-4" />
                   Çalışma Saatleri
                 </label>

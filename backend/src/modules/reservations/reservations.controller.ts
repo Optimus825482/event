@@ -18,6 +18,9 @@ import {
   ApiQuery,
 } from "@nestjs/swagger";
 import { ReservationsService } from "./reservations.service";
+import { CheckInService } from "./check-in.service";
+import { ReservationCrmService } from "./reservation-crm.service";
+import { ReservationStatsService } from "./reservation-stats.service";
 import {
   CreateReservationDto,
   UpdateReservationDto,
@@ -30,6 +33,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Public } from "../auth/decorators/public.decorator";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 import { SettingsService } from "../settings/settings.service";
+import { Throttle } from "@nestjs/throttler";
 
 @ApiTags("Reservations")
 @ApiBearerAuth("JWT-auth")
@@ -38,6 +42,9 @@ import { SettingsService } from "../settings/settings.service";
 export class ReservationsController {
   constructor(
     private reservationsService: ReservationsService,
+    private checkInService: CheckInService,
+    private crmService: ReservationCrmService,
+    private statsService: ReservationStatsService,
     private settingsService: SettingsService,
   ) {}
 
@@ -167,7 +174,7 @@ export class ReservationsController {
   @ApiOperation({ summary: "QR kod ile rezervasyon getir (Public)" })
   async getByQRCode(@Param("qrCodeHash") qrCodeHash: string) {
     await this.ensureQrCodeEnabled();
-    return this.reservationsService.getReservationByQRCode(qrCodeHash);
+    return this.checkInService.getReservationByQRCode(qrCodeHash);
   }
 
   /**
@@ -176,11 +183,12 @@ export class ReservationsController {
    * Public: Kiosk/tablet modunda auth gerekmez
    */
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post("check-in/:qrCodeHash")
   @ApiOperation({ summary: "QR kod ile check-in (Public)" })
   async checkIn(@Param("qrCodeHash") qrCodeHash: string) {
     await this.ensureQrCodeEnabled();
-    return this.reservationsService.checkIn(qrCodeHash);
+    return this.checkInService.checkIn(qrCodeHash);
   }
 
   @Post(":id/cancel")
@@ -196,7 +204,7 @@ export class ReservationsController {
   @Get("event/:eventId/stats")
   @ApiOperation({ summary: "Etkinlik rezervasyon istatistikleri" })
   getEventStats(@Param("eventId") eventId: string) {
-    return this.reservationsService.getEventStats(eventId);
+    return this.statsService.getEventStats(eventId);
   }
 
   @Get("event/:eventId/table/:tableId")
@@ -205,7 +213,7 @@ export class ReservationsController {
     @Param("eventId") eventId: string,
     @Param("tableId") tableId: string,
   ) {
-    return this.reservationsService.getByTable(eventId, tableId);
+    return this.statsService.getByTable(eventId, tableId);
   }
 
   @Get("event/:eventId/table/:tableId/available")
@@ -218,13 +226,13 @@ export class ReservationsController {
   }
 
   /**
-   * Müşteri geçmişi getir - CRM Entegrasyonu
+   * Müşteri geçmişi - CRM Entegrasyonu
    * Requirement: 6.1 - VIP score ve event geçmişi
    */
   @Get("customer/:customerId/history")
   @ApiOperation({ summary: "Müşteri rezervasyon geçmişi" })
   getCustomerHistory(@Param("customerId") customerId: string) {
-    return this.reservationsService.getCustomerHistory(customerId);
+    return this.crmService.getCustomerHistory(customerId);
   }
 
   /**
@@ -234,7 +242,7 @@ export class ReservationsController {
   @Get("customer/:customerId/blacklist-status")
   @ApiOperation({ summary: "Müşteri kara liste durumu" })
   checkBlacklistStatus(@Param("customerId") customerId: string) {
-    return this.reservationsService.checkBlacklistStatus(customerId);
+    return this.crmService.checkBlacklistStatus(customerId);
   }
 
   /**
@@ -244,7 +252,7 @@ export class ReservationsController {
   @Get("customer/:customerId/info")
   @ApiOperation({ summary: "Müşteri rezervasyon bilgileri" })
   getCustomerInfoForReservation(@Param("customerId") customerId: string) {
-    return this.reservationsService.getCustomerInfoForReservation(customerId);
+    return this.crmService.getCustomerInfoForReservation(customerId);
   }
 
   @Delete(":id")
@@ -264,7 +272,7 @@ export class ReservationsController {
   @Get("event/:eventId/check-in-data")
   @ApiOperation({ summary: "Check-in için etkinlik verileri (Public)" })
   getEventForCheckIn(@Param("eventId") eventId: string) {
-    return this.reservationsService.getEventForCheckIn(eventId);
+    return this.checkInService.getEventForCheckIn(eventId);
   }
 
   /**
@@ -278,7 +286,7 @@ export class ReservationsController {
     @Param("eventId") eventId: string,
     @Query("limit") limit?: string,
   ) {
-    return this.reservationsService.getCheckInHistory(
+    return this.checkInService.getCheckInHistory(
       eventId,
       limit ? parseInt(limit, 10) : 20,
     );
@@ -292,7 +300,7 @@ export class ReservationsController {
   @Get("event/:eventId/available-tables")
   @ApiOperation({ summary: "Müsait masalar (Public)" })
   getAvailableTables(@Param("eventId") eventId: string) {
-    return this.reservationsService.getAvailableTables(eventId);
+    return this.checkInService.getAvailableTables(eventId);
   }
 
   /**
@@ -300,10 +308,11 @@ export class ReservationsController {
    * Requirement: Check-in Module 11.1, 11.2, 11.4
    */
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post("walk-in")
   @ApiOperation({ summary: "Walk-in misafir kaydı (Public)" })
   registerWalkIn(@Body() dto: WalkInDto) {
-    return this.reservationsService.registerWalkIn(dto);
+    return this.checkInService.registerWalkIn(dto);
   }
 
   /**
@@ -311,9 +320,22 @@ export class ReservationsController {
    * Requirement: Check-in Module 12.1
    */
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Patch(":id/guest-count")
   @ApiOperation({ summary: "Kişi sayısı güncelle (Public)" })
   updateGuestCount(@Param("id") id: string, @Body() dto: UpdateGuestCountDto) {
-    return this.reservationsService.updateGuestCount(id, dto.guestCount);
+    return this.checkInService.updateGuestCount(id, dto.guestCount);
+  }
+
+  // ==================== ADMIN OPERATIONS ====================
+
+  /**
+   * Gelmeyen misafirleri NO_SHOW olarak işaretle
+   * Event bittikten sonra PENDING/CONFIRMED → NO_SHOW
+   */
+  @Post("event/:eventId/mark-no-shows")
+  @ApiOperation({ summary: "Gelmeyen misafirleri NO_SHOW olarak işaretle" })
+  markNoShows(@Param("eventId") eventId: string) {
+    return this.reservationsService.markNoShows(eventId);
   }
 }

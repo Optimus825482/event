@@ -21,8 +21,6 @@ import {
   ChevronRight,
   Star,
   Calendar,
-  TrendingUp,
-  Eye,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -211,13 +209,13 @@ export default function AdminUsersPage() {
       ]);
       setUsers(usersRes.data);
       setStats(statsRes.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Kullanıcılar yüklenemedi:", error);
       toast.error("Kullanıcılar yüklenemedi");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadUsers();
@@ -254,15 +252,17 @@ export default function AdminUsersPage() {
 
     // Sıralama
     result.sort((a, b) => {
-      let aVal: any = a[sortField];
-      let bVal: any = b[sortField];
+      let aVal: string | number = '';
+      let bVal: string | number = '';
+      const rawA = a[sortField];
+      const rawB = b[sortField];
 
       if (sortField === "isActive") {
-        aVal = aVal ? 1 : 0;
-        bVal = bVal ? 1 : 0;
-      } else if (typeof aVal === "string") {
-        aVal = aVal.toLowerCase();
-        bVal = (bVal || "").toLowerCase();
+        aVal = rawA ? 1 : 0;
+        bVal = rawB ? 1 : 0;
+      } else if (typeof rawA === "string") {
+        aVal = rawA.toLowerCase();
+        bVal = (typeof rawB === "string" ? rawB : "").toLowerCase();
       }
 
       if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
@@ -324,8 +324,9 @@ export default function AdminUsersPage() {
       setShowCreateModal(false);
       setFormData(initialFormData);
       loadUsers();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Kullanıcı oluşturulamadı");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Kullanıcı oluşturulamadı");
     } finally {
       setSaving(false);
     }
@@ -359,8 +360,9 @@ export default function AdminUsersPage() {
       setEditingUser(null);
       setFormData(initialFormData);
       loadUsers();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Kullanıcı güncellenemedi");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Kullanıcı güncellenemedi");
     } finally {
       setSaving(false);
     }
@@ -374,8 +376,9 @@ export default function AdminUsersPage() {
       toast.success("Kullanıcı silindi");
       setDeleteConfirm(null);
       loadUsers();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Kullanıcı silinemedi");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Kullanıcı silinemedi");
     } finally {
       setSaving(false);
     }
@@ -388,8 +391,9 @@ export default function AdminUsersPage() {
         user.isActive ? "Kullanıcı pasif yapıldı" : "Kullanıcı aktif yapıldı"
       );
       loadUsers();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Durum değiştirilemedi");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Durum değiştirilemedi");
     }
   };
 
@@ -408,8 +412,9 @@ export default function AdminUsersPage() {
       toast.success("Şifre değiştirildi");
       setShowPasswordModal(null);
       setNewPassword("");
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Şifre değiştirilemedi");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Şifre değiştirilemedi");
     } finally {
       setSaving(false);
     }
@@ -436,8 +441,9 @@ export default function AdminUsersPage() {
         `Username migration tamamlandı: ${res.data.migrated} güncellendi, ${res.data.skipped} atlandı`
       );
       loadUsers();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Migration başarısız");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Migration başarısız");
     } finally {
       setMigrating(false);
     }
@@ -449,7 +455,7 @@ export default function AdminUsersPage() {
     try {
       const res = await leaderApi.getStaffReviews(user.id);
       setStaffReviews(res.data || []);
-    } catch (error: any) {
+    } catch {
       toast.error("Değerlendirmeler yüklenemedi");
       setStaffReviews([]);
     } finally {
@@ -938,7 +944,7 @@ export default function AdminUsersPage() {
             }
           }}
         >
-          <DialogContent className="bg-slate-800 border-slate-700 !max-w-[500px]">
+          <DialogContent className="bg-slate-800 border-slate-700 max-w-[500px]!">
             <DialogHeader>
               <DialogTitle>
                 {editingUser ? "Kullanıcı Düzenle" : "Yeni Kullanıcı"}
@@ -1173,7 +1179,7 @@ export default function AdminUsersPage() {
             setStaffReviews([]);
           }}
         >
-          <DialogContent className="bg-slate-800 border-slate-700 !max-w-[700px] max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogContent className="bg-slate-800 border-slate-700 max-w-[700px]! max-h-[85vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
                 <Avatar className="w-10 h-10">
