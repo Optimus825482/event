@@ -154,6 +154,9 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
 
   // ==================== START ====================
 
+  // Graceful shutdown - connection pool ve kaynakların düzgün kapanması
+  app.enableShutdownHooks();
+
   const port = configService.get("PORT") || 4000;
   await app.listen(port);
 
@@ -169,6 +172,9 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
     `🌐 CORS: ${
       isProduction ? allowedOrigins.join(", ") : "Open (development)"
     }`,
+  );
+  logger.log(
+    `💾 Memory limit: ${Math.round(require("v8").getHeapStatistics().heap_size_limit / 1024 / 1024)}MB`,
   );
 }
 bootstrap();

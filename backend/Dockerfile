@@ -46,4 +46,5 @@ USER node
 
 EXPOSE 4004
 
-CMD ["node", "dist/main.js"]
+# Node.js heap limit - Docker memory limitinin %75'i (1G container -> 768MB heap)
+CMD ["node", "--max-old-space-size=768", "dist/main.js"]

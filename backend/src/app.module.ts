@@ -156,9 +156,9 @@ import { ExcelImportModule } from "./modules/excel-import/excel-import.module";
         ),
         // Connection pool ayarları - Optimize edilmiş
         extra: {
-          max: parseInt(configService.get("DB_POOL_MAX") || "50", 10),
-          min: parseInt(configService.get("DB_POOL_MIN") || "10", 10),
-          idleTimeoutMillis: 30000,
+          max: parseInt(configService.get("DB_POOL_MAX") || "20", 10),
+          min: parseInt(configService.get("DB_POOL_MIN") || "5", 10),
+          idleTimeoutMillis: 60000,
           connectionTimeoutMillis: 10000,
           query_timeout: 30000,
           statement_timeout: 60000,

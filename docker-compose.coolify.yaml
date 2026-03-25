@@ -97,6 +97,12 @@ services:
       - uploads_data:/app/uploads
     expose:
       - "4004"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4004/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - coolify
       - default
@@ -118,6 +124,12 @@ services:
       HOSTNAME: "0.0.0.0"
     expose:
       - "3003"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - coolify
       - default

@@ -49,4 +49,5 @@ USER nextjs
 
 EXPOSE 3003
 
-CMD ["node", "server.js"]
+# Node.js heap limit - Docker memory limitinin %75'i (1G container -> 768MB heap)
+CMD ["node", "--max-old-space-size=768", "server.js"]
