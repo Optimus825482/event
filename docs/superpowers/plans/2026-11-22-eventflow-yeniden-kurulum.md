@@ -218,14 +218,116 @@ Kurallar: (1) `admin` her şeye izinlidir. (2) Rol taban matrisi: `organizer` �
 
 ---
 
-## Sonraki aşamalar (her biri başlamadan önce bu dosyaya görev düzeyinde eklenir)
+## Aşama 2–5 ortak kuralları
 
-| Aşama | Görevler | Model |
-|---|---|---|
-| 2 | Etkinlik + masa yerleşimi (tuval), müşteri, personel + katalog, ekip + masa grubu + atama, davetiye, ayarlar + kullanıcı yönetimi | Sonnet (paralel), tuval ve atama Opus |
-| 3 | Rezervasyon servisi, check-in (koşullu UPDATE, idempotency), QR belirteci, istatistikler | Opus |
-| 4 | SSE + LISTEN/NOTIFY, çevrimdışı kuyruk + PWA, Excel içe aktarma, değerlendirme, bildirim, dosya yükleme | Sonnet; SSE Opus |
-| 5 | Taşıma betiği (eski şema → yeni), yetim raporu, Playwright uçtan uca, eski `backend/` ve `frontend/` kaldırma | Opus + Sonnet |
+- **Katmanlar (her alan `web/src/features/<alan>/`):** `schemas.ts` (Zod girdi şemaları), `service.ts` (iş mantığı; imza `(db: Db | Tx, actor: Actor, input) => Promise<…>`; Next'e bağımlı değildir, testler bunu çağırır), `queries.ts` (okuma; Sunucu Bileşenleri çağırır, ilk satırda `authorize`), `actions.ts` (yalnızca `defineAction` ile `service` sarmalayıcıları), `components/` (istemci bileşenleri). Sayfalar `web/src/app/(app)/<rota>/`.
+- **Hatalar:** iş kuralı ihlali `DomainError("conflict" | "not_found", "<Türkçe mesaj>")`; yetki `authorize(...)`. Servis, veritabanı hata kodunu (`23505`, `23503`) yakalayıp anlamlı `DomainError`'a çevirir.
+- **Transaction:** birden fazla satır yazan her servis işlevi `db.transaction` içinde çalışır.
+- **Testler:** `web/tests/features/<alan>/*.test.ts`, gerçek veritabanı, `tests/helpers/factories.ts` ile veri. Her ajan kendi test veritabanını kullanır: `TEST_DB_NAME=eventflow_test_<alan> npx vitest run tests/features/<alan>`. Ajanlar `npm run build` çalıştırmaz.
+- **Davranış kaynağı:** eski kod (`backend/src/modules/<alan>`, `frontend/src/app/...`). Eski davranış ile bu plan/spec çelişirse spec geçerlidir; çelişki raporda belirtilir.
+- **Arayüz:** `web/src/components/ui` bileşenleri; her rota için `loading.tsx` ve boş durum; formlar action sonucundaki `fieldErrors`'ı alan altında gösterir. Dosya başına en çok 400 satır.
+
+## Aşama 2 — Alan modülleri (paralel)
+
+### Task 8: Etkinlikler (Sonnet)
+
+`features/events`; rotalar `/events`, `/events/new`, `/events/[id]`. Servis: `createEvent`, `updateEvent`, `changeEventStatus` (`canTransitionEvent`; geçersiz geçiş `conflict`), `deleteEvent` (yalnızca `draft` ve rezervasyonsuz), `listEvents`, `getEvent`. `starts_at` oluşturmada geçmişte olamaz.
+
+**Üretir:** `getEventOrThrow(db, id)`, `listEventTables(db, eventId)`, `totalCapacity(db, eventId)`.
+
+Testler: geçiş matrisi servis üzerinden; `completed → draft` reddi; rezervasyonu olan etkinlik silinemez; bitiş ≤ başlangıç `invalid`; `staff` rolü oluşturamaz.
+
+### Task 9: Mekân ve masa yerleşimi (Opus)
+
+`features/venue`; rotalar `/events/[id]/venue`, `/venues` (şablonlar), `/settings/table-types`. Servis: `saveLayout(db, actor, { eventId, tables: TableInput[], decor })` — tek transaction'da ekle/güncelle/sil; rezervasyonu veya ataması olan masa silinmek istenirse tümü geri alınır ve `conflict` mesajı masa etiketlerini listeler; etiket etkinlik içinde tekil; `applyVenueTemplate`, `saveAsTemplate`. Tuval: eski `EventCanvas`/`useVenueState` davranışı Konva ile, tek durum kaynağı (Zustand store), geri al/yinele; 3B önizleme `next/dynamic` ile tembel yüklenir ve eski bileşenden parçalanarak taşınır.
+
+Testler: 200 masalık yerleşim kaydı atomik; rezervasyonlu masa silme reddi ve hiçbir değişikliğin yazılmaması; yinelenen etiket reddi; kapasite 0 reddi; şablon uygulama mevcut rezervasyonlu masaları korur.
+
+### Task 10: Müşteriler (Sonnet)
+
+`features/customers`; rotalar `/customers`, `/customers/[id]`, `/guests`. Servis: `createCustomer`, `updateCustomer`, `searchCustomers` (ad/telefon, sayfalı), `setBlacklist`, etiket ve not işlemleri. `normalizePhone(raw): string | null` (Türkiye: `+90XXXXXXXXXX`), `normalizeEmail`.
+
+**Üretir:** `findOrCreateCustomer(tx, { customerId?, phone?, email?, fullName? }): Promise<{ id: string; isBlacklisted: boolean }>` — sıra: id → telefon → e-posta → ad varsa yeni; eşzamanlı çağrıda mükerrer oluşturmaz (`ON CONFLICT`).
+
+Testler: aynı telefonla 10 eşzamanlı `findOrCreateCustomer` → tek satır; `0532 111 22 33`, `+905321112233`, `5321112233` aynı müşteri; adaş ama farklı telefonlu iki müşteri birleşmez.
+
+### Task 11: Personel ve kataloglar (Sonnet)
+
+`features/staff`; rotalar `/staff`, `/staff/[id]`, `/settings/organization` (departman, pozisyon, görev yeri, vardiya şablonları, personel rolleri/renkleri). Servis: personel CRUD, `sicil_no` tekil, pasifleştirme (ataması olan personel silinemez), katalog CRUD.
+
+**Üretir:** `listActiveStaff(db, filter)`.
+
+Testler: yinelenen sicil `conflict`; ataması olan personel silme reddi; pasif personel `listActiveStaff`'ta yok.
+
+### Task 12: Ekip, masa grubu ve atama (Opus)
+
+`features/staffing`; rota `/events/[id]/team-organization`. Servis: `saveTeams` (ekip kimlikleri korunur: güncelle/ekle/sil farkı), `saveTableGroups` (bir masa tek grupta; taşıma atomik), `assignTeamToGroup`, `saveAssignments` (masa + özel görev + servis noktası atamaları tek transaction; özel görevler kaybolmaz), `autoAssign(strategy: "balanced" | "zone" | "random")` (localar hariç), `saveExtraStaff`, `applyOrganizationTemplate` (atomik; personel `staff.id` ile eşlenir, ad ile değil; hedef etkinlikte olmayan masa kimlikleri raporlanır). Arayüz: eski sihirbazın adımları, her adım ayrı bileşen.
+
+Testler: spec §13 madde 10 ve 11; toplu kayıt ortasında hata → hiçbir değişiklik yok; ekip güncellemede `table_groups.team_id` bağları korunur; aynı personel aynı vardiyaya iki kez atanamaz (`conflict`).
+
+### Task 13: Ayarlar, kullanıcı yönetimi, dosya yükleme (Sonnet)
+
+`features/settings`, `features/users`, `features/uploads`; rotalar `/admin/users`, `/admin/settings`, `/api/uploads/[...path]`. Kullanıcı: oluştur (Better Auth iç bağdaştırıcısı), rol/izin düzenle, `deactivateUser`/`reactivateUser`, parola sıfırla (yalnızca admin). Ayarlar: sistem ayarları; SMTP parolası AES-256-GCM ile şifreli (`SETTINGS_ENCRYPTION_KEY`), hiçbir sorgu/yanıtta düz metin dönmez.
+
+**Üretir:** `saveImage(file: File, kind: "avatar"|"event"|"invitation"|"logo"): Promise<{ path: string }>` (dosya imzası denetimi, `sharp` ile WebP'ye yeniden kodlama, rastgele ad, ≤5 MB), `deleteImage(path)`, yetki denetimli sunum handler'ı.
+
+Testler: PNG uzantılı HTML dosyası reddedilir; `../` içeren yol 404; SMTP parolası `getSettings` çıktısında yok; admin olmayan kullanıcı oluşturamaz; son admin pasifleştirilemez.
+
+### Task 14: Davetiyeler (Sonnet)
+
+`features/invitations`; rotalar `/events/[id]/invitation`, `/templates`, herkese açık `/i/[token]`. Şablon CRUD, etkinlik davetiyesi, editör (eski `InvitationEditor` parçalanarak), e-posta gönderimi (nodemailer), WhatsApp bağlantısı. Herkese açık sayfa yalnızca imzalı belirteçle erişilir ve yalnızca davetiye için gereken alanları döndürür.
+
+Testler: geçersiz/başka etkinliğe ait belirteç 404; herkese açık yanıtta telefon/e-posta yok; SMTP yapılandırılmamışsa anlaşılır hata.
+
+## Aşama 3 — Rezervasyon ve check-in (Opus, sıralı)
+
+### Task 15: Rezervasyon servisi
+
+`features/reservations`; rotalar `/reservations`, `/reservations/[eventId]`, `/reservations/[eventId]/new`. Servis: `createReservation` (müşteri `findOrCreateCustomer`; kara listede ise `conflict`, `actor.role === "admin"` ve `overrideBlacklist: true` ile aşılır; kapasite aşımı `conflict`; durum `confirmed`; `23505` → "Bu masa için aktif bir rezervasyon var"), `updateReservation` (masa değişimi aynı kurallar), `changeReservationStatus` (`canTransitionReservation`), `cancelReservation`, `markNoShows(eventId)` (yalnızca `completed` etkinlik; müşteri sayaçları güncellenir), `availableTables(eventId)`. QR: `signQrToken(reservationId): string`, `verifyQrToken(token): { reservationId } | null` (HMAC-SHA256, `QR_SIGNING_KEY`; masa bilgisi taşımaz).
+
+Testler: spec §13 madde 1, 4, 5, 6, 7, 9, 15 — eşzamanlılık testleri ayrı havuz bağlantılarıyla.
+
+### Task 16: Check-in
+
+`features/check-in`; rotalar `/check-in`, `/check-in/[eventId]`, `POST /api/check-in` (çevrimdışı kuyruk için). Servis: `checkIn({ token | legacyHash | reservationId, idempotencyKey, clientTimestamp })` — tek koşullu `UPDATE … WHERE status IN ('pending','confirmed','no_show') RETURNING`; aynı `idempotencyKey` tekrarında aynı sonucu döner; zaten yapılmışsa `{ outcome: "already_checked_in" }`; iptal edilmişse `conflict`; müşteri `total_attended_events` aynı transaction'da +1; `registerWalkIn`, `updateGuestCount` (kapasite aşımı reddedilir), `eventStats(eventId)` (beklenen = pending + confirmed + checked_in; kalan = pending + confirmed). Eski 3 özellik testi taşınır.
+
+Testler: spec §13 madde 2, 3, 8 (QR kısmı); aynı QR ile 10 eşzamanlı check-in → tek başarı, sayaç +1; eski `legacy_qr_hash` ile check-in.
+
+## Aşama 4 — Tamamlayıcılar
+
+### Task 17: Canlı güncelleme (Opus)
+
+`features/realtime`; `GET /api/events/[eventId]/stream` (SSE). Tek paylaşımlı `LISTEN` bağlantısı; `publish(tx, channel, payload)` `pg_notify` çağırır (commit ile birlikte yayılır); istemci kancası `useEventStream(eventId)` TanStack Query önbelleğini geçersiz kılar. Yetki: akışa bağlanmak `check_in:view` veya `reservations:view` ister. Olaylar: `reservation.changed`, `guest.checked_in`, `table.updated`, `stats.updated`, `notification.created`.
+
+Testler: geri alınan transaction olay yaymaz; yetkisiz bağlantı 403; bağlantı kopunca dinleyici temizlenir.
+
+### Task 18: Çevrimdışı check-in ve PWA (Sonnet)
+
+Tek IndexedDB şeması, tek kuyruk; kuyruk `POST /api/check-in`'e `idempotencyKey` ile gönderir; service worker kimlik doğrulamalı API yanıtlarını önbelleğe almaz; QR okuyucu eski `qr-scanner.tsx`'ten taşınır.
+
+Testler: kuyruk tekrar gönderimde mükerrer check-in üretmez (kuyruk mantığı saf işlev olarak test edilir).
+
+### Task 19: Excel içe aktarma (Sonnet)
+
+`features/import`; rezervasyon ve personel/atama içe aktarma; `exceljs`; ayrıştırma sunucuda; önizleme → onay; satırlar `createReservation` / `saveAssignments`'tan geçer; satır bazlı hata raporu; müşteri adla değil telefon/e-posta ile eşlenir.
+
+Testler: spec §13 madde 8; dolu masaya satır reddi; kapasite aşımı reddi; 10 MB üstü dosya reddi.
+
+### Task 20: Değerlendirmeler ve bildirimler (Sonnet)
+
+`features/reviews` (`/leader/*`): puan = Σ(puan/5 × ağırlık)/Σağırlık × 100, ağırlıklar 15/15/15/20/10/10/5/10; eşikler ≥90, ≥80, ≥60, ≥40, ≥20; `review_enabled` kapalıyken yazılamaz; tamamlanan kilitlenir; lider yalnızca kendi ekibi. `features/notifications`: oluştur, okundu, hedef rol.
+
+Testler: spec §13 madde 12, 13.
+
+## Aşama 5 — Taşıma ve kapanış
+
+### Task 21: Veri taşıma betiği (Opus)
+
+`web/scripts/migrate-legacy/`: `LEGACY_DATABASE_URL`'den salt-okunur okur, yeni şemaya yazar; `--dry-run`; `LEGACY_TZ` (varsayılan `Europe/Istanbul`); eşleme `task-4-report.md` tablosundan; rapor: yetim masa referansları, eşleşmeyen personel, çakışan rezervasyonlar, yalnızca harf büyüklüğüyle ayrışan kullanıcı adları, organizatörsüz etkinlikler. Yerel doğrulama: `docs/legacy/schema.sql` özel kümeye yüklenir, sentetik veriyle test edilir.
+
+### Task 22: Uçtan uca testler ve kapanış (Sonnet)
+
+Playwright: giriş, etkinlik + yerleşim, rezervasyon, QR check-in. `README.md`, `DEPLOYMENT.md` güncellenir; `docker-compose` `web` servisine geçer. Eski `backend/` ve `frontend/` kaldırılması **kullanıcı onayı gerektirir** (canlı geçişten sonra).
 
 ## Ana oturumun yapamayacağı, kullanıcıya kalan işler
 
