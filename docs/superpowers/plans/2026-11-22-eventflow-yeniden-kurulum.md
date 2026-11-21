@@ -34,7 +34,7 @@
 
 ## Aşama 0 — Eski sistemde acil önlemler
 
-### Görev 0A: Depo temizliği (Haiku)
+### Task 0A: Depo temizliği (Haiku)
 
 **Files:**
 - Modify: `.gitignore`
@@ -46,7 +46,7 @@
 - [ ] **Step 2:** `.gitignore`'a ekle: `personnel_images_correct/`, `exc/`, `*.xlsx`, `*.bak`, `*.lnk`, `*.code-workspace`, `backend/uploads/`, `backend/seed-data.sql` (mevcut `!backend/seed-data.sql` istisnasını kaldır), `web/.pgdata/`, `web/.env*` (`!web/.env.example`), `web/uploads/`.
 - [ ] **Step 3:** Yukarıdaki silme işlemlerini uygula. Doğrula: `git ls-files | grep -c "personnel_images_correct\|\.xlsx$\|seed-data"` → `0`; `ls backend/seed-data.sql personnel_images_correct | head -2` dosyaların diskte durduğunu gösterir.
 
-### Görev 0B: Eski backend güvenlik düzeltmeleri (Sonnet)
+### Task 0B: Eski backend güvenlik düzeltmeleri (Sonnet)
 
 **Files:**
 - Modify: `backend/src/modules/auth/auth.controller.ts`, `backend/src/modules/reservations/reservations.controller.ts`, `backend/src/modules/events/events.controller.ts`, `backend/src/modules/health/health.controller.ts`, `backend/src/main.ts`, `backend/src/modules/realtime/realtime.gateway.ts`, `backend/src/modules/upload/upload.service.ts`, `backend/src/common/**/http-exception.filter.ts`, `docker-compose.yml`, `docker-compose.coolify.yaml`
@@ -89,7 +89,7 @@ web/
   tests/**                       testler (kaynakla aynı alt yol)
 ```
 
-### Görev 1: İskelet, yerel veritabanı, test altyapısı (Sonnet)
+### Task 1: İskelet, yerel veritabanı, test altyapısı (Sonnet)
 
 **Files:** Create: `web/**` (yukarıdaki yapıdan `scripts/pg.mjs`, `drizzle.config.ts`, `src/env.ts`, `src/db/client.ts`, `src/features/auth/roles.ts`, `tests/helpers/db.ts`, `tests/env.test.ts`, `tests/db.test.ts`, `vitest.config.ts`, `.env.example`, `package.json`, yapılandırma dosyaları)
 
@@ -107,7 +107,7 @@ web/
 - [ ] **Step 5:** Uygula; havuz bağlantısında `options: "-c timezone=UTC"`.
 - [ ] **Step 6:** `npm run db:start && npm run typecheck && npm run lint && npm test` → hepsi geçer; `npm run build` → başarılı.
 
-### Görev 2: Durum makineleri (Haiku)
+### Task 2: Durum makineleri (Haiku)
 
 **Files:** Create: `web/src/domain/event-status.ts`, `web/src/domain/reservation-status.ts`, `web/tests/domain/event-status.test.ts`, `web/tests/domain/reservation-status.test.ts`
 
@@ -120,7 +120,7 @@ web/
 - [ ] **Step 1:** Tablo güdümlü testler: her iki makine için 5×5 = 25 çiftin tamamı beklenen sonuçla; ayrıca `canTransitionEvent("completed","draft") === false`, `canTransitionReservation("no_show","checked_in") === true`, `canTransitionReservation("checked_in","cancelled") === false`, aynı duruma geçiş her zaman `false`.
 - [ ] **Step 2:** `npx vitest run tests/domain` → FAIL. **Step 3:** Uygula. **Step 4:** → PASS.
 
-### Görev 3: Kimlik doğrulama (Opus)
+### Task 3: Kimlik doğrulama (Opus)
 
 **Files:** Create: `web/src/features/auth/auth.ts`, `session.ts`, `errors.ts`, `web/src/db/schema/auth.ts`, `web/src/app/api/auth/[...all]/route.ts`, `web/src/app/login/page.tsx`, `web/src/app/login/login-form.tsx`, `web/scripts/create-admin.ts`, `web/tests/features/auth/session.test.ts`; Modify: `web/src/db/schema/index.ts`; Create: ilk migration (`npm run db:generate`).
 
@@ -141,7 +141,7 @@ web/
   - `is_active=false` yapılan kullanıcının geçerli oturum çereziyle `getActor()` `null` döner.
 - [ ] **Step 3:** FAIL gör. **Step 4:** Uygula; giriş sayfası tek form (kullanıcı adı, parola), hata durumunda tek genel mesaj: `Kullanıcı adı veya parola hatalı`. **Step 5:** `npm test && npm run typecheck && npm run lint` → PASS.
 
-### Görev 4: Alan şeması (Opus)
+### Task 4: Alan şeması (Opus)
 
 **Files:** Create: `web/src/db/schema/{catalog,people,events,reservations,staffing,invitations,reviews,system}.ts`, migration, `web/tests/db/constraints.test.ts`; Modify: `web/src/db/schema/index.ts`
 
@@ -169,7 +169,7 @@ web/
   - Tüm tablolarda zaman sütunlarının tipi `timestamp with time zone`'dur (`information_schema.columns` sorgusu; `timestamp without time zone` sayısı `0`).
 - [ ] **Step 2:** FAIL gör. **Step 3:** Şemayı yaz, `npm run db:generate`; drizzle-kit'in ifade edemediği kısıtları (kısmi index, `NULLS NOT DISTINCT`, `CHECK`) üretilen SQL'de doğrula, eksikse aynı migration'a elle ekle. **Step 4:** `npm run db:reset && npm test && npm run typecheck` → PASS (boş veritabanından kurulum kanıtı).
 
-### Görev 5: Yetki politikası (Sonnet)
+### Task 5: Yetki politikası (Sonnet)
 
 **Files:** Create: `web/src/features/auth/policy.ts`, `web/tests/features/auth/policy.test.ts`
 
@@ -186,7 +186,7 @@ Kurallar: (1) `admin` her şeye izinlidir. (2) Rol taban matrisi: `organizer` �
 - [ ] **Step 1:** Tablo güdümlü test: 6 rol × 11 modül × 4 fiil = 264 hücrenin tamamı beklenen değerle; ek olarak: lider başka ekibin değerlendirmesini düzenleyemez; `venue_owner` başkasının şablonunu silemez; `organizer` için `{module:"events", canDelete:false,…}` satırı silmeyi kapatır; `staff` için `{module:"events", canView:true,…}` satırı erişim **açmaz**; `authorize` reddederken `ForbiddenError` atar.
 - [ ] **Step 2:** FAIL. **Step 3:** Uygula (matris tek bir sabit nesne). **Step 4:** PASS.
 
-### Görev 6: `defineAction`, rota koruması, uygulama kabuğu (Sonnet)
+### Task 6: `defineAction`, rota koruması, uygulama kabuğu (Sonnet)
 
 **Files:** Create: `web/src/lib/action.ts`, `web/src/proxy.ts`, `web/src/app/(app)/layout.tsx`, `web/src/app/(app)/page.tsx`, `web/src/app/{error,not-found,loading}.tsx`, `web/src/components/ui/**` (eski `frontend/src/components/ui` ve `frontend/src/lib/utils.ts`, `frontend/src/app/globals.css` taşınır), `web/src/components/layout/app-nav.tsx`, `web/tests/lib/action.test.ts`, `web/tests/lint/actions-use-define-action.test.ts`
 
@@ -208,7 +208,7 @@ Kurallar: (1) `admin` her şeye izinlidir. (2) Rol taban matrisi: `organizer` �
   - `tests/lint/actions-use-define-action.test.ts`: `src/features/**/actions.ts` ve `src/features/**/actions/*.ts` dosyalarındaki her dışa aktarım `defineAction(` çağrısının sonucudur (kaynak metni taranır); ihlal eden dosya adı hata mesajında yer alır.
 - [ ] **Step 2:** FAIL. **Step 3:** Uygula; shadcn bileşenlerini olduğu gibi kopyala, yalnızca içe aktarma yollarını düzelt. **Step 4:** `npm test && npm run typecheck && npm run lint && npm run build` → PASS.
 
-### Görev 7: CI ve konteyner (Haiku)
+### Task 7: CI ve konteyner (Haiku)
 
 **Files:** Create: `web/Dockerfile`, `web/.dockerignore`, `.github/workflows/web-ci.yml`, `web/src/app/api/health/route.ts`; Modify: `.github/workflows/build-and-push.yml` (yalnızca `web-ci` başarılıysa imaj üretir)
 
