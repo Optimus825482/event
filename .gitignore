@@ -88,3 +88,6 @@ ULTRA_CODEBASE_AUDIT_REPORT.md
 /More Actions*.md
 /Ekran görüntüsü*.png
 /image.png
+
+# Drizzle migration dosyaları izlenir
+!web/drizzle/*.sql
