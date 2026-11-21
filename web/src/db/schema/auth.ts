@@ -1,6 +1,7 @@
 import { boolean, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 // drizzle-kit tsconfig yol takma adlarını çözmeyebilir; göreli içe aktarım.
 import { ROLES } from "../../features/auth/roles";
+import { staff } from "./people";
 
 // Better Auth tabloları. Model adları çoğul (`usePlural`), sütunlar snake_case;
 // tablo nesnelerindeki alan adları Better Auth'un beklediği camelCase alan adlarıdır.
@@ -24,8 +25,11 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   role: userRole("role").notNull().default("staff"),
   isActive: boolean("is_active").notNull().default(true),
-  // Personel tablosuna yabancı anahtar sonraki görevde eklenir.
-  staffId: uuid("staff_id"),
+  // Hesabın bağlı olduğu personel kaydı (en fazla bir hesap). people.ts ile döngüsel
+  // içe aktarım tembel `references` geri çağrısı sayesinde güvenlidir.
+  staffId: uuid("staff_id")
+    .unique()
+    .references(() => staff.id, { onDelete: "set null" }),
   color: text("color"),
   ...timestamps,
 });

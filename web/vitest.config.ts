@@ -7,6 +7,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Test dosyaları tek bir test veritabanını paylaşır; paralel çalışırlarsa birbirlerinin satırlarını siler.
+    fileParallelism: false,
     globalSetup: ["./tests/global-setup.ts"],
     include: ["tests/**/*.test.{ts,tsx}", "src/**/*.test.{ts,tsx}"],
     env: {
