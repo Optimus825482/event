@@ -6,6 +6,8 @@ import { v4 as uuidv4 } from "uuid";
 
 // Desteklenen dosya türleri
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/jpg"];
+// Yalnızca harf, rakam, tire, alt çizgi ve tek nokta ile uzantı
+const SAFE_FILENAME = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9]+)?$/;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 // Avatar boyutları
@@ -133,6 +135,11 @@ export class UploadService {
   // Avatar sil
   async deleteAvatar(filename: string): Promise<void> {
     if (!filename) return;
+
+    // Path traversal koruması: yalnızca düz dosya adı kabul edilir
+    if (!SAFE_FILENAME.test(filename) || filename !== path.basename(filename)) {
+      throw new BadRequestException("Geçersiz dosya adı");
+    }
 
     try {
       const paths = [

@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import {
   HealthCheck,
@@ -8,6 +8,10 @@ import {
   DiskHealthIndicator,
 } from "@nestjs/terminus";
 import { HealthService } from "./health.service";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { UserRole } from "../../entities/user.entity";
 
 @ApiTags("Health")
 @Controller("health")
@@ -62,6 +66,8 @@ export class HealthController {
   }
 
   @Get("metrics")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "Sistem metrikleri" })
   @ApiResponse({ status: 200, description: "Sistem metrikleri" })
   async metrics() {

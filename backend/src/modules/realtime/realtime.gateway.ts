@@ -117,17 +117,23 @@ export class RealtimeGateway
       return { success: false, message: "Unauthorized: userId mismatch" };
     }
 
+    // Rol, bağlantıda doğrulanan JWT'den alınır; istemcinin gönderdiği rol yok sayılır
+    const verifiedRole = clientData.role;
+    if (!verifiedRole) {
+      return { success: false, message: "Unauthorized: role not verified" };
+    }
+
     // Kullanıcı kendi odasına katılır
     client.join(`user:${data.userId}`);
     // Role bazlı odaya da katılır
-    client.join(`role:${data.role}`);
+    client.join(`role:${verifiedRole}`);
     // Genel bildirimler için
     client.join("notifications:all");
 
     this.connectedClients.set(client.id, {
       ...clientData,
       userId: data.userId,
-      role: data.role,
+      role: verifiedRole,
     });
 
     return {
@@ -147,7 +153,7 @@ export class RealtimeGateway
     this.connectedClients.set(client.id, {
       ...clientData,
       eventId: data.eventId,
-      role: data.role,
+      // Rol burada yazılmaz: istemcinin gönderdiği rol, JWT'den doğrulanan rolü ezmemeli
     });
     return { success: true, message: `Joined event ${data.eventId}` };
   }

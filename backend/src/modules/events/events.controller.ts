@@ -29,7 +29,6 @@ import {
   BulkSaveEventExtraStaffDto,
 } from "./dto/event-extra-staff.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import { Public } from "../auth/decorators/public.decorator";
 import { SkipThrottle } from "@nestjs/throttler";
 import { EventStatus } from "../../entities/event.entity";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
@@ -45,11 +44,9 @@ export class EventsController {
   /**
    * Check-in modülü için etkinlikleri getir
    * Personel ataması veya rezervasyonu olan TÜM etkinlikleri döndürür
-   * Public: Kiosk/tablet modunda auth gerekmez
    */
-  @Public()
   @Get("active/today")
-  @ApiOperation({ summary: "Check-in için planlı etkinlikler (Public)" })
+  @ApiOperation({ summary: "Check-in için planlı etkinlikler" })
   getActiveEventsToday() {
     return this.eventsService.getActiveEventsToday();
   }

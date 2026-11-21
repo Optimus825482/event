@@ -30,7 +30,6 @@ import {
 } from "./dto/reservation.dto";
 import { ReservationStatus } from "../../entities/reservation.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import { Public } from "../auth/decorators/public.decorator";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 import { SettingsService } from "../settings/settings.service";
 import { Throttle } from "@nestjs/throttler";
@@ -167,11 +166,10 @@ export class ReservationsController {
   /**
    * QR kod ile rezervasyon detaylarını getir
    * Requirement: 4.1 - Check-in öncesi doğrulama için
-   * Public: Kiosk/tablet modunda auth gerekmez
+   * Kiosk/tablet modunda da oturum gerekir
    */
-  @Public()
   @Get("qr/:qrCodeHash")
-  @ApiOperation({ summary: "QR kod ile rezervasyon getir (Public)" })
+  @ApiOperation({ summary: "QR kod ile rezervasyon getir" })
   async getByQRCode(@Param("qrCodeHash") qrCodeHash: string) {
     await this.ensureQrCodeEnabled();
     return this.checkInService.getReservationByQRCode(qrCodeHash);
@@ -180,12 +178,11 @@ export class ReservationsController {
   /**
    * QR kod ile check-in yap
    * Requirements: 4.2, 4.3, 4.4
-   * Public: Kiosk/tablet modunda auth gerekmez
+   * Kiosk/tablet modunda da oturum gerekir
    */
-  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post("check-in/:qrCodeHash")
-  @ApiOperation({ summary: "QR kod ile check-in (Public)" })
+  @ApiOperation({ summary: "QR kod ile check-in" })
   async checkIn(@Param("qrCodeHash") qrCodeHash: string) {
     await this.ensureQrCodeEnabled();
     return this.checkInService.checkIn(qrCodeHash);
@@ -268,9 +265,8 @@ export class ReservationsController {
    * Event detayları, rezervasyonlar ve istatistikler
    * Requirement: Check-in Module 1.1, 1.2
    */
-  @Public()
   @Get("event/:eventId/check-in-data")
-  @ApiOperation({ summary: "Check-in için etkinlik verileri (Public)" })
+  @ApiOperation({ summary: "Check-in için etkinlik verileri" })
   getEventForCheckIn(@Param("eventId") eventId: string) {
     return this.checkInService.getEventForCheckIn(eventId);
   }
@@ -279,9 +275,8 @@ export class ReservationsController {
    * Check-in geçmişi - Son check-in'ler
    * Requirement: Check-in Module 6.1, 6.2
    */
-  @Public()
   @Get("event/:eventId/check-in-history")
-  @ApiOperation({ summary: "Check-in geçmişi (Public)" })
+  @ApiOperation({ summary: "Check-in geçmişi" })
   getCheckInHistory(
     @Param("eventId") eventId: string,
     @Query("limit") limit?: string,
@@ -296,9 +291,8 @@ export class ReservationsController {
    * Müsait masaları getir - Walk-in için
    * Requirement: Check-in Module 11.3
    */
-  @Public()
   @Get("event/:eventId/available-tables")
-  @ApiOperation({ summary: "Müsait masalar (Public)" })
+  @ApiOperation({ summary: "Müsait masalar" })
   getAvailableTables(@Param("eventId") eventId: string) {
     return this.checkInService.getAvailableTables(eventId);
   }
@@ -307,10 +301,9 @@ export class ReservationsController {
    * Walk-in misafir kaydı
    * Requirement: Check-in Module 11.1, 11.2, 11.4
    */
-  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post("walk-in")
-  @ApiOperation({ summary: "Walk-in misafir kaydı (Public)" })
+  @ApiOperation({ summary: "Walk-in misafir kaydı" })
   registerWalkIn(@Body() dto: WalkInDto) {
     return this.checkInService.registerWalkIn(dto);
   }
@@ -319,10 +312,9 @@ export class ReservationsController {
    * Kişi sayısı güncelle
    * Requirement: Check-in Module 12.1
    */
-  @Public()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Patch(":id/guest-count")
-  @ApiOperation({ summary: "Kişi sayısı güncelle (Public)" })
+  @ApiOperation({ summary: "Kişi sayısı güncelle" })
   updateGuestCount(@Param("id") id: string, @Body() dto: UpdateGuestCountDto) {
     return this.checkInService.updateGuestCount(id, dto.guestCount);
   }

@@ -140,17 +140,20 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
     .addTag("Health", "Sistem sağlık kontrolleri")
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  const swaggerPath = isProduction ? "docs" : "api/docs";
-  SwaggerModule.setup(swaggerPath, app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: "none",
-      filter: true,
-      showRequestDuration: true,
-    },
-    customSiteTitle: "EventFlow PRO API Docs",
-  });
+  // Swagger yalnızca production dışında açılır
+  if (!isProduction) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    const swaggerPath = "api/docs";
+    SwaggerModule.setup(swaggerPath, app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        docExpansion: "none",
+        filter: true,
+        showRequestDuration: true,
+      },
+      customSiteTitle: "EventFlow PRO API Docs",
+    });
+  }
 
   // ==================== START ====================
 
@@ -163,7 +166,9 @@ Tüm korumalı endpoint'ler için \`Authorization: Bearer <token>\` header'ı ge
   const nodeEnv = configService.get("NODE_ENV") || "development";
   logger.log(`🚀 EventFlow PRO Backend running on http://localhost:${port}`);
   logger.log(`🌍 Environment: ${nodeEnv}`);
-  logger.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
+  if (!isProduction) {
+    logger.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
+  }
   logger.log(`🔒 Helmet: Enabled`);
   logger.log(`⚡ Rate Limiting: Enabled (100 req/60s)`);
   logger.log(`📦 Compression: Enabled (gzip)`);

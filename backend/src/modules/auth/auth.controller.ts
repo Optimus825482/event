@@ -19,6 +19,9 @@ import { AuthService } from "./auth.service";
 import { RegisterDto, LoginDto, ChangePasswordDto } from "./dto/auth.dto";
 import { RefreshTokenDto, TokenResponseDto } from "./dto/refresh-token.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
+import { RolesGuard } from "./guards/roles.guard";
+import { Roles } from "./decorators/roles.decorator";
+import { UserRole } from "../../entities/user.entity";
 
 @ApiTags("Auth")
 @Controller("auth")
@@ -26,6 +29,9 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post("register")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
   @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 kayıt/dakika
   @ApiOperation({ summary: "Yeni kullanıcı kaydı" })
   @ApiResponse({ status: 201, description: "Kayıt başarılı" })

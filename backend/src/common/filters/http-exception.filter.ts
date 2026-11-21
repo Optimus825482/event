@@ -57,7 +57,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // HTTP status koduna göre error code belirle
       code = this.getErrorCode(status);
     } else if (exception instanceof Error) {
-      message = exception.message;
+      // Production'da dahili hata mesajını (SQL, yol vb.) istemciye sızdırma
+      message =
+        process.env.NODE_ENV === "production"
+          ? "Internal server error"
+          : exception.message;
       this.logger.error(
         `Unhandled exception: ${exception.message}`,
         exception.stack
