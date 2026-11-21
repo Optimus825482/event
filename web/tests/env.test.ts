@@ -22,6 +22,37 @@ describe("parseEnv", () => {
     );
   });
 
+  it("üretimde BETTER_AUTH_URL yoksa değişken adıyla hata verir", () => {
+    const { BETTER_AUTH_URL: _omitted, ...rest } = valid;
+    void _omitted;
+    expect(() => parseEnv({ ...rest, NODE_ENV: "production" })).toThrow(/BETTER_AUTH_URL/);
+  });
+
+  it("üretimde http:// ile başlayan BETTER_AUTH_URL reddedilir", () => {
+    expect(() =>
+      parseEnv({ ...valid, NODE_ENV: "production", BETTER_AUTH_URL: "http://eventflow.example.com" }),
+    ).toThrow(/BETTER_AUTH_URL/);
+  });
+
+  it("üretimde https:// ile başlayan BETTER_AUTH_URL kabul edilir", () => {
+    const parsed = parseEnv({ ...valid, NODE_ENV: "production", BETTER_AUTH_URL: "https://eventflow.example.com" });
+    expect(parsed.BETTER_AUTH_URL).toBe("https://eventflow.example.com");
+  });
+
+  it("geliştirmede BETTER_AUTH_URL yoksa varsayılan kullanılır", () => {
+    const { BETTER_AUTH_URL: _omitted, ...rest } = valid;
+    void _omitted;
+    expect(parseEnv({ ...rest, NODE_ENV: "development" }).BETTER_AUTH_URL).toBe("http://localhost:3000");
+  });
+
+  it("TRUSTED_IP_HEADER isteğe bağlıdır; boşsa tanımsız sayılır, değer küçük harfe çevrilir", () => {
+    expect(parseEnv(valid).TRUSTED_IP_HEADER).toBeUndefined();
+    expect(parseEnv({ ...valid, TRUSTED_IP_HEADER: "" }).TRUSTED_IP_HEADER).toBeUndefined();
+    expect(parseEnv({ ...valid, TRUSTED_IP_HEADER: " X-Forwarded-For " }).TRUSTED_IP_HEADER).toBe(
+      "x-forwarded-for",
+    );
+  });
+
   it("DATABASE_URL eksikse hata mesajı değişken adını içerir", () => {
     const { DATABASE_URL: _omitted, ...rest } = valid;
     void _omitted;

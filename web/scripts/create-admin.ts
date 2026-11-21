@@ -11,6 +11,7 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { auth, hashPassword, MIN_PASSWORD_LENGTH } from "@/features/auth/auth";
+import { isValidUsername, MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH } from "@/features/auth/username";
 
 export const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
 
@@ -24,8 +25,14 @@ export type CreateAdminInput = {
 export type CreatedAdmin = { id: string; username: string; email: string };
 
 export async function createAdmin(input: CreateAdminInput): Promise<CreatedAdmin> {
-  const username = input.username.trim();
-  if (username.length === 0) throw new Error("Kullanıcı adı boş olamaz");
+  // Kırpma yapılmaz: baş/son boşluklu ad sessizce değiştirilmek yerine reddedilir.
+  const { username } = input;
+  if (!isValidUsername(username)) {
+    throw new Error(
+      `Kullanıcı adı geçersiz: ${MIN_USERNAME_LENGTH}–${MAX_USERNAME_LENGTH} karakter olmalı, ` +
+        "başında/sonunda boşluk ve kontrol karakteri içermemeli",
+    );
+  }
   if (input.password.length < MIN_PASSWORD_LENGTH) {
     throw new Error(`Parola en az ${MIN_PASSWORD_LENGTH} karakter olmalı`);
   }

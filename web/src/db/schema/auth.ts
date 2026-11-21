@@ -1,4 +1,4 @@
-import { boolean, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 // drizzle-kit tsconfig yol takma adlarını çözmeyebilir; göreli içe aktarım.
 import { ROLES } from "../../features/auth/roles";
 import { staff } from "./people";
@@ -31,6 +31,9 @@ export const users = pgTable("users", {
     .unique()
     .references(() => staff.id, { onDelete: "set null" }),
   color: text("color"),
+  phone: text("phone"),
+  // Eski sistemdeki serbest metin görev etiketi (yetki rolü değildir).
+  position: text("position"),
   ...timestamps,
 });
 
@@ -81,4 +84,24 @@ export const verifications = pgTable(
     ...timestamps,
   },
   (t) => [index("verifications_identifier_idx").on(t.identifier)],
+);
+
+
+/** Better Auth hız sınırı sayaçları (`rateLimit.storage: "database"`). */
+export const rateLimits = pgTable("rate_limits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
+
+/** Kullanıcı adı başına giriş denemesi sayacı (IP'den bağımsız kilit). */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    username: text("username").primaryKey(),
+    attempts: integer("attempts").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("login_attempts_expires_at_idx").on(t.expiresAt)],
 );

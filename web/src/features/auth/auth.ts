@@ -8,7 +8,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { env } from "@/env";
+import { eventflowGuard } from "./guard";
 import { ROLES } from "./roles";
+import { isValidUsername, MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH } from "./username";
 
 /** Eski sistemle aynı bcrypt maliyeti; eski hash'ler olduğu gibi doğrulanır. */
 export const BCRYPT_COST = 12;
@@ -31,59 +33,87 @@ async function isUserActive(userId: string): Promise<boolean> {
   return row?.isActive === true;
 }
 
-export const auth = betterAuth({
-  appName: "EventFlow",
-  baseURL: env.BETTER_AUTH_URL,
-  secret: env.BETTER_AUTH_SECRET,
-  database: drizzleAdapter(db, { provider: "pg", schema, usePlural: true }),
-  advanced: {
-    database: { generateId: "uuid" },
-  },
-  emailAndPassword: {
-    enabled: true,
-    disableSignUp: true,
-    minPasswordLength: MIN_PASSWORD_LENGTH,
-    password: { hash: hashPassword, verify: verifyPassword },
-  },
-  session: {
-    expiresIn: 60 * 60 * 24 * SESSION_DAYS,
-    // Çerez önbelleği kapalı: her oturum okuması veritabanına gider.
-    cookieCache: { enabled: false },
-  },
-  rateLimit: { enabled: true },
-  user: {
-    additionalFields: {
-      role: { type: [...ROLES], required: false, defaultValue: "staff", input: false },
-      isActive: { type: "boolean", required: false, defaultValue: true, input: false },
-      staffId: { type: "string", required: false, input: false },
-      color: { type: "string", required: false, input: false },
+export type CreateAuthOptions = {
+  /** Üretim: oturum çerezleri her zaman `Secure`. */
+  production: boolean;
+  baseURL: string;
+  /**
+   * İstemci IP'sinin okunacağı, ters vekilin yazdığı başlık. Tanımsızsa hiçbir
+   * istemci başlığına güvenilmez (IP sınırı tek ortak kovaya düşer).
+   */
+  trustedIpHeader?: string;
+};
+
+/** İstemcilerin hiçbir uçtan değiştiremeyeceği ek kullanıcı alanları. */
+const serverOnly = { required: false, input: false } as const;
+
+export function createAuth(options: CreateAuthOptions) {
+  return betterAuth({
+    appName: "EventFlow",
+    baseURL: options.baseURL,
+    secret: env.BETTER_AUTH_SECRET,
+    database: drizzleAdapter(db, { provider: "pg", schema, usePlural: true }),
+    advanced: {
+      database: { generateId: "uuid" },
+      useSecureCookies: options.production,
+      ipAddress: {
+        ipAddressHeaders: options.trustedIpHeader ? [options.trustedIpHeader] : [],
+      },
     },
-  },
-  databaseHooks: {
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      minPasswordLength: MIN_PASSWORD_LENGTH,
+      password: { hash: hashPassword, verify: verifyPassword },
+    },
     session: {
-      create: {
-        // Pasif kullanıcıya oturum açılmaz; yanıt yanlış parolayla aynıdır.
-        async before(session) {
-          if (!(await isUserActive(session.userId))) {
-            throw APIError.from("UNAUTHORIZED", USERNAME_ERROR_CODES.INVALID_USERNAME_OR_PASSWORD);
-          }
+      expiresIn: 60 * 60 * 24 * SESSION_DAYS,
+      // Çerez önbelleği kapalı: her oturum okuması veritabanına gider.
+      cookieCache: { enabled: false },
+    },
+    rateLimit: { enabled: true, storage: "database" },
+    user: {
+      additionalFields: {
+        role: { ...serverOnly, type: [...ROLES], defaultValue: "staff" },
+        isActive: { ...serverOnly, type: "boolean", defaultValue: true },
+        staffId: { ...serverOnly, type: "string" },
+        color: { ...serverOnly, type: "string" },
+        phone: { ...serverOnly, type: "string" },
+        position: { ...serverOnly, type: "string" },
+      },
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          // Pasif kullanıcıya oturum açılmaz; yanıt yanlış parolayla aynıdır.
+          async before(session) {
+            if (!(await isUserActive(session.userId))) {
+              throw APIError.from("UNAUTHORIZED", USERNAME_ERROR_CODES.INVALID_USERNAME_OR_PASSWORD);
+            }
+          },
         },
       },
     },
-  },
-  plugins: [
-    username({
-      // Eski sistemde kullanıcı adları büyük/küçük harf duyarlıdır ve
-      // yönetici tarafından en fazla 100 karakterle serbestçe oluşturulabilir.
-      usernameNormalization: false,
-      displayUsername: false,
-      minUsernameLength: 1,
-      maxUsernameLength: 100,
-      usernameValidator: (value) => value.trim().length > 0,
-    }),
-    // Sunucu eylemlerinden yapılan auth.api çağrılarının çerezlerini yazar; en sonda olmalı.
-    nextCookies(),
-  ],
+    plugins: [
+      username({
+        // Eski sistemle uyum: büyük/küçük harf duyarlı, 1–100 karakter.
+        usernameNormalization: false,
+        displayUsername: false,
+        minUsernameLength: MIN_USERNAME_LENGTH,
+        maxUsernameLength: MAX_USERNAME_LENGTH,
+        usernameValidator: isValidUsername,
+      }),
+      eventflowGuard(),
+      // Sunucu eylemlerinden yapılan auth.api çağrılarının çerezlerini yazar; en sonda olmalı.
+      nextCookies(),
+    ],
+  });
+}
+
+export const auth = createAuth({
+  production: env.NODE_ENV === "production",
+  baseURL: env.BETTER_AUTH_URL,
+  trustedIpHeader: env.TRUSTED_IP_HEADER,
 });
 
 export type Auth = typeof auth;
