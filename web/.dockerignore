@@ -1,0 +1,13 @@
+node_modules
+.next
+.pgdata
+.env*
+uploads
+uploads-test
+tests
+test-results
+playwright-report
+coverage
+*.log
+npm-debug.log*
+*.tsbuildinfo
