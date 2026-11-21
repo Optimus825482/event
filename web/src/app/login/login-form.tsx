@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { safeNextPath } from "@/features/auth/next-path";
 import { useState, type FormEvent } from "react";
 
 const GENERIC_ERROR = "Kullanıcı adı veya parola hatalı";
@@ -8,7 +9,7 @@ const GENERIC_ERROR = "Kullanıcı adı veya parola hatalı";
 const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next: string | null }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -33,7 +34,7 @@ export function LoginForm() {
         setError(GENERIC_ERROR);
         return;
       }
-      router.replace("/");
+      router.replace(safeNextPath(next));
       router.refresh();
     } catch {
       setError(GENERIC_ERROR);

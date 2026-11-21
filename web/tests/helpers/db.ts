@@ -4,10 +4,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
+import { PG_BASE_URL, resolveTestDbName, testDatabaseUrl } from "./db-name";
+
 // Testler HER ZAMAN test veritabanını kullanır; DATABASE_URL'e bakılmaz.
-const BASE_URL = "postgres://postgres@localhost:54329";
-const TEST_DB = "eventflow_test";
-export const TEST_DATABASE_URL = `${BASE_URL}/${TEST_DB}`;
+// Ad, isteğe bağlı TEST_DB_NAME ile değişir (eventflow_test önekli olmak zorunda; bkz. db-name.ts).
+export const TEST_DB = resolveTestDbName(process.env.TEST_DB_NAME);
+export const TEST_DATABASE_URL = testDatabaseUrl(TEST_DB);
+const BASE_URL = PG_BASE_URL;
 
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, "../../drizzle");
 const PG_OPTIONS = "-c timezone=UTC";

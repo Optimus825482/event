@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { pool } from "@/db/client";
-import { setupTestDb } from "./helpers/db";
+import { setupTestDb, TEST_DB } from "./helpers/db";
 
 describe("test veritabanı", () => {
   beforeAll(async () => {
@@ -19,6 +19,6 @@ describe("test veritabanı", () => {
 
   it("test veritabanına bağlıdır", async () => {
     const res = await pool.query<{ db: string }>("select current_database() as db");
-    expect(res.rows[0]?.db).toBe("eventflow_test");
+    expect(res.rows[0]?.db).toBe(TEST_DB);
   });
 });
