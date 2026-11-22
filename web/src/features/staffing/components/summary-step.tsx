@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { AlertTriangle, Layers, Save, UserCog, UserPlus, Users } from "lucide-react";
+import { StatCard } from "@/components/layout/stat-card";
 import { Button } from "@/components/ui/button";
 import { saveOrganizationAction } from "../actions";
 import { Section } from "./bits";
@@ -27,6 +29,7 @@ export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: 
   const [status, setStatus] = useState<Status>(null);
   const [pending, startTransition] = useTransition();
 
+  const tableAssignments = assignments.filter((a) => a.assignmentType === "table").length;
   const grouped = new Set(groups.flatMap((g) => g.tableIds));
   const served = new Set(assignments.flatMap((a) => (a.assignmentType === "table" ? a.tableIds : [])));
   const warnings = [
@@ -55,24 +58,20 @@ export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: 
   return (
     <div className="space-y-4">
       <Section title="Özet">
-        <dl className="grid gap-3 sm:grid-cols-5">
-          {[
-            ["Ekip", teams.length],
-            ["Grup", groups.length],
-            ["Masa ataması", assignments.filter((a) => a.assignmentType === "table").length],
-            ["Özel görev / servis noktası", assignments.filter((a) => a.assignmentType !== "table").length],
-            ["Ekstra personel", extras.length],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="rounded-md border border-border p-3">
-              <dt className="text-xs text-muted-foreground">{label}</dt>
-              <dd className="text-xl font-semibold">{value}</dd>
-            </div>
-          ))}
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatCard label="Ekip" value={teams.length} tone="blue" icon={<Users aria-hidden className="size-5" />} />
+          <StatCard label="Grup" value={groups.length} tone="purple" icon={<Layers aria-hidden className="size-5" />} />
+          <StatCard label="Masa ataması" value={tableAssignments} tone="emerald" icon={<UserCog aria-hidden className="size-5" />} />
+          <StatCard label="Özel görev / servis noktası" value={assignments.length - tableAssignments} tone="amber" icon={<UserCog aria-hidden className="size-5" />} />
+          <StatCard label="Ekstra personel" value={extras.length} tone="slate" icon={<UserPlus aria-hidden className="size-5" />} />
         </dl>
         {warnings.length > 0 ? (
-          <ul className="list-disc space-y-1 pl-5 text-sm text-amber-700 dark:text-amber-400">
+          <ul className="space-y-1 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
             {warnings.map((w, i) => (
-              <li key={`${w}-${i}`}>{w}</li>
+              <li key={`${w}-${i}`} className="flex items-center gap-2">
+                <AlertTriangle aria-hidden className="size-4 shrink-0" />
+                {w}
+              </li>
             ))}
           </ul>
         ) : (
@@ -85,6 +84,7 @@ export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: 
       ) : (
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={save} disabled={pending}>
+            <Save aria-hidden className="size-4" />
             {pending ? "Kaydediliyor…" : "Tümünü kaydet"}
           </Button>
           {dirty ? <span className="text-sm text-muted-foreground">Kaydedilmemiş değişiklikler var.</span> : null}
@@ -93,7 +93,7 @@ export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: 
 
       {status ? (
         <div role={status.kind === "error" ? "alert" : "status"} className="space-y-1 text-sm">
-          <p className={status.kind === "error" ? "text-destructive" : "text-green-700 dark:text-green-400"}>
+          <p className={status.kind === "error" ? "text-destructive" : "text-green-400"}>
             {status.message}
           </p>
           {status.details?.map((d) => (

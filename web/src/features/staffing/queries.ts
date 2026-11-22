@@ -4,6 +4,7 @@ import { requirePolicyActor } from "@/features/auth/permissions";
 import { authorize, can } from "@/features/auth/policy";
 import { DomainError } from "@/lib/action";
 import { isUuid } from "@/lib/identifiers";
+import { getFloorPlan } from "@/features/venue/plan-service";
 import { getOrganization } from "./organization-service";
 import { listOrganizationTemplates } from "./templates-service";
 
@@ -13,12 +14,14 @@ export async function loadTeamOrganization(id: string) {
   authorize(actor, "events", "view");
   if (!isUuid(id)) notFound();
   try {
-    const [organization, templates] = await Promise.all([
+    const [organization, templates, plan] = await Promise.all([
       getOrganization(db, actor, id),
       listOrganizationTemplates(db, actor),
+      getFloorPlan(db, actor, id),
     ]);
     return {
       organization,
+      plan: { canvas: plan.canvas, tables: plan.tables, decor: plan.decor },
       templates: templates.map((t) => ({ id: t.id, name: t.name, description: t.description, isDefault: t.isDefault, canManage: t.canManage })),
       canImport: can(actor, "events", "edit"),
       permissions: {

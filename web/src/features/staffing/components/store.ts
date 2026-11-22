@@ -4,6 +4,7 @@ import { createContext, useContext } from "react";
 import { createStore, useStore, type StoreApi } from "zustand";
 import type { Organization } from "../organization-service";
 import { planAutoAssign } from "../auto-assign";
+import { assignTablesToGroup, clearGroupTables } from "../group-plan";
 import type { AutoAssignStrategy } from "../schemas";
 
 export type DraftTeam = Organization["teams"][number];
@@ -41,6 +42,10 @@ export type OrganizationState = Draft & {
   removeGroup: (id: string) => void;
   /** Masayı gruba ekler (önceki grubundan çıkarır) ya da gruptaysa çıkarır: bir masa tek grupta. */
   toggleTable: (groupId: string, tableId: string) => void;
+  /** Masaları gruba toplu atar (başka gruptaysa oradan taşınır). */
+  assignTables: (groupId: string, tableIds: string[]) => void;
+  /** Gruptaki tüm masaları serbest bırakır. */
+  clearGroupTables: (groupId: string) => void;
   /** Grubu ekibe bağlar; grup ekibin rengini alır, gruptaki masaların atamaları ekibe geçer. */
   setGroupTeam: (groupId: string, teamId: string | null) => void;
   addTeam: () => void;
@@ -133,6 +138,8 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
           return g.tableIds.includes(tableId) ? { ...g, tableIds: g.tableIds.filter((t) => t !== tableId) } : g;
         }),
       })),
+    assignTables: (groupId, tableIds) => set((s) => ({ dirty: true, groups: assignTablesToGroup(s.groups, groupId, tableIds) })),
+    clearGroupTables: (groupId) => set((s) => ({ dirty: true, groups: clearGroupTables(s.groups, groupId) })),
     setGroupTeam: (groupId, teamId) =>
       set((s) => {
         const group = s.groups.find((g) => g.id === groupId);

@@ -29,8 +29,8 @@ export function Chip({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "rounded-md border px-2 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-        active ? "border-transparent text-white" : "border-border hover:bg-accent",
+        "rounded-lg border px-2 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        active ? "border-transparent text-white" : "border-slate-600 text-slate-300 hover:bg-slate-700",
       )}
       style={active ? { backgroundColor: color ?? "#3b82f6" } : undefined}
     >
@@ -45,7 +45,7 @@ export function Swatch({ color }: { color: string | null | undefined }) {
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+    <p className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
       {children}
     </p>
   );
@@ -53,9 +53,9 @@ export function EmptyState({ children }: { children: ReactNode }) {
 
 export function Section({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
   return (
-    <section className="space-y-3 rounded-md border border-border p-4">
+    <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-medium">{title}</h3>
+        <h3 className="font-medium text-white">{title}</h3>
         {actions}
       </div>
       {children}
