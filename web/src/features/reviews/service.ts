@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { events, staff, staffPerformanceReviews, teamMembers, teams, users } from "@/db/schema";
-import { authorize, type PolicyResource, type Verb } from "@/features/auth/policy";
+import { authorize, can, type PolicyResource, type Verb } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { insertNotification, type NotificationRow } from "@/features/notifications/service";
 import { DomainError } from "@/lib/action";
@@ -73,9 +73,21 @@ export async function saveReviewDraft(
   actor: Actor,
   input: ParsedSaveReviewInput,
 ): Promise<ReviewRow> {
-  authorizeReviewsGate(actor, "create");
+  // Kapı: ortak (zayıf) gereksinim. Asıl fiil, kaydın var olup olmadığına göre seçilir:
+  // yeni taslak `create`, var olanı güncelleme `edit` ister (aktör izin satırlarını taşımalıdır).
+  authorizeReviewsGate(actor, "view");
   const event = await loadReviewEvent(executor, actor, input.eventId);
-  await resolveTeam(executor, actor, input.eventId, input.staffId, "create");
+  const [existing] = await executor
+    .select({ id: staffPerformanceReviews.id })
+    .from(staffPerformanceReviews)
+    .where(
+      and(
+        eq(staffPerformanceReviews.eventId, input.eventId),
+        eq(staffPerformanceReviews.staffId, input.staffId),
+        eq(staffPerformanceReviews.reviewerId, actor.id),
+      ),
+    );
+  await resolveTeam(executor, actor, input.eventId, input.staffId, existing ? "edit" : "create");
   assertWritable(event);
 
   const score = computeScore(input.ratings);
@@ -167,12 +179,45 @@ export async function completeReview(
   });
 }
 
-/** Etkinlikte kendi tam puanlı taslaklarını tamamlar; eksik puanlı taslaklara dokunmaz. */
+/**
+ * Taslak sahibinin, taslaktaki personeli şu an hâlâ değerlendirebildiği kümeyi bulur: personel
+ * etkinlikte aktif bir ekipte olmalı ve tek değerlendirmedeki kural (`resolveTeam`) geçerli olmalı
+ * (lider yalnızca kendi ekibini; kendini değil). Fırlatmaz; uygun olmayanlar atlanır.
+ */
+async function currentlyReviewable(
+  executor: Executor,
+  actor: Actor,
+  eventId: string,
+  staffIds: string[],
+): Promise<Set<string>> {
+  if (staffIds.length === 0) return new Set();
+  const memberships = await executor
+    .select({ staffId: teamMembers.staffId, leaderStaffId: teams.leaderStaffId })
+    .from(teamMembers)
+    .innerJoin(teams, eq(teams.id, teamMembers.teamId))
+    .where(and(inArray(teamMembers.staffId, staffIds), eq(teams.eventId, eventId), eq(teams.isActive, true)));
+  const byStaff = new Map<string, (string | null)[]>();
+  for (const m of memberships) byStaff.set(m.staffId, [...(byStaff.get(m.staffId) ?? []), m.leaderStaffId]);
+
+  const allowed = new Set<string>();
+  for (const [staffId, leaders] of byStaff) {
+    if (actor.staffId !== null && actor.staffId === staffId) continue;
+    const own = leaders.find((l) => actor.staffId !== null && l === actor.staffId);
+    const chosen = own ?? leaders[0];
+    if (can(actor, "reviews", "edit", chosen ? { teamLeaderStaffId: chosen } : {})) allowed.add(staffId);
+  }
+  return allowed;
+}
+
+/**
+ * Etkinlikte kendi tam puanlı taslaklarını tamamlar; eksik puanlı taslaklara dokunmaz. Personel
+ * artık aktörün yetkisindeki bir ekipte değilse (taşındı/lider değişti) taslak atlanır (`skipped`).
+ */
 export async function completeAllReviews(
   executor: Db,
   actor: Actor,
   input: CompleteAllReviewsInput,
-): Promise<{ completed: number; incomplete: number; notification: NotificationRow | null }> {
+): Promise<{ completed: number; incomplete: number; skipped: number; notification: NotificationRow | null }> {
   authorizeReviewsGate(actor, "edit");
   return executor.transaction(async (tx) => {
     const event = await loadReviewEvent(tx, actor, input.eventId);
@@ -195,7 +240,10 @@ export async function completeAllReviews(
           eq(staffPerformanceReviews.isCompleted, false),
         ),
       );
-    const ready = drafts.filter(isFullyRated).map((d) => d.id);
+    const allowed = await currentlyReviewable(tx, actor, input.eventId, drafts.map((d) => d.staffId));
+    const eligible = drafts.filter((d) => allowed.has(d.staffId));
+    const skipped = drafts.length - eligible.length;
+    const ready = eligible.filter(isFullyRated).map((d) => d.id);
     const done =
       ready.length === 0
         ? []
@@ -205,7 +253,7 @@ export async function completeAllReviews(
             .where(and(inArray(staffPerformanceReviews.id, ready), eq(staffPerformanceReviews.isCompleted, false)))
             .returning({ id: staffPerformanceReviews.id });
 
-    if (done.length === 0) return { completed: 0, incomplete: drafts.length, notification: null };
+    if (done.length === 0) return { completed: 0, incomplete: eligible.length, skipped, notification: null };
     const reviewer = await reviewerName(tx, actor);
     const notification = await insertNotification(tx, {
       type: "staff_review_completed",
@@ -218,6 +266,6 @@ export async function completeAllReviews(
       metadata: { reviewerName: reviewer, reviewCount: done.length },
       actionUrl: `/leader/reviews/${event.id}`,
     });
-    return { completed: done.length, incomplete: drafts.length - done.length, notification };
+    return { completed: done.length, incomplete: eligible.length - done.length, skipped, notification };
   });
 }

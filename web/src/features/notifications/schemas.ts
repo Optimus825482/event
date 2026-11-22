@@ -5,15 +5,38 @@ export const PRIORITIES = notificationPriority.enumValues;
 export const TARGET_ROLES = notificationTargetRole.enumValues;
 export const NOTIFICATION_TYPES = notificationType.enumValues;
 
-/** Yalnızca uygulama içi yol: `/x` evet; `//x`, `https://x`, `javascript:` hayır. */
+const URL_BASE = "https://app.invalid";
+// Denetim karakterleri ve her türlü boşluk (tarayıcılar sekme/satır sonunu sessizce siler).
+const FORBIDDEN_CHARS = /[\p{Cc}\s]/u;
+
+/** Güvenli uygulama içi yolu normalleştirir (`pathname + search + hash`); geçersizse `null`. */
+export function normalizeInternalPath(value: string): string | null {
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\") || FORBIDDEN_CHARS.test(value)) {
+    return null;
+  }
+  try {
+    const url = new URL(value, URL_BASE);
+    if (url.origin !== URL_BASE) return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Yalnızca uygulama içi yol: `/x` evet; `//x`, `https://x`, `javascript:`, boşluk/denetim karakteri hayır. */
 const internalPath = z
   .string()
   .trim()
   .max(500, "Bağlantı en fazla 500 karakter olabilir")
-  .refine((v) => v === "" || (v.startsWith("/") && !v.startsWith("//") && !v.includes("\\")), {
-    message: "Bağlantı uygulama içi bir yol olmalı (ör. /events)",
+  .transform((v, ctx) => {
+    if (v === "") return undefined;
+    const normalized = normalizeInternalPath(v);
+    if (normalized === null) {
+      ctx.addIssue({ code: "custom", message: "Bağlantı uygulama içi bir yol olmalı (ör. /events)" });
+      return z.NEVER;
+    }
+    return normalized;
   })
-  .transform((v) => (v === "" ? undefined : v))
   .optional();
 
 const optionalUuid = z.preprocess(

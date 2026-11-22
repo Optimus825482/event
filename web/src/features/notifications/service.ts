@@ -42,8 +42,14 @@ export async function createNotification(
 ): Promise<NotificationRow> {
   authorize(actor, "notifications", "create");
   if (input.eventId) {
-    const [event] = await executor.select({ id: events.id }).from(events).where(eq(events.id, input.eventId));
-    if (!event) throw new DomainError("not_found", "Etkinlik bulunamadı");
+    const [event] = await executor
+      .select({ id: events.id, organizerId: events.organizerId })
+      .from(events)
+      .where(eq(events.id, input.eventId));
+    // Organizatör yalnızca kendi etkinliğine bağlayabilir; başkasınınki "yok" gibi davranır.
+    if (!event || (actor.role === "organizer" && event.organizerId !== actor.id)) {
+      throw new DomainError("not_found", "Etkinlik bulunamadı");
+    }
   }
   return insertNotification(executor, {
     type: "system_announcement",
