@@ -12,7 +12,8 @@ const playfair = Playfair_Display({ variable: "--font-playfair", subsets: ["lati
 
 const APP_NAME = "EventFlow PRO";
 const APP_DEFAULT_TITLE = "EventFlow PRO - Etkinlik Yönetim Sistemi";
-const APP_TITLE_TEMPLATE = "%s | EventFlow PRO";
+// Sayfalar başlığı "… | EventFlow" olarak kendileri verir; şablon yinelemeye yol açardı.
+const APP_TITLE_TEMPLATE = "%s";
 const APP_DESCRIPTION = "Yeni nesil etkinlik yönetim, planlama ve deneyim ekosistemi";
 
 export const metadata: Metadata = {
