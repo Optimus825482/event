@@ -3,15 +3,15 @@
 Etkinlik, mekan yerleşimi, rezervasyon ve kapı (check-in) yönetim sistemi.
 
 Bu depo **yeniden yazılmış uygulamayı** `web/` altında barındırır (Next.js 16 + Drizzle + PostgreSQL 17 + Better Auth).
-Eski NestJS (`backend/`) ve Next.js (`frontend/`) uygulamaları, canlı geçiş tamamlanıp sahibi onaylayana kadar
-**geri dönüş için** depoda durur; yeni geliştirme yalnızca `web/` içindedir.
+Eski NestJS (`backend/`) ve Next.js (`frontend/`) uygulamaları sahibinin onayıyla depodan kaldırıldı; kaynakları git
+geçmişinde, son imajları GHCR'de (`eventflow-backend:latest`, `eventflow-frontend:latest`) durur.
 
 | Konu | Nerede |
 | --- | --- |
 | Uygulama | `web/` |
 | Üretim kurulumu, geçiş, geri alma | [`DEPLOYMENT.md`](DEPLOYMENT.md) |
 | Eski veriyi yeni şemaya taşıma | [`web/scripts/migrate-legacy/README.md`](web/scripts/migrate-legacy/README.md) |
-| Eski yığın (yalnızca geri dönüş) | `docker-compose.legacy.yml`, `docker-compose.legacy.coolify.yaml` |
+| Eski yığın (yalnızca geri dönüş, hazır imajlarla) | `docker-compose.legacy.coolify.yaml` |
 | Yeniden kurulum tasarımı ve görev raporları | `.superpowers/sdd/2026-11-22-eventflow-yeniden-kurulum/` |
 
 ## Teknolojiler

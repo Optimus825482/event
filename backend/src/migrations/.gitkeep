@@ -1,4 +1,0 @@
-# Migration dosyaları bu klasörde tutulur
-# TypeORM CLI ile migration oluşturmak için:
-# npm run migration:generate -- src/migrations/MigrationName
-# npm run migration:run

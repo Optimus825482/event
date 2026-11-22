@@ -1,8 +1,8 @@
 # EventFlow PRO - Dağıtım Rehberi (yeni uygulama: `web/`)
 
 > Bu rehber `web/` uygulamasının Docker/Coolify ile üretime alınmasını anlatır. Eski NestJS + Next.js yığınının
-> dağıtımı `docker-compose.legacy.yml` / `docker-compose.legacy.coolify.yaml` ile hâlâ mümkündür (geri dönüş için);
-> eski rehber artık geçerli değildir.
+> kaynak kodu depodan kaldırıldı; GHCR'deki son imajlarıyla `docker-compose.legacy.coolify.yaml` üzerinden hâlâ
+> başlatılabilir (geri dönüş için). Eski imajlar artık yeniden üretilmez; eski rehber geçerli değildir.
 >
 > **Durum notu:** Docker bu geliştirme makinesinde kurulu değildi; `web/Dockerfile` ve compose dosyaları **derlenip
 > çalıştırılarak denenmedi**. Yalnızca migrator ve create-admin betikleri özel PostgreSQL kümesinde gerçekten çalıştırıldı (bkz. en alt,
@@ -152,7 +152,8 @@ Geri alma:
   dağıtın. Dikkat: `migrate` ileri yönlüdür; yeni migration'lar eski imajla uyumsuz olabilir. Şema değiştiyse
   yeni veritabanını bu dağıtımdan önce alınan yedekten geri yükleyin.
 - **Yeni yığın tümden vazgeçilirse**: alan adını eski yığına çevirin ve eskiyi başlatın:
-  `docker compose -f docker-compose.legacy.yml up -d` (Coolify'da `docker-compose.legacy.coolify.yaml`). Eski veritabanı
+  Coolify'da `docker-compose.legacy.coolify.yaml` (GHCR'deki son `eventflow-backend`/`eventflow-frontend` imajlarını
+  kullanır; bu imajları cutover onaylanana kadar silmeyin). Eski veritabanı
   taşıma sırasında hiç değiştirilmediği için olduğu gibi çalışır. Cutover sonrası eski uygulamaya yazılan veri yoksa kayıp
   olmaz; yeni uygulamada cutover sonrası girilen veriler eski yığına geri taşınmaz.
 
@@ -170,9 +171,9 @@ Bunlar ajanın/otomasyonun yapamayacağı ya da yapmaması gereken işlerdir:
    (parola zaten geçersizdir); geri döndürülemez bir işlem olduğu için yedek alıp sahibi karar vermelidir.
 3. **Gerçek veri taşımasını çalıştırın** (yukarıdaki kılavuz) ve taşıma raporundaki tüm uyarıları gözden geçirin.
 4. **Cutover'ı yapın** (alan adını yeni servise çevirin) ve elle duman testi yapın.
-5. **Onayınızla** `backend/` ve `frontend/` dizinleri, eski compose dosyaları, eski iş akışı işleri ve
-   `DEPLOYMENT_CHECKLIST.md` gibi eski belgeler kaldırılabilir. Bu silme kasıtlı olarak yapılmadı; geri dönüş süresi
-   (birkaç hafta) dolduktan sonra onay verin.
+5. `backend/` ve `frontend/` dizinleri, kaynaktan derleyen `docker-compose.legacy.yml` ve eski imaj işleri sahibinin
+   onayıyla kaldırıldı. Geri dönüş süresi dolduktan sonra `docker-compose.legacy.coolify.yaml`, `DEPLOYMENT_CHECKLIST.md`,
+   GHCR'deki eski imajlar ve eski yığının volume'ları da kaldırılabilir.
 6. Üretim gizli değerlerini (`BETTER_AUTH_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `DB_PASSWORD`) üretip güvenli bir yerde
    (parola yöneticisi) yedekleyin; kaybedilen `BETTER_AUTH_SECRET`/`QR_SIGNING_KEY` basılı/dağıtılmış QR'ları geçersiz kılar.
 

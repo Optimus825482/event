@@ -1,1 +1,0 @@
-export { InvitationEditor } from "./InvitationEditor";
