@@ -9,6 +9,13 @@ import { addNoteAction, deleteNoteAction, updateNoteAction } from "../actions";
 import { NOTE_TYPE_LABELS, NOTE_TYPES, type NoteType } from "../schemas";
 import { useRunAction } from "./use-run-action";
 
+// Sunucu (UTC) ve tarayıcı aynı metni üretsin: saat dilimi sabit.
+const NOTE_TIME = new Intl.DateTimeFormat("tr-TR", {
+  dateStyle: "short",
+  timeStyle: "short",
+  timeZone: "Europe/Istanbul",
+});
+
 export type NoteView = {
   id: string;
   content: string;
@@ -39,7 +46,7 @@ function NoteItem({ note, canEdit }: { note: NoteView; canEdit: boolean }) {
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="outline">{NOTE_TYPE_LABELS[note.noteType]}</Badge>
         {note.eventName ? <span>{note.eventName}</span> : null}
-        <span>{new Date(note.createdAt).toLocaleString("tr-TR")}</span>
+        <span>{NOTE_TIME.format(new Date(note.createdAt))}</span>
         {note.createdByName ? <span>{note.createdByName}</span> : null}
       </div>
       {editing ? (

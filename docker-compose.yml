@@ -18,6 +18,8 @@ services:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD zorunlu}
       POSTGRES_DB: ${DB_NAME:-eventflow}
+      # Geliştirme, CI ve Coolify ile aynı harmanlama (C): ORDER BY ve metin karşılaştırmaları her yerde aynı sonucu verir.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - web_postgres_data:/var/lib/postgresql/data
     networks:

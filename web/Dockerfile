@@ -17,14 +17,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-# Çalışma zamanı migrator'ının bağımlılıkları: yalnızca drizzle-orm + pg (package.json'daki sürümlerle).
-# Standalone izlemesi bunları eksik bırakabileceği için ayrı, tam bir kurulumdur.
-FROM node:24-alpine AS migrator-deps
-WORKDIR /opt/migrator
-COPY package.json ./pkg.json
-RUN node -e "const p=require('./pkg.json').dependencies; require('fs').writeFileSync('package.json', JSON.stringify({name:'migrator',private:true,type:'module',dependencies:{'drizzle-orm':p['drizzle-orm'],pg:p.pg}}))" \
-    && rm pkg.json \
-    && npm install --omit=dev --no-audit --no-fund
+# Çalışma zamanı migrator'ının bağımlılıkları: yalnızca drizzle-orm + pg ve geçişli bağımlılıkları.
+# Paketler, uygulamanın `npm ci` ile kurulan ağacından (package-lock.json'daki sürümler) kopyalanır; böylece
+# migrator uygulamayla aynı sürümleri kullanır ve ağdan kurulum yapılmaz. Kapanışı package-lock.json'dan çıkarır.
+FROM deps AS migrator-deps
+RUN node -e "const fs=require('fs');const lock=require('./package-lock.json').packages;const seen=new Set();const find=(from,name)=>{let p=from;for(;;){const c=(p?p+'/':'')+'node_modules/'+name;if(lock[c])return c;if(!p)return null;const i=p.lastIndexOf('/node_modules/');p=i<0?'':p.slice(0,i);}};const walk=(path)=>{if(!path||seen.has(path))return;seen.add(path);const e=lock[path];for(const d of Object.keys({...e.dependencies,...e.optionalDependencies}))walk(find(path,d));};for(const n of ['drizzle-orm','pg'])walk(find('',n));for(const p of seen)fs.cpSync(p,'/opt/migrator/'+p,{recursive:true});console.log([...seen].join('\n'));"
 
 FROM node:24-alpine AS runner
 WORKDIR /app

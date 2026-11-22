@@ -22,6 +22,9 @@ const STATUS_LABELS: Record<string, string> = {
   no_show: "Gelmedi",
 };
 
+// Sunucu bileşeni kapsayıcının saat dilimini (UTC) kullanırdı; gece yarısına yakın etkinlikler önceki günü gösterirdi.
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requirePolicyActor();
   if (!can(actor, "customers", "view")) {
@@ -112,7 +115,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
                 <span className="font-medium">{r.eventName}</span>
                 <span className="text-muted-foreground">
-                  {r.eventStartsAt.toLocaleDateString("tr-TR")} · {r.guestCount} kişi
+                  {dateFormat.format(r.eventStartsAt)} · {r.guestCount} kişi
                 </span>
                 <Badge variant="outline">{STATUS_LABELS[r.status] ?? r.status}</Badge>
               </li>

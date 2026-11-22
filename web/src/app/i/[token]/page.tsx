@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { notFound, redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { db } from "@/db/client";
 import { FitToWidth } from "@/features/invitations/components/fit-to-width";
 import { InvitationSurface } from "@/features/invitations/components/invitation-surface";
 import { getPublicInvitation } from "@/features/invitations/public";
+import { checkInvitationRate } from "@/features/invitations/rate-limit";
 
 // Bağlantıya sahip olan herkes görür; arama motorlarına açılmaz ve önbelleğe alınmaz.
 export const metadata: Metadata = {
@@ -17,6 +19,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicInvitationPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  // Veritabanına dokunmadan önce: IP başına hız sınırı. Sayfa durum kodu belirleyemediğinden 429 veren uca yönlendirilir.
+  const rate = checkInvitationRate(await headers());
+  if (!rate.allowed) redirect(`/i/${encodeURIComponent(token)}/limited?r=${rate.retryAfterSeconds}`);
+
   const invitation = await getPublicInvitation(db, token);
   if (!invitation) notFound();
 

@@ -95,11 +95,13 @@ function fieldErrorsOf(error: z.ZodError): Record<string, string[]> {
 }
 
 function toFailure(scope: string, error: unknown): ActionResult<never> {
+  // ForbiddenError, sayfalar için Next'in 403 özetini taşır; eylemde sonuç olarak döner, yeniden fırlatılmaz.
+  if (error instanceof ForbiddenError) return fail("forbidden", MESSAGES.forbidden);
+
   // redirect() / notFound() gibi Next iç akış hataları yutulmaz.
   unstable_rethrow(error);
 
   if (error instanceof DomainError) return fail(error.code, error.message);
-  if (error instanceof ForbiddenError) return fail("forbidden", MESSAGES.forbidden);
   if (error instanceof UnauthenticatedError) return fail("unauthenticated", MESSAGES.unauthenticated);
 
   const pgCode = pgErrorCode(error);

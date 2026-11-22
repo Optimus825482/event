@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { customers, customerTags, guestNotes } from "@/db/schema";
+import { customers, customerTags, events, guestNotes, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "./pg-error";
@@ -38,8 +38,48 @@ export async function removeTag(
   return { customerId: input.customerId, tag };
 }
 
+/** Organizatör yalnızca kendi etkinliğine erişir; başkasınınki "yok" gibi görünür (events/service ile aynı kural). */
+function mayAccessEvent(actor: Actor, event: { organizerId: string }): boolean {
+  return actor.role !== "organizer" || event.organizerId === actor.id;
+}
+
+/**
+ * Not ebeveynleri: etkinlik var ve erişilebilir olmalı; rezervasyon bu müşteriye ve (verildiyse) bu
+ * etkinliğe ait olmalı ve etkinliği erişilebilir olmalıdır. Kimlikler istemciden gelir, güvenilmez.
+ */
+async function assertNoteParents(db: Executor, actor: Actor, input: AddNoteInput): Promise<void> {
+  if (input.eventId) {
+    const [event] = await db
+      .select({ organizerId: events.organizerId })
+      .from(events)
+      .where(eq(events.id, input.eventId));
+    if (!event || !mayAccessEvent(actor, event)) throw new DomainError("not_found", "Etkinlik bulunamadı");
+  }
+  if (input.reservationId) {
+    const [reservation] = await db
+      .select({
+        customerId: reservations.customerId,
+        eventId: reservations.eventId,
+        organizerId: events.organizerId,
+      })
+      .from(reservations)
+      .innerJoin(events, eq(events.id, reservations.eventId))
+      .where(eq(reservations.id, input.reservationId));
+    if (!reservation || !mayAccessEvent(actor, reservation)) {
+      throw new DomainError("not_found", "Rezervasyon bulunamadı");
+    }
+    if (reservation.customerId !== input.customerId) {
+      throw new DomainError("invalid", "Rezervasyon bu müşteriye ait değil");
+    }
+    if (input.eventId && reservation.eventId !== input.eventId) {
+      throw new DomainError("invalid", "Rezervasyon seçilen etkinliğe ait değil");
+    }
+  }
+}
+
 export async function addNote(db: Executor, actor: Actor, input: AddNoteInput): Promise<{ id: string }> {
   await assertCustomerExists(db, input.customerId);
+  await assertNoteParents(db, actor, input);
   const [row] = await db
     .insert(guestNotes)
     .values({

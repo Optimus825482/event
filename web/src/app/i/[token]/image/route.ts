@@ -1,5 +1,6 @@
 import { db } from "@/db/client";
 import { getPublicInvitationImagePath } from "@/features/invitations/public";
+import { checkInvitationRate, tooManyRequestsResponse } from "@/features/invitations/rate-limit";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
 import { serveUpload } from "@/features/uploads/serve";
 
@@ -14,6 +15,10 @@ function notFound(): Response {
  * yalnızca o etkinliğin davetiyesinde gösterilen yükleme yolları sunulur (`?p=<yol>`).
  */
 export async function GET(request: Request, context: RouteContext): Promise<Response> {
+  // Veritabanına dokunmadan önce: IP başına hız sınırı.
+  const rate = checkInvitationRate(request.headers);
+  if (!rate.allowed) return tooManyRequestsResponse(rate.retryAfterSeconds);
+
   const { token } = await context.params;
   const requested = new URL(request.url).searchParams.get("p");
   if (!requested) return notFound();
