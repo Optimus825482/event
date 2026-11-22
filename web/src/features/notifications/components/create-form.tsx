@@ -1,14 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Send } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { createNotificationAction } from "../actions";
 import { PRIORITY_LABELS, TARGET_ROLE_LABELS } from "../labels";
 import { PRIORITIES, TARGET_ROLES } from "../schemas";
 
 const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500";
 
 function Field({
   label,
@@ -23,12 +25,12 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label htmlFor={name} className="block text-sm font-medium">
+      <label htmlFor={name} className="block text-sm font-medium text-slate-200">
         {label}
       </label>
       {children}
       {errors?.map((message) => (
-        <p key={message} role="alert" className="text-sm text-destructive">
+        <p key={message} role="alert" className="text-sm text-red-400">
           {message}
         </p>
       ))}
@@ -39,6 +41,7 @@ function Field({
 /** Hedef role duyuru gönderir. */
 export function CreateNotificationForm() {
   const router = useRouter();
+  const toast = useToast();
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -64,22 +67,25 @@ export function CreateNotificationForm() {
       if (!res.ok) {
         setErrors(res.fieldErrors ?? {});
         setMessage({ kind: "error", text: res.message });
+        toast.error(res.message);
         return;
       }
       setErrors({});
       setMessage({ kind: "ok", text: "Bildirim gönderildi" });
+      toast.success("Bildirim gönderildi");
       formRef.current?.reset();
       router.refresh();
     } catch {
       setMessage({ kind: "error", text: "Beklenmeyen bir hata oluştu" });
+      toast.error("Beklenmeyen bir hata oluştu");
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="space-y-4 rounded-lg border border-border p-4" aria-busy={pending}>
-      <h2 className="text-lg font-semibold">Yeni bildirim</h2>
+    <form ref={formRef} onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-700 bg-slate-800/50 p-4" aria-busy={pending}>
+      <h2 className="text-lg font-semibold text-white">Yeni bildirim</h2>
       <Field label="Başlık" name="title" errors={errors.title}>
         <input id="title" name="title" required maxLength={200} className={inputClass} />
       </Field>
@@ -112,12 +118,13 @@ export function CreateNotificationForm() {
       {message ? (
         <p
           role={message.kind === "error" ? "alert" : "status"}
-          className={message.kind === "error" ? "text-sm text-destructive" : "text-sm text-emerald-600"}
+          className={message.kind === "error" ? "text-sm text-red-400" : "text-sm text-emerald-400"}
         >
           {message.text}
         </p>
       ) : null}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" className="bg-blue-600 text-white hover:bg-blue-500" disabled={pending}>
+        <Send aria-hidden="true" />
         {pending ? "Gönderiliyor..." : "Gönder"}
       </Button>
     </form>

@@ -1,5 +1,7 @@
+import { Map as MapIcon, ScanLine } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { CheckInConsole } from "@/features/check-in/components/check-in-console";
 import { loadCheckInConsole } from "@/features/check-in/queries";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
@@ -20,20 +22,30 @@ export default async function CheckInEventPage({ params }: { params: Params }) {
   const closed = event.status === "draft" || event.status === "cancelled";
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div className="space-y-1">
-          <Link href="/check-in" className="text-sm text-muted-foreground hover:underline">
-            ← Etkinlikler
+    <div className="mx-auto max-w-5xl">
+      <Link href="/check-in" className="mb-3 inline-block text-sm text-slate-400 hover:text-white">
+        ← Etkinlikler
+      </Link>
+      <PageHeader
+        title={event.name}
+        description={`${dateFormat.format(event.startsAt)} · ${EVENT_STATUS_LABELS[event.status]}`}
+        icon={
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+            <ScanLine className="h-5 w-5" aria-hidden="true" />
+          </div>
+        }
+        actions={
+          <Link
+            href={`/check-in/${event.id}/plan`}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-700"
+          >
+            <MapIcon className="h-4 w-4" aria-hidden="true" />
+            Kat planı
           </Link>
-          <h1 className="text-2xl font-semibold">{event.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {dateFormat.format(event.startsAt)} · {EVENT_STATUS_LABELS[event.status]}
-          </p>
-        </div>
-      </div>
+        }
+      />
       {closed ? (
-        <p role="alert" className="rounded-md border border-amber-500 bg-amber-50 p-4 text-sm text-amber-900">
+        <p role="alert" className="mb-5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
           Bu etkinlik {EVENT_STATUS_LABELS[event.status].toLocaleLowerCase("tr-TR")} durumunda; check-in yapılamaz.
         </p>
       ) : null}

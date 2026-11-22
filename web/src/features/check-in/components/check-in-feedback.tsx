@@ -1,6 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-react";
+import Link from "next/link";
 import type { CheckInFeedback, QueuedReason } from "./use-check-in";
 
 const timeFormat = new Intl.DateTimeFormat("tr-TR", {
@@ -19,7 +20,20 @@ function formatTime(iso: string): string {
   return Number.isNaN(date.getTime()) || date.getTime() === 0 ? "bilinmeyen saat" : timeFormat.format(date);
 }
 
-/** Son check-in denemesinin sonucu: yeşil başarı, sarı "zaten giriş yaptı", kırmızı ret. */
+function CloseButton({ onClose, className }: { onClose: () => void; className: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClose}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm transition-colors ${className}`}
+    >
+      <X className="h-4 w-4" aria-hidden="true" />
+      Kapat
+    </button>
+  );
+}
+
+/** Son check-in denemesinin sonucu: yeşil başarı, sarı "zaten giriş yaptı", mavi kuyruk, kırmızı ret. */
 export function CheckInFeedbackBanner({
   feedback,
   onClose,
@@ -33,15 +47,16 @@ export function CheckInFeedbackBanner({
     return (
       <div
         role="alert"
-        className="flex items-start justify-between gap-4 rounded-lg border-2 border-red-500 bg-red-50 p-4 text-red-900 dark:bg-red-950 dark:text-red-100"
+        className="flex items-start justify-between gap-4 rounded-xl border-2 border-red-500/60 bg-red-500/10 p-4 text-red-100"
       >
-        <div>
-          <p className="text-lg font-semibold">Giriş yapılamadı</p>
-          <p>{feedback.message}</p>
+        <div className="flex items-start gap-3">
+          <XCircle className="mt-1 h-6 w-6 shrink-0 text-red-400" aria-hidden="true" />
+          <div>
+            <p className="text-lg font-semibold">Giriş yapılamadı</p>
+            <p>{feedback.message}</p>
+          </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Kapat
-        </Button>
+        <CloseButton onClose={onClose} className="text-red-200 hover:bg-red-500/20" />
       </div>
     );
   }
@@ -50,46 +65,59 @@ export function CheckInFeedbackBanner({
     return (
       <div
         role="status"
-        className="flex items-start justify-between gap-4 rounded-lg border-2 border-sky-500 bg-sky-50 p-4 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
+        className="flex items-start justify-between gap-4 rounded-xl border-2 border-sky-500/60 bg-sky-500/10 p-4 text-sky-100"
       >
-        <div className="space-y-1">
-          <p className="text-lg font-semibold">{QUEUED_TITLE[feedback.reason]}</p>
-          <p>Bu giriş henüz sunucuda ONAYLANMADI. Bağlantı gelince otomatik gönderilir; bekleyen sayısı aşağıda görünür.</p>
+        <div className="flex items-start gap-3">
+          <Clock className="mt-1 h-6 w-6 shrink-0 text-sky-400" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="text-lg font-semibold">{QUEUED_TITLE[feedback.reason]}</p>
+            <p>Bu giriş henüz sunucuda ONAYLANMADI. Bağlantı gelince otomatik gönderilir; bekleyen sayısı aşağıda görünür.</p>
+          </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Kapat
-        </Button>
+        <CloseButton onClose={onClose} className="text-sky-200 hover:bg-sky-500/20" />
       </div>
     );
   }
 
   const { result } = feedback;
   const success = feedback.kind === "success";
+  const Icon = success ? CheckCircle2 : AlertTriangle;
   return (
     <div
       role="status"
       className={
         success
-          ? "flex items-start justify-between gap-4 rounded-lg border-2 border-emerald-500 bg-emerald-50 p-4 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
-          : "flex items-start justify-between gap-4 rounded-lg border-2 border-amber-500 bg-amber-50 p-4 text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+          ? "flex items-start justify-between gap-4 rounded-xl border-2 border-emerald-500/60 bg-emerald-500/10 p-4 text-emerald-100"
+          : "flex items-start justify-between gap-4 rounded-xl border-2 border-amber-500/60 bg-amber-500/10 p-4 text-amber-100"
       }
     >
-      <div className="space-y-1">
-        <p className="text-lg font-semibold">{success ? "Giriş yapıldı" : "Bu misafir zaten giriş yaptı"}</p>
-        <p className="text-2xl font-bold">Masa {result.tableLabel}</p>
-        <p>
-          {result.guestName ?? "Misafir"} · {result.guestCount} kişi
-        </p>
-        {!success ? (
-          <p className="text-sm">
-            {formatTime(result.checkedInAt)}
-            {result.checkedInBy ? ` · ${result.checkedInBy.username}` : ""}
+      <div className="flex items-start gap-3">
+        <Icon className={`mt-1 h-6 w-6 shrink-0 ${success ? "text-emerald-400" : "text-amber-400"}`} aria-hidden="true" />
+        <div className="space-y-1">
+          <p className="text-lg font-semibold">{success ? "Giriş yapıldı" : "Bu misafir zaten giriş yaptı"}</p>
+          <p className="text-2xl font-bold text-white">Masa {result.tableLabel}</p>
+          <p>
+            {result.guestName ?? "Misafir"} · {result.guestCount} kişi
           </p>
-        ) : null}
+          {!success ? (
+            <p className="text-sm">
+              {formatTime(result.checkedInAt)}
+              {result.checkedInBy ? ` · ${result.checkedInBy.username}` : ""}
+            </p>
+          ) : null}
+          <Link
+            href={`/check-in/${result.eventId}/plan?masa=${encodeURIComponent(result.tableId)}`}
+            className="inline-flex items-center gap-1 text-sm underline underline-offset-2 hover:text-white"
+          >
+            <MapPin className="h-4 w-4" aria-hidden="true" />
+            Masayı planda göster
+          </Link>
+        </div>
       </div>
-      <Button variant="ghost" size="sm" onClick={onClose}>
-        Kapat
-      </Button>
+      <CloseButton
+        onClose={onClose}
+        className={success ? "text-emerald-200 hover:bg-emerald-500/20" : "text-amber-200 hover:bg-amber-500/20"}
+      />
     </div>
   );
 }

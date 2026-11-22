@@ -1,5 +1,6 @@
 "use client";
 
+import { QrCode } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +24,17 @@ export function ScanPanel({ onScan, pending }: { onScan: (token: string) => void
   }
 
   return (
-    <form onSubmit={submit} className="space-y-2" aria-label="QR kod ile giriş">
-      <Label htmlFor="check-in-code">QR kod</Label>
+    <form
+      onSubmit={submit}
+      className="space-y-2 rounded-xl border border-slate-700 bg-slate-800 p-4"
+      aria-label="QR kod ile giriş"
+    >
+      <div className="flex items-center gap-2">
+        <QrCode className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+        <Label htmlFor="check-in-code" className="text-slate-200">
+          QR kod
+        </Label>
+      </div>
       <div className="flex gap-2">
         <Input
           ref={inputRef}
@@ -36,9 +46,14 @@ export function ScanPanel({ onScan, pending }: { onScan: (token: string) => void
           autoCapitalize="off"
           spellCheck={false}
           autoFocus
-          className="h-12 text-base"
+          className="h-12 border-slate-600 bg-slate-900 text-base text-white placeholder:text-slate-500"
         />
-        <Button type="submit" size="lg" className="h-12" disabled={pending || value.trim() === ""}>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-12 bg-emerald-600 text-white hover:bg-emerald-500"
+          disabled={pending || value.trim() === ""}
+        >
           {pending ? "Gönderiliyor…" : "Giriş yap"}
         </Button>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,10 +54,18 @@ export function WalkInForm({
 
   const free = tables.data ?? [];
   return (
-    <form key={formKey} onSubmit={submit} className="space-y-3" aria-label="Walk-in misafir kaydı">
-      <h2 className="text-lg font-semibold">Walk-in misafir</h2>
+    <form
+      key={formKey}
+      onSubmit={submit}
+      className="space-y-3 rounded-xl border border-slate-700 bg-slate-800 p-4"
+      aria-label="Walk-in misafir kaydı"
+    >
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+        <UserPlus className="h-5 w-5 text-emerald-400" aria-hidden="true" />
+        Walk-in misafir
+      </h2>
       <Field id="walk-in-table" label="Masa" errors={errors.tableId}>
-        <select id="walk-in-table" name="tableId" className={SELECT_CLASS} defaultValue="" required>
+        <select id="walk-in-table" name="tableId" className={`${SELECT_CLASS} border-slate-600 bg-slate-900 text-white`} defaultValue="" required>
           <option value="" disabled>
             {tables.isLoading ? "Masalar yükleniyor…" : free.length === 0 ? "Boş masa yok" : "Boş masa seçin"}
           </option>
@@ -78,7 +87,7 @@ export function WalkInForm({
           <Input id="walk-in-phone" name="guestPhone" type="tel" autoComplete="off" />
         </Field>
       </div>
-      <Button type="submit" disabled={pending || free.length === 0}>
+      <Button type="submit" className="bg-emerald-600 text-white hover:bg-emerald-500" disabled={pending || free.length === 0}>
         {pending ? "Kaydediliyor…" : "Kaydet ve giriş yap"}
       </Button>
     </form>
