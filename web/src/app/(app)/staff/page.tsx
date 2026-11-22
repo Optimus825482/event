@@ -15,6 +15,7 @@ import { DepartmentCards } from "@/features/staff/components/department-cards";
 import { ReviewSummaryTable } from "@/features/staff/components/review-summary-table";
 import { StaffFilters } from "@/features/staff/components/staff-filters";
 import { StaffForm } from "@/features/staff/components/staff-form";
+import { StaffImport } from "@/features/staff/components/staff-import";
 import { StaffTabs, type StaffTabKey } from "@/features/staff/components/staff-tabs";
 import { TeamCardsGrid } from "@/features/staff/components/team-cards-grid";
 import { getStaffStats, listDepartmentCards } from "@/features/staff/overview-queries";
@@ -46,14 +47,22 @@ export default async function StaffPage({
   const requested = first(raw.tab);
   const tab: StaffTabKey = available.find((key) => key === requested) ?? "people";
 
-  const headerActions = can(actor, "staff", "edit") ? (
-    <Button asChild variant="outline" size="sm">
-      <Link href="/settings/organization">
-        <Settings aria-hidden className="size-4" />
-        Kuruluş ayarları
-      </Link>
-    </Button>
-  ) : null;
+  const canImport = can(actor, "staff", "create");
+  const canSettings = can(actor, "staff", "edit");
+  const headerActions =
+    canImport || canSettings ? (
+      <div className="flex flex-wrap gap-2">
+        {canImport ? <StaffImport /> : null}
+        {canSettings ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href="/settings/organization">
+              <Settings aria-hidden className="size-4" />
+              Kuruluş ayarları
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+    ) : null;
 
   return (
     <div className="mx-auto max-w-6xl">

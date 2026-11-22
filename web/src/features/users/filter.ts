@@ -30,3 +30,11 @@ export function countUsers(users: UserSummary[]): UserCounts {
     admins: users.filter((u) => u.role === "admin").length,
   };
 }
+
+/** Silinmiş (anonimleştirilmiş) hesapların e-posta soneki; `deleteUser` bu biçimi yazar. */
+export const DELETED_EMAIL_SUFFIX = "@silinmis.eventflow.invalid";
+
+/** Başka kayıtlarca anıldığı için satırı tutulan, anonimleştirilmiş hesap. */
+export function isDeletedAccount(user: Pick<UserSummary, "email" | "isActive">): boolean {
+  return !user.isActive && user.email.endsWith(DELETED_EMAIL_SUFFIX);
+}

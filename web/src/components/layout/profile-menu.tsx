@@ -3,6 +3,7 @@
 import { ChevronDown, Home, LogOut, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +21,8 @@ import { useSignOut } from "./use-sign-out";
 
 type ProfileMenuProps = {
   username: string;
+  /** Doğrulanmış `data:` URL (bkz. features/users/avatar.ts); yoksa simge gösterilir. */
+  avatarUrl?: string | null;
   roleLabel: string;
   isAdmin: boolean;
   modules: readonly ShellGroup[];
@@ -30,7 +33,7 @@ type ProfileMenuProps = {
 const ITEM = "cursor-pointer gap-2 rounded-md px-3 py-2 text-sm text-slate-300 focus:bg-slate-700 focus:text-white";
 
 /** Profil açılır menüsü: kullanıcı, modül geçişi, genel bağlantılar ve çıkış. */
-export function ProfileMenu({ username, roleLabel, isAdmin, modules, general, accent }: ProfileMenuProps) {
+export function ProfileMenu({ username, avatarUrl = null, roleLabel, isAdmin, modules, general, accent }: ProfileMenuProps) {
   const pathname = usePathname();
   const { pending, signOut } = useSignOut();
   const active = findActiveGroup(modules, pathname);
@@ -42,9 +45,12 @@ export function ProfileMenu({ username, roleLabel, isAdmin, modules, general, ac
         aria-label="Profil menüsü"
         className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm text-white transition-colors hover:bg-slate-700 data-[state=open]:bg-slate-700"
       >
-        <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", classes.avatar)}>
-          <User aria-hidden="true" className="h-4 w-4 text-white" />
-        </span>
+        <Avatar className="h-8 w-8">
+          {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+          <AvatarFallback className={cn("flex h-8 w-8 items-center justify-center rounded-full", classes.avatar)}>
+            <User aria-hidden="true" className="h-4 w-4 text-white" />
+          </AvatarFallback>
+        </Avatar>
         <span className="hidden max-w-32 truncate font-medium lg:block">{username}</span>
         <ChevronDown aria-hidden="true" className="h-4 w-4 text-slate-400" />
       </DropdownMenuTrigger>

@@ -1,18 +1,21 @@
 import { and, count, eq, ne, or, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { accounts, sessions, userPermissions, users } from "@/db/schema";
+import { accounts, events, sessions, staffPerformanceReviews, userPermissions, users } from "@/db/schema";
 import { auth, hashPassword } from "@/features/auth/auth";
 import { deactivateUser, reactivateUser } from "@/features/auth/admin";
+import { ForbiddenError } from "@/features/auth/errors";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import type {
   CreateUserInput,
+  DeleteUserInput,
   ResetPasswordInput,
   SetPermissionsInput,
   SetUserActiveInput,
   UpdateUserInput,
 } from "./schemas";
+import { DELETED_EMAIL_SUFFIX, isDeletedAccount } from "./filter";
 import { USER_COLUMNS, type UserSummary } from "./types";
 
 const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
@@ -24,6 +27,9 @@ const MESSAGES = {
   selfDeactivate: "Kendi hesabınızı pasifleştiremezsiniz",
   lastAdminDeactivate: "Sistemdeki son aktif yönetici pasifleştirilemez",
   lastAdminDemote: "Sistemdeki son aktif yöneticinin rolü değiştirilemez",
+  selfDelete: "Kendi hesabınızı silemezsiniz",
+  deletedReactivate: "Silinmiş hesap yeniden etkinleştirilemez",
+  lastAdminDelete: "Sistemdeki son yönetici silinemez",
 } as const;
 
 /** Yönetici sayısını etkileyen işlemleri (pasifleştirme, rol düşürme) sıraya sokar. */
@@ -44,7 +50,7 @@ async function otherActiveAdmins(tx: Tx, excludeId: string): Promise<number> {
 
 async function getTarget(tx: Db | Tx, id: string) {
   const [row] = await tx
-    .select({ id: users.id, role: users.role, isActive: users.isActive })
+    .select({ id: users.id, role: users.role, isActive: users.isActive, email: users.email })
     .from(users)
     .where(eq(users.id, id));
   if (!row) throw new DomainError("not_found", MESSAGES.notFound);
@@ -143,6 +149,7 @@ export async function setUserActive(db: Db | Tx, actor: Actor, input: SetUserAct
       }
       await deactivateUser(target.id);
     } else {
+      if (isDeletedAccount(target)) throw new DomainError("conflict", MESSAGES.deletedReactivate);
       await reactivateUser(target.id);
     }
   });
@@ -189,4 +196,66 @@ export async function setUserPermissions(
     }
   });
   return { id: input.id, count: input.permissions.length };
+}
+
+export const DELETED_USER_NAME = "Silinmiş kullanıcı";
+
+export type DeleteUserResult = { id: string; mode: "deleted" | "anonymized" };
+
+/** `ON DELETE RESTRICT` ile kullanıcıya bağlı kayıtlar: varsa satır silinemez. */
+async function hasRestrictingReferences(tx: Tx, userId: string): Promise<boolean> {
+  const [organized] = await tx.select({ n: count() }).from(events).where(eq(events.organizerId, userId));
+  if ((organized?.n ?? 0) > 0) return true;
+  const [reviewed] = await tx
+    .select({ n: count() })
+    .from(staffPerformanceReviews)
+    .where(eq(staffPerformanceReviews.reviewerId, userId));
+  return (reviewed?.n ?? 0) > 0;
+}
+
+/**
+ * Kullanıcıyı siler (yalnızca yönetici). Kendini ve son yöneticiyi silmek reddedilir.
+ * - Hiçbir `restrict` başvurusu yoksa satır kalıcı silinir; oturum, parola hesabı ve izinler
+ *   `cascade`, diğer başvurular (`created_by_id` vb.) `set null` olur.
+ * - Etkinlik sahibi ya da değerlendiren olarak anılıyorsa satır kalır ama anonimleştirilir:
+ *   pasif, kişisel alanlar boş, kullanıcı adı/e-posta yer tutucu, rol `staff`, parola hesabı,
+ *   izinleri ve tüm oturumları silinir (giriş yapamaz; geçmiş kayıtlar bozulmaz).
+ */
+export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInput): Promise<DeleteUserResult> {
+  authorize(actor, "users", "delete");
+  // Silme izni yalnızca yönetici rolündedir; özel izin satırları bunu genişletemez.
+  if (actor.role !== "admin") throw new ForbiddenError();
+  return withAdminLock(db, async (tx) => {
+    const target = await getTarget(tx, input.id);
+    if (target.id === actor.id) throw new DomainError("conflict", MESSAGES.selfDelete);
+    if (target.role === "admin" && (await otherActiveAdmins(tx, target.id)) === 0) {
+      throw new DomainError("conflict", MESSAGES.lastAdminDelete);
+    }
+
+    if (!(await hasRestrictingReferences(tx, target.id))) {
+      await tx.delete(users).where(eq(users.id, target.id));
+      return { id: target.id, mode: "deleted" };
+    }
+
+    await tx
+      .update(users)
+      .set({
+        name: DELETED_USER_NAME,
+        username: `silinmis-${target.id}`,
+        email: `${target.id}${DELETED_EMAIL_SUFFIX}`,
+        emailVerified: false,
+        image: null,
+        role: "staff",
+        isActive: false,
+        staffId: null,
+        color: null,
+        phone: null,
+        position: null,
+      })
+      .where(eq(users.id, target.id));
+    await tx.delete(sessions).where(eq(sessions.userId, target.id));
+    await tx.delete(accounts).where(eq(accounts.userId, target.id));
+    await tx.delete(userPermissions).where(eq(userPermissions.userId, target.id));
+    return { id: target.id, mode: "anonymized" };
+  });
 }

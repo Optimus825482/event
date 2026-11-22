@@ -4,6 +4,7 @@ import type { ShellNav } from "./shell-nav";
 
 type AppShellProps = {
   username: string;
+  avatarUrl?: string | null;
   roleLabel: string;
   isAdmin: boolean;
   nav: ShellNav;

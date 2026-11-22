@@ -12,6 +12,7 @@ import { visibleNavGroups } from "@/features/auth/nav";
 import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { countUnread } from "@/features/notifications/service";
+import { getOwnAvatar } from "@/features/users/profile";
 
 async function currentActorOrLogin(): Promise<ActorWithPermissions> {
   try {
@@ -27,13 +28,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const actor = await currentActorOrLogin();
   const nav = buildShellNav(actor.role, visibleNavGroups(actor));
   const showBell = can(actor, "notifications", "view");
-  const unreadCount = showBell ? await countUnread(db, actor) : 0;
+  const [unreadCount, avatarUrl] = await Promise.all([
+    showBell ? countUnread(db, actor) : Promise.resolve(0),
+    getOwnAvatar(db, actor),
+  ]);
 
   return (
     <QueryProvider>
       <ToastProvider>
         <AppShell
           username={actor.username}
+          avatarUrl={avatarUrl}
           roleLabel={ROLE_LABELS[actor.role]}
           isAdmin={actor.role === "admin"}
           nav={nav}

@@ -10,6 +10,7 @@ import type { ShellNav } from "./shell-nav";
 
 type NavbarProps = {
   username: string;
+  avatarUrl?: string | null;
   roleLabel: string;
   isAdmin: boolean;
   nav: ShellNav;
@@ -18,7 +19,7 @@ type NavbarProps = {
 };
 
 /** Eski arayüzdeki `Navbar` / `LeaderNavbar` karşılığı: yapışkan üst çubuk + kırıntı satırı. */
-export function Navbar({ username, roleLabel, isAdmin, nav, unreadCount, showBell }: NavbarProps) {
+export function Navbar({ username, avatarUrl = null, roleLabel, isAdmin, nav, unreadCount, showBell }: NavbarProps) {
   const leader = nav.variant === "leader";
   const accent = nav.modules[0]?.accent ?? "blue";
   const linkable = [...nav.modules.flatMap((g) => g.items.map((i) => i.href)), ...nav.general.map((i) => i.href)];
@@ -62,6 +63,7 @@ export function Navbar({ username, roleLabel, isAdmin, nav, unreadCount, showBel
             <div className="hidden md:block">
               <ProfileMenu
                 username={username}
+                avatarUrl={avatarUrl}
                 roleLabel={roleLabel}
                 isAdmin={isAdmin}
                 modules={nav.modules}

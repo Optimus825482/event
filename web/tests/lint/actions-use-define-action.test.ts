@@ -5,8 +5,10 @@ import { describe, expect, it } from "vitest";
 const FEATURES_DIR = path.resolve(import.meta.dirname, "../../src/features");
 
 const TYPE_EXPORT = /^export\s+(?:type|interface)\b/;
+// `defineSelfAction` (features/users/self-action.ts): yalnızca oturumdaki kullanıcının kendi satırına
+// yazan eylemler; oturum + Zod sırası aynıdır, modül izni yerine yetki sınırı servistedir.
 const DEFINE_ACTION_EXPORT =
-  /^export\s+const\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*defineAction\s*[<(]/;
+  /^export\s+const\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*define(?:Self)?Action\s*[<(]/;
 
 /**
  * Bir action dosyasındaki, `defineAction(...)` sonucu olmayan dışa aktarımları
@@ -66,6 +68,7 @@ describe("action dosyaları yalnızca defineAction dışa aktarır", () => {
         `});`,
         `export const typed: Thing =`,
         `  defineAction({ module: "events" });`,
+        `export const own = defineSelfAction({ scope: "avatar" });`,
       ].join("\n");
       expect(findViolations(good)).toEqual([]);
     });
@@ -78,9 +81,10 @@ describe("action dosyaları yalnızca defineAction dışa aktarır", () => {
         `export { other } from "./other";`,
         `export default defineAction({});`,
         `export const notCalled = defineAction;`,
+        `export const lookalike = defineSelfActionX({});`,
       ].join("\n");
       const found = findViolations(bad);
-      expect(found).toHaveLength(5);
+      expect(found).toHaveLength(6);
       expect(found[0]).toContain("satır 1");
       expect(found.join("\n")).not.toContain("satır 3");
     });

@@ -16,8 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { ROLES } from "@/features/auth/roles";
-import { setUserActiveAction } from "../actions";
-import { countUsers, filterUsers, type RoleFilter, type StatusFilter } from "../filter";
+import { deleteUserAction, setUserActiveAction } from "../actions";
+import { countUsers, filterUsers, isDeletedAccount, type RoleFilter, type StatusFilter } from "../filter";
 import type { UserSummary } from "../types";
 import { CreateUserForm } from "./create-user-form";
 import { EditUserForm } from "./edit-user-form";
@@ -29,11 +29,12 @@ type DialogState =
   | { kind: "edit"; user: UserSummary }
   | { kind: "password"; user: UserSummary }
   | { kind: "toggle"; user: UserSummary }
+  | { kind: "delete"; user: UserSummary }
   | null;
 
-type Props = { users: UserSummary[]; selfId: string; canCreate: boolean; canEdit: boolean };
+type Props = { users: UserSummary[]; selfId: string; canCreate: boolean; canEdit: boolean; canDelete: boolean };
 
-export function UsersView({ users, selfId, canCreate, canEdit }: Props) {
+export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
@@ -57,6 +58,24 @@ export function UsersView({ users, selfId, canCreate, canEdit }: Props) {
       setDialog(null);
       if (result.ok) {
         const message = active ? "Kullanıcı etkinleştirildi" : "Kullanıcı pasifleştirildi";
+        toast.success(message);
+        setAnnouncement(message);
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+    });
+  }
+
+  function remove(user: UserSummary) {
+    startTransition(async () => {
+      const result = await deleteUserAction({ id: user.id });
+      setDialog(null);
+      if (result.ok) {
+        const message =
+          result.data.mode === "deleted"
+            ? "Kullanıcı silindi"
+            : "Kullanıcı geçmiş kayıtlarda anıldığı için anonimleştirildi ve kapatıldı";
         toast.success(message);
         setAnnouncement(message);
         router.refresh();
@@ -166,11 +185,13 @@ export function UsersView({ users, selfId, canCreate, canEdit }: Props) {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={user.isActive ? "secondary" : "outline"}>{user.isActive ? "Aktif" : "Pasif"}</Badge>
+                    <Badge variant={user.isActive ? "secondary" : "outline"}>
+                      {isDeletedAccount(user) ? "Silinmiş" : user.isActive ? "Aktif" : "Pasif"}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-1">
-                      {canEdit ? (
+                      {canEdit && !isDeletedAccount(user) ? (
                         <>
                           <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: "edit", user })}>
                             Düzenle
@@ -187,6 +208,18 @@ export function UsersView({ users, selfId, canCreate, canEdit }: Props) {
                             {user.isActive ? "Pasifleştir" : "Etkinleştir"}
                           </Button>
                         </>
+                      ) : null}
+                      {canDelete && user.id !== selfId && !isDeletedAccount(user) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-400 hover:text-red-300"
+                          disabled={pending}
+                          aria-label={`${user.username} kullanıcısını sil`}
+                          onClick={() => setDialog({ kind: "delete", user })}
+                        >
+                          Sil
+                        </Button>
                       ) : null}
                       <Button variant="ghost" size="sm" asChild>
                         <Link href={`/admin/users/${user.id}`} aria-label={`${user.username} ayrıntıları ve izinleri`}>
@@ -243,6 +276,21 @@ export function UsersView({ users, selfId, canCreate, canEdit }: Props) {
         variant="destructive"
         loading={pending}
         onConfirm={() => dialog?.kind === "toggle" && setActive(dialog.user, false)}
+      />
+
+      <ConfirmDialog
+        open={dialog?.kind === "delete"}
+        onOpenChange={(open) => !open && setDialog(null)}
+        title="Kullanıcı silinsin mi?"
+        description={
+          dialog?.kind === "delete"
+            ? `${dialog.user.username} hesabı silinecek ve tüm oturumları kapatılacak. Etkinlik sahibi ya da değerlendiren olarak anılıyorsa kayıt bozulmasın diye hesap anonimleştirilip kalıcı olarak kapatılır. Bu işlem geri alınamaz.`
+            : ""
+        }
+        confirmText="Sil"
+        variant="destructive"
+        loading={pending}
+        onConfirm={() => dialog?.kind === "delete" && remove(dialog.user)}
       />
     </div>
   );

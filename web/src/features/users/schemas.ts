@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ROLES } from "@/features/auth/roles";
 import { isValidUsername } from "@/features/auth/username";
+import { checkAvatarDataUrl } from "./avatar";
 
 /** `MIN_PASSWORD_LENGTH` (features/auth/auth.ts) ile aynı; testle eşitliği doğrulanır. */
 export const PASSWORD_MIN_LENGTH = 12;
@@ -87,3 +88,18 @@ export const setPermissionsSchema = z.object({
   ),
 });
 export type SetPermissionsInput = z.infer<typeof setPermissionsSchema>;
+
+export const deleteUserSchema = z.object({ id });
+export type DeleteUserInput = z.infer<typeof deleteUserSchema>;
+
+/** Kendi profil fotoğrafı: doğrulanmış `data:` URL ya da `null` (kaldır). Ayrıntılı denetim `avatar.ts`. */
+export const setOwnAvatarSchema = z.object({
+  image: z
+    .string()
+    .superRefine((value, ctx) => {
+      const check = checkAvatarDataUrl(value);
+      if (!check.ok) ctx.addIssue({ code: "custom", message: check.message });
+    })
+    .nullable(),
+});
+export type SetOwnAvatarInput = z.infer<typeof setOwnAvatarSchema>;

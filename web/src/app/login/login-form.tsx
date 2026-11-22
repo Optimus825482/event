@@ -31,6 +31,8 @@ export function LoginForm({ next }: { next: string | null }) {
         body: JSON.stringify({
           username: String(form.get("username") ?? ""),
           password: String(form.get("password") ?? ""),
+          // İşaretsiz: Better Auth oturum çerezini Max-Age'siz (tarayıcı kapanınca biten) yazar ve oturumu kısa tutar.
+          rememberMe: form.get("rememberMe") === "on",
         }),
       });
       if (!res.ok) {
@@ -102,6 +104,15 @@ export function LoginForm({ next }: { next: string | null }) {
           </button>
         </div>
       </div>
+      <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-slate-400">
+        <input
+          type="checkbox"
+          name="rememberMe"
+          defaultChecked
+          className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-blue-600"
+        />
+        Beni hatırla
+      </label>
       <button
         type="submit"
         disabled={pending}

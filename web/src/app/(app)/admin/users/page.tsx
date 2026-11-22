@@ -19,6 +19,7 @@ export default async function UsersPage() {
       selfId={actor.id}
       canCreate={can(actor, "users", "create")}
       canEdit={can(actor, "users", "edit")}
+      canDelete={actor.role === "admin" && can(actor, "users", "delete")}
     />
   );
 }
