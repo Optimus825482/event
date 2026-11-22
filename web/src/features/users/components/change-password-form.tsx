@@ -4,13 +4,14 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { changeOwnPasswordAction } from "../actions";
 import { passwordChangeError, validatePasswordChange } from "../password-change";
 import { Field } from "./field";
 
 const SUCCESS = "Parolanız değiştirildi; diğer oturumlar kapatıldı";
 const NETWORK_ERROR = "Bağlantı hatası. Lütfen tekrar deneyin.";
 
-/** Kendi parolasını değiştirme: Better Auth `change-password` ucuna doğrudan gider (giriş formuyla aynı yöntem). */
+/** Kendi parolasını değiştirme: `changeOwnPasswordAction` sunucu eylemiyle (auth uç noktası kapalıdır). */
 export function ChangePasswordForm() {
   const toast = useToast();
   const [pending, setPending] = useState(false);
@@ -35,16 +36,9 @@ export function ChangePasswordForm() {
 
     setPending(true);
     try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ currentPassword: input.current, newPassword: input.next, revokeOtherSessions: true }),
-      });
-      if (!res.ok) {
-        const body: { code?: unknown } | null = await res.json().catch(() => null);
-        const retry = res.headers.get("retry-after") ?? res.headers.get("x-retry-after");
-        const failure = passwordChangeError(res.status, body, retry);
+      const result = await changeOwnPasswordAction({ currentPassword: input.current, newPassword: input.next });
+      if (!result.ok) {
+        const failure = passwordChangeError(result);
         if (failure.field) setErrors({ [failure.field]: failure.message });
         else setFormError(failure.message);
         toast.error(failure.message);

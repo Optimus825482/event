@@ -7,7 +7,7 @@ import { getActorFromHeaders, type Actor } from "@/features/auth/session";
 import { createAction } from "@/lib/action";
 import { userActionDefs } from "@/features/users/action-defs";
 import { isDeletedAccount } from "@/features/users/filter";
-import { createUser, deleteUser, setUserActive, setUserPermissions } from "@/features/users/service";
+import { createUser, deleteUser, resetUserPassword, setUserActive, setUserPermissions, updateUser } from "@/features/users/service";
 import { truncateAll } from "../../helpers/db";
 import { createEvent, createStaff, createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD, signedInCookie, signIn } from "../auth/helpers";
@@ -161,5 +161,63 @@ describe("kullanıcı silme", () => {
     const run = createAction({ getActor: async () => admin }).defineAction(userActionDefs.deleteUser);
     expect(await run({ id: "yok" })).toMatchObject({ ok: false, code: "invalid" });
     expect(await run({ id: target.id })).toEqual({ ok: true, data: { id: target.id, mode: "deleted" } });
+  });
+
+  describe("silinmiş hesap değiştirilemez", () => {
+    async function anonymized(admin: Actor) {
+      const staffRow = await createStaff(db);
+      const target = await createUser(db, admin, {
+        username: "organizator",
+        password: PASSWORD,
+        role: "organizer",
+        staffId: staffRow.id,
+      });
+      await createEvent(db, { organizerId: target.id });
+      await expect(deleteUser(db, admin, { id: target.id })).resolves.toMatchObject({ mode: "anonymized" });
+      return target;
+    }
+
+    it("updateUser, resetUserPassword ve setUserPermissions conflict ile reddedilir; satır değişmez", async () => {
+      const admin = await actorOf("admin");
+      const target = await anonymized(admin);
+      const before = await rowOf(target.id);
+      const conflict = { code: "conflict", message: "Silinmiş hesap değiştirilemez" };
+
+      await expect(updateUser(db, admin, { id: target.id, email: "geri@example.com" })).rejects.toMatchObject(conflict);
+      await expect(updateUser(db, admin, { id: target.id, name: "Yeni Ad", role: "admin" })).rejects.toMatchObject(conflict);
+      await expect(resetUserPassword(db, admin, { id: target.id, password: PASSWORD })).rejects.toMatchObject(conflict);
+      await expect(
+        setUserPermissions(db, admin, {
+          id: target.id,
+          permissions: [{ module: "events", canView: true, canCreate: false, canEdit: false, canDelete: false }],
+        }),
+      ).rejects.toMatchObject(conflict);
+
+      expect(await rowOf(target.id)).toEqual(before);
+      expect(await db.select().from(accounts).where(eq(accounts.userId, target.id))).toHaveLength(0);
+      expect(await db.select().from(userPermissions).where(eq(userPermissions.userId, target.id))).toHaveLength(0);
+      expect((await signIn("organizator", PASSWORD)).status).not.toBe(200);
+    });
+
+    it("silinmiş hesap işaretini taklit eden e-posta ve kullanıcı adı reddedilir", async () => {
+      const admin = await actorOf("admin");
+      const normal = await createUser(db, admin, { username: "normal", password: PASSWORD, role: "staff" });
+
+      await expect(
+        updateUser(db, admin, { id: normal.id, email: "Sahte@Silinmis.EventFlow.Invalid" }),
+      ).rejects.toMatchObject({ code: "invalid" });
+      await expect(
+        createUser(db, admin, { username: "yeni", password: PASSWORD, role: "staff", email: "x@silinmis.eventflow.invalid" }),
+      ).rejects.toMatchObject({ code: "invalid" });
+      await expect(
+        createUser(db, admin, { username: "silinmis-123", password: PASSWORD, role: "staff" }),
+      ).rejects.toMatchObject({ code: "invalid" });
+      await expect(
+        createUser(db, admin, { username: "Silinmis-123", password: PASSWORD, role: "staff" }),
+      ).rejects.toMatchObject({ code: "invalid" });
+
+      expect((await rowOf(normal.id))?.email).toBe("normal@eventflow.invalid");
+      expect(await db.select().from(users).where(eq(users.username, "yeni"))).toHaveLength(0);
+    });
   });
 });

@@ -103,3 +103,15 @@ export const setOwnAvatarSchema = z.object({
     .nullable(),
 });
 export type SetOwnAvatarInput = z.infer<typeof setOwnAvatarSchema>;
+
+/** Kendi parolasını değiştirme: yeni parola yönetici parola sıfırlamayla aynı kuralları izler. */
+export const changeOwnPasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Mevcut parolayı girin").max(PASSWORD_MAX_LENGTH, "Parola çok uzun"),
+    newPassword: password,
+  })
+  .refine((v) => v.newPassword !== v.currentPassword, {
+    path: ["newPassword"],
+    message: "Yeni parola mevcut parolayla aynı olamaz",
+  });
+export type ChangeOwnPasswordInput = z.infer<typeof changeOwnPasswordSchema>;

@@ -19,6 +19,7 @@ import { DELETED_EMAIL_SUFFIX, isDeletedAccount } from "./filter";
 import { USER_COLUMNS, type UserSummary } from "./types";
 
 const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
+const DELETED_USERNAME_PREFIX = "silinmis-";
 
 const MESSAGES = {
   notFound: "Kullanıcı bulunamadı",
@@ -30,6 +31,9 @@ const MESSAGES = {
   selfDelete: "Kendi hesabınızı silemezsiniz",
   deletedReactivate: "Silinmiş hesap yeniden etkinleştirilemez",
   lastAdminDelete: "Sistemdeki son yönetici silinemez",
+  deletedImmutable: "Silinmiş hesap değiştirilemez",
+  reservedEmail: "Bu e-posta adresi kullanılamaz",
+  reservedUsername: "Bu kullanıcı adı kullanılamaz",
 } as const;
 
 /** Yönetici sayısını etkileyen işlemleri (pasifleştirme, rol düşürme) sıraya sokar. */
@@ -57,6 +61,20 @@ async function getTarget(tx: Db | Tx, id: string) {
   return row;
 }
 
+/** Silinmiş (anonimleştirilmiş) hesabın işaretini taklit eden e-posta ve kullanıcı adı normal hesaplara verilmez. */
+function assertNotReserved(username: string | undefined, email: string | undefined) {
+  if (email !== undefined && email.toLowerCase().endsWith(DELETED_EMAIL_SUFFIX)) {
+    throw new DomainError("invalid", MESSAGES.reservedEmail);
+  }
+  if (username !== undefined && username.toLowerCase().startsWith(DELETED_USERNAME_PREFIX)) {
+    throw new DomainError("invalid", MESSAGES.reservedUsername);
+  }
+}
+
+function assertNotDeleted(target: { email: string; isActive: boolean }) {
+  if (isDeletedAccount(target)) throw new DomainError("conflict", MESSAGES.deletedImmutable);
+}
+
 async function readSummary(db: Db | Tx, id: string): Promise<UserSummary> {
   const [row] = await db.select(USER_COLUMNS).from(users).where(eq(users.id, id));
   if (!row) throw new DomainError("not_found", MESSAGES.notFound);
@@ -82,6 +100,7 @@ async function assertUnique(db: Db | Tx, username: string | undefined, email: st
 export async function createUser(db: Db | Tx, actor: Actor, input: CreateUserInput): Promise<UserSummary> {
   authorize(actor, "users", "create");
   const email = (input.email || `${input.username}@${PLACEHOLDER_EMAIL_DOMAIN}`).toLowerCase();
+  assertNotReserved(input.username, email);
   await assertUnique(db, input.username, email);
 
   const ctx = await auth.$context;
@@ -119,9 +138,11 @@ export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInp
   const { id, email, ...rest } = input;
   const values: Partial<typeof users.$inferInsert> = { ...rest };
   if (email !== undefined) values.email = email.toLowerCase();
+  assertNotReserved(undefined, values.email);
 
   return withAdminLock(db, async (tx) => {
     const target = await getTarget(tx, id);
+    assertNotDeleted(target);
     const demoting = input.role !== undefined && input.role !== "admin" && target.role === "admin";
     if (demoting && target.isActive && (await otherActiveAdmins(tx, id)) === 0) {
       throw new DomainError("conflict", MESSAGES.lastAdminDemote);
@@ -164,8 +185,8 @@ export async function resetUserPassword(
 ): Promise<{ id: string }> {
   authorize(actor, "users", "edit");
   const passwordHash = await hashPassword(input.password);
-  await db.transaction(async (tx) => {
-    await getTarget(tx, input.id);
+  await withAdminLock(db, async (tx) => {
+    assertNotDeleted(await getTarget(tx, input.id));
     const updated = await tx
       .update(accounts)
       .set({ password: passwordHash })
@@ -188,8 +209,8 @@ export async function setUserPermissions(
   input: SetPermissionsInput,
 ): Promise<{ id: string; count: number }> {
   authorize(actor, "users", "edit");
-  await db.transaction(async (tx) => {
-    await getTarget(tx, input.id);
+  await withAdminLock(db, async (tx) => {
+    assertNotDeleted(await getTarget(tx, input.id));
     await tx.delete(userPermissions).where(eq(userPermissions.userId, input.id));
     if (input.permissions.length > 0) {
       await tx.insert(userPermissions).values(input.permissions.map((p) => ({ ...p, userId: input.id })));
@@ -241,7 +262,7 @@ export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInp
       .update(users)
       .set({
         name: DELETED_USER_NAME,
-        username: `silinmis-${target.id}`,
+        username: `${DELETED_USERNAME_PREFIX}${target.id}`,
         email: `${target.id}${DELETED_EMAIL_SUFFIX}`,
         emailVerified: false,
         image: null,

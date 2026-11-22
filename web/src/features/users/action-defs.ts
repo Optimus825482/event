@@ -1,7 +1,9 @@
 import type { z } from "zod";
 import type { ActionOptions } from "@/lib/action";
+import { currentSessionId } from "./current-session";
+import { changeOwnPassword } from "./own-password";
 import { setOwnAvatar } from "./profile";
-import { deleteUserSchema, setOwnAvatarSchema } from "./schemas";
+import { changeOwnPasswordSchema, deleteUserSchema, setOwnAvatarSchema } from "./schemas";
 import { selfDef } from "./self-action";
 import { deleteUser } from "./service";
 
@@ -25,5 +27,10 @@ export const selfActionDefs = {
     scope: "avatar",
     input: setOwnAvatarSchema,
     handler: ({ actor, input, db }) => setOwnAvatar(db, actor, input),
+  }),
+  changeOwnPassword: selfDef({
+    scope: "password",
+    input: changeOwnPasswordSchema,
+    handler: async ({ actor, input, db }) => changeOwnPassword(db, actor, input, await currentSessionId()),
   }),
 };

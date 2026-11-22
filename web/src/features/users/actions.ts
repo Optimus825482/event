@@ -50,3 +50,5 @@ export const setPermissionsAction = defineAction({
 export const deleteUserAction = defineAction(userActionDefs.deleteUser);
 
 export const setOwnAvatarAction = defineSelfAction(selfActionDefs.setOwnAvatar);
+
+export const changeOwnPasswordAction = defineSelfAction(selfActionDefs.changeOwnPassword);

@@ -37,16 +37,21 @@ describe("validatePasswordChange", () => {
 
 describe("passwordChangeError", () => {
   it("yanlış mevcut parolayı alana bağlar", () => {
-    expect(passwordChangeError(400, { code: "INVALID_PASSWORD" }, null)).toEqual({
+    expect(passwordChangeError({ code: "invalid", message: "Mevcut parola hatalı" })).toEqual({
       field: "current",
       message: "Mevcut parola hatalı",
     });
   });
-  it("hız sınırında bekleme süresini söyler", () => {
-    expect(passwordChangeError(429, null, "30").message).toContain("30 saniye");
+  it("alan hatasını ilgili alana bağlar", () => {
+    const failure = { code: "invalid", message: "Girdi geçersiz", fieldErrors: { newPassword: ["Parola çok uzun"] } };
+    expect(passwordChangeError(failure)).toEqual({ field: "next", message: "Parola çok uzun" });
+  });
+  it("hız sınırı mesajını olduğu gibi gösterir", () => {
+    const message = "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.";
+    expect(passwordChangeError({ code: "invalid", message })).toEqual({ field: null, message });
   });
   it("bilinmeyen hatada genel mesaj verir", () => {
-    expect(passwordChangeError(500, null, null).field).toBeNull();
+    expect(passwordChangeError({ code: "error", message: "x" }).field).toBeNull();
   });
 });
 
