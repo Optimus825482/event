@@ -43,6 +43,19 @@ describe("planToSceneTables", () => {
     expect(planToSceneTables(plan).some((t) => t.highlighted)).toBe(false);
   });
 
+  it("colorByTable durum ve tip rengini ezer, verilmeyen masa eskisi gibi kalır", () => {
+    const [a, b, c] = planToSceneTables(plan, { statuses: { a: "confirmed", b: "free" }, colorByTable: { a: "#ff0000", c: "#00ff00" } });
+    expect(a?.color).toBe("#ff0000");
+    expect(b?.color).toBe(PLAN_STATUS_COLORS.free);
+    expect(c?.color).toBe("#00ff00");
+    expect(planToSceneTables(plan, { colorByTable: {} }).map((t) => t.color)).toEqual(planToSceneTables(plan).map((t) => t.color));
+  });
+
+  it("outlinedIds yalnızca verilen masaları çerçeveler", () => {
+    expect(planToSceneTables(plan, { outlinedIds: ["b", "c"] }).map((t) => t.outlined)).toEqual([false, true, true]);
+    expect(planToSceneTables(plan).some((t) => t.outlined)).toBe(false);
+  });
+
   it("seçilemeyen masalar soluk işaretlenir", () => {
     expect(planToSceneTables(plan, { disabledIds: ["a", "c"] }).map((t) => t.dimmed)).toEqual([true, false, true]);
   });

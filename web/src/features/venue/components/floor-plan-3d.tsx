@@ -19,10 +19,10 @@ const Scene3D = dynamic(() => import("./venue-3d-scene"), {
 });
 
 /** Salt okunur alan planının 3B görünümü: seçili masa parlar ve halkayla işaretlenir, durum renkleri uygulanır. */
-export function FloorPlan3D({ plan, statuses, selectedId, disabledIds, compact, height, ariaLabel }: FloorPlanViewProps) {
+export function FloorPlan3D({ plan, statuses, selectedId, disabledIds, colorByTable, outlinedIds, compact, height, ariaLabel }: FloorPlanViewProps) {
   const tables = useMemo(
-    () => planToSceneTables(plan, { statuses, selectedId, disabledIds }),
-    [plan, statuses, selectedId, disabledIds],
+    () => planToSceneTables(plan, { statuses, selectedId, disabledIds, colorByTable, outlinedIds }),
+    [plan, statuses, selectedId, disabledIds, colorByTable, outlinedIds],
   );
   const px = height ?? (compact ? 220 : 420);
   return (

@@ -22,10 +22,16 @@ export type SceneTable = {
   highlighted: boolean;
   /** Soluk (seçilemez) masa. */
   dimmed: boolean;
+  /** Çerçeveli masa (ör. seçili grubun masaları): hafif yükselir, kenarında beyaz halka çizilir. */
+  outlined?: boolean;
 };
 
 export type PlanSceneOptions = {
   statuses?: Readonly<Record<string, PlanStatus>>;
+  /** Masa kimliği -> dolgu rengi; durum rengini ezer. */
+  colorByTable?: Readonly<Record<string, string>>;
+  /** Çerçeveyle vurgulanan masalar. */
+  outlinedIds?: readonly string[];
   selectedId?: string | null;
   disabledIds?: readonly string[];
 };
@@ -33,6 +39,7 @@ export type PlanSceneOptions = {
 /** Salt okunur planı 3B sahne masalarına çevirir; renk önceliği 2B plandakiyle aynıdır (durum > loca > tip rengi). */
 export function planToSceneTables(plan: FloorPlanData, options: PlanSceneOptions = {}): SceneTable[] {
   const disabled = new Set(options.disabledIds ?? []);
+  const outlined = new Set(options.outlinedIds ?? []);
   return plan.tables.map((t) => ({
     key: t.id,
     label: t.label,
@@ -44,8 +51,9 @@ export function planToSceneTables(plan: FloorPlanData, options: PlanSceneOptions
     floor: 1,
     size: null,
     shape: t.shape,
-    color: statusColor(options.statuses?.[t.id]) ?? (t.isLoca ? LOCA_COLOR : (t.color ?? DEFAULT_TABLE_COLOR)),
+    color: options.colorByTable?.[t.id] ?? statusColor(options.statuses?.[t.id]) ?? (t.isLoca ? LOCA_COLOR : (t.color ?? DEFAULT_TABLE_COLOR)),
     highlighted: options.selectedId != null && options.selectedId === t.id,
     dimmed: disabled.has(t.id),
+    outlined: outlined.has(t.id),
   }));
 }

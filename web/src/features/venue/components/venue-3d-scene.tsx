@@ -94,7 +94,7 @@ function TableMesh({ table, toWorld }: { table: SceneTable; toWorld: ToWorld }) 
           <meshStandardMaterial color="#64748b" />
         </mesh>
       ) : null}
-      <mesh position={[x, base + height / 2, z]} rotation={[0, (-table.rotation * Math.PI) / 180, 0]} castShadow>
+      <mesh position={[x, base + height / 2 + (table.outlined ? 0.08 : 0), z]} rotation={[0, (-table.rotation * Math.PI) / 180, 0]} castShadow>
         {round ? <cylinderGeometry args={[w / 2, w / 2, height, 24]} /> : <boxGeometry args={[w, height, d]} />}
         <meshStandardMaterial
           color={table.color}
@@ -108,6 +108,12 @@ function TableMesh({ table, toWorld }: { table: SceneTable; toWorld: ToWorld }) 
         <mesh position={[x, base + 0.03, z]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[Math.max(w, d) * 0.7, Math.max(w, d) * 0.7 + 0.18, 40]} />
           <meshBasicMaterial color={HIGHLIGHT_COLOR} toneMapped={false} />
+        </mesh>
+      ) : null}
+      {table.outlined ? (
+        <mesh position={[x, base + 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[Math.max(w, d) * 0.62, Math.max(w, d) * 0.62 + 0.1, 40]} />
+          <meshBasicMaterial color="#ffffff" toneMapped={false} />
         </mesh>
       ) : null}
       {table.isLoca ? (
