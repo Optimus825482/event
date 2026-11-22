@@ -81,11 +81,17 @@ export async function signIn(page: Page, username: string, password: string): Pr
   await loginAs(page, username, password);
   const result = await response;
   expect(result.status(), `giriş yanıtı: ${await result.text()}`).toBe(200);
-  await expect(page.getByRole("button", { name: "Çıkış yap" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Profil menüsü" })).toBeVisible();
+}
+
+/** Çıkış, profil açılır menüsünün içindedir: önce menüyü açar, sonra "Çıkış yap" öğesini seçer. */
+export async function clickSignOut(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Profil menüsü" }).click();
+  await page.getByRole("menuitem", { name: "Çıkış yap" }).click();
 }
 
 export async function signOut(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Çıkış yap" }).click();
+  await clickSignOut(page);
   await expect(page).toHaveURL(/\/login/);
 }
 

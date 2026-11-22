@@ -1,27 +1,23 @@
 import type { ReactNode } from "react";
-import { AppNav, type AppNavItem } from "./app-nav";
-import { UserMenu } from "./user-menu";
+import { Navbar } from "./navbar";
+import type { ShellNav } from "./shell-nav";
 
 type AppShellProps = {
   username: string;
   roleLabel: string;
-  navItems: readonly AppNavItem[];
+  isAdmin: boolean;
+  nav: ShellNav;
+  unreadCount: number;
+  showBell: boolean;
   children: ReactNode;
 };
 
-export function AppShell({ username, roleLabel, navItems, children }: AppShellProps) {
+/** Eski arayüz kabuğu: yapışkan üst çubuk (modül menüsü, zil, profil) + kırıntı satırı + içerik. */
+export function AppShell({ children, ...navbar }: AppShellProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground md:flex-row">
-      <aside className="border-b border-border bg-card md:w-60 md:shrink-0 md:border-r md:border-b-0">
-        <div className="px-4 pt-4 text-lg font-semibold">EventFlow</div>
-        <AppNav items={navItems} />
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-end border-b border-border bg-card px-4 py-3">
-          <UserMenu username={username} roleLabel={roleLabel} />
-        </header>
-        <main className="flex-1 p-4 md:p-6">{children}</main>
-      </div>
+    <div className="min-h-screen bg-slate-900 text-white">
+      <Navbar {...navbar} />
+      <main className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">{children}</main>
     </div>
   );
 }

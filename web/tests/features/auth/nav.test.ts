@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_ITEMS, visibleNavItems } from "@/features/auth/nav";
+import { NAV_GROUPS, NAV_ITEMS, visibleNavGroups, visibleNavItems } from "@/features/auth/nav";
 import { ROLES, type Role } from "@/features/auth/roles";
 
 function actor(role: Role, staffId: string | null = null) {
@@ -11,21 +11,27 @@ function hrefs(role: Role, staffId: string | null = null): string[] {
 }
 
 describe("NAV_ITEMS", () => {
-  it("belirtilen sırayla 12 öğe içerir", () => {
-    expect(NAV_ITEMS.map((i) => [i.href, i.label, i.module])).toEqual([
-      ["/events", "Etkinlikler", "events"],
-      ["/reservations", "Rezervasyonlar", "reservations"],
-      ["/check-in", "Check-in", "check_in"],
-      ["/customers", "Müşteriler", "customers"],
-      ["/staff", "Personel", "staff"],
-      ["/venues", "Mekân Şablonları", "venues"],
-      ["/settings/table-types", "Masa Tipleri", "settings"],
-      ["/templates", "Davetiye Şablonları", "invitations"],
-      ["/leader/reviews", "Değerlendirmeler", "reviews"],
-      ["/notifications", "Bildirimler", "notifications"],
-      ["/admin/users", "Kullanıcılar", "users"],
-      ["/admin/settings", "Ayarlar", "settings"],
+  it("modül gruplarıyla belirtilen sırada 13 öğe içerir", () => {
+    expect(NAV_ITEMS.map((i) => [i.href, i.label, i.module, i.group])).toEqual([
+      ["/events", "Etkinlikler", "events", "events"],
+      ["/staff", "Ekipler", "staff", "events"],
+      ["/venues", "Şablonlar", "venues", "events"],
+      ["/templates", "Davetiye Şablonları", "invitations", "events"],
+      ["/leader/reviews", "Değerlendirmeler", "reviews", "events"],
+      ["/reservations", "Rezervasyonlar", "reservations", "reservations"],
+      ["/customers", "Müşteriler", "customers", "reservations"],
+      ["/guests", "Misafirler", "customers", "reservations"],
+      ["/check-in", "Check-in", "check_in", "check_in"],
+      ["/admin/users", "Kullanıcılar", "users", "admin"],
+      ["/settings/table-types", "Masa Tipleri", "settings", "admin"],
+      ["/admin/settings", "Sistem Ayarları", "settings", "admin"],
+      ["/notifications", "Bildirimler", "notifications", "general"],
     ]);
+  });
+
+  it("her öğenin simgesi ve her grubun vurgu rengi tanımlıdır", () => {
+    for (const item of NAV_ITEMS) expect(item.icon).toBeTruthy();
+    for (const group of NAV_GROUPS) expect(group.accent).toBeTruthy();
   });
 });
 
@@ -47,12 +53,12 @@ describe("visibleNavItems", () => {
     }
   });
 
-  it("staff yalnızca rezervasyon, check-in ve müşterileri görür", () => {
-    expect(hrefs("staff")).toEqual(["/reservations", "/check-in", "/customers"]);
+  it("staff yalnızca rezervasyon, müşteri, misafir ve check-in öğelerini görür", () => {
+    expect(hrefs("staff")).toEqual(["/reservations", "/customers", "/guests", "/check-in"]);
   });
 
   it("leader check-in, değerlendirme ve bildirimleri görür", () => {
-    expect(hrefs("leader", "s1")).toEqual(["/check-in", "/leader/reviews", "/notifications"]);
+    expect(hrefs("leader", "s1")).toEqual(["/leader/reviews", "/check-in", "/notifications"]);
   });
 
   it("controller yalnızca check-in görür", () => {
@@ -75,5 +81,21 @@ describe("visibleNavItems", () => {
 
   it("her rol için tanımlıdır", () => {
     for (const role of ROLES) expect(Array.isArray(visibleNavItems(actor(role)))).toBe(true);
+  });
+});
+
+describe("visibleNavGroups", () => {
+  it("admin dört modül ve genel grubu görür", () => {
+    expect(visibleNavGroups(actor("admin")).map((g) => g.key)).toEqual(["events", "reservations", "check_in", "admin", "general"]);
+  });
+
+  it("yetkisiz modül atılır; öğesi olmayan grup listelenmez", () => {
+    expect(visibleNavGroups(actor("controller")).map((g) => g.key)).toEqual(["check_in"]);
+    expect(visibleNavGroups(actor("organizer")).map((g) => g.key)).not.toContain("admin");
+  });
+
+  it("/guests rezervasyon modülünde, müşteri yetkisiyle görünür", () => {
+    const reservations = visibleNavGroups(actor("staff")).find((g) => g.key === "reservations");
+    expect(reservations?.items.map((i) => i.href)).toContain("/guests");
   });
 });

@@ -43,11 +43,12 @@ test.describe("Giriş ve oturum", () => {
     await expect(page).toHaveURL(/\/login/);
 
     await loginAs(page, adminUsername, adminPassword());
-    await expect(page.getByRole("button", { name: "Çıkış yap" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Profil menüsü" })).toBeVisible();
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByRole("navigation", { name: "Ana menü" }).getByRole("link", { name: "Etkinlikler" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Çıkış yap" }).click();
+    await page.getByRole("button", { name: "Profil menüsü" }).click();
+    await page.getByRole("menuitem", { name: "Çıkış yap" }).click();
     await expect(page).toHaveURL(/\/login/);
     await page.goto("/events");
     await expect(page).toHaveURL(/\/login/);

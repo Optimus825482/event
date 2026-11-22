@@ -3,6 +3,7 @@ import { invitationLink } from "./support/invitation";
 import { checkInKeys, qrTokenFor, reservationsByGuest } from "./support/db";
 import {
   cachedApiUrls,
+  clickSignOut,
   createDoorUser,
   expectPending,
   openConsoleAndWarm,
@@ -113,7 +114,7 @@ test("çıkış, önbellekteki kimlik doğrulamalı kabuğu siler: çıkıştan 
     await expect(page.getByRole("heading", { name: "Çevrimdışısınız" })).toBeVisible();
     await expect(page.getByRole("heading", { name: EVENT_NAME })).toHaveCount(0);
     await expect(page.getByText(EVENT_NAME)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Çıkış yap" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Profil menüsü" })).toHaveCount(0);
     await context.setOffline(false);
   } finally {
     await context.close();
@@ -130,7 +131,7 @@ test("çevrimdışı çıkış: kabuk silinir, arayüz kilitlenir, bağlantı ge
     await openConsoleAndWarm(page, fixture.eventId, EVENT_NAME);
 
     await context.setOffline(true);
-    await page.getByRole("button", { name: "Çıkış yap" }).click();
+    await clickSignOut(page);
     const blocker = page.getByRole("alertdialog", { name: "Çıkış tamamlanamadı" });
     await expect(blocker).toBeVisible();
     await expect(blocker).toContainText("Bağlantı gelince çıkış otomatik olarak tamamlanacak");

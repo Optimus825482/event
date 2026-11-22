@@ -11,10 +11,13 @@ vi.mock("@/features/auth/permissions", () => ({
   }),
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("@/db/client", () => ({ db: {} }));
+vi.mock("@/features/notifications/service", () => ({ countUnread: async () => 3 }));
 
 import AppLayout from "@/app/(app)/layout";
 import { AppShell } from "@/components/layout/app-shell";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { ToastProvider } from "@/components/ui/toast";
 
 /** Eleman ağacını gezip verilen bileşenin üst-alt sırasını döndürür. */
 function typesAlongPath(node: ReactNode, path: unknown[] = []): unknown[] {
@@ -30,5 +33,6 @@ describe("(app) düzeni", () => {
     const path = typesAlongPath(tree);
     expect(path).toContain(QueryProvider);
     expect(path).toContain(AppShell);
+    expect(path).toContain(ToastProvider);
   });
 });
