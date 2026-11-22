@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { AppOverlays } from "@/components/layout/app-overlays";
 import { AppShell } from "@/components/layout/app-shell";
 import { ROLE_LABELS } from "@/components/layout/role-labels";
 import { buildShellNav } from "@/components/layout/shell-nav";
@@ -41,6 +42,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         >
           {children}
         </AppShell>
+        <AppOverlays />
       </ToastProvider>
     </QueryProvider>
   );

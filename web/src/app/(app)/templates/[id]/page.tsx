@@ -1,5 +1,7 @@
+import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { designFrom } from "@/features/invitations/components/editor/editor-state";
@@ -25,18 +27,19 @@ export default async function TemplateEditPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
-      <Link href="/templates" className="text-sm text-muted-foreground hover:underline">
+      <Link href="/templates" className="inline-flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-white">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Şablonlar
       </Link>
-      <h1 className="text-2xl font-semibold">{template.name}</h1>
-      <p className="text-sm text-muted-foreground">
-        {INVITATION_SIZES[design.size].label}
-        {template.isSystemTemplate ? " - sistem şablonu (silinemez)" : ""}
-      </p>
+      <PageHeader
+        className="mb-2"
+        title={template.name}
+        description={`${INVITATION_SIZES[design.size].label}${template.isSystemTemplate ? " - sistem şablonu (silinemez)" : ""}`}
+      />
       {canEdit ? (
         <TemplateEditor id={template.id} name={template.name} description={template.description ?? ""} initial={design} />
       ) : (
-        <p className="rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">Bu şablonu düzenleme yetkiniz yok.</p>
+        <p className="rounded-xl border border-dashed border-slate-700 p-6 text-sm text-slate-400">Bu şablonu düzenleme yetkiniz yok.</p>
       )}
     </div>
   );

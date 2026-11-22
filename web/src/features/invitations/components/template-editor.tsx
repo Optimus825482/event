@@ -25,11 +25,11 @@ export function TemplateEditor({ id, name: initialName, description: initialDesc
       header={
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-sm">
-            <span className="font-medium">Şablon adı</span>
+            <span className="font-medium text-slate-300">Şablon adı</span>
             <Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="font-medium">Açıklama</span>
+            <span className="font-medium text-slate-300">Açıklama</span>
             <Textarea value={description} maxLength={500} rows={1} onChange={(e) => setDescription(e.target.value)} />
           </label>
         </div>

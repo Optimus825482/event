@@ -57,7 +57,7 @@ export function ImagePanel({ eventId, images, imageSrc, onChange, onRemoved }: P
         }}
       />
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-red-400">
           {error}
         </p>
       ) : null}

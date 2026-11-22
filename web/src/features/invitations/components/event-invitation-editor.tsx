@@ -45,7 +45,7 @@ export function EventInvitationEditor({ eventId, eventName, eventDescription, in
       eventImages={{ eventId, initial: knownImages, onChange: setKnownImages }}
       header={
         <label className="block max-w-xs space-y-1 text-sm">
-          <span className="font-medium">Kaynak şablon</span>
+          <span className="font-medium text-slate-300">Kaynak şablon</span>
           <select className={SELECT_CLASS} value={chosen} onChange={(e) => setChosen(e.target.value)}>
             <option value="">Seçili değil (varsayılan)</option>
             {templates.map((t) => (

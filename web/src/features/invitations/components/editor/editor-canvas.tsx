@@ -68,7 +68,7 @@ export function EditorCanvas({ design, selectedId, zoom, fields, imageSrc, dispa
   const sorted = [...design.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 
   return (
-    <div className="overflow-auto rounded-md border border-border bg-muted/40 p-4" style={{ maxHeight: "75vh" }}>
+    <div className="overflow-auto rounded-xl border border-slate-700 bg-slate-900/60 p-4" style={{ maxHeight: "75vh" }}>
       <div style={{ width: design.width * zoom, height: design.height * zoom }}>
         <div
           data-testid="invitation-canvas"

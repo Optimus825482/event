@@ -42,14 +42,14 @@ export function SendPanel({ recipients, canSend }: { recipients: Recipient[]; ca
 
   if (recipients.length === 0) {
     return (
-      <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-md border border-dashed border-slate-700 p-6 text-center text-sm text-muted-foreground">
         Bu etkinlikte davetiye gönderilecek rezervasyon yok.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-border rounded-md border border-border">
+    <ul className="divide-y divide-slate-700 rounded-xl border border-slate-700 bg-slate-800/50">
       {recipients.map((r) => {
         const state = rows[r.reservationId];
         const disabled = !canSend || busy === r.reservationId;
@@ -61,7 +61,7 @@ export function SendPanel({ recipients, canSend }: { recipients: Recipient[]; ca
                 Masa {r.tableLabel} - {STATUS_LABELS[r.status] ?? r.status}
               </p>
               {state ? (
-                <p role={state.ok ? "status" : "alert"} className={state.ok ? "text-xs text-emerald-600" : "text-xs text-destructive"}>
+                <p role={state.ok ? "status" : "alert"} className={state.ok ? "text-xs text-green-400" : "text-xs text-red-400"}>
                   {state.message}
                 </p>
               ) : null}

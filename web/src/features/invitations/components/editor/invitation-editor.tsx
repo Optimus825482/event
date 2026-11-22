@@ -69,22 +69,22 @@ export function InvitationEditor({ initial, eventName, eventDescription = "", on
             <input type="range" min={0.3} max={1.2} step={0.1} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} aria-label="Yakınlaştırma" />
             {Math.round(zoom * 100)}%
           </label>
-          <Button type="button" onClick={() => void save()} disabled={pending || !state.dirty}>
+          <Button type="button" onClick={() => void save()} disabled={pending || !state.dirty} className="bg-blue-600 text-white hover:bg-blue-700">
             {pending ? "Kaydediliyor..." : saveLabel}
           </Button>
         </div>
       </div>
       {status ? (
-        <p role={status.ok ? "status" : "alert"} className={status.ok ? "text-sm text-emerald-600" : "text-sm text-destructive"}>
+        <p role={status.ok ? "status" : "alert"} className={status.ok ? "text-sm text-green-400" : "text-sm text-red-400"}>
           {status.message}
         </p>
       ) : state.dirty ? (
-        <p className="text-sm text-muted-foreground">Kaydedilmemiş değişiklikler var.</p>
+        <p className="text-sm text-amber-400">Kaydedilmemiş değişiklikler var.</p>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <EditorCanvas design={state.design} selectedId={state.selectedId} zoom={zoom} fields={fields} imageSrc={uploadSrc} dispatch={dispatch} />
-        <aside className="space-y-4 rounded-md border border-border p-4">
+        <aside className="space-y-4 rounded-xl border border-slate-700 bg-slate-800/50 p-4">
           <ElementToolbar dispatch={dispatch} />
           <Tabs defaultValue="element">
             <TabsList>

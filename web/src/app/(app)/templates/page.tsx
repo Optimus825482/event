@@ -1,4 +1,6 @@
+import { Mail } from "lucide-react";
 import type { Metadata } from "next";
+import { PageHeader } from "@/components/layout/page-header";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { TemplateList } from "@/features/invitations/components/template-list";
@@ -10,11 +12,12 @@ export const metadata: Metadata = { title: "Davetiye şablonları | EventFlow" }
 export default async function TemplatesPage() {
   const [actor, templates] = await Promise.all([requirePolicyActor(), loadTemplates()]);
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Davetiye şablonları</h1>
-        <p className="text-sm text-muted-foreground">Etkinliklerde başlangıç noktası olarak kullanılan davetiye tasarımları.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Davetiye şablonları"
+        description="Etkinliklerde başlangıç noktası olarak kullanılan davetiye tasarımları."
+        icon={<Mail className="h-8 w-8 text-blue-400" aria-hidden="true" />}
+      />
       <TemplateList
         templates={templates.map((t) => ({
           id: t.id,
