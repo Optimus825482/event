@@ -21,7 +21,7 @@ export async function loadCheckInConsole(eventId: string) {
   if (!UUID_RE.test(eventId)) notFound();
   try {
     const [event, stats] = await Promise.all([getCheckInEvent(db, actor, eventId), eventStats(db, actor, eventId)]);
-    return { event, stats, canWrite: can(actor, "check_in", "create") };
+    return { userId: actor.id, event, stats, canWrite: can(actor, "check_in", "create") };
   } catch (error) {
     if (error instanceof DomainError && error.code === "not_found") notFound();
     throw error;

@@ -68,18 +68,31 @@ function logOutcome(result: StoredResult) {
   return result.code === "not_found" ? "not_found" : "invalid_status";
 }
 
-async function replay(tx: Tx, idempotencyKey: string, print: string): Promise<StoredResult> {
+/**
+ * Aynı anahtarın tekrarı: saklanan yanıt yalnızca (1) isteği ilk yapan kullanıcıya, (2) hâlâ bu
+ * etkinliğe erişebiliyorsa ve (3) aynı etkinliğe ait bir istek/yanıt ise döner. Erişim denetimi taze
+ * çağrıyla aynı kuraldır (`lockEvent`); erişemeyen kullanıcı `not_found` alır, başka bir kullanıcının
+ * anahtarı ise `keyReused` çatışması olur: saklanan veri hiçbir durumda sızmaz.
+ */
+async function replay(
+  tx: Tx,
+  actor: Actor,
+  input: { idempotencyKey: string; eventId: string },
+  print: string,
+): Promise<StoredResult> {
   const [row] = await tx
     .select({
       response: checkInEvents.response,
       requestFingerprint: checkInEvents.requestFingerprint,
+      actorId: checkInEvents.actorId,
     })
     .from(checkInEvents)
-    .where(eq(checkInEvents.idempotencyKey, idempotencyKey));
+    .where(eq(checkInEvents.idempotencyKey, input.idempotencyKey));
+  if (row) await lockEvent(tx, actor, input.eventId);
+  const reused: StoredResult = { ok: false, code: "conflict", message: CHECK_IN_MSG.keyReused };
   const stored = storedResultSchema.safeParse(row?.response);
-  if (!row || row.requestFingerprint !== print || !stored.success) {
-    return { ok: false, code: "conflict", message: CHECK_IN_MSG.keyReused };
-  }
+  if (!row || row.requestFingerprint !== print || row.actorId !== actor.id || !stored.success) return reused;
+  if (stored.data.ok && stored.data.data.eventId !== input.eventId) return reused;
   return stored.data;
 }
 
@@ -112,7 +125,7 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
       })
       .onConflictDoNothing({ target: checkInEvents.idempotencyKey })
       .returning({ id: checkInEvents.id });
-    if (!claimed) return replay(tx, input.idempotencyKey, print);
+    if (!claimed) return replay(tx, actor, input, print);
 
     const found: { reservationId: string | null } = { reservationId: null };
     let stored: StoredResult;

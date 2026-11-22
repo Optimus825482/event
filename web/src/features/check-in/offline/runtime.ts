@@ -11,6 +11,8 @@ type Listener = (events: SettledEvent[]) => void;
 export type QueueRuntime = {
   /** `false`: IndexedDB yok, kuyruk yalnızca bu sekmenin belleğinde. */
   durable: boolean;
+  /** Oturumdaki kullanıcı (sunucudan gelen kimlik); boşaltma ve yeni öğeler bununla damgalanır. */
+  setUser(userId: string): void;
   list(): Promise<QueueItem[]>;
   enqueue(eventId: string, target: QueueTarget): Promise<QueueItem>;
   flush(): Promise<void>;
@@ -37,6 +39,7 @@ export function getQueueRuntime(): QueueRuntime {
   const channel = openChannel();
   const changeListeners = new Set<() => void>();
   const eventListeners = new Set<Listener>();
+  let userId: string | null = null;
 
   const notifyLocal = () => changeListeners.forEach((l) => l());
   const notifyAll = () => {
@@ -49,6 +52,7 @@ export function getQueueRuntime(): QueueRuntime {
     store,
     send: (items) => sendBatch(items),
     tryLock: tryWebLock,
+    currentUserId: () => userId,
     now: () => Date.now(),
     onEvents: (events) => {
       eventListeners.forEach((l) => l(events));
@@ -58,10 +62,18 @@ export function getQueueRuntime(): QueueRuntime {
 
   instance = {
     durable,
+    setUser(next) {
+      if (userId === next) return;
+      userId = next;
+      // Başka kullanıcının oturumundan kalan duraklatma, yeni kullanıcıyı durdurmamalı.
+      flusher.resume();
+    },
     list: () => store.getAll(),
     async enqueue(eventId, target) {
+      if (userId === null) throw new Error("Oturum kimliği bilinmiyor; giriş kuyruğa yazılamaz");
       const item = createItem({
         idempotencyKey: crypto.randomUUID(),
+        ownerId: userId,
         eventId,
         target,
         clientTimestamp: new Date().toISOString(),

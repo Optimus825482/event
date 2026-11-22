@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createFlusher, createMemoryStore, type QueueStore } from "@/features/check-in/offline/flusher";
 import type { BatchOutcome, QueueItem, SettledEvent } from "@/features/check-in/offline/queue-core";
-import { item, success } from "./helpers";
+import { migrateStoredItem } from "@/features/check-in/offline/queue-core";
+import { item, OTHER_USER_ID, success, USER_ID } from "./helpers";
 
 function okFor(items: readonly QueueItem[]): BatchOutcome {
   return {
@@ -25,12 +26,17 @@ function createTryLock() {
   };
 }
 
-function setup(send: (items: readonly QueueItem[]) => Promise<BatchOutcome>, store: QueueStore = createMemoryStore()) {
+function setup(
+  send: (items: readonly QueueItem[]) => Promise<BatchOutcome>,
+  store: QueueStore = createMemoryStore(),
+  currentUserId: () => string | null = () => USER_ID,
+) {
   const events: SettledEvent[] = [];
   let clock = 10_000;
   const flusher = createFlusher({
     store,
     send,
+    currentUserId,
     now: () => clock,
     random: () => 0.5,
     tryLock: createTryLock(),
@@ -72,6 +78,7 @@ describe("flusher", () => {
     // Kilit hep açık: yalnızca sekme içi "tek boşaltma" koruması sınanır.
     const flusher = createFlusher({
       store,
+      currentUserId: () => USER_ID,
       now: () => 10_000,
       random: () => 0,
       tryLock: async (fn) => {
@@ -105,6 +112,7 @@ describe("flusher", () => {
       createFlusher({
         store,
         tryLock,
+        currentUserId: () => USER_ID,
         now: () => 10_000,
         random: () => 0,
         send: async (items) => {
@@ -211,5 +219,87 @@ describe("flusher", () => {
     await store.putMany([a]);
     await flusher.flush();
     expect(seen).toEqual([a.idempotencyKey]);
+  });
+
+  describe("kullanıcı sahipliği (ortak cihazda çapraz kullanıcı gönderimi yok)", () => {
+    it("yalnızca oturumdaki kullanıcının öğelerini gönderir; başkasının öğesine dokunmaz", async () => {
+      const seen: string[] = [];
+      const { store, flusher } = setup(async (items) => {
+        seen.push(...items.map((i) => i.idempotencyKey));
+        return okFor(items);
+      });
+      const mine = item({ now: 1 });
+      const theirs = item({ now: 2, ownerId: OTHER_USER_ID });
+      const unknown = { ...item({ now: 3 }), ownerId: null };
+      await store.putMany([mine, theirs, unknown]);
+      await flusher.flush();
+      expect(seen).toEqual([mine.idempotencyKey]);
+      const left = await store.getAll();
+      expect(left.map((i) => i.idempotencyKey).sort()).toEqual([theirs.idempotencyKey, unknown.idempotencyKey].sort());
+      for (const i of left) expect(i).toMatchObject({ status: "pending", attempts: 0 });
+    });
+
+    it("sahibi yeniden oturum açınca bekletilen öğeler gönderilir", async () => {
+      let user: string | null = USER_ID;
+      const seen: string[] = [];
+      const { store, flusher } = setup(
+        async (items) => {
+          seen.push(...items.map((i) => i.idempotencyKey));
+          return okFor(items);
+        },
+        createMemoryStore(),
+        () => user,
+      );
+      const theirs = item({ ownerId: OTHER_USER_ID });
+      await store.putMany([theirs]);
+      await flusher.flush();
+      expect(seen).toEqual([]);
+      user = OTHER_USER_ID;
+      await flusher.flush();
+      expect(seen).toEqual([theirs.idempotencyKey]);
+      expect(await store.getAll()).toEqual([]);
+    });
+
+    it("oturum kimliği bilinmiyorsa hiçbir şey gönderilmez", async () => {
+      let calls = 0;
+      const { store, flusher } = setup(
+        async (items) => {
+          calls += 1;
+          return okFor(items);
+        },
+        createMemoryStore(),
+        () => null,
+      );
+      await store.putMany([item()]);
+      await flusher.flush();
+      expect(calls).toBe(0);
+      expect(await store.getAll()).toHaveLength(1);
+    });
+
+    it("boşaltma sırasında kullanıcı değişirse sonraki grup eski kullanıcının adına gönderilmez", async () => {
+      let user: string | null = USER_ID;
+      const sent: string[][] = [];
+      const { store, flusher } = setup(
+        async (items) => {
+          sent.push(items.map((i) => i.idempotencyKey));
+          user = OTHER_USER_ID; // ilk grup giderken oturum değişti
+          return okFor(items);
+        },
+        createMemoryStore(),
+        () => user,
+      );
+      await store.putMany([item({ now: 1 }), item({ now: 2 }), item({ now: 3 })]);
+      await flusher.flush();
+      expect(sent).toHaveLength(1);
+      expect(await store.getAll()).toHaveLength(1);
+    });
+
+    it("şema 1'den kalan öğe (sahipsiz) korunur ve sahibi bilinmeyen sayılır", () => {
+      const legacy = { ...item(), ownerId: undefined } as unknown as QueueItem;
+      const migrated = migrateStoredItem(legacy);
+      expect(migrated).toEqual({ ...legacy, ownerId: null });
+      const owned = item();
+      expect(migrateStoredItem(owned)).toBe(owned);
+    });
   });
 });

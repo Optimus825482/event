@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { compareItems, summarize, type QueueItem, type QueueTarget, type SettledEvent } from "./queue-core";
+import { compareItems, heldAside, ownedBy, summarize, type QueueItem, type QueueTarget, type SettledEvent } from "./queue-core";
 import { getQueueRuntime } from "./runtime";
 
 const FLUSH_INTERVAL_MS = 15_000;
@@ -25,7 +25,10 @@ export function useOnline(): boolean {
 }
 
 export type OfflineQueue = {
+  /** Yalnızca oturumdaki kullanıcıya ait öğeler. */
   items: QueueItem[];
+  /** Başka kullanıcıya ait (ya da sahibi bilinmeyen) bekleyen girişlerin sayısı: gönderilmez, bekletilir. */
+  heldAsideCount: number;
   pending: number;
   failed: QueueItem[];
   paused: boolean;
@@ -46,15 +49,21 @@ export type OfflineQueue = {
  * Kuyruğun React kancası. Boşaltma tetikleyicileri: açılış, `online` olayı, sekme görünür olunca
  * ve 15 sn'lik zamanlayıcı. `onEvents` her boşaltma sonucunu (done/failed/deferred) bildirir.
  */
-export function useOfflineQueue(onEvents?: (events: SettledEvent[]) => void): OfflineQueue {
+export function useOfflineQueue(userId: string, onEvents?: (events: SettledEvent[]) => void): OfflineQueue {
   const online = useOnline();
+
   const durable = useSyncExternalStore(
     () => () => undefined,
     () => getQueueRuntime().durable,
     () => true,
   );
-  const [items, setItems] = useState<QueueItem[]>([]);
+  const [allItems, setAllItems] = useState<QueueItem[]>([]);
   const [paused, setPaused] = useState(false);
+
+  // Kimlik sunucudan (oturum) gelir. Aşağıdaki boşaltma efektinden ÖNCE bildirilmelidir.
+  useEffect(() => {
+    getQueueRuntime().setUser(userId);
+  }, [userId]);
 
   useEffect(() => {
     const runtime = getQueueRuntime();
@@ -62,7 +71,7 @@ export function useOfflineQueue(onEvents?: (events: SettledEvent[]) => void): Of
     const refresh = () => {
       void runtime.list().then((all) => {
         if (!active) return;
-        setItems(all.sort(compareItems));
+        setAllItems(all.sort(compareItems));
         setPaused(runtime.isPaused());
       });
     };
@@ -95,6 +104,9 @@ export function useOfflineQueue(onEvents?: (events: SettledEvent[]) => void): Of
       window.clearInterval(timer);
     };
   }, []);
+
+  const items = useMemo(() => ownedBy(allItems, userId), [allItems, userId]);
+  const heldAsideCount = useMemo(() => heldAside(allItems, userId).length, [allItems, userId]);
 
   const enqueue = useCallback(
     async (eventId: string, target: QueueTarget) => {
@@ -129,6 +141,7 @@ export function useOfflineQueue(onEvents?: (events: SettledEvent[]) => void): Of
   return useMemo(
     () => ({
       items,
+      heldAsideCount,
       pending: summarize(items).pending,
       failed: items.filter((i) => i.status === "failed"),
       paused,
@@ -141,6 +154,6 @@ export function useOfflineQueue(onEvents?: (events: SettledEvent[]) => void): Of
       retry,
       dismiss,
     }),
-    [items, paused, online, durable, enqueue, flushNow, isPausedNow, resume, retry, dismiss],
+    [items, heldAsideCount, paused, online, durable, enqueue, flushNow, isPausedNow, resume, retry, dismiss],
   );
 }

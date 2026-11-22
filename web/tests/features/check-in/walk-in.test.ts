@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { db } from "@/db/client";
+import type { PoolClient } from "pg";
+import { db, pool } from "@/db/client";
 import { customers, reservations } from "@/db/schema";
 import { registerWalkIn, updateGuestCount } from "@/features/check-in/service";
 import { verifyQrToken } from "@/features/reservations/qr-token";
@@ -56,6 +57,28 @@ describe("registerWalkIn", () => {
     expect(customer.totalAttendedEvents).toBe(1);
     expect((await checkInLog(row.id)).map((r) => r.outcome)).toEqual(["checked_in"]);
   });
+
+  it("M6: havuzda yalnızca tek boş bağlantı varken bile tamamlanır (transaction içinde ikinci bağlantı alınmaz)", async () => {
+    const { event } = await bookedGuest();
+    const table = await createTable(db, event.id, { capacity: 6, label: "K8" });
+    const door = await actorOf("controller");
+    const held: PoolClient[] = [];
+    try {
+      for (let i = 0; i < (pool.options.max ?? 10) - 1; i += 1) held.push(await pool.connect());
+      const outcome = await Promise.race([
+        registerWalkIn(db, door, {
+          eventId: event.id,
+          tableId: table.id,
+          guestName: "Havuz Testi",
+          guestCount: 2,
+        }).then((r) => r.outcome),
+        new Promise<string>((resolve) => setTimeout(() => resolve("zaman aşımı"), 5_000)),
+      ]);
+      expect(outcome).toBe("checked_in");
+    } finally {
+      for (const client of held) client.release();
+    }
+  }, 20_000);
 
   it("dolu masada conflict verir ve hiçbir şey yazılmaz (müşteri dahil)", async () => {
     const { event, table } = await bookedGuest();

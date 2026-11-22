@@ -19,7 +19,7 @@ function failureText(item: QueueItem): string {
 
 /**
  * Kuyruk durumu: bekleyen sayacı (canlı bölge), oturum uyarısı, kalıcı hata alan girişler.
- * Kalıcı hata alan öğe kendiliğinden silinmez; operatör "Kaldır" ya da (istek hatalarında)
+ * Başka kullanıcıya ait girişler gönderilmez, yalnızca sayısı gösterilir. Kalıcı hata alan öğe kendiliğinden silinmez; operatör "Kaldır" ya da (istek hatalarında)
  * "Yeniden dene" der.
  */
 export function QueuePanel({ eventId, queue }: { eventId: string; queue: OfflineQueue }) {
@@ -47,6 +47,11 @@ export function QueuePanel({ eventId, queue }: { eventId: string; queue: Offline
         </span>
         {elsewhere > 0 ? (
           <span className="text-muted-foreground">Başka etkinlikler için {elsewhere} bekleyen giriş var.</span>
+        ) : null}
+        {queue.heldAsideCount > 0 ? (
+          <span role="alert" className="text-amber-900 dark:text-amber-100">
+            {queue.heldAsideCount} başka kullanıcıya ait bekleyen giriş var; sahibi oturum açınca gönderilecek.
+          </span>
         ) : null}
         {mine.length > 0 && queue.online && !queue.paused ? (
           <Button variant="outline" size="sm" onClick={() => void queue.flushNow()}>

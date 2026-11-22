@@ -44,6 +44,8 @@ async function rejectedMessage(response: Response): Promise<string> {
  */
 export async function sendBatch(items: readonly QueueItem[], fetchImpl: typeof fetch = fetch): Promise<BatchOutcome> {
   const body = {
+    // Sunucu, oturumdaki kullanıcı bu kimlikle uyuşmuyorsa isteği reddeder (başka oturumda gönderim olmaz).
+    ownerId: items[0]?.ownerId ?? null,
     items: items.map((i) => ({
       eventId: i.eventId,
       idempotencyKey: i.idempotencyKey,

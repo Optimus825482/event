@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { purgeAuthenticatedShell } from "@/features/check-in/offline/purge-shell";
 
 export function UserMenu({ username, roleLabel }: { username: string; roleLabel: string }) {
   const router = useRouter();
@@ -18,6 +19,8 @@ export function UserMenu({ username, roleLabel }: { username: string; roleLabel:
         body: "{}",
       });
     } finally {
+      // Ortak cihaz: yönlendirmeden önce çevrimdışı kabuk önbelleği silinir (hata olursa çıkış sürer).
+      await purgeAuthenticatedShell();
       router.replace("/login");
       router.refresh();
     }

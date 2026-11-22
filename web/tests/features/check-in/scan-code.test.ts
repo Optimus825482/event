@@ -22,7 +22,31 @@ describe("parseScannedCode", () => {
     expect(parseScannedCode("rastgele metin")).toEqual({
       token: "rastgele metin",
     });
-    const badJson = Buffer.from(JSON.stringify({ qrCodeHash: "kisa" })).toString("base64");
+    const badJson = Buffer.from(JSON.stringify({ qrCodeHash: "geçersiz karakter!" })).toString("base64");
     expect(parseScannedCode(badJson)).toEqual({ token: badJson });
+  });
+
+  it("I1: Excel ile içe aktarılan eski rezervasyonun uzun, hex olmayan hash'i (~240 karakterlik yük) kabul edilir", () => {
+    const eventId = randomUUID();
+    const tableId = randomUUID();
+    const hash = `${eventId}-${tableId}-${Date.now()}-k3x9a1b2c`;
+    expect(hash.length).toBeGreaterThan(80);
+    const payload = Buffer.from(JSON.stringify({ eventId, tableId, qrCodeHash: hash })).toString("base64");
+    expect(payload.length).toBeGreaterThan(200);
+    expect(payload.length).toBeLessThan(300);
+    expect(parseScannedCode(payload)).toEqual({ legacyHash: hash });
+  });
+
+  it("I1: gömülü hash'in üst sınırı 128 ve karakter kümesi kısıtlıdır", () => {
+    const encode = (qrCodeHash: unknown) => Buffer.from(JSON.stringify({ qrCodeHash })).toString("base64");
+    const atLimit = "a".repeat(128);
+    expect(parseScannedCode(encode(atLimit))).toEqual({ legacyHash: atLimit });
+    const tooLong = "a".repeat(129);
+    expect(parseScannedCode(encode(tooLong))).toEqual({ token: encode(tooLong) });
+    expect(parseScannedCode(encode(""))).toEqual({ token: encode("") });
+    expect(parseScannedCode(encode(123))).toEqual({ token: encode(123) });
+    for (const bad of ["a b", "a/b", "a'b", "a;b", "<x>"]) {
+      expect(parseScannedCode(encode(bad))).toEqual({ token: encode(bad) });
+    }
   });
 });

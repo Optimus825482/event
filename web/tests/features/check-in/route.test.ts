@@ -117,6 +117,21 @@ describe("POST /api/check-in", () => {
     expect(await res.json()).toMatchObject({ ok: false, code: "invalid" });
   });
 
+  it("toplu istek: ownerId oturumdaki kullanıcıyla uyuşmazsa 401 alır ve hiçbir şey işlenmez", async () => {
+    const { event, reservation } = await bookedGuest();
+    const door = await loginAs("controller");
+    const item = { eventId: event.id, idempotencyKey: key(), token: reservation.qrToken };
+
+    const foreign = await post({ ownerId: randomUUID(), items: [item] }, { cookie: door.cookie });
+    expect(foreign.status).toBe(401);
+    expect(await foreign.json()).toMatchObject({ ok: false, code: "unauthenticated" });
+    expect((await reservationRow(reservation.id)).status).toBe("confirmed");
+
+    const own = await post({ ownerId: door.id, items: [item] }, { cookie: door.cookie });
+    expect(own.status).toBe(200);
+    expect((await reservationRow(reservation.id)).status).toBe("checked_in");
+  });
+
   it("tek öğe: 200 ve action ile aynı sonuç biçimi; aynı anahtarla tekrar aynı yanıt", async () => {
     const { event, customer, reservation } = await bookedGuest();
     const door = await loginAs("controller");

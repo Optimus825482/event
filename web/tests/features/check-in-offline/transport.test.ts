@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sendBatch } from "@/features/check-in/offline/transport";
-import { EVENT_ID, item, success } from "./helpers";
+import { EVENT_ID, item, success, USER_ID } from "./helpers";
 
 function fetchReturning(response: Response | Error): typeof fetch {
   return async () => {
@@ -25,6 +25,7 @@ describe("sendBatch", () => {
     expect(new Headers(request?.init?.headers).get("content-type")).toBe("application/json");
     expect(request?.init?.credentials).toBe("same-origin");
     expect(JSON.parse(String(request?.init?.body))).toEqual({
+      ownerId: USER_ID,
       items: [
         { eventId: EVENT_ID, idempotencyKey: a.idempotencyKey, clientTimestamp: a.clientTimestamp, token: "tok.sig" },
       ],

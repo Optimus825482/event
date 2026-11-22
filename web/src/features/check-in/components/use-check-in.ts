@@ -43,7 +43,8 @@ export function useRefreshEvent(eventId: string) {
 /**
  * Check-in gönderimi: her giriş önce kalıcı kuyruğa yazılır (anahtar bir kez üretilir), sonra
  * çevrimiçiyse hemen gönderilir. Bu sekmeden gönderilen öğenin sonucu anında gösterilir: onaylı
- * giriş / zaten yapıldı / iş kuralı reddi / "kuyruğa alındı". Kuyruğa alınan öğenin SONRAKİ sonucu
+ * giriş / zaten yapıldı / iş kuralı reddi / "kuyruğa alındı". Çevrimiçi reddedilen giriş bantta gösterilir ve
+ * kuyruktan kaldırılır (hata listesinde ikinci kez görünmez). Kuyruğa alınan öğenin SONRAKİ sonucu
  * bandı ezmez; sayaç ve hata listesinde görünür.
  */
 export function useCheckIn(eventId: string, queue: OfflineQueue) {
@@ -60,6 +61,9 @@ export function useCheckIn(eventId: string, queue: OfflineQueue) {
       for (const event of events) {
         const mine = own.current.delete(event.item.idempotencyKey);
         if (event.type === "done") changed = true;
+        // Çevrimiçi reddedilen giriş yalnızca bantta gösterilir; "Gönderilemeyen girişler" listesi
+        // çevrimdışı kuyruktan geçen öğeler içindir.
+        if (mine && event.type === "failed") void queue.dismiss(event.item.idempotencyKey);
         if (!mine) {
           if (event.type === "done") syncedLater += 1;
           continue;
@@ -80,7 +84,7 @@ export function useCheckIn(eventId: string, queue: OfflineQueue) {
       if (changed) refresh();
       return syncedLater;
     },
-    [refresh],
+    [refresh, queue],
   );
 
   const submit = useCallback(

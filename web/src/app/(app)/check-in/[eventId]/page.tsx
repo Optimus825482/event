@@ -16,7 +16,7 @@ const dateFormat = new Intl.DateTimeFormat("tr-TR", {
 
 export default async function CheckInEventPage({ params }: { params: Params }) {
   const { eventId } = await params;
-  const { event, stats, canWrite } = await loadCheckInConsole(eventId);
+  const { userId, event, stats, canWrite } = await loadCheckInConsole(eventId);
   const closed = event.status === "draft" || event.status === "cancelled";
 
   return (
@@ -39,6 +39,7 @@ export default async function CheckInEventPage({ params }: { params: Params }) {
       ) : null}
       <CheckInConsole
         eventId={event.id}
+        userId={userId}
         initialStats={stats}
         canWrite={canWrite && !closed}
         readOnlyNote={!closed && !canWrite ? "Bu ekranda yalnızca görüntüleme yetkiniz var." : null}

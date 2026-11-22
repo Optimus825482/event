@@ -22,6 +22,8 @@ import { WalkInForm } from "./walk-in-form";
 /** `readOnlyNote`: yazma kapalıysa nedeni (yetki yok ya da etkinlik kapalı); `null` ise not gösterilmez. */
 type ConsoleProps = {
   eventId: string;
+  /** Oturumdaki kullanıcı (sunucuda çözülür); çevrimdışı kuyruk öğeleri bununla damgalanır. */
+  userId: string;
   initialStats: EventStats;
   canWrite: boolean;
   readOnlyNote: string | null;
@@ -62,12 +64,13 @@ function RecentCheckIns({ eventId }: { eventId: string }) {
   );
 }
 
-function ConsoleBody({ eventId, initialStats, canWrite, readOnlyNote }: ConsoleProps) {
+function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: ConsoleProps) {
   const stream = useEventStream(eventId);
   const [syncNote, setSyncNote] = useState("");
   // Kuyruk olayları check-in kancasından gelir; kanca da kuyruğu ister: önce sabit bir yönlendirici.
   const handlers = useRef<(events: SettledEvent[]) => number>(() => 0);
   const queue = useOfflineQueue(
+    userId,
     useCallback((events: SettledEvent[]) => {
       const synced = handlers.current(events);
       if (synced > 0) setSyncNote(`${synced} giriş sunucuya eşitlendi`);

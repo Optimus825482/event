@@ -3,6 +3,8 @@ import {
   applyOutcome,
   backoffMs,
   claim,
+  heldAside,
+  ownedBy,
   recoverInterrupted,
   retryFailed,
   selectDue,
@@ -10,7 +12,7 @@ import {
   type BatchOutcome,
   type QueueItem,
 } from "@/features/check-in/offline/queue-core";
-import { item, success } from "./helpers";
+import { item, OTHER_USER_ID, success, USER_ID } from "./helpers";
 
 function claimed(items: QueueItem[], now = 2_000): QueueItem[] {
   return claim(selectDue(items, now, 50), now);
@@ -224,5 +226,18 @@ describe("recoverInterrupted / summarize", () => {
     const sending = { ...item(), status: "sending" as const };
     const failed = { ...item(), status: "failed" as const };
     expect(summarize([pending, sending, failed])).toEqual({ pending: 2, failed: 1 });
+  });
+});
+
+describe("ownedBy / heldAside", () => {
+  it("öğeler kullanıcıya göre ayrılır; sahibi bilinmeyenler ve tamamlananlar bekletilen sayılmaz/sayılır", () => {
+    const mine = item();
+    const theirs = item({ ownerId: OTHER_USER_ID });
+    const unknown = { ...item(), ownerId: null };
+    const doneTheirs = { ...item({ ownerId: OTHER_USER_ID }), status: "done" as const };
+    const all = [mine, theirs, unknown, doneTheirs];
+    expect(ownedBy(all, USER_ID)).toEqual([mine]);
+    expect(heldAside(all, USER_ID).map((i) => i.idempotencyKey)).toEqual([theirs.idempotencyKey, unknown.idempotencyKey]);
+    expect(heldAside(all, null).map((i) => i.idempotencyKey)).toEqual(all.slice(0, 3).map((i) => i.idempotencyKey));
   });
 });

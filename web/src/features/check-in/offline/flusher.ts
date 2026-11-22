@@ -2,6 +2,7 @@ import {
   DEFAULT_BATCH_SIZE,
   applyOutcome,
   claim,
+  ownedBy,
   recoverInterrupted,
   selectDue,
   type BatchOutcome,
@@ -23,6 +24,11 @@ export type FlusherDeps = {
   store: QueueStore;
   send: (items: readonly QueueItem[]) => Promise<BatchOutcome>;
   tryLock: TryLock;
+  /**
+   * Oturumdaki kullanıcı (sunucudan gelen kimlik). `null`: bilinmiyor, hiçbir şey gönderilmez.
+   * Yalnızca bu kullanıcıya ait öğeler gönderilir; diğerleri dokunulmadan bekletilir.
+   */
+  currentUserId: () => string | null;
   now: () => number;
   random?: () => number;
   maxBatch?: number;
@@ -63,11 +69,15 @@ export function createFlusher(deps: FlusherDeps): Flusher {
   let running: Promise<void> | null = null;
 
   async function drain(): Promise<void> {
-    const recovered = recoverInterrupted(await store.getAll());
+    const userId = deps.currentUserId();
+    if (userId === null) return;
+    const recovered = recoverInterrupted(ownedBy(await store.getAll(), userId));
     await store.putMany(recovered.filter((i) => i.status === "pending"));
 
     for (let round = 0; round < MAX_ROUNDS && !paused; round += 1) {
-      const due = selectDue(await store.getAll(), now(), maxBatch);
+      // Oturum bu arada değiştiyse (başka sekmede çıkış/giriş) eski kullanıcının öğeleri gönderilmez.
+      if (deps.currentUserId() !== userId) return;
+      const due = selectDue(ownedBy(await store.getAll(), userId), now(), maxBatch);
       if (due.length === 0) return;
       const sent = claim(due, now());
       await store.putMany(sent);

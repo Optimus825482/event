@@ -110,6 +110,11 @@ export async function handleCheckInPost(request: Request): Promise<Response> {
   const run = defineAction(checkInActionDefs.checkIn);
 
   if (!("items" in single.data)) return json(200, await run(single.data));
+  // Kuyruk öğeleri oluşturan kullanıcının kimliğini taşır; başka bir oturumda gönderilmez.
+  const { ownerId } = single.data;
+  if (typeof ownerId === "string" && ownerId !== actor.id) {
+    return failure(401, "unauthenticated", "Bu girişler başka bir kullanıcıya ait; sahibi oturum açınca gönderilir");
+  }
   const batch = batchSchema.safeParse(single.data);
   if (!batch.success) return failure(400, "invalid", batch.error.issues[0]?.message ?? "Girdi geçersiz");
 

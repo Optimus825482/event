@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 import { checkInEvents, reservations } from "@/db/schema";
+import { withPermissions } from "@/features/auth/permissions";
+import { can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
 import { lockEvent, MSG, type Executor } from "@/features/reservations/internal";
@@ -16,14 +18,22 @@ import { updateGuestCountInput, walkInInput, type UpdateGuestCountInput, type Wa
  */
 export async function registerWalkIn(db: Executor, actor: Actor, raw: WalkInInput): Promise<CheckInSuccess> {
   const input = walkInInput.parse(raw);
+  // İzinler transaction AÇILMADAN okunur: açıkken havuzdan ikinci bağlantı almak, eşzamanlı
+  // walk-in'lerde havuzu tüketip kilitlenmeye yol açar.
+  const mayReadCustomers = can(await withPermissions(actor), "customers", "view");
   return db.transaction(async (tx) => {
-    const reservation = await createReservation(tx, actor, {
-      eventId: input.eventId,
-      tableId: input.tableId,
-      guestCount: input.guestCount,
-      guestName: input.guestName,
-      guestPhone: input.guestPhone,
-    });
+    const reservation = await createReservation(
+      tx,
+      actor,
+      {
+        eventId: input.eventId,
+        tableId: input.tableId,
+        guestCount: input.guestCount,
+        guestName: input.guestName,
+        guestPhone: input.guestPhone,
+      },
+      { mayReadCustomers },
+    );
     // Etkinlik bu transaction'da zaten `FOR SHARE` kilitli; satır, sayaçlar için yeniden okunur.
     const event = await lockEvent(tx, actor, input.eventId);
     const changed = await markCheckedIn(tx, {

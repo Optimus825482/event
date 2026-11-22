@@ -10,6 +10,9 @@ import type { CheckInSuccess } from "../internal";
  * - 401: kuyruk durur (`pauseForAuth`), öğe `pending` kalır ve deneme sayılmaz.
  * - İstek düzeyi ret (400/403/413/415): `failed` (kind "request"); operatör yeniden deneyebilir.
  * - Başarılı öğeler (`done`) olayla bildirilir; kalıcı silme çağıranın işidir.
+ * - Her öğe, onu oluşturan kullanıcının kimliğini (`ownerId`) taşır. Yalnızca o anki oturumun
+ *   sahibi olduğu öğeler gönderilir; başkasına ait (ya da sahibi bilinmeyen) öğeler kuyrukta
+ *   bekletilir ve ancak sahibi yeniden oturum açınca gönderilir.
  */
 
 export type QueueTarget = { token: string } | { legacyHash: string } | { reservationId: string };
@@ -23,6 +26,8 @@ export type QueueStatus = "pending" | "sending" | "failed" | "done";
 export type QueueItem = {
   /** Hem depo anahtarı hem sunucuya giden `idempotencyKey`. */
   idempotencyKey: string;
+  /** Öğeyi kuyruğa yazan kullanıcı; `null`: sahibi bilinmeyen (eski sürümden kalan) öğe, hiç gönderilmez. */
+  ownerId: string | null;
   eventId: string;
   target: QueueTarget;
   /** Tarama anı (ISO); tekrar gönderimlerde değişmez. */
@@ -68,6 +73,7 @@ export function backoffMs(attempts: number, random: number): number {
 
 export function createItem(input: {
   idempotencyKey: string;
+  ownerId: string;
   eventId: string;
   target: QueueTarget;
   clientTimestamp: string;
@@ -76,6 +82,7 @@ export function createItem(input: {
   sequence += 1;
   return {
     idempotencyKey: input.idempotencyKey,
+    ownerId: input.ownerId,
     eventId: input.eventId,
     target: input.target,
     clientTimestamp: input.clientTimestamp,
@@ -94,6 +101,21 @@ export function compareItems(a: QueueItem, b: QueueItem): number {
   return (
     a.enqueuedAt - b.enqueuedAt || a.seq - b.seq || (a.idempotencyKey < b.idempotencyKey ? -1 : 1)
   );
+}
+
+/** Şema 1'den kalan öğe (sahibi kaydedilmemiş): öğe korunur, sahibi bilinmeyen olarak bekletilir. */
+export function migrateStoredItem(item: QueueItem): QueueItem {
+  return typeof item.ownerId === "string" ? item : { ...item, ownerId: null };
+}
+
+/** Yalnızca `userId`'ye ait öğeler; sahibi başka ya da bilinmeyen olanlar çıkarılır. */
+export function ownedBy(items: readonly QueueItem[], userId: string): QueueItem[] {
+  return items.filter((i) => i.ownerId === userId);
+}
+
+/** Başka kullanıcıya ait (ya da sahibi bilinmeyen), henüz sonuçlanmamış öğeler: bekletilir, gönderilmez. */
+export function heldAside(items: readonly QueueItem[], userId: string | null): QueueItem[] {
+  return items.filter((i) => (i.ownerId === null || i.ownerId !== userId) && i.status !== "done");
 }
 
 /** Gönderilmesi gereken öğeler: beklemede ve zamanı gelmiş, ekleme sırasında, en çok `max`. */
