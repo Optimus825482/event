@@ -5,6 +5,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FloorPlanView } from "@/features/venue/components/floor-plan-view";
+import { isTableSelectable, type PlanStatus } from "@/features/venue/plan-status";
+import type { FloorPlanData } from "@/features/venue/plan-types";
 import { useRunAction } from "@/features/customers/components/use-run-action";
 import { Field, SELECT_CLASS } from "@/features/users/components/field";
 import { createReservationAction } from "../actions";
@@ -23,16 +26,24 @@ type Props = {
   tables: AvailableTable[];
   customers: CustomerOption[];
   canOverrideBlacklist: boolean;
+  /** Verilirse "plandan masa seç" bölümü gösterilir; açılır liste yine de klavye alternatifidir. */
+  plan?: FloorPlanData;
+  tableStatuses?: Readonly<Record<string, PlanStatus>>;
 };
 
-export function ReservationForm({ eventId, tables, customers, canOverrideBlacklist }: Props) {
+export function ReservationForm({ eventId, tables, customers, canOverrideBlacklist, plan, tableStatuses }: Props) {
   const router = useRouter();
   const { pending, failure, run } = useRunAction();
   const [selected, setSelected] = useState<CustomerOption | null>(null);
   const [tableId, setTableId] = useState("");
+  const [showPlan, setShowPlan] = useState(false);
+  const [guests, setGuests] = useState(2);
   const free = tables.filter((t) => t.available);
   const capacity = free.find((t) => t.id === tableId)?.capacity;
   const errors = failure?.fieldErrors ?? {};
+  // Müsaitlik kuralı rezervasyon servisinden gelir (`available`); plan yalnızca aynı sonucu gösterir.
+  const blockedIds = tables.filter((t) => !isTableSelectable(t, guests)).map((t) => t.id);
+  const pickedLabel = tables.find((t) => t.id === tableId)?.label;
 
   function submit(form: FormData) {
     const value = (key: string) => {
@@ -117,9 +128,50 @@ export function ReservationForm({ eventId, tables, customers, canOverrideBlackli
           </select>
         </Field>
         <Field id="guestCount" label="Kişi sayısı" errors={errors.guestCount} hint={capacity ? `En fazla ${capacity}` : undefined}>
-          <Input id="guestCount" name="guestCount" type="number" min={1} max={capacity ?? 50} defaultValue={2} required />
+          <Input
+            id="guestCount"
+            name="guestCount"
+            type="number"
+            min={1}
+            max={capacity ?? 50}
+            defaultValue={2}
+            required
+            onChange={(e) => setGuests(e.target.valueAsNumber)}
+          />
         </Field>
       </div>
+
+      {plan ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-expanded={showPlan}
+              aria-controls="reservation-plan"
+              onClick={() => setShowPlan((v) => !v)}
+            >
+              {showPlan ? "Planı gizle" : "Plandan masa seç"}
+            </Button>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {pickedLabel ? `Seçilen masa: ${pickedLabel}` : "Masayı yukarıdaki listeden de seçebilirsiniz."}
+            </p>
+          </div>
+          {showPlan ? (
+            <div id="reservation-plan">
+              <FloorPlanView
+                plan={plan}
+                statuses={tableStatuses}
+                selectedId={tableId || null}
+                disabledIds={blockedIds}
+                onSelect={setTableId}
+                ariaLabel="Masa seçimi için yerleşim planı"
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {selected ? (
         <p className="rounded-md bg-muted p-3 text-sm">

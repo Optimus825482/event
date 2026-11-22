@@ -6,6 +6,8 @@ import { EventActions } from "@/features/events/components/event-actions";
 import { EventForm } from "@/features/events/components/event-form";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import { loadEventDetail } from "@/features/events/queries";
+import { PlanPreviewCard } from "@/features/venue/components/plan-preview-card";
+import { loadEventPlanPreview } from "@/features/venue/queries";
 
 export const metadata: Metadata = { title: "Etkinlik | EventFlow" };
 
@@ -17,7 +19,11 @@ const dateFormat = new Intl.DateTimeFormat("tr-TR", {
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [actor, { event, tables }] = await Promise.all([requirePolicyActor(), loadEventDetail(id)]);
+  const [actor, { event, tables }, preview] = await Promise.all([
+    requirePolicyActor(),
+    loadEventDetail(id),
+    loadEventPlanPreview(id),
+  ]);
   const canEdit = can(actor, "events", "edit");
   const editable = canEdit && event.status !== "completed" && event.status !== "cancelled";
 
@@ -73,6 +79,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           <dd className="text-2xl font-semibold">{event.reservationCount}</dd>
         </div>
       </dl>
+
+      {preview ? <PlanPreviewCard eventId={event.id} plan={preview} canEdit={editable} /> : null}
 
       <section className="space-y-2">
         <h2 className="text-lg font-medium">Masalar</h2>

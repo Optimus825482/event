@@ -15,7 +15,7 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 export default async function NewReservationPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const [{ eventId }, sp] = await Promise.all([params, searchParams]);
   const customerQ = first(sp.customerQ);
-  const { actor, event, tables, customerResults } = await loadNewReservationPage(eventId, customerQ);
+  const { actor, event, tables, plan, statuses, customerResults } = await loadNewReservationPage(eventId, customerQ);
   const bookable = (event.status === "published" || event.status === "active") && event.reservationEnabled;
   const freeCount = tables.filter((t) => t.available).length;
 
@@ -63,6 +63,8 @@ export default async function NewReservationPage({ params, searchParams }: { par
           <ReservationForm
             eventId={eventId}
             tables={tables}
+            plan={plan}
+            tableStatuses={statuses}
             customers={customerResults.map((c) => ({
               id: c.id,
               fullName: c.fullName,

@@ -10,6 +10,7 @@ import { listEvents } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { escapeLike, isUuid } from "@/lib/identifiers";
 import { canAccessEvent, MSG, type Executor } from "./internal";
+import { getReservationPlan } from "./plan-service";
 import { availableTables } from "./read-service";
 import { listReservationsInput, type ListReservationsInput } from "./schemas";
 
@@ -166,10 +167,11 @@ export async function loadNewReservationPage(eventId: string, customerQuery: str
   try {
     const event = await accessibleEvent(defaultDb, actor, eventId);
     const tables = await availableTables(defaultDb, actor, { eventId });
+    const { plan, statuses } = await getReservationPlan(defaultDb, actor, eventId);
     const q = customerQuery?.trim();
     const customerResults =
       q && can(actor, "customers", "view") ? (await searchCustomers(defaultDb, actor, { q, pageSize: 10 })).items : [];
-    return { actor, event, tables, customerResults };
+    return { actor, event, tables, plan, statuses, customerResults };
   } catch (error) {
     return rethrowNotFound(error);
   }
@@ -182,4 +184,16 @@ export async function loadReservationDetail(eventId: string, id: string) {
   if (!detail || detail.event.id !== eventId) notFound();
   const tables = await availableTables(defaultDb, actor, { eventId, excludeReservationId: id });
   return { actor, ...detail, tables };
+}
+
+/** Etkinlik rezervasyon haritası (durum renkli plan + masa rezervasyonları). */
+export async function loadReservationMap(eventId: string) {
+  const actor = await requirePolicyActor();
+  authorize(actor, "reservations", "view");
+  if (!isUuid(eventId)) notFound();
+  try {
+    return await getReservationPlan(defaultDb, actor, eventId);
+  } catch (error) {
+    return rethrowNotFound(error);
+  }
 }
