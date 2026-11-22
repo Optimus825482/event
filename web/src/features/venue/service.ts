@@ -129,6 +129,11 @@ export async function applyVenueTemplate(db: Db, actor: Actor, input: ApplyTempl
         y: t.y,
         rotation: t.rotation,
         isLoca: t.isLoca,
+        isVip: t.isVip,
+        isPinned: t.isPinned,
+        size: t.size,
+        floor: t.floor,
+        sortNumber: t.sortNumber,
       }));
 
       const result = await writeLayout(tx, input.eventId, [...keptInputs, ...fromTemplate], layout.decor);
@@ -178,6 +183,11 @@ export async function saveAsTemplate(db: Db, actor: Actor, input: SaveAsTemplate
       y: t.y,
       rotation: t.rotation,
       isLoca: t.isLoca,
+      isVip: t.isVip,
+      isPinned: t.isPinned,
+      size: t.size,
+      floor: t.floor,
+      sortNumber: t.sortNumber,
     })),
     decor: parseDecor(event.layoutDecor),
   };

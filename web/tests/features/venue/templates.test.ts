@@ -32,12 +32,14 @@ async function caught(promise: Promise<unknown>): Promise<DomainError> {
   return err as DomainError;
 }
 
+const ATTRS = { isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null } as const;
+
 const templateLayout: TemplateLayout = {
   version: 1,
   tables: [
-    { label: "M1", capacity: 10, tableTypeId: null, x: 500, y: 500, rotation: 0, isLoca: false },
-    { label: "T2", capacity: 6, tableTypeId: null, x: 600, y: 500, rotation: 0, isLoca: false },
-    { label: "T3", capacity: 4, tableTypeId: null, x: 700, y: 500, rotation: 0, isLoca: true },
+    { label: "M1", capacity: 10, tableTypeId: null, x: 500, y: 500, rotation: 0, isLoca: false, ...ATTRS },
+    { label: "T2", capacity: 6, tableTypeId: null, x: 600, y: 500, rotation: 0, isLoca: false, ...ATTRS },
+    { label: "T3", capacity: 4, tableTypeId: null, x: 700, y: 500, rotation: 0, isLoca: true, ...ATTRS },
   ],
   decor: {
     width: 2000,
@@ -116,8 +118,8 @@ describe("applyVenueTemplate", () => {
     const layout: TemplateLayout = {
       ...templateLayout,
       tables: [
-        { label: "A", capacity: 4, tableTypeId: type?.id ?? null, x: 0, y: 0, rotation: 0, isLoca: false },
-        { label: "B", capacity: 4, tableTypeId: crypto.randomUUID(), x: 0, y: 0, rotation: 0, isLoca: false },
+        { label: "A", capacity: 4, tableTypeId: type?.id ?? null, x: 0, y: 0, rotation: 0, isLoca: false, ...ATTRS },
+        { label: "B", capacity: 4, tableTypeId: crypto.randomUUID(), x: 0, y: 0, rotation: 0, isLoca: false, ...ATTRS },
       ],
     };
     const tpl = await insertTemplate(actor.id, { layoutData: layout });
@@ -228,7 +230,75 @@ describe("şablon yönetimi", () => {
   });
 });
 
+describe("şablon: masa nitelikleri", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("şablona kaydedilir ve başka etkinliğe uygulanınca korunur", async () => {
+    const actor = await makeActor();
+    const event = await f.createEvent(db, { organizerId: actor.id });
+    await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [{ label: "V1", capacity: 4, x: 1, y: 2, isVip: true, isPinned: true, size: 70, floor: 3, sortNumber: 5 }],
+      decor: { width: 900, height: 600, elements: [] },
+    });
+    const tpl = await saveAsTemplate(db, actor, { eventId: event.id, name: "Nitelikli" });
+    expect(parseTemplateLayout(tpl.layoutData).tables[0]).toMatchObject({ isVip: true, isPinned: true, size: 70, floor: 3, sortNumber: 5 });
+    const target = await f.createEvent(db, { organizerId: actor.id });
+    const res = await applyVenueTemplate(db, actor, { eventId: target.id, templateId: tpl.id });
+    expect(res.tables[0]).toMatchObject({ label: "V1", isVip: true, isPinned: true, size: 70, floor: 3, sortNumber: 5 });
+  });
+
+  it("yeni alanları olmayan v1 şablon okunur ve varsayılanlarla uygulanır", async () => {
+    const actor = await makeActor();
+    const event = await f.createEvent(db, { organizerId: actor.id });
+    const oldV1 = {
+      version: 1,
+      tables: [{ label: "E1", capacity: 6, tableTypeId: null, x: 10, y: 20, rotation: 0, isLoca: false }],
+      decor: { width: 1200, height: 800, elements: [] },
+    };
+    expect(parseTemplateLayout(oldV1).tables[0]).toMatchObject({ isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null, x: 10, y: 20 });
+    const [tpl] = await db.insert(venueTemplates).values({ name: "Eski v1", layoutData: oldV1, createdById: actor.id }).returning();
+    const res = await applyVenueTemplate(db, actor, { eventId: event.id, templateId: tpl?.id ?? "" });
+    expect(res.tables[0]).toMatchObject({ label: "E1", isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null });
+  });
+
+  it("kullanımdaki masa şablon uygulanınca niteliklerini korur", async () => {
+    const actor = await makeActor();
+    const event = await f.createEvent(db, { organizerId: actor.id });
+    const saved = await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [{ label: "K1", capacity: 4, x: 5, y: 5, isVip: true, floor: 2, size: 48 }],
+      decor: { width: 900, height: 600, elements: [] },
+    });
+    const table = saved.tables[0];
+    if (!table) throw new Error("masa yok");
+    const customer = await f.createCustomer(db);
+    await f.createReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
+    const tpl = await insertTemplate(actor.id);
+    const res = await applyVenueTemplate(db, actor, { eventId: event.id, templateId: tpl.id });
+    expect(res.tables.find((t) => t.label === "K1")).toMatchObject({ isVip: true, floor: 2, size: 48 });
+  });
+});
+
 describe("parseTemplateLayout", () => {
+  it("eski biçim: VIP, sabit (isLocked), boyut, kat, sayısal masa numarası ve merkez koordinatı", () => {
+    const layout = parseTemplateLayout({
+      placedTables: [
+        { id: "a", tableNumber: 7, capacity: 8, x: 100, y: 200, size: 60, isVip: true, isLocked: true, floor: 3 },
+        { id: "b", tableNumber: "12", capacity: 8, x: 100, y: 200 },
+        { id: "c", tableNumber: "A-1", capacity: 8, x: 0, y: 0, floor: 99, size: "x" },
+        { id: "d", tableNumber: 4, capacity: 8, x: 0, y: 0, floor: 5.5 },
+      ],
+    });
+    const [a, b, c, d] = layout.tables;
+    expect(a).toMatchObject({ x: 130, y: 230, size: 60, isVip: true, isPinned: true, floor: 3, sortNumber: 7 });
+    expect(b).toMatchObject({ x: 120, y: 220, size: null, isVip: false, isPinned: false, floor: 1, sortNumber: 12 });
+    expect(c).toMatchObject({ x: 20, y: 20, size: null, floor: 9, sortNumber: null });
+    expect(d).toMatchObject({ floor: 6, sortNumber: 4 });
+  });
+
   it("eski placedTables/stageElements biçimini dönüştürür", () => {
     const layout = parseTemplateLayout({
       placedTables: [

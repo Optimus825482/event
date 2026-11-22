@@ -14,7 +14,7 @@ import { canAccessEvent } from "@/features/events/access";
 import { listEventTables, totalCapacity, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
-import { MAX_TABLE_CAPACITY, MAX_TABLES, decorSchema, normalizeLabel, type Decor, type DecorInput, type TableInput } from "./schemas";
+import { MAX_FLOOR, MAX_TABLE_CAPACITY, MAX_TABLES, MIN_FLOOR, decorSchema, normalizeLabel, type Decor, type DecorInput, type TableInput } from "./schemas";
 
 export type EventTableRow = typeof eventTables.$inferSelect;
 
@@ -67,6 +67,11 @@ type NormalizedTable = {
   y: number;
   rotation: number;
   isLoca: boolean;
+  isVip: boolean;
+  isPinned: boolean;
+  size: number | null;
+  floor: number;
+  sortNumber: number | null;
 };
 
 function normalizeRotation(value: number): number {
@@ -84,6 +89,7 @@ function normalizeTables(tables: TableInput[]): NormalizedTable[] {
   const seen = new Map<string, string>();
   const duplicates = new Set<string>();
   const badCapacity: string[] = [];
+  const badFloor: string[] = [];
   const emptyLabel = tables.some((t) => t.label.trim() === "");
   if (emptyLabel) throw new DomainError("conflict", "Her masanın bir etiketi olmalı");
 
@@ -93,6 +99,7 @@ function normalizeTables(tables: TableInput[]): NormalizedTable[] {
     if (seen.has(key)) duplicates.add(seen.get(key) ?? label);
     else seen.set(key, label);
     if (!Number.isInteger(t.capacity) || t.capacity < 1 || t.capacity > MAX_TABLE_CAPACITY) badCapacity.push(label);
+    if (t.floor !== undefined && (!Number.isInteger(t.floor) || t.floor < MIN_FLOOR || t.floor > MAX_FLOOR)) badFloor.push(label);
     return {
       id: t.id,
       label,
@@ -102,6 +109,11 @@ function normalizeTables(tables: TableInput[]): NormalizedTable[] {
       y: t.y,
       rotation: normalizeRotation(t.rotation ?? 0),
       isLoca: t.isLoca ?? false,
+      isVip: t.isVip ?? false,
+      isPinned: t.isPinned ?? false,
+      size: t.size ?? null,
+      floor: t.floor ?? MIN_FLOOR,
+      sortNumber: t.sortNumber ?? null,
     };
   });
   if (duplicates.size > 0) {
@@ -112,6 +124,9 @@ function normalizeTables(tables: TableInput[]): NormalizedTable[] {
       "conflict",
       `Kapasite 1 ile ${MAX_TABLE_CAPACITY} arasında bir tam sayı olmalı: ${quoteList(badCapacity)}`,
     );
+  }
+  if (badFloor.length > 0) {
+    throw new DomainError("conflict", `Kat ${MIN_FLOOR} ile ${MAX_FLOOR} arasında bir tam sayı olmalı: ${quoteList(badFloor)}`);
   }
   return result;
 }
@@ -130,7 +145,7 @@ async function assertTableTypesExist(tx: Tx, tables: NormalizedTable[]): Promise
 }
 
 function valuesRow(t: NormalizedTable & { id: string }) {
-  return sql`(${t.id}::uuid, ${t.label}::text, ${t.capacity}::int, ${t.tableTypeId}::uuid, ${t.x}::float8, ${t.y}::float8, ${t.rotation}::float8, ${t.isLoca}::boolean)`;
+  return sql`(${t.id}::uuid, ${t.label}::text, ${t.capacity}::int, ${t.tableTypeId}::uuid, ${t.x}::float8, ${t.y}::float8, ${t.rotation}::float8, ${t.isLoca}::boolean, ${t.isVip}::boolean, ${t.isPinned}::boolean, ${t.size}::float8, ${t.floor}::smallint, ${t.sortNumber}::int)`;
 }
 
 /**
@@ -241,9 +256,11 @@ export async function writeLayout(
     await tx.execute(sql`
       update ${eventTables} as t set
         label = v.label, capacity = v.capacity, table_type_id = v.table_type_id,
-        x = v.x, y = v.y, rotation = v.rotation, is_loca = v.is_loca, updated_at = now()
+        x = v.x, y = v.y, rotation = v.rotation, is_loca = v.is_loca,
+        is_vip = v.is_vip, is_pinned = v.is_pinned, size = v.size, floor = v.floor, sort_number = v.sort_number,
+        updated_at = now()
       from (values ${sql.join(updates.map(valuesRow), sql`, `)})
-        as v(id, label, capacity, table_type_id, x, y, rotation, is_loca)
+        as v(id, label, capacity, table_type_id, x, y, rotation, is_loca, is_vip, is_pinned, size, floor, sort_number)
       where t.id = v.id and t.event_id = ${eventId}`);
   }
 
@@ -259,6 +276,11 @@ export async function writeLayout(
         y: t.y,
         rotation: t.rotation,
         isLoca: t.isLoca,
+        isVip: t.isVip,
+        isPinned: t.isPinned,
+        size: t.size,
+        floor: t.floor,
+        sortNumber: t.sortNumber,
       })),
     );
   }
@@ -290,7 +312,7 @@ export function mapLayoutDbError(error: unknown): never {
   if (code === "23503") {
     throw new DomainError("conflict", "Masa başka kayıtlarca kullanılıyor; hiçbir değişiklik kaydedilmedi");
   }
-  if (code === "23514") throw new DomainError("conflict", "Masa bilgileri geçersiz (kapasite en az 1 olmalı)");
+  if (code === "23514") throw new DomainError("conflict", "Masa bilgileri geçersiz (kapasite en az 1, kat 1-9 olmalı)");
   throw error;
 }
 

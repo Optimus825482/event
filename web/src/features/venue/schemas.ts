@@ -5,6 +5,10 @@ export const MAX_TABLES = 500;
 export const MAX_DECOR_ELEMENTS = 200;
 export const MAX_TABLE_CAPACITY = 100;
 export const LABEL_MAX = 20;
+export const MIN_FLOOR = 1;
+export const MAX_FLOOR = 9;
+export const TABLE_SIZE_MIN = 8;
+export const TABLE_SIZE_MAX = 400;
 
 export const DECOR_KINDS = ["stage", "area", "wall", "label"] as const;
 export type DecorKind = (typeof DECOR_KINDS)[number];
@@ -37,6 +41,23 @@ export const tableInputSchema = z.object({
   y: coordinate,
   rotation: z.number().min(-3600).max(3600).default(0),
   isLoca: z.boolean().default(false),
+  isVip: z.boolean().default(false),
+  isPinned: z.boolean().default(false),
+  /** Çizim boyutu (px); null = kapasiteden türetilir. */
+  size: z.number({ error: "Boyut sayı olmalı" }).min(TABLE_SIZE_MIN, `Boyut en az ${TABLE_SIZE_MIN} olmalı`).max(TABLE_SIZE_MAX, `Boyut en fazla ${TABLE_SIZE_MAX} olabilir`).nullable().default(null),
+  floor: z
+    .number({ error: "Kat sayı olmalı" })
+    .int("Kat tam sayı olmalı")
+    .min(MIN_FLOOR, `Kat en az ${MIN_FLOOR} olmalı`)
+    .max(MAX_FLOOR, `Kat en fazla ${MAX_FLOOR} olabilir`)
+    .default(1),
+  sortNumber: z
+    .number({ error: "Sıra numarası sayı olmalı" })
+    .int("Sıra numarası tam sayı olmalı")
+    .min(0, "Sıra numarası negatif olamaz")
+    .max(1_000_000, "Sıra numarası çok büyük")
+    .nullable()
+    .default(null),
 });
 export type TableInput = z.input<typeof tableInputSchema>;
 export type ParsedTableInput = z.output<typeof tableInputSchema>;

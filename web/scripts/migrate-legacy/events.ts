@@ -113,6 +113,11 @@ export async function migrateEvents(ctx: Ctx): Promise<void> {
         y: t.y,
         rotation: t.rotation,
         isLoca: t.isLoca,
+        isVip: t.isVip,
+        isPinned: t.isPinned,
+        size: t.size,
+        floor: t.floor,
+        sortNumber: t.sortNumber,
         createdAt: r.date("createdAt") ?? undefined,
         updatedAt: r.date("updatedAt") ?? undefined,
       });

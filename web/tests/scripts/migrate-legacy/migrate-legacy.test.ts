@@ -164,7 +164,8 @@ describe("rapor kategorileri", () => {
     expect(gap("staff_performance_logs.*")).toBe(1);
     expect(gap("events.venueLayout.tablePlans")).toBe(1);
     expect(gap("events.venueLayout.groupLines")).toBe(1);
-    expect(gap("events.venueLayout.(placedTables|tables)[].isLocked")).toBe(3);
+    // Masadaki isLocked artık event_tables.is_pinned'e taşınır; boşluk olarak raporlanmaz.
+    expect(gap("events.venueLayout.(placedTables|tables)[].isLocked")).toBeUndefined();
     expect(gap("events.venueLayout.stageElements[].isLocked")).toBe(1);
   });
 
@@ -214,6 +215,14 @@ describe("hedef durum", () => {
       expect(of(E.e1).map((t) => t.label)).toEqual(["1", "2", "A1", "Eski ghost-7"]);
       expect(of(E.e1).find((t) => t.label === "1")?.table_type_id).toBe(IDS.tableType);
       expect(of(E.e1).find((t) => t.label === "A1")?.is_loca).toBe(true);
+      const attrs = await c.query<{ label: string; x: number; y: number; is_pinned: boolean; is_vip: boolean; size: number | null; floor: number; sort_number: number | null }>(
+        "SELECT label, x, y, is_pinned, is_vip, size, floor, sort_number FROM event_tables WHERE event_id = $1 ORDER BY label",
+        [E.e1],
+      );
+      // isLocked → is_pinned, tableNumber → sort_number, x/y sol-üstten merkeze (+20, varsayılan boyut 40).
+      expect(attrs.rows.find((t) => t.label === "1")).toMatchObject({ x: 120, y: 120, is_pinned: true, is_vip: false, size: null, floor: 1, sort_number: 1 });
+      expect(attrs.rows.find((t) => t.label === "2")).toMatchObject({ x: 220, y: 120, is_pinned: false, sort_number: 2 });
+      expect(attrs.rows.find((t) => t.label === "A1")).toMatchObject({ x: 20, y: 320, sort_number: 3 });
       expect(of(E.e1).find((t) => t.label === "Eski ghost-7")?.capacity).toBe(50);
       expect(of(E.e2).map((t) => [t.label, t.rotation])).toEqual([["1", 45], ["1 (2)", 0]]);
       expect(of(E.e3).map((t) => t.label)).toEqual(["Eski X9"]);

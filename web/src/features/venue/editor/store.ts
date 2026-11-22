@@ -13,6 +13,15 @@ export type EditorTable = {
   y: number;
   rotation: number;
   isLoca: boolean;
+  isVip: boolean;
+  /** Düzenleyicide sabitlenmiş (taşınmaz); `locked` (kullanımda) kavramından bağımsız. */
+  isPinned: boolean;
+  /** Çizim boyutu (px); null = kapasiteden türetilir. */
+  size: number | null;
+  /** Kat, 1..9. */
+  floor: number;
+  /** Sayısal sıralama anahtarı; null = yok. */
+  sortNumber: number | null;
   /** Rezervasyonu/ataması var: silinemez (sunucu da reddeder). */
   locked: boolean;
 };
@@ -42,7 +51,7 @@ export type EditorActions = {
   load: (layout: InitialLayout) => void;
   addTable: (opts?: { at?: Point; capacity?: number; tableTypeId?: string | null; isLoca?: boolean }) => string;
   addDecor: (kind: DecorKind, at?: Point) => string;
-  updateTables: (keys: readonly string[], patch: Partial<Pick<EditorTable, "label" | "capacity" | "tableTypeId" | "isLoca" | "rotation">>) => void;
+  updateTables: (keys: readonly string[], patch: Partial<Pick<EditorTable, "label" | "capacity" | "tableTypeId" | "isLoca" | "rotation" | "isVip" | "isPinned" | "size" | "floor" | "sortNumber">>) => void;
   updateDecor: (key: string, patch: Partial<Pick<DecorElement, "label" | "color" | "width" | "height" | "rotation">>) => void;
   commitPlacements: (placements: readonly Placement[]) => void;
   nudge: (dx: number, dy: number) => void;
@@ -102,6 +111,11 @@ function toEditorTables(layout: InitialLayout): EditorTable[] {
     y: t.y,
     rotation: t.rotation,
     isLoca: t.isLoca,
+    isVip: t.isVip,
+    isPinned: t.isPinned,
+    size: t.size,
+    floor: t.floor,
+    sortNumber: t.sortNumber,
     locked: locked.has(t.id),
   }));
 }
@@ -156,6 +170,11 @@ export function createEditorStore(initial: InitialLayout) {
           y: at.y,
           rotation: 0,
           isLoca: opts.isLoca ?? false,
+          isVip: false,
+          isPinned: false,
+          size: null,
+          floor: 1,
+          sortNumber: null,
           locked: false,
         };
         change({ tables: [...s.tables, table], selection: [key] });
@@ -314,6 +333,11 @@ export function createEditorStore(initial: InitialLayout) {
             y: Math.round(t.y * 100) / 100,
             rotation: t.rotation,
             isLoca: t.isLoca,
+            isVip: t.isVip,
+            isPinned: t.isPinned,
+            size: t.size,
+            floor: t.floor,
+            sortNumber: t.sortNumber,
           })),
           decor: { width: s.canvas.width, height: s.canvas.height, elements: s.elements },
         };

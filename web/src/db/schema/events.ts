@@ -8,6 +8,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  smallint,
   text,
   time,
   unique,
@@ -82,10 +83,19 @@ export const eventTables = pgTable(
     y: doublePrecision("y").notNull().default(0),
     rotation: doublePrecision("rotation").notNull().default(0),
     isLoca: boolean("is_loca").notNull().default(false),
+    isVip: boolean("is_vip").notNull().default(false),
+    /** Düzenleyicide sabitlenmiş (taşınmaz); "kullanımda" (rezervasyonlu) kavramından bağımsızdır. */
+    isPinned: boolean("is_pinned").notNull().default(false),
+    /** Çizim boyutu (px; yuvarlak için çap, diğerleri için uzun kenar). null = kapasiteden türetilir. */
+    size: doublePrecision("size"),
+    floor: smallint("floor").notNull().default(1),
+    /** Sayısal sıralama anahtarı (etiketten bağımsız). */
+    sortNumber: integer("sort_number"),
     ...timestamps(),
   },
   (t) => [
     check("event_tables_capacity_positive", sql`${t.capacity} > 0`),
+    check("event_tables_floor_range", sql`${t.floor} BETWEEN 1 AND 9`),
     unique("event_tables_event_label_uq").on(t.eventId, t.label),
     // Bağlı tabloların bileşik yabancı anahtarı (event_id, table_id) için hedef:
     // bir masa yalnızca kendi etkinliğinin satırlarınca referans alınabilir.

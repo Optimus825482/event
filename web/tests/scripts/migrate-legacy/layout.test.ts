@@ -22,6 +22,48 @@ describe("parseLayout", () => {
     expect(out.issues).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "capacity_adjusted", legacyId: "c" })]));
   });
 
+  it("masa nitelikleri eşlenir: isVip, isLocked→isPinned, size, floor, sayısal tableNumber→sortNumber", () => {
+    const out = parseLayout({
+      placedTables: [
+        { id: "a", tableNumber: 7, capacity: 8, x: 0, y: 0, isVip: true, isLocked: true, size: 60, floor: 3 },
+        { id: "b", tableNumber: "12", capacity: 8, x: 0, y: 0 },
+        { id: "c", tableNumber: "A-1", capacity: 8, x: 0, y: 0, isVip: "yes", size: 500, floor: 12 },
+        { id: "d", tableNumber: 2.5, capacity: 8, x: 0, y: 0, size: -4, floor: 0 },
+      ],
+    });
+    const pick = (i: number) => {
+      const t = out.tables[i];
+      return t && { isVip: t.isVip, isPinned: t.isPinned, size: t.size, floor: t.floor, sortNumber: t.sortNumber };
+    };
+    expect(pick(0)).toEqual({ isVip: true, isPinned: true, size: 60, floor: 3, sortNumber: 7 });
+    expect(pick(1)).toEqual({ isVip: false, isPinned: false, size: null, floor: 1, sortNumber: 12 });
+    expect(pick(2)).toEqual({ isVip: false, isPinned: false, size: 400, floor: 9, sortNumber: null });
+    expect(pick(3)).toEqual({ isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null });
+    expect(out.issues.filter((i) => i.kind === "floor_adjusted").map((i) => [i.legacyId, i.detail])).toEqual([
+      ["c", "12 → 9"],
+      ["d", "0 → 1"],
+    ]);
+    // Bu anahtarlar artık "düşürülen özellik" olarak raporlanmaz.
+    expect(out.droppedTableProps).toEqual({});
+  });
+
+  it("koordinat: eski x/y kutunun sol-üstüdür, yeni merkezdir (size/2 eklenir, varsayılan 40)", () => {
+    const out = parseLayout({
+      placedTables: [
+        { id: "a", tableNumber: 1, capacity: 8, x: 100, y: 200 },
+        { id: "b", tableNumber: 2, capacity: 8, x: 100, y: 200, size: 60 },
+        { id: "c", tableNumber: 3, capacity: 8, x: 99_990, y: -99_990, size: 80 },
+        { id: "d", tableNumber: 4, capacity: 8 },
+      ],
+    });
+    expect(out.tables.map((t) => [t.x, t.y])).toEqual([
+      [120, 220],
+      [130, 230],
+      [100_000, -99_950],
+      [0, 0],
+    ]);
+  });
+
   it("tables biçimi (eski entity tipi) ve ikisi birden: kimliğe göre birleşir", () => {
     const old = parseLayout({ tables: [{ id: "T1", label: "1", capacity: 4, x: 0, y: 0, rotation: 90, type: "loca" }] });
     expect(old.sourceKeys).toEqual(["tables"]);

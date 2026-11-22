@@ -8,6 +8,7 @@ import { listEventTables, totalCapacity } from "@/features/events/service";
 import type { TableInput } from "@/features/venue/schemas";
 import { getVenueLayout, saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
+import { pgCodeOf } from "@/lib/pg-error";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -244,6 +245,97 @@ describe("saveLayout", () => {
       decor,
     });
     expect(res.tables[0]).toMatchObject({ tableTypeId: type?.id, rotation: 270 });
+  });
+});
+
+describe("masa nitelikleri", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  const attrs = { isVip: true, isPinned: true, size: 62.5, floor: 4, sortNumber: 17 };
+
+  it("eklenirken ve güncellenirken kaydedilir; getVenueLayout aynısını döner", async () => {
+    const { actor, event } = await setup();
+    const created = await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [
+        { label: "A", capacity: 4, x: 1, y: 2, ...attrs },
+        { label: "B", capacity: 4, x: 3, y: 4 },
+      ],
+      decor,
+    });
+    const a = created.tables.find((t) => t.label === "A");
+    const b = created.tables.find((t) => t.label === "B");
+    expect(a).toMatchObject(attrs);
+    expect(b).toMatchObject({ isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null });
+
+    const updated = await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [
+        { id: a?.id, label: "A", capacity: 4, x: 1, y: 2, isVip: false, isPinned: false, size: null, floor: 2, sortNumber: null },
+        { id: b?.id, label: "B", capacity: 4, x: 3, y: 4, ...attrs },
+      ],
+      decor,
+    });
+    expect(updated.tables.find((t) => t.label === "A")).toMatchObject({ isVip: false, isPinned: false, size: null, floor: 2, sortNumber: null });
+    expect(updated.tables.find((t) => t.label === "B")).toMatchObject(attrs);
+
+    const loaded = await getVenueLayout(db, actor, event.id);
+    expect(loaded.tables.find((t) => t.label === "B")).toMatchObject(attrs);
+  });
+
+  it("yükle → kaydet döngüsü nitelikleri kaybetmez", async () => {
+    const { actor, event } = await setup();
+    await saveLayout(db, actor, { eventId: event.id, tables: [{ label: "A", capacity: 4, x: 0, y: 0, ...attrs }], decor });
+    const loaded = (await getVenueLayout(db, actor, event.id)).tables[0];
+    if (!loaded) throw new Error("masa yok");
+    const again = await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [
+        {
+          id: loaded.id,
+          label: loaded.label,
+          capacity: loaded.capacity,
+          x: loaded.x,
+          y: loaded.y,
+          isVip: loaded.isVip,
+          isPinned: loaded.isPinned,
+          size: loaded.size,
+          floor: loaded.floor,
+          sortNumber: loaded.sortNumber,
+        },
+      ],
+      decor,
+    });
+    expect(again.tables[0]).toMatchObject({ id: loaded.id, ...attrs });
+  });
+
+  it("kat 1..9 dışı servis katmanında reddedilir, hiçbir şey yazılmaz", async () => {
+    const { actor, event } = await setup();
+    for (const floor of [0, 10, 2.5]) {
+      const err = await caught(
+        saveLayout(db, actor, { eventId: event.id, tables: [{ label: "A", capacity: 4, x: 0, y: 0, floor }], decor }),
+      );
+      expect(err.code).toBe("conflict");
+      expect(err.message).toContain("Kat 1 ile 9 arasında");
+    }
+    expect(await listEventTables(db, event.id)).toHaveLength(0);
+  });
+
+  it("veritabanı kısıtı kat 1..9 dışını reddeder (23514)", async () => {
+    const { event } = await setup();
+    const insert = (floor: number) =>
+      db.insert(eventTables).values({ eventId: event.id, label: `K${floor}`, capacity: 4, floor });
+    for (const bad of [0, 10]) {
+      const err: unknown = await insert(bad).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(pgCodeOf(err)).toBe("23514");
+    }
+    await expect(insert(9)).resolves.toBeDefined();
+    await expect(insert(1)).resolves.toBeDefined();
   });
 });
 

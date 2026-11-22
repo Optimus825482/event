@@ -2,7 +2,11 @@ import { z } from "zod";
 import {
   DEFAULT_CANVAS,
   LABEL_MAX,
+  MAX_FLOOR,
   MAX_TABLE_CAPACITY,
+  MIN_FLOOR,
+  TABLE_SIZE_MAX,
+  TABLE_SIZE_MIN,
   decorSchema,
   emptyDecor,
   templateLayoutSchema,
@@ -20,6 +24,11 @@ const legacyTableSchema = z.object({
   x: z.number(),
   y: z.number(),
   isLoca: z.boolean().optional(),
+  // Yeni alanlar bozuksa tüm masayı düşürmesin diye `catch` ile yok sayılır.
+  isVip: z.boolean().optional().catch(undefined),
+  isLocked: z.boolean().optional().catch(undefined),
+  size: z.number().optional().catch(undefined),
+  floor: z.number().optional().catch(undefined),
 });
 const legacyStageSchema = z.object({
   id: z.string().optional(),
@@ -42,6 +51,14 @@ function clampCapacity(value: number | undefined): number {
   return Math.min(MAX_TABLE_CAPACITY, Math.max(1, Math.round(value)));
 }
 
+/** Eski düzenleyicide `size` yoksa varsayılan masa boyutu (px). */
+const LEGACY_DEFAULT_SIZE = 40;
+
+function legacySortNumber(value: number | string | undefined): number | null {
+  const n = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 1_000_000 ? n : null;
+}
+
 function fromLegacy(raw: z.infer<typeof legacyLayoutSchema>): TemplateLayout {
   const tables: TemplateTable[] = [];
   const used = new Set<string>();
@@ -52,14 +69,23 @@ function fromLegacy(raw: z.infer<typeof legacyLayoutSchema>): TemplateLayout {
     let label = (t.isLoca && t.locaName ? t.locaName : String(t.tableNumber ?? index + 1)).trim().slice(0, LABEL_MAX);
     if (label === "" || used.has(label.toLocaleLowerCase("tr"))) label = `M${index + 1}`;
     used.add(label.toLocaleLowerCase("tr"));
+    // Eski sistemde x/y, `size` px'lik kutunun sol-üst köşesidir; yeni düzenleyici merkezi kullanır.
+    const legacySize = t.size !== undefined && Number.isFinite(t.size) && t.size > 0 ? t.size : null;
+    const half = (legacySize ?? LEGACY_DEFAULT_SIZE) / 2;
+    const floor = t.floor !== undefined && Number.isFinite(t.floor) ? Math.min(MAX_FLOOR, Math.max(MIN_FLOOR, Math.round(t.floor))) : MIN_FLOOR;
     tables.push({
       label,
       capacity: clampCapacity(t.capacity),
       tableTypeId: null,
-      x: t.x,
-      y: t.y,
+      x: t.x + half,
+      y: t.y + half,
       rotation: 0,
       isLoca: t.isLoca ?? false,
+      isVip: t.isVip ?? false,
+      isPinned: t.isLocked ?? false,
+      size: legacySize === null ? null : Math.min(TABLE_SIZE_MAX, Math.max(TABLE_SIZE_MIN, legacySize)),
+      floor,
+      sortNumber: legacySortNumber(t.tableNumber),
     });
   });
   const elements: DecorElement[] = [];

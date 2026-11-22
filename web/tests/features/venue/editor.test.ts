@@ -7,11 +7,13 @@ import { saveLayoutSchema } from "@/features/venue/schemas";
 const ID1 = "11111111-1111-4111-8111-111111111111";
 const ID2 = "22222222-2222-4222-8222-222222222222";
 
+const ATTRS = { isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null } as const;
+
 function layout(): InitialLayout {
   return {
     tables: [
-      { id: ID1, label: "M1", capacity: 8, tableTypeId: null, x: 100, y: 100, rotation: 0, isLoca: false },
-      { id: ID2, label: "M2", capacity: 6, tableTypeId: null, x: 200, y: 100, rotation: 0, isLoca: false },
+      { id: ID1, label: "M1", capacity: 8, tableTypeId: null, x: 100, y: 100, rotation: 0, isLoca: false, ...ATTRS },
+      { id: ID2, label: "M2", capacity: 6, tableTypeId: null, x: 200, y: 100, rotation: 0, isLoca: false, ...ATTRS },
     ],
     decor: { width: 1200, height: 800, elements: [] },
     lockedTableIds: [ID2],
@@ -165,6 +167,43 @@ describe("editor store", () => {
     expect(input.tables[0]).toMatchObject({ id: ID1, label: "M1" });
     expect(input.tables[2]?.id).toBeUndefined();
     expect(saveLayoutSchema.safeParse({ eventId: ID1, ...input }).success).toBe(true);
+  });
+
+  it("masa nitelikleri (VIP, sabit, boyut, kat, sıra no) yüklenir, düzenlenir ve kayıpsız kaydedilir", () => {
+    const init = layout();
+    const first = init.tables[0];
+    if (!first) throw new Error("masa yok");
+    Object.assign(first, { isVip: true, isPinned: true, size: 55.5, floor: 3, sortNumber: 12 });
+    const store = createEditorStore(init);
+    expect(store.getState().tables[0]).toMatchObject({ isVip: true, isPinned: true, size: 55.5, floor: 3, sortNumber: 12 });
+    expect(store.getState().tables[1]).toMatchObject({ isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null });
+    store.getState().updateTables([`t:${ID2}`], { floor: 2 });
+    const key = store.getState().addTable();
+    expect(store.getState().tables.find((t) => t.key === key)).toMatchObject({
+      isVip: false,
+      isPinned: false,
+      size: null,
+      floor: 1,
+      sortNumber: null,
+    });
+    const input = store.getState().toSaveInput();
+    expect(input.tables[0]).toMatchObject({ isVip: true, isPinned: true, size: 55.5, floor: 3, sortNumber: 12 });
+    expect(input.tables[1]).toMatchObject({ floor: 2, size: null });
+    expect(saveLayoutSchema.safeParse({ eventId: ID1, ...input }).success).toBe(true);
+  });
+
+  it("şema: kat 1..9 tam sayı, boyut ve sıra no sınırları, varsayılanlar", () => {
+    const base = { eventId: ID1, decor: { width: 1200, height: 800, elements: [] } };
+    const table = { label: "A", capacity: 4, x: 0, y: 0 };
+    const parse = (extra: Record<string, unknown>) => saveLayoutSchema.safeParse({ ...base, tables: [{ ...table, ...extra }] });
+    const ok = parse({});
+    expect(ok.success && ok.data.tables[0]).toMatchObject({ isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null });
+    expect(parse({ floor: 9, size: 80, sortNumber: 0 }).success).toBe(true);
+    for (const bad of [{ floor: 0 }, { floor: 10 }, { floor: 1.5 }, { size: 0 }, { size: 5000 }, { sortNumber: -1 }, { sortNumber: 1.2 }]) {
+      expect(parse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+    const tooHigh = parse({ floor: 10 });
+    expect(!tooHigh.success && tooHigh.error.issues[0]?.message).toBe("Kat en fazla 9 olabilir");
   });
 
   it("load geçmişi ve kirli bayrağını sıfırlar", () => {

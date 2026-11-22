@@ -5,7 +5,11 @@ import {
   DEFAULT_CANVAS,
   LABEL_MAX,
   MAX_DECOR_ELEMENTS,
+  MAX_FLOOR,
+  MIN_FLOOR,
   normalizeLabel,
+  TABLE_SIZE_MAX,
+  TABLE_SIZE_MIN,
 } from "@/features/venue/schemas";
 import { isRecord } from "./context";
 import { uniqueName } from "./values";
@@ -27,6 +31,13 @@ export type LayoutTable = {
   y: number;
   rotation: number;
   isLoca: boolean;
+  isVip: boolean;
+  /** Eski `isLocked` (düzenleyicide sabitlenmiş). */
+  isPinned: boolean;
+  size: number | null;
+  floor: number;
+  /** Eski `tableNumber` sayısal ise. */
+  sortNumber: number | null;
   typeRef: string | null;
   /** Rezervasyon eşlemesi için ek anahtarlar (masa numarası, loca adı, eski etiket). */
   aliases: string[];
@@ -46,11 +57,13 @@ export type ParsedLayout = {
   convertedLines: number;
 };
 
-const TABLE_KEYS = new Set(["id", "label", "tableNumber", "locaName", "type", "capacity", "x", "y", "rotation", "isLoca"]);
+const TABLE_KEYS = new Set(["id", "label", "tableNumber", "locaName", "type", "capacity", "x", "y", "rotation", "isLoca", "isVip", "isLocked", "size", "floor"]);
 const DECOR_KEYS = new Set(["id", "type", "x", "y", "width", "height", "label", "displayText", "color", "rotation"]);
 const LAYOUT_KEYS = new Set(["placedTables", "tables", "stageElements", "stage", "walls", "drawnLines", "dimensions"]);
 const COORD = 100_000;
 const DEFAULT_CAPACITY = 8;
+/** Eski düzenleyicide `size` yoksa varsayılan masa boyutu (px, `DEFAULT_TABLE_SIZE`). */
+const LEGACY_DEFAULT_SIZE = 40;
 const MAX_CAPACITY = 100;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -99,13 +112,30 @@ function tableFrom(
   const x = num(item.x);
   const y = num(item.y);
   if (x === null || y === null) issues.push({ kind: "position_missing", legacyId, detail: "x/y yok → 0" });
+  const rawSize = num(item.size);
+  const legacySize = rawSize !== null && rawSize > 0 ? rawSize : null;
+  const size = legacySize === null ? null : Math.min(TABLE_SIZE_MAX, Math.max(TABLE_SIZE_MIN, legacySize));
+  // Eski sistemde x/y, `size` px'lik kutunun sol-üst köşesidir; yeni düzenleyici merkezi kullanır.
+  const half = (legacySize ?? LEGACY_DEFAULT_SIZE) / 2;
+  const rawFloor = num(item.floor);
+  let floor = MIN_FLOOR;
+  if (rawFloor !== null) {
+    floor = Math.min(MAX_FLOOR, Math.max(MIN_FLOOR, Math.round(rawFloor)));
+    if (floor !== rawFloor) issues.push({ kind: "floor_adjusted", legacyId, detail: `${rawFloor} → ${floor}` });
+  }
+  const rawNumber = num(item.tableNumber);
   const table = {
     legacyId,
     capacity,
-    x: clampCoord(x ?? 0),
-    y: clampCoord(y ?? 0),
+    x: clampCoord(x === null ? 0 : x + half),
+    y: clampCoord(y === null ? 0 : y + half),
     rotation: Math.min(3600, Math.max(-3600, num(item.rotation) ?? 0)),
     isLoca,
+    isVip: item.isVip === true,
+    isPinned: item.isLocked === true,
+    size,
+    floor,
+    sortNumber: rawNumber !== null && Number.isInteger(rawNumber) && rawNumber >= 0 && rawNumber <= 1_000_000 ? rawNumber : null,
     typeRef,
     aliases,
   };
