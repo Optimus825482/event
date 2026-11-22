@@ -18,3 +18,5 @@ npm-debug.log*
 next-env.d.ts
 /test-results/
 /playwright-report/
+/.next-e2e/
+/e2e/.auth/

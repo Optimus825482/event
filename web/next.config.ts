@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // E2E sunucusu (Playwright) geliştirme sunucusunun `.next` klasörüne dokunmasın diye ayrı dizin kullanır.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   output: "standalone",
   // 10 MB'a kadar Excel yüklemeleri sunucu eylemine ulaşsın (varsayılan 1 MB).
   experimental: { serverActions: { bodySizeLimit: "11mb" } },
