@@ -4,7 +4,7 @@ import type { Db } from "@/db/client";
 import { db } from "@/db/client";
 import { ForbiddenError, UnauthenticatedError } from "@/features/auth/errors";
 import { loadPermissions } from "@/features/auth/permissions";
-import { authorize, type Module, type Verb } from "@/features/auth/policy";
+import { authorize, type Module, type PolicyResource, type Verb } from "@/features/auth/policy";
 import { getActor, type Actor } from "@/features/auth/session";
 import { logError } from "@/lib/log";
 
@@ -48,6 +48,11 @@ export type ActionOptions<S extends z.ZodType, T> = {
   module: Module;
   verb: Verb;
   input: S;
+  /**
+   * Sahipliğe bağlı izinler (ör. lider yalnızca kendi ekibi) için yetki kaynağı. Verilirse girdi
+   * önce doğrulanır, sonra `authorize(module, verb, kaynak)` çağrılır.
+   */
+  resource?: (ctx: { actor: Actor; input: z.infer<S> }) => PolicyResource | Promise<PolicyResource>;
   handler: (ctx: ActionContext<S>) => Promise<T>;
 };
 
@@ -122,10 +127,14 @@ export function createAction(deps: ActionDeps) {
         if (!actor) return fail("unauthenticated", MESSAGES.unauthenticated);
 
         const permissions = await loadPermissions(actor.id);
-        authorize({ ...actor, permissions }, opts.module, opts.verb);
+        const policyActor = { ...actor, permissions };
+        if (!opts.resource) authorize(policyActor, opts.module, opts.verb);
 
         const parsed = opts.input.safeParse(raw);
         if (!parsed.success) return fail("invalid", MESSAGES.invalid, fieldErrorsOf(parsed.error));
+        if (opts.resource) {
+          authorize(policyActor, opts.module, opts.verb, await opts.resource({ actor, input: parsed.data }));
+        }
 
         const data = await opts.handler({ actor, input: parsed.data, db });
         return { ok: true, data };
