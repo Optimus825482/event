@@ -44,6 +44,19 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           canDelete={can(actor, "events", "delete")}
           deletable={event.status === "draft" && event.reservationCount === 0}
         />
+        <nav aria-label="Etkinlik bölümleri" className="flex flex-wrap gap-2 pt-2 text-sm">
+          {[
+            { href: `/events/${event.id}/venue`, label: "Masa yerleşimi" },
+            { href: `/events/${event.id}/team-organization`, label: "Ekip organizasyonu" },
+            { href: `/events/${event.id}/invitation`, label: "Davetiye" },
+            { href: `/reservations/${event.id}`, label: "Rezervasyonlar" },
+            { href: `/check-in/${event.id}`, label: "Check-in" },
+          ].map((item) => (
+            <Link key={item.href} href={item.href} className="rounded-md border border-border px-3 py-1.5 hover:bg-muted">
+              {item.label}
+            </Link>
+          ))}
+        </nav>
       </div>
 
       <dl className="grid gap-4 sm:grid-cols-3">
