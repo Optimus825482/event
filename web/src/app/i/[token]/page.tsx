@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function PublicInvitationPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   // Veritabanına dokunmadan önce: IP başına hız sınırı. Sayfa durum kodu belirleyemediğinden 429 veren uca yönlendirilir.
-  const rate = checkInvitationRate(await headers());
+  const rate = await checkInvitationRate(await headers());
   if (!rate.allowed) redirect(`/i/${encodeURIComponent(token)}/limited?r=${rate.retryAfterSeconds}`);
 
   const invitation = await getPublicInvitation(db, token);

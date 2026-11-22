@@ -1,12 +1,14 @@
 import { getIP } from "better-auth/api";
 import { env } from "@/env";
-import { createRateLimiter, type RateLimiter, type RateLimitDecision } from "@/lib/rate-limit";
+import { db } from "@/db/client";
+import { type AsyncRateLimiter, createPgRateLimiter, type RateLimitDecision } from "@/lib/rate-limit";
 
 /**
  * Herkese açık davetiye uçları (`/i/[token]`, `/i/[token]/image`) için IP başına hız sınırı (spec §12).
  * Davetiye sayfası görselleriyle birlikte birkaç istek yaptığından ve mekân Wi-Fi'ında birçok misafir
  * aynı IP'yi paylaşabildiğinden sınır cömerttir; amaç anonim istemcinin sınırsız veritabanı yükü
- * üretmesini engellemektir. Sayaç süreç içindedir (tek kopya kısıtı, bkz. `lib/rate-limit.ts`).
+ * üretmesini engellemektir. Sayaç PostgreSQL'dedir (`public_rate_limits`): yeniden başlatmada sıfırlanmaz ve
+ * web kopyaları arasında paylaşılır. Veritabanı hatasında fail-open (bkz. `createPgRateLimiter`).
  */
 export const INVITATION_RATE_LIMIT = { limit: 120, windowMs: 60_000 } as const;
 export const MAX_RETRY_AFTER_SECONDS = 3600;
@@ -22,12 +24,12 @@ export function invitationClientKey(headers: Headers, trustedHeader: string | un
   return ip ?? UNKNOWN_KEY;
 }
 
-const limiter = createRateLimiter(INVITATION_RATE_LIMIT);
+const limiter = createPgRateLimiter({ db, scope: "invitation", ...INVITATION_RATE_LIMIT });
 
 export function checkInvitationRate(
   headers: Headers,
-  deps: { limiter?: RateLimiter; trustedHeader?: string | undefined } = {},
-): RateLimitDecision {
+  deps: { limiter?: AsyncRateLimiter; trustedHeader?: string | undefined } = {},
+): Promise<RateLimitDecision> {
   const trustedHeader = "trustedHeader" in deps ? deps.trustedHeader : env.TRUSTED_IP_HEADER;
   return (deps.limiter ?? limiter).check(invitationClientKey(headers, trustedHeader));
 }

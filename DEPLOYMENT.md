@@ -5,7 +5,7 @@
 > eski rehber artık geçerli değildir.
 >
 > **Durum notu:** Docker bu geliştirme makinesinde kurulu değildi; `web/Dockerfile` ve compose dosyaları **derlenip
-> çalıştırılarak denenmedi**. Yalnızca migrator betiği özel PostgreSQL kümesinde gerçekten çalıştırıldı (bkz. en alt,
+> çalıştırılarak denenmedi**. Yalnızca migrator ve create-admin betikleri özel PostgreSQL kümesinde gerçekten çalıştırıldı (bkz. en alt,
 > "Doğrulama durumu"). İlk dağıtımı bir hazırlık (staging) ortamında deneyin.
 
 ## Mimari
@@ -13,6 +13,7 @@
 ```
 Traefik/Coolify (HTTPS, x-real-ip) -> web (Next.js standalone, :3000) -> postgres (17, iç ağ, port yayınlanmaz)
                                       ^-- migrate (tek seferlik: node /opt/migrator/migrate.mjs)
+                                      ^-- create-admin (isteğe bağlı tek seferlik, profil `tools`; bkz. İlk yönetici)
 ```
 
 - `postgres`: `postgres:17-alpine`, verisi `web_postgres_data` volume'unda. Port yayınlanmaz. Volume adı eski yığınınkinden
@@ -59,33 +60,56 @@ sonlandıran bir ters vekil koyun ve onun yazdığı IP başlığını `TRUSTED_
 
 ## Veritabanı geçişleri (migrate)
 
-- Betik: `web/scripts/migrate.mjs` (yalnızca `drizzle-orm` + `pg`). `DATABASE_URL`'den bağlanır, `drizzle/` klasöründeki
+- Betik: `web/scripts/migrate.mjs` (yalnızca `drizzle-orm` + `pg`; `create-admin.mjs` ile aynı kapanışta `bcryptjs`). `DATABASE_URL`'den bağlanır, `drizzle/` klasöründeki
   SQL migration'larını uygular (kayıt tablosu `drizzle.__drizzle_migrations`, `drizzle-kit migrate` ile aynı), PostgreSQL
   advisory lock alır (iki kapsayıcı aynı anda başlarsa biri bekler), hata olursa çıkış kodu 1 ile biter, her sonuç için
   tek satır yazar. İkinci çalıştırma işlem yapmaz (idempotent).
-- İmajda: `/opt/migrator/migrate.mjs` ve yalnızca bu betiğin bağımlılıklarını içeren `/opt/migrator/node_modules`;
+- İmajda: `/opt/migrator/migrate.mjs`, `/opt/migrator/create-admin.mjs` ve yalnızca bu betiklerin bağımlılıklarını (`drizzle-orm`, `pg`, `bcryptjs` + geçişli bağımlılıkları, `package-lock.json` sürümleriyle) içeren `/opt/migrator/node_modules`;
   migration SQL'leri `/app/drizzle` (`MIGRATIONS_FOLDER`).
 - Elle çalıştırma (örnek, Coolify dışı sunucuda):
   `docker compose run --rm migrate`
 - Migration başarısız olursa `web` başlamaz; eski web kapsayıcısı (varsa) çalışmaya devam eder. Günlük için
   `docker compose logs migrate`.
 - Migration'lar **yalnızca ileri** yönlüdür; geri alma betiği yoktur (bkz. Geri alma).
+- **Önemli (migration yazarları için)**: Drizzle migrator o çalıştırmada bekleyen TÜM migration'ları tek işlemde uygular.
+  PostgreSQL, `ALTER TYPE ... ADD VALUE` ile eklenen enum değerinin aynı işlemde kullanılmasına izin vermez (tür
+  önceki bir çalıştırmadan kalmışsa); bu durumda çalıştırmanın tamamı geri alınır ve `migrate` başarısız olur. Bu yüzden bir
+  SQL migration'ı, `ADD VALUE` ile eklenmiş bir değeri (ekleyen dosya dahil, hiçbir sonraki dosyada) kullanmamalıdır;
+  veri doldurma gerekiyorsa uygulama kodunda yapın. Ayrıntı ve otomatik denetim: `web/drizzle/README.md`.
+- Herkese açık davet sayfası hız sınırı `public_rate_limits` tablosunu kullanır (migration 0006); tablo yalnızca
+  bu `migrate` adımıyla oluşur, eski satırlar istekler sırasında temizlenir, ek bakım gerekmez.
 
 ## İlk yönetici
 
-Üretim imajında `tsx` ve TypeScript kaynakları yoktur, dolayısıyla `create-admin.ts` imajın içinde çalışmaz.
-Seçenekler:
+Uygulamada kayıt ekranı yoktur; ilk yönetici imajdaki düz Node betiğiyle açılır (`/opt/migrator/create-admin.mjs`,
+kaynağı `web/scripts/create-admin.mjs`; `tsx`/TypeScript gerekmez). `docker-compose.yml` ve `docker-compose.coolify.yaml`
+içinde `create-admin` adlı, `tools` profilindeki tek seferlik bir servis olarak tanımlıdır; `up` ile başlamaz. Veritabanı
+`migrate` ile hazırlanmış olmalıdır (ilk dağıtım bittikten sonra çalıştırın).
 
-1. **Eski veri taşıma** (asıl yol): eski kullanıcılar (bcrypt parolalarıyla) taşınır; taşıma sonrası eski yönetici
-   hesabıyla girilir. Taşımadan **önce** yönetici oluşturmayın (bkz. taşıma kılavuzu).
-2. **Sıfırdan kurulum**: depoyu sunucuda/iş istasyonunda açıp `web/` içinde, veritabanına erişen geçici bir kapsayıcıyla:
-   ```bash
-   docker run --rm -it -v "$PWD/web:/app" -w /app --network <proje>_default \
-     -e DATABASE_URL=postgres://<kullanıcı>:<parola>@postgres:5432/<db> \
-     -e BETTER_AUTH_SECRET=<üretimdekiyle aynı> -e ADMIN_PASSWORD=<en az 12 karakter> \
-     node:24-alpine sh -c "npm ci && npx tsx scripts/create-admin.ts <kullanıcı-adı> [e-posta]"
-   ```
-   (Ağ adı `docker network ls` ile bulunur.) Bu yol denenmedi; `create-admin` betiği yerelde çalışır durumdadır.
+```bash
+# Parolayı standart girdiden verin (komut geçmişine ve süreç listesine düşmez):
+printf %s "$YENI_PAROLA" | docker compose run --rm -T create-admin --password-stdin <kullanıcı-adı>
+
+# ya da ortam değişkeniyle (değeri komutta yazmayın; ana makinede önceden dışa aktarılmış olsun):
+ADMIN_PASSWORD="$YENI_PAROLA" docker compose run --rm create-admin <kullanıcı-adı> --email yonetici@sirket.com
+```
+
+- Parola en az 12 karakter olmalıdır; hiçbir çıktıya yazılmaz. E-posta verilmezse `<kullanıcı-adı>@eventflow.invalid` kullanılır.
+- **Etkin bir yönetici zaten varsa betik hiçbir şey değiştirmeden çıkış kodu 2 ile biter.** Taşıma sonrası eski
+  yöneticilerle girilecekse bu betiği çalıştırmayın (bkz. aşağıda taşıma notu).
+- **Parola sıfırlama / kilitlenme**: `... create-admin --reset <kullanıcı-adı>` var olan yönetici hesabının parolasını
+  değiştirir, hesabı yeniden etkinleştirir ve tüm oturumlarını siler. Yönetici olmayan bir kullanıcıyı yükseltmez.
+- Çıkış kodları: 0 başarılı; 1 kullanım/doğrulama (parola kısa, kullanıcı adı geçersiz, `DATABASE_URL` yok); 2 etkin yönetici
+  var; 3 kullanıcı adı/e-posta başka kullanıcıda; 4 `--reset` hedefi yok ya da yönetici değil; 5 veritabanı hatası
+  (genellikle `migrate` çalışmamıştır). Her sonuç tek satırdır: `create-admin: yönetici oluşturuldu: <ad> (<id>)`.
+- Coolify'da: aynı komutu sunucuda, Coolify'ın dağıttığı compose dizininde `docker compose --profile tools run --rm ...`
+  ile ya da kapsayıcı terminalinden `node /opt/migrator/create-admin.mjs ...` ile çalıştırabilirsiniz (ortam
+  değişkenleri `web` kapsayıcısında zaten vardır, `DATABASE_URL` dahil).
+- Eski veri taşıma yolu: eski kullanıcılar (bcrypt parolalarıyla) taşınıyorsa taşıma sonrası eski yönetici hesabıyla girilir;
+  taşımadan **önce** yönetici oluşturmayın (bkz. taşıma kılavuzu).
+- Betik, uygulamanın kimlik doğrulamasıyla aynı kuralları uygular (bcrypt maliyeti 12, `credential` hesabı, kullanıcı
+  adı büyük/küçük harf duyarlı). Oluşturulan yöneticinin gerçek Better Auth işleyicisiyle giriş yaptığı vitest ile
+  doğrulandı (`web/tests/scripts/create-admin.test.ts`); **kapsayıcı içinde çalıştırılması denenmedi** (Docker yok).
 
 ## Eski veriyi taşıma (canlıya geçiş öncesi)
 
@@ -168,5 +192,7 @@ Bunlar ajanın/otomasyonun yapamayacağı ya da yapmaması gereken işlerdir:
 - Yapıldı: `web/scripts/migrate.mjs`, boş bir geçici veritabanında (`localhost:54329`) iki kez ve iki eşzamanlı süreçle
   çalıştırıldı (idempotent, kilit çalışıyor, hatalı veritabanında çıkış kodu 1); bağımlılık kurulum adımı
   (`drizzle-orm` + `pg` ile ayrı `npm install`) betikle birlikte denendi; YAML dosyaları ayrıştırıldı.
-- Yapılmadı (Docker yok): imaj derlemesi, `docker compose config/up`, Coolify/Traefik davranışı, kapsayıcıda `migrate`
+- Ayrıca yapıldı: `migrate.mjs` boş geçici veritabanında 0000'dan 0006'ya temiz uygulandı; `create-admin.mjs`, imajdaki gibi
+  `package-lock.json` kapanışıyla (16 paket) oluşturulmuş ayrı bir dizinden çalıştırıldı (oluşturma, ikinci çalıştırmada çıkış 2).
+- Yapılmadı (Docker yok): imaj derlemesi, `create-admin` servisinin kapsayıcıda çalıştırılması, Coolify'ın `profiles` desteği, `docker compose config/up`, Coolify/Traefik davranışı, kapsayıcıda `migrate`
   ve `web` başlatma sırası, `/data/uploads` volume sahipliği, GitHub Actions `workflow_call` çağrısı.

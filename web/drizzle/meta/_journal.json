@@ -43,6 +43,13 @@
       "when": 1795349125031,
       "tag": "0005_narrow_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795353650441,
+      "tag": "0006_clammy_lilith",
+      "breakpoints": true
     }
   ]
 }

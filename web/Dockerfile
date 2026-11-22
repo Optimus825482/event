@@ -17,11 +17,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-# Çalışma zamanı migrator'ının bağımlılıkları: yalnızca drizzle-orm + pg ve geçişli bağımlılıkları.
+# Çalışma zamanı betiklerinin (migrate.mjs, create-admin.mjs) bağımlılıkları: yalnızca drizzle-orm + pg + bcryptjs
+# ve geçişli bağımlılıkları. Betiklere yeni bir paket eklenirse aşağıdaki listeye de eklenmelidir (tests/scripts/image-deps.test.ts denetler).
 # Paketler, uygulamanın `npm ci` ile kurulan ağacından (package-lock.json'daki sürümler) kopyalanır; böylece
 # migrator uygulamayla aynı sürümleri kullanır ve ağdan kurulum yapılmaz. Kapanışı package-lock.json'dan çıkarır.
 FROM deps AS migrator-deps
-RUN node -e "const fs=require('fs');const lock=require('./package-lock.json').packages;const seen=new Set();const find=(from,name)=>{let p=from;for(;;){const c=(p?p+'/':'')+'node_modules/'+name;if(lock[c])return c;if(!p)return null;const i=p.lastIndexOf('/node_modules/');p=i<0?'':p.slice(0,i);}};const walk=(path)=>{if(!path||seen.has(path))return;seen.add(path);const e=lock[path];for(const d of Object.keys({...e.dependencies,...e.optionalDependencies}))walk(find(path,d));};for(const n of ['drizzle-orm','pg'])walk(find('',n));for(const p of seen)fs.cpSync(p,'/opt/migrator/'+p,{recursive:true});console.log([...seen].join('\n'));"
+RUN node -e "const fs=require('fs');const lock=require('./package-lock.json').packages;const seen=new Set();const find=(from,name)=>{let p=from;for(;;){const c=(p?p+'/':'')+'node_modules/'+name;if(lock[c])return c;if(!p)return null;const i=p.lastIndexOf('/node_modules/');p=i<0?'':p.slice(0,i);}};const walk=(path)=>{if(!path||seen.has(path))return;seen.add(path);const e=lock[path];for(const d of Object.keys({...e.dependencies,...e.optionalDependencies}))walk(find(path,d));};for(const n of ['drizzle-orm','pg','bcryptjs'])walk(find('',n));for(const p of seen)fs.cpSync(p,'/opt/migrator/'+p,{recursive:true});console.log([...seen].join('\n'));"
 
 FROM node:24-alpine AS runner
 WORKDIR /app
@@ -37,9 +38,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
-# Tek seferlik migrate adımı: `node /opt/migrator/migrate.mjs` (bkz. docker-compose, `migrate` servisi).
+# Tek seferlik adımlar: `node /opt/migrator/migrate.mjs` (compose `migrate` servisi) ve
+# `node /opt/migrator/create-admin.mjs <kullanıcı-adı>` (compose `create-admin` servisi, bkz. DEPLOYMENT.md "İlk yönetici").
 COPY --from=migrator-deps --chown=nextjs:nodejs /opt/migrator/node_modules /opt/migrator/node_modules
-COPY --chown=nextjs:nodejs scripts/migrate.mjs /opt/migrator/migrate.mjs
+COPY --chown=nextjs:nodejs scripts/migrate.mjs scripts/create-admin.mjs /opt/migrator/
 
 # Yükleme dizini (UPLOAD_DIR=/data/uploads): adlandırılmış volume ilk oluşturulurken bu sahipliği miras alır.
 RUN mkdir -p /data/uploads && chown nextjs:nodejs /data/uploads

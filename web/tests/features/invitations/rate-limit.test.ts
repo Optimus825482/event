@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/invitations/public", () => ({
   getPublicInvitationImagePath: vi.fn(async () => null),
@@ -14,6 +14,13 @@ import {
   tooManyRequestsResponse,
 } from "@/features/invitations/rate-limit";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { truncateAll } from "../../helpers/db";
+
+// Üretimdeki sayaç PostgreSQL'dedir; burada süreç içi uygulama sahte olarak kullanılır.
+const fake = (limit: number) => {
+  const inner = createRateLimiter({ limit, windowMs: 60_000 });
+  return { check: async (key: string) => inner.check(key) };
+};
 
 const headersOf = (init: Record<string, string>) => new Headers(init);
 
@@ -32,16 +39,16 @@ describe("invitationClientKey", () => {
 });
 
 describe("checkInvitationRate", () => {
-  it("IP başına sayar: bir IP sınırı aşınca reddedilir, başka IP etkilenmez", () => {
-    const limiter = createRateLimiter({ limit: 2, windowMs: 60_000 });
+  it("IP başına sayar: bir IP sınırı aşınca reddedilir, başka IP etkilenmez", async () => {
+    const limiter = fake(2);
     const deps = { limiter, trustedHeader: "x-real-ip" };
     const a = headersOf({ "x-real-ip": "203.0.113.1" });
-    expect(checkInvitationRate(a, deps).allowed).toBe(true);
-    expect(checkInvitationRate(a, deps).allowed).toBe(true);
-    const denied = checkInvitationRate(a, deps);
+    expect((await checkInvitationRate(a, deps)).allowed).toBe(true);
+    expect((await checkInvitationRate(a, deps)).allowed).toBe(true);
+    const denied = await checkInvitationRate(a, deps);
     expect(denied.allowed).toBe(false);
     expect(denied.allowed === false && denied.retryAfterSeconds).toBeGreaterThan(0);
-    expect(checkInvitationRate(headersOf({ "x-real-ip": "203.0.113.2" }), deps).allowed).toBe(true);
+    expect((await checkInvitationRate(headersOf({ "x-real-ip": "203.0.113.2" }), deps)).allowed).toBe(true);
   });
 });
 
@@ -63,7 +70,12 @@ describe("429 yanıtı", () => {
   });
 });
 
-describe("GET /i/[token]/image hız sınırı", () => {
+describe("GET /i/[token]/image hız sınırı (PostgreSQL sayacı)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+    vi.mocked(getPublicInvitationImagePath).mockClear();
+  });
+
   it("sınır aşılınca veritabanına gitmeden 429 + Retry-After döner", async () => {
     const context = { params: Promise.resolve({ token: "t" }) };
     const request = () => new Request("http://localhost/i/t/image?p=a/b.png");

@@ -6,6 +6,7 @@
 #
 # Kullanım:
 #   docker compose up -d --build        # postgres -> migrate (tek seferlik) -> web
+#   printf %s "$PAROLA" | docker compose run --rm -T create-admin --password-stdin <kullanıcı-adı>   # ilk yönetici
 
 x-db-url: &db-url postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@postgres:5432/${DB_NAME:-eventflow}
 
@@ -42,6 +43,22 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: *db-url
+    networks:
+      - eventflow-network
+
+  # Tek seferlik: ilk yöneticiyi oluşturur / parolasını sıfırlar (--reset). `up` ile başlamaz (profil: tools).
+  # Parola komut satırında verilmez: stdin (--password-stdin) ya da ADMIN_PASSWORD ortam değişkeni.
+  create-admin:
+    image: eventflow-web:local
+    profiles: ["tools"]
+    restart: "no"
+    entrypoint: ["node", "/opt/migrator/create-admin.mjs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: *db-url
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     networks:
       - eventflow-network
 

@@ -42,7 +42,7 @@ cp .env.example .env.local
 npm run db:migrate
 
 # 4) İlk yönetici (aşağıya bakın)
-ADMIN_PASSWORD='en-az-12-karakterli-parola' npx tsx --env-file=.env.local scripts/create-admin.ts admin
+ADMIN_PASSWORD='en-az-12-karakterli-parola' node --env-file=.env.local scripts/create-admin.mjs admin
 
 # 5) Geliştirme sunucusu: http://localhost:3000
 npm run dev
@@ -50,20 +50,26 @@ npm run dev
 
 ### İlk yönetici nasıl oluşturulur
 
-Uygulamada kayıt ekranı ve tohum (seed) verisi **yoktur**; ilk yönetici `web/scripts/create-admin.ts` ile açılır:
+Uygulamada kayıt ekranı ve tohum (seed) verisi **yoktur**; ilk yönetici `web/scripts/create-admin.mjs` ile açılır.
+Betik düz Node'dur (`tsx`/TypeScript gerekmez), bu yüzden **üretim imajında da çalışır** (`/opt/migrator/create-admin.mjs`):
 
 ```
-ADMIN_PASSWORD=... npx tsx --env-file=.env.local scripts/create-admin.ts <kullanıcı-adı> [e-posta]
+ADMIN_PASSWORD=... node --env-file=.env.local scripts/create-admin.mjs <kullanıcı-adı> [--email <e-posta>] [--name <ad>]
+printf %s "$PAROLA" | node --env-file=.env.local scripts/create-admin.mjs --password-stdin <kullanıcı-adı>
+... --reset     # var olan YÖNETİCİNİN parolasını sıfırlar, hesabı etkinleştirir, oturumlarını siler
 ```
 
-- Parola yalnızca `ADMIN_PASSWORD` ortam değişkeninden okunur (komut satırı geçmişine düşmesin diye argüman değildir);
-  en az 12 karakter olmalıdır.
+- Parola yalnızca `ADMIN_PASSWORD` ortam değişkeninden ya da `--password-stdin` ile standart girdiden okunur (komut
+  satırı geçmişine düşmesin diye argüman değildir; hiçbir çıktıya yazılmaz); en az 12 karakter olmalıdır.
+- Etkin bir yönetici zaten varsa **hiçbir şey yapmadan** çıkış kodu 2 ile biter; `--reset` yalnızca var olan bir
+  yönetici hesabında çalışır (yönetici olmayan kullanıcıyı yükseltmez, kod 4). Diğer kodlar: 1 kullanım/doğrulama,
+  3 kullanıcı adı ya da e-posta çakışması, 5 veritabanı hatası.
 - E-posta verilmezse `<kullanıcı-adı>@eventflow.invalid` yer tutucusu kullanılır.
-- Kullanıcı adı 1-100 karakter olmalı, başında/sonunda boşluk ve kontrol karakteri içermemelidir.
+- Kullanıcı adı 1-100 karakter olmalı, büyük/küçük harf duyarlıdır, başında/sonunda boşluk ve kontrol karakteri içermemelidir.
 - Rol `admin`, hesap etkin ve e-posta doğrulanmış olarak oluşur; diğer kullanıcıları yönetici arayüzünden
   (`/admin/users`) ekleyin.
-- Betik TypeScript kaynaklarını (`tsx`) kullanır; **üretim imajında yoktur**. Üretimde ilk yönetici için bkz.
-  [`DEPLOYMENT.md`](DEPLOYMENT.md) ("İlk yönetici").
+- Docker'da: `docker compose run --rm create-admin ...` (bkz. [`DEPLOYMENT.md`](DEPLOYMENT.md) "İlk yönetici").
+  `scripts/create-admin.ts` testlerin kullandığı geliştirme yardımcısıdır (aynı kurallar, Better Auth bağlamı üzerinden).
 
 ## Komutlar (`web/` içinde)
 
@@ -77,6 +83,7 @@ ADMIN_PASSWORD=... npx tsx --env-file=.env.local scripts/create-admin.ts <kullan
 | `npm run db:generate` | Şema değişikliğinden yeni Drizzle migration'ı üretir (`web/drizzle/`) |
 | `npm run db:migrate` | Migration'ları `drizzle-kit` ile uygular (geliştirme) |
 | `npm run db:migrate:runtime` | Üretimdekiyle aynı migrator (`scripts/migrate.mjs`; advisory lock'lu, `drizzle-kit`siz) |
+| `node scripts/create-admin.mjs` | İlk yönetici / parola sıfırlama (yukarıya bakın) |
 | `npm run db:migrate-legacy` | Eski veritabanından tek seferlik veri taşıma ([kılavuz](web/scripts/migrate-legacy/README.md)) |
 
 ## Mimari özeti
@@ -93,8 +100,9 @@ web/src/
   lib/action.ts   defineAction
   proxy.ts        Oturum çerezi yoksa /login'e yönlendirir; /api/* için 401
   env.ts          Ortam değişkeni doğrulaması (Zod)
-web/drizzle/      SQL migration'ları (git'te tutulur)
-web/scripts/      create-admin, pg (yerel küme), migrate.mjs (üretim migrator'ı), migrate-legacy/
+web/drizzle/      SQL migration'ları (git'te tutulur; yazar kuralları için `web/drizzle/README.md`)
+web/scripts/      create-admin.mjs (ilk yönetici; üretim imajında da var), migrate.mjs (üretim migrator'ı), pg (yerel küme),
+                  migrate-legacy/, create-admin.ts (test yardımcısı)
 ```
 
 - **`defineAction`** (`src/lib/action.ts`): her sunucu eylemi `module` + `verb` + Zod `input` + `handler` ile tanımlanır.
@@ -113,20 +121,51 @@ web/scripts/      create-admin, pg (yerel küme), migrate.mjs (üretim migrator'
 - **İstemci IP'si**: yalnızca `TRUSTED_IP_HEADER` ile adı verilen, ters vekilin yazdığı başlığa güvenilir; üretimde
   zorunludur.
 
-## Eski uygulamadan taşınmayanlar
+## Eski uygulamadan taşınmayanlar ve bilinen sınırlar
 
-Aşağıdakiler yeniden yazımda **taşınmadı ya da eksik kaldı** (kaynak: görev raporları ve ilerleme notlarındaki devir
-maddeleri). Canlıya almadan önce gerçek kullanımla karşılaştırın:
+Bu liste ilerleme notlarının (`.superpowers/sdd/.../progress.md`) ve düzeltme dalgası raporlarının son durumuna göre
+tutulur. Canlıya almadan önce gerçek kullanımla karşılaştırın.
 
+**Eski uygulamada olup taşınmayan / eksik kalan**
 - Personel CSV içe aktarma, personel istatistikleri, departman-pozisyon ilişkileri, personel için giriş hesabı.
-- Yerleşim düzenleyicide çoklu seçim, geri al/yinele, PNG/PDF dışa aktarma; masa boyutu kalıcı değil (kapasite/türden
-  türetilir); 3B önizleme eskisinin portu değil, basit yeni bir bileşendir; `venue_owner` kendi şablonunu düzenleyemez.
-- Rezervasyon silme, ödeme ve bilet e-postası; e-posta gönderim geçmişi ve hız sınırı yok; davet belirteçleri süresiz.
+- Yerleşim düzenleyicide çoklu seçim, geri al/yinele, PNG/PDF dışa aktarma; masa boyutu kalıcı değil
+  (kapasite/türden türetilir); 3B önizleme eskisinin portu değil, basit yeni bir bileşendir.
+- Rezervasyon silme, ödeme ve bilet e-postası; e-posta gönderim geçmişi ve gönderim hız sınırı yok; davet belirteçleri
+  süresizdir (herkese açık davet sayfası ve görseli ise IP başına sınırlıdır, aşağıya bakın).
 - Lider analitik sayfaları; okunmamış bildirim rozeti; `staff` rolünün bildirimlere erişimi yok.
-- Gerçek zamanlı akış tek süreçli, yeniden oynatma yok.
-- Etkinliklerde konum metni alanı yoktu; davet şablonundaki `{{eventLocation}}` boş çıkabilir (ilerleme notlarına
-  bakın, sonradan eklenmiş olabilir).
+- Etkinlik şemasında konum metni alanı yok; davet şablonundaki `{{eventLocation}}` boş çıkar.
 - Eski veritabanındaki bazı alanların yeni şemada karşılığı yoktur; kayıp listesi veri taşıma raporunun "Şema
   boşlukları" bölümünde çıkar (`task-21-report.md`).
-- Arayüz, geliştirme sırasında tarayıcıda yalnızca kısmen elle denendi (yerleşim kanvası, davet düzenleyici, içe aktarma
-  ve check-in ekranları dahil); canlıya almadan önce elle duman testi yapın.
+
+**Tasarım gereği sınırlar**
+- Gerçek zamanlı akış (SSE) tek süreçlidir, yeniden oynatma yoktur, yetki yalnızca bağlanırken denetlenir: web
+  servisini tek kopya çalıştırın.
+- Herkese açık davet uçları (`/i/[token]`, görsel) IP başına dakikada 120 istekle sınırlıdır; sayaç PostgreSQL'dedir
+  (`public_rate_limits`), kopyalar arasında paylaşılır. Veritabanı hatasında fail-open'dır (hata günlüğe yazılır).
+  `TRUSTED_IP_HEADER` tanımsızsa tüm istemciler tek kovaya düşer (üretimde zorunludur).
+- Güvenlik başlıkları (nosniff, X-Frame-Options, `frame-ancestors 'none'`, HSTS, Referrer/Permissions-Policy) vardır;
+  betik/stil kısıtlayan tam bir CSP (nonce) yoktur.
+- Çevrimdışı check-in kuyruğu kullanıcıya aittir ve çıkışta servis çalışanı önbelleği temizlenir. Yürüyerek gelen
+  misafir kaydının çevrimdışı kuyruğa alınması ile IndexedDB/servis çalışanının gerçek tarayıcıda denenmesi ayrı bir
+  düzeltme dalgasında ele alınıyor (`fixwave-F-report.md`); tamamlanana kadar bunlara güvenmeyin.
+- `npm audit`: 6 "moderate" bulgu açıktır; uyumlu bir sürüm yok (`drizzle-kit` → eski `esbuild`: yalnızca geliştirme aracı,
+  imajda yoktur; `exceljs` → `uuid`: zayıf kod yolu (v3/v5/v6 + `buf`) `exceljs` tarafından çağrılmaz). Gerekçe `fixwave-H-report.md`'de.
+- Eski veri taşıma politikası kararları (olay sahibi olmayan etkinlikler, müşterisiz rezervasyonlar, benzersizlik
+  çakışmaları) `task-21-report.md` içindedir; gerçek çalıştırmadan önce okuyun.
+
+**Önceki sürümlerde listelenip şimdi giderilenler**: `venue_owner` kendi şablonunu düzenleyebilir; `reviews` izin modülü
+veritabanı enum'unda var (migration 0005); yetkisiz sayfa için 403 sayfası var; eski QR belirteçleri check-in'de kabul
+edilir; davet sayfası IP başına sınırlı; ilk yönetici üretim imajından oluşturulabilir.
+
+## Hiç çalıştırılmayanlar (dürüst liste)
+
+Aşağıdakiler yazıldı ya da okunarak gözden geçirildi, **ama gerçekten çalıştırılıp denenmedi**:
+- **Docker imajı derlemesi** (`web/Dockerfile`) ve imajın içinde `migrate.mjs` / `create-admin.mjs` — Docker bu geliştirme
+  makinesinde kurulu değil. Betikler ve bağımlılık kapanışı imaj dışında, aynı `package-lock.json` kapanışıyla ayrı bir
+  dizinde denendi.
+- **Compose başlatma sırası** (`postgres` → `migrate` → `web`, `create-admin` profili), `/data/uploads` volume sahipliği,
+  Coolify/Traefik davranışı (ve Coolify'ın `profiles` desteği).
+- **GitHub Actions'ta CI** (`web-ci.yml` ve `build-and-push.yml` içindeki `workflow_call`) bir kez bile çalışmadı.
+- **Gerçek veri taşıma**: ETL betiği yalnızca sentetik veriyle test edildi; gerçek eski veritabanıyla hiç çalıştırılmadı.
+- **Cihaz kamerası**: QR okuyucu gerçek bir telefon/tablet kamerasıyla denenmedi.
+- Arayüz, geliştirme sırasında tarayıcıda yalnızca kısmen elle denendi; canlıya almadan önce elle duman testi yapın.

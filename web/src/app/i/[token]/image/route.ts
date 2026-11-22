@@ -16,7 +16,7 @@ function notFound(): Response {
  */
 export async function GET(request: Request, context: RouteContext): Promise<Response> {
   // Veritabanına dokunmadan önce: IP başına hız sınırı.
-  const rate = checkInvitationRate(request.headers);
+  const rate = await checkInvitationRate(request.headers);
   if (!rate.allowed) return tooManyRequestsResponse(rate.retryAfterSeconds);
 
   const { token } = await context.params;
