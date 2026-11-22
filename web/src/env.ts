@@ -1,3 +1,4 @@
+import { hkdfSync } from "node:crypto";
 import { z } from "zod";
 
 const DEV_AUTH_URL = "http://localhost:3000";
@@ -15,6 +16,12 @@ const envSchema = z
       .string()
       .optional()
       .refine((value) => !value || Buffer.from(value, "base64").length === 32, "base64 çözüldüğünde 32 bayt olmalıdır"),
+    // Rezervasyon QR belirteçlerini imzalayan HMAC anahtarı (en az 32 karakter). İsteğe bağlı;
+    // tanımsızsa BETTER_AUTH_SECRET'tan HKDF ile türetilir (bkz. qrSigningKey).
+    QR_SIGNING_KEY: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.string().min(32, "en az 32 karakter olmalıdır").optional(),
+    ),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     // İstemci IP'sinin okunacağı, ters vekilin (ör. Traefik) yazdığı başlık. Üretimde
     // zorunlu; geliştirme/testte tanımsızsa istemcinin gönderdiği hiçbir başlığa güvenilmez.
@@ -53,6 +60,17 @@ export function parseEnv(input: Record<string, string | undefined>): Env {
     throw new Error(`Geçersiz ortam değişkenleri: ${details}`);
   }
   return result.data;
+}
+
+const QR_KEY_LABEL = "qr-token-v1";
+
+/**
+ * QR belirteci HMAC anahtarı: `QR_SIGNING_KEY` tanımlıysa onun UTF-8 baytları, değilse
+ * `BETTER_AUTH_SECRET`'tan HKDF-SHA256 (tuzsuz, bilgi `"qr-token-v1"`, 32 bayt) ile türetilen anahtar.
+ */
+export function qrSigningKey(value: Pick<Env, "QR_SIGNING_KEY" | "BETTER_AUTH_SECRET">): Buffer {
+  if (value.QR_SIGNING_KEY) return Buffer.from(value.QR_SIGNING_KEY, "utf8");
+  return Buffer.from(hkdfSync("sha256", value.BETTER_AUTH_SECRET, "", QR_KEY_LABEL, 32));
 }
 
 export const env: Env = parseEnv(process.env);

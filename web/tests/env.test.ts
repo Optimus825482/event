@@ -1,5 +1,6 @@
+import { hkdfSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { parseEnv } from "@/env";
+import { parseEnv, qrSigningKey } from "@/env";
 
 const valid = {
   DATABASE_URL: "postgres://postgres@localhost:54329/eventflow_test",
@@ -79,6 +80,37 @@ describe("parseEnv", () => {
 
     it("phase-production-build sırasında zorunlu değildir", () => {
       expect(parseEnv({ ...production, NEXT_PHASE: "phase-production-build" }).TRUSTED_IP_HEADER).toBeUndefined();
+    });
+  });
+
+  describe("QR_SIGNING_KEY", () => {
+    it("isteğe bağlıdır; tanımsız ya da boşsa tanımsız sayılır", () => {
+      expect(parseEnv(valid).QR_SIGNING_KEY).toBeUndefined();
+      expect(parseEnv({ ...valid, QR_SIGNING_KEY: "  " }).QR_SIGNING_KEY).toBeUndefined();
+    });
+
+    it("31 karakter reddedilir, 32 karakter kabul edilir", () => {
+      expect(() => parseEnv({ ...valid, QR_SIGNING_KEY: "k".repeat(31) })).toThrow(/QR_SIGNING_KEY/);
+      expect(parseEnv({ ...valid, QR_SIGNING_KEY: "k".repeat(32) }).QR_SIGNING_KEY).toBe("k".repeat(32));
+    });
+
+    it("tanımlıysa anahtar olarak doğrudan kullanılır", () => {
+      const key = qrSigningKey(parseEnv({ ...valid, QR_SIGNING_KEY: "k".repeat(40) }));
+      expect(key.equals(Buffer.from("k".repeat(40), "utf8"))).toBe(true);
+    });
+
+    it("tanımsızsa BETTER_AUTH_SECRET'tan HKDF-SHA256 ('qr-token-v1') ile türetilir", () => {
+      const key = qrSigningKey(parseEnv(valid));
+      const expected = Buffer.from(hkdfSync("sha256", valid.BETTER_AUTH_SECRET, "", "qr-token-v1", 32));
+      expect(key.length).toBe(32);
+      expect(key.equals(expected)).toBe(true);
+      expect(key.equals(Buffer.from(valid.BETTER_AUTH_SECRET, "utf8"))).toBe(false);
+    });
+
+    it("türetilen anahtar sırra bağlıdır", () => {
+      const a = qrSigningKey(parseEnv(valid));
+      const b = qrSigningKey(parseEnv({ ...valid, BETTER_AUTH_SECRET: "b".repeat(32) }));
+      expect(a.equals(b)).toBe(false);
     });
   });
 
