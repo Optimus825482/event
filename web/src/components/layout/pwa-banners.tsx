@@ -131,7 +131,7 @@ export function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium ${
+      className={`pointer-events-none fixed bottom-4 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-lg ${
         offline ? "bg-amber-500 text-amber-950" : "bg-green-600 text-white"
       }`}
     >

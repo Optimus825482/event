@@ -88,7 +88,7 @@ export function EditorToolbar(props: Props) {
   const s = () => store.getState();
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-border bg-background px-2 py-1.5" role="toolbar">
+    <div className="flex flex-nowrap items-center gap-1 overflow-x-auto [&>*]:shrink-0 border-b border-border bg-background px-2 py-1.5" role="toolbar">
       <ToolButton label="Seç (sürükleyerek çoklu seçim)" active={tool === "select"} onClick={() => s().setTool("select")}>
         <MousePointer2 className="size-4" />
       </ToolButton>

@@ -21,6 +21,8 @@ import { ToastProvider } from "@/components/ui/toast";
 
 /** Eleman ağacını gezip verilen bileşenin üst-alt sırasını döndürür. */
 function typesAlongPath(node: ReactNode, path: unknown[] = []): unknown[] {
+  // Birden çok çocuk varsa (ör. kabuk + yüzen katmanlar) ilk eleman izlenir.
+  if (Array.isArray(node)) return typesAlongPath(node.find((child) => isValidElement(child)), path);
   if (!isValidElement(node)) return path;
   const next = [...path, node.type];
   const props = node.props as { children?: ReactNode };
