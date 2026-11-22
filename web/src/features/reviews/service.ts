@@ -3,6 +3,7 @@ import type { Db, Tx } from "@/db/client";
 import { events, staff, staffPerformanceReviews, teamMembers, teams, users } from "@/db/schema";
 import { authorize, can, type PolicyResource, type Verb } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
+import { canAccessEvent } from "@/features/events/access";
 import { insertNotification, type NotificationRow } from "@/features/notifications/service";
 import { DomainError } from "@/lib/action";
 import { REVIEW_MESSAGES } from "./labels";
@@ -27,7 +28,7 @@ export function authorizeReviewsGate(actor: Actor, verb: Verb): void {
 /** Organizatör yalnızca kendi etkinliğini görür; başkasınınki "yok" gibi davranır. */
 export async function loadReviewEvent(executor: Executor, actor: Actor, eventId: string): Promise<EventRow> {
   const [event] = await executor.select().from(events).where(eq(events.id, eventId));
-  if (!event || (actor.role === "organizer" && event.organizerId !== actor.id)) {
+  if (!event || !canAccessEvent(actor, event)) {
     throw new DomainError("not_found", REVIEW_MESSAGES.eventNotFound);
   }
   return event;

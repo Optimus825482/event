@@ -2,8 +2,9 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { customers, eventTables, events, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
-import { pgCodeOf, pgConstraintOf } from "@/features/customers/pg-error";
+import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import { publish } from "@/features/realtime/publish";
+import { canAccessEvent } from "@/features/events/access";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import type { EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
@@ -58,10 +59,7 @@ function mapDbError(error: unknown): unknown {
   return error;
 }
 
-/** Organizatör yalnızca kendi etkinliğine erişir; başkasınınki "yok" gibi görünür. */
-export function canAccessEvent(actor: Actor, event: Pick<EventRow, "organizerId">): boolean {
-  return actor.role !== "organizer" || event.organizerId === actor.id;
-}
+export { canAccessEvent };
 
 /**
  * Etkinliği `FOR SHARE` ile kilitler: durum geçişi (`FOR UPDATE`) ve yerleşim kaydı

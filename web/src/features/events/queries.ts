@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { authorize } from "@/features/auth/policy";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { DomainError } from "@/lib/action";
+import { isUuid } from "@/lib/identifiers";
 import { listEventsFilterSchema } from "./schemas";
 import { getEvent, listEventTables, listEvents } from "./service";
 
@@ -17,7 +18,7 @@ export async function loadEventList(rawFilter: unknown) {
 export async function loadEventDetail(id: string) {
   const actor = await requirePolicyActor();
   authorize(actor, "events", "view");
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   try {
     const event = await getEvent(db, actor, id);
     const tables = await listEventTables(db, id);

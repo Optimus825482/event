@@ -7,14 +7,13 @@ import { requirePolicyActor } from "@/features/auth/permissions";
 import { ReviewBoardView } from "@/features/reviews/components/review-board";
 import { getReviewBoard } from "@/features/reviews/queries";
 import { DomainError } from "@/lib/action";
+import { isUuid } from "@/lib/identifiers";
 
 export const metadata: Metadata = { title: "Ekip değerlendirmesi | EventFlow" };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export default async function ReviewBoardPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
-  if (!UUID.test(eventId)) notFound();
+  if (!isUuid(eventId)) notFound();
   const actor = await requirePolicyActor();
 
   let board;

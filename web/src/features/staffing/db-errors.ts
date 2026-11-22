@@ -1,19 +1,5 @@
 import { DomainError } from "@/lib/action";
-
-type PgErrorInfo = { code: string; constraint: string };
-
-/** Hata zincirinde (`error`, `error.cause`, ...) PostgreSQL SQLSTATE kodunu ve kısıt adını arar. */
-function pgErrorInfo(error: unknown): PgErrorInfo | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth += 1) {
-    if ("code" in current && typeof current.code === "string" && /^\d{2}[0-9A-Z]{3}$/.test(current.code)) {
-      const constraint = "constraint" in current && typeof current.constraint === "string" ? current.constraint : "";
-      return { code: current.code, constraint };
-    }
-    current = "cause" in current ? current.cause : undefined;
-  }
-  return undefined;
-}
+import { pgErrorInfo } from "@/lib/pg-error";
 
 export const STAFFING_MESSAGES = {
   tableInTwoGroups: "Bir masa yalnızca tek gruba ait olabilir",

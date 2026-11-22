@@ -4,6 +4,7 @@ import type { Db, Tx } from "@/db/client";
 import { eventTables, organizationTemplates, servicePoints, staff, workShifts } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
+import { isUuid } from "@/lib/identifiers";
 import { ensureStaffingAccess, getReadableEvent, withEventWrite } from "./access";
 import { applyAssignments } from "./assignments-service";
 import { unique } from "./diff";
@@ -199,7 +200,7 @@ export async function applyOrganizationTemplate(
       ...snapshot.groups.map((g) => g.supervisorStaffId),
       ...snapshot.assignments.map((a) => a.staffId),
     ]).filter((id): id is string => typeof id === "string");
-    const uuidLike = staffIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+    const uuidLike = staffIds.filter(isUuid);
     const activeRows =
       uuidLike.length > 0
         ? await tx
@@ -216,9 +217,7 @@ export async function applyOrganizationTemplate(
       return null;
     };
 
-    const shiftIds = unique(snapshot.assignments.flatMap((a) => (a.shiftId ? [a.shiftId] : []))).filter((id) =>
-      /^[0-9a-f-]{36}$/i.test(id),
-    );
+    const shiftIds = unique(snapshot.assignments.flatMap((a) => (a.shiftId ? [a.shiftId] : []))).filter(isUuid);
     const usableShiftRows =
       shiftIds.length > 0
         ? await tx

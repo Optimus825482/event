@@ -8,12 +8,11 @@ import { authorize, can } from "@/features/auth/policy";
 import { searchCustomers } from "@/features/customers/queries";
 import { listEvents } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
+import { escapeLike, isUuid } from "@/lib/identifiers";
 import { canAccessEvent, MSG, type Executor } from "./internal";
 import { availableTables } from "./read-service";
 import { listReservationsInput, type ListReservationsInput } from "./schemas";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const escapeLike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 async function accessibleEvent(db: Executor, actor: ActorWithPermissions, eventId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
@@ -105,7 +104,7 @@ export async function listReservations(db: Executor, actor: ActorWithPermissions
  */
 export async function getReservationDetail(db: Executor, actor: ActorWithPermissions, id: string) {
   authorize(actor, "reservations", "view");
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [row] = await db
     .select({
       reservation: reservations,
@@ -152,7 +151,7 @@ export async function loadReservationEvents(raw: { search?: string; page?: strin
 export async function loadReservationList(eventId: string, raw: Omit<ListReservationsInput, "eventId">) {
   const actor = await requirePolicyActor();
   authorize(actor, "reservations", "view");
-  if (!UUID_RE.test(eventId)) notFound();
+  if (!isUuid(eventId)) notFound();
   try {
     return { actor, ...(await listReservations(defaultDb, actor, { ...raw, eventId })) };
   } catch (error) {
@@ -163,7 +162,7 @@ export async function loadReservationList(eventId: string, raw: Omit<ListReserva
 export async function loadNewReservationPage(eventId: string, customerQuery: string | undefined) {
   const actor = await requirePolicyActor();
   authorize(actor, "reservations", "view");
-  if (!UUID_RE.test(eventId)) notFound();
+  if (!isUuid(eventId)) notFound();
   try {
     const event = await accessibleEvent(defaultDb, actor, eventId);
     const tables = await availableTables(defaultDb, actor, { eventId });

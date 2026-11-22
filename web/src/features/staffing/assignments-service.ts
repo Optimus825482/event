@@ -98,26 +98,29 @@ async function assertStaffActive(tx: Tx, items: AssignmentInput[], byId: Readonl
 }
 
 /**
- * §13.10 "bir masa tek ekip": atamanın ekibi boş ya da masalarını tutan grupların ekibi olmalıdır.
- * Ekip atanmış bir gruptaki masaya başka ekibin atanması reddedilir.
+ * §13.10 "bir masa tek ekip": atamanın ekibi boş ya da masalarını tutan grupların ekibi olmalıdır;
+ * ayrıca aynı masaya iki farklı ekibin ataması yazılamaz. Ekipsiz atama masaya ikinci bir ekip
+ * getirmez, her durumda kabul edilir.
  */
 async function assertTeamMatchesGroups(tx: Tx, eventId: string, items: AssignmentInput[]) {
-  const tableIds = unique(items.flatMap((i) => (i.teamId ? i.tableIds : [])));
+  const teamOfTable = new Map<string, string>();
+  for (const item of items) {
+    if (!item.teamId) continue;
+    for (const tableId of item.tableIds) {
+      const other = teamOfTable.get(tableId);
+      if (other !== undefined && other !== item.teamId) throw new DomainError("conflict", STAFFING_MESSAGES.teamTableMismatch);
+      teamOfTable.set(tableId, item.teamId);
+    }
+  }
+  const tableIds = [...teamOfTable.keys()];
   if (tableIds.length === 0) return;
   const rows = await tx
     .select({ tableId: tableGroupTables.tableId, teamId: tableGroups.teamId })
     .from(tableGroupTables)
     .innerJoin(tableGroups, eq(tableGroups.id, tableGroupTables.tableGroupId))
     .where(and(eq(tableGroupTables.eventId, eventId), inArray(tableGroupTables.tableId, tableIds)));
-  const teamOfTable = new Map(rows.flatMap((r) => (r.teamId ? [[r.tableId, r.teamId] as const] : [])));
-  for (const item of items) {
-    if (!item.teamId) continue;
-    if (item.tableIds.some((t) => {
-      const groupTeam = teamOfTable.get(t);
-      return groupTeam !== undefined && groupTeam !== item.teamId;
-    })) {
-      throw new DomainError("conflict", STAFFING_MESSAGES.teamTableMismatch);
-    }
+  if (rows.some((r) => r.teamId !== null && r.teamId !== teamOfTable.get(r.tableId))) {
+    throw new DomainError("conflict", STAFFING_MESSAGES.teamTableMismatch);
   }
 }
 

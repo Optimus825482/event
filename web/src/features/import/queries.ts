@@ -7,14 +7,13 @@ import { authorize, type Module, type Verb } from "@/features/auth/policy";
 import { getEventOrThrow } from "@/features/events/service";
 import { canAccessEvent } from "@/features/reservations/internal";
 import { DomainError } from "@/lib/action";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from "@/lib/identifiers";
 
 /** İçe aktarma sayfası verisi: ilk satırda `authorize`; geçersiz kimlik ya da görünmeyen etkinlik 404. */
 export async function loadImportPage(module: Module, verb: Verb, eventId: string) {
   const actor = await requirePolicyActor();
   authorize(actor, module, verb);
-  if (!UUID.test(eventId)) notFound();
+  if (!isUuid(eventId)) notFound();
   try {
     const event = await getEventOrThrow(db, eventId);
     if (!canAccessEvent(actor, event)) notFound();

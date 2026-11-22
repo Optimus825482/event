@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { assignmentTables, eventStaffAssignments, tableGroupTables, tableGroups, teams } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
@@ -97,14 +97,40 @@ export async function applyGroups(tx: Tx, eventId: string, input: GroupInput[]):
   return saved;
 }
 
+/**
+ * §13.10: bir grubun ekibi, masalarındaki ekipli atamaların ekibiyle çelişemez. Yalnızca grup
+ * tek başına kaydedilirken denetlenir; bütün organizasyon ya da şablon yazılırken atamalar
+ * grup yazıldıktan sonra kendi denetimlerinden geçer.
+ */
+async function assertGroupTeamsMatchAssignments(tx: Tx, eventId: string) {
+  const [clash] = await tx
+    .select({ id: eventStaffAssignments.id })
+    .from(eventStaffAssignments)
+    .innerJoin(assignmentTables, eq(assignmentTables.assignmentId, eventStaffAssignments.id))
+    .innerJoin(tableGroupTables, eq(tableGroupTables.tableId, assignmentTables.tableId))
+    .innerJoin(tableGroups, eq(tableGroups.id, tableGroupTables.tableGroupId))
+    .where(
+      and(
+        eq(eventStaffAssignments.eventId, eventId),
+        isNotNull(eventStaffAssignments.teamId),
+        isNotNull(tableGroups.teamId),
+        ne(eventStaffAssignments.teamId, tableGroups.teamId),
+      ),
+    )
+    .limit(1);
+  if (clash) throw new DomainError("conflict", STAFFING_MESSAGES.teamTableMismatch);
+}
+
 export async function saveTableGroups(
   db: Db | Tx,
   actor: Actor,
   input: SaveTableGroupsInput,
 ): Promise<{ groups: SavedGroup[] }> {
-  return withEventWrite(db, actor, input.eventId, async (tx) => ({
-    groups: await applyGroups(tx, input.eventId, input.groups),
-  }));
+  return withEventWrite(db, actor, input.eventId, async (tx) => {
+    const groups = await applyGroups(tx, input.eventId, input.groups);
+    await assertGroupTeamsMatchAssignments(tx, input.eventId);
+    return { groups };
+  });
 }
 
 /**

@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { withPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { getActorFromHeaders, type Actor } from "@/features/auth/session";
+import { canAccessEvent } from "@/features/events/access";
 import { getEventOrThrow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 
@@ -28,7 +29,7 @@ export async function authorizeStream(requestHeaders: Headers, eventId: string):
   if (!z.uuid().safeParse(eventId).success) return notFound;
   try {
     const event = await getEventOrThrow(db, eventId);
-    if (actor.role === "organizer" && event.organizerId !== actor.id) return notFound;
+    if (!canAccessEvent(actor, event)) return notFound;
   } catch (error) {
     if (error instanceof DomainError && error.code === "not_found") return notFound;
     throw error;

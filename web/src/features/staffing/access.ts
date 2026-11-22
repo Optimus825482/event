@@ -3,6 +3,7 @@ import type { Db, Tx } from "@/db/client";
 import { events } from "@/db/schema";
 import { authorize, type PolicyActor, type Verb } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
+import { canAccessEvent } from "@/features/events/access";
 import { getEventOrThrow, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { mapStaffingDbError } from "./db-errors";
@@ -18,11 +19,8 @@ export function ensureStaffingAccess(actor: PolicyActor, verb: Verb): void {
   authorize(actor, "events", verb);
 }
 
-/** Organizatör yalnızca kendi etkinliğine erişir; başkasınınki "yok" gibi davranır. */
 function assertOwnership(actor: Actor, event: EventRow): void {
-  if (actor.role === "organizer" && event.organizerId !== actor.id) {
-    throw new DomainError("not_found", NOT_FOUND);
-  }
+  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", NOT_FOUND);
 }
 
 export async function getReadableEvent(db: Db | Tx, actor: Actor, eventId: string): Promise<EventRow> {

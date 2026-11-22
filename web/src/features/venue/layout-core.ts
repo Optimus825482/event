@@ -10,8 +10,10 @@ import {
   tableTypes,
 } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
+import { canAccessEvent } from "@/features/events/access";
 import { listEventTables, totalCapacity, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
+import { pgCodeOf } from "@/lib/pg-error";
 import { MAX_TABLE_CAPACITY, MAX_TABLES, decorSchema, normalizeLabel, type Decor, type DecorInput, type TableInput } from "./schemas";
 
 export type EventTableRow = typeof eventTables.$inferSelect;
@@ -20,9 +22,7 @@ export const EVENT_NOT_FOUND = "Etkinlik bulunamadı";
 
 /** Etkinlikler modülüyle aynı kural: organizatör yalnızca kendi etkinliğini görür, başkasınınki "yok"tur. */
 export function assertEventAccess(actor: Actor, event: EventRow): void {
-  if (actor.role === "organizer" && event.organizerId !== actor.id) {
-    throw new DomainError("not_found", EVENT_NOT_FOUND);
-  }
+  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", EVENT_NOT_FOUND);
 }
 
 export function isLayoutEditable(event: Pick<EventRow, "status">): boolean {
@@ -285,7 +285,7 @@ export async function writeLayout(
 
 /** Transaction dışına çıkan PostgreSQL hatalarını anlamlı `DomainError`'a çevirir. */
 export function mapLayoutDbError(error: unknown): never {
-  const code = pgCode(error);
+  const code = pgCodeOf(error);
   if (code === "23505") throw new DomainError("conflict", "Masa etiketi etkinlik içinde tekil olmalı");
   if (code === "23503") {
     throw new DomainError("conflict", "Masa başka kayıtlarca kullanılıyor; hiçbir değişiklik kaydedilmedi");
@@ -294,11 +294,3 @@ export function mapLayoutDbError(error: unknown): never {
   throw error;
 }
 
-function pgCode(error: unknown): string | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth += 1) {
-    if ("code" in current && typeof current.code === "string") return current.code;
-    current = "cause" in current ? current.cause : undefined;
-  }
-  return undefined;
-}

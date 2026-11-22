@@ -4,6 +4,7 @@ import { events, notificationReads, notifications } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
 import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
+import { canAccessEvent } from "@/features/events/access";
 import { DomainError } from "@/lib/action";
 import type { CreateNotificationInput, ListNotificationsInput, MarkReadInput } from "./schemas";
 
@@ -47,7 +48,7 @@ export async function createNotification(
       .from(events)
       .where(eq(events.id, input.eventId));
     // Organizatör yalnızca kendi etkinliğine bağlayabilir; başkasınınki "yok" gibi davranır.
-    if (!event || (actor.role === "organizer" && event.organizerId !== actor.id)) {
+    if (!event || !canAccessEvent(actor, event)) {
       throw new DomainError("not_found", "Etkinlik bulunamadı");
     }
   }

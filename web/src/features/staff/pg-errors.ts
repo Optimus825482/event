@@ -1,15 +1,6 @@
 import { authorize, type PolicyActor, type Verb } from "@/features/auth/policy";
 import { DomainError } from "@/lib/action";
-
-/** Hata zincirinde (`error`, `error.cause`, ...) PostgreSQL SQLSTATE kodunu arar. */
-export function pgErrorCode(error: unknown): string | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth += 1) {
-    if ("code" in current && typeof current.code === "string") return current.code;
-    current = "cause" in current ? current.cause : undefined;
-  }
-  return undefined;
-}
+import { pgCodeOf } from "@/lib/pg-error";
 
 type ConflictMessages = { unique?: string; foreignKey?: string };
 
@@ -18,7 +9,7 @@ export async function mapDbConflicts<T>(run: () => Promise<T>, messages: Conflic
   try {
     return await run();
   } catch (error) {
-    const code = pgErrorCode(error);
+    const code = pgCodeOf(error);
     if (code === "23505" && messages.unique) throw new DomainError("conflict", messages.unique);
     if (code === "23503" && messages.foreignKey) throw new DomainError("conflict", messages.foreignKey);
     throw error;

@@ -4,6 +4,8 @@ import { eventTables, events, reservations } from "@/db/schema";
 import { canTransitionEvent } from "@/domain/event-status";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
+import { escapeLike } from "@/lib/identifiers";
+import { canAccessEvent } from "./access";
 import { EVENT_STATUS_LABELS } from "./labels";
 import type {
   ChangeEventStatusInput,
@@ -26,11 +28,8 @@ export async function getEventOrThrow(db: Executor, id: string): Promise<EventRo
   return row;
 }
 
-/** Organizatör yalnızca kendi etkinliğine erişir; başkasınınki "yok" gibi davranır. */
 function assertAccess(actor: Actor, event: EventRow): void {
-  if (actor.role === "organizer" && event.organizerId !== actor.id) {
-    throw new DomainError("not_found", NOT_FOUND);
-  }
+  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", NOT_FOUND);
 }
 
 async function getAccessibleEvent(db: Executor, actor: Actor, id: string): Promise<EventRow> {
@@ -144,10 +143,6 @@ export async function deleteEvent(db: Db, actor: Actor, input: DeleteEventInput)
     await tx.delete(events).where(eq(events.id, input.id));
     return { id: input.id };
   });
-}
-
-function escapeLike(term: string): string {
-  return term.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 export async function listEvents(db: Executor, actor: Actor, filter: ListEventsFilter) {

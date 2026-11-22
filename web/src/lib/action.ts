@@ -7,6 +7,7 @@ import { loadPermissions } from "@/features/auth/permissions";
 import { authorize, type Module, type PolicyResource, type Verb } from "@/features/auth/policy";
 import { getActor, type Actor } from "@/features/auth/session";
 import { logError } from "@/lib/log";
+import { pgCodeOf } from "@/lib/pg-error";
 
 export type ActionErrorCode =
   | "unauthenticated"
@@ -75,16 +76,6 @@ function fail(
   return fieldErrors ? { ok: false, code, message, fieldErrors } : { ok: false, code, message };
 }
 
-/** Hata zincirinde (`error`, `error.cause`, ...) PostgreSQL SQLSTATE kodunu arar. */
-function pgErrorCode(error: unknown): string | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth += 1) {
-    if ("code" in current && typeof current.code === "string") return current.code;
-    current = "cause" in current ? current.cause : undefined;
-  }
-  return undefined;
-}
-
 function fieldErrorsOf(error: z.ZodError): Record<string, string[]> {
   const fieldErrors: Record<string, string[]> = {};
   for (const issue of error.issues) {
@@ -104,7 +95,7 @@ function toFailure(scope: string, error: unknown): ActionResult<never> {
   if (error instanceof DomainError) return fail(error.code, error.message);
   if (error instanceof UnauthenticatedError) return fail("unauthenticated", MESSAGES.unauthenticated);
 
-  const pgCode = pgErrorCode(error);
+  const pgCode = pgCodeOf(error);
   if (pgCode === "23505") return fail("conflict", MESSAGES.uniqueViolation);
   if (pgCode === "23503") return fail("conflict", MESSAGES.foreignKeyViolation);
 

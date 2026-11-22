@@ -3,16 +3,15 @@ import { db } from "@/db/client";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { authorize, can } from "@/features/auth/policy";
 import { DomainError } from "@/lib/action";
+import { isUuid } from "@/lib/identifiers";
 import { getOrganization } from "./organization-service";
 import { listOrganizationTemplates } from "./templates-service";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Ekip organizasyonu sayfası verisi. Kimlik geçersizse ya da etkinlik görünmüyorsa 404. */
 export async function loadTeamOrganization(id: string) {
   const actor = await requirePolicyActor();
   authorize(actor, "events", "view");
-  if (!UUID.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   try {
     const [organization, templates] = await Promise.all([
       getOrganization(db, actor, id),

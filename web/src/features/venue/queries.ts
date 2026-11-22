@@ -3,17 +3,16 @@ import { db } from "@/db/client";
 import { can, authorize } from "@/features/auth/policy";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { DomainError } from "@/lib/action";
+import { isUuid } from "@/lib/identifiers";
 import { getVenueLayout } from "./service";
 import { listTableTypes } from "./table-types-service";
 import { listVenueTemplates } from "./templates-service";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Yerleşim düzenleyicisi için her şey. Kimlik geçersizse ya da etkinlik görünmüyorsa 404. */
 export async function loadVenueEditor(eventId: string) {
   const actor = await requirePolicyActor();
   authorize(actor, "events", "view");
-  if (!UUID.test(eventId)) notFound();
+  if (!isUuid(eventId)) notFound();
   try {
     const layout = await getVenueLayout(db, actor, eventId);
     const tableTypes = await listTableTypes(db);
