@@ -1,0 +1,25 @@
+/node_modules
+/.pnp
+.pnp.*
+/coverage
+/.next/
+/out/
+/build
+.pgdata/
+/uploads/
+/uploads-test/
+.env*
+!.env.example
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+/test-results/
+/playwright-report/
+/.next-e2e/
+/e2e/.auth/
+
+# yerel taşıma provası (gerçek veri; asla commit edilmez)
+/.rehearsal/

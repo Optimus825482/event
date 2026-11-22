@@ -45,7 +45,8 @@ coverage/
 # Database dumps (büyük dosyalar)
 *.dump
 *.sql
-!backend/seed-data.sql
+!docs/legacy/schema.sql
+backend/seed-data.sql
 
 # Uploads (keep folder structure)
 backend/uploads/avatars/*
@@ -56,6 +57,19 @@ backend/uploads/invitation-images/*
 !backend/uploads/logos/.gitkeep
 !backend/uploads/event-images/.gitkeep
 !backend/uploads/invitation-images/.gitkeep
+
+# Personal data, uploads and local artifacts
+personnel_images_correct/
+exc/
+*.xlsx
+*.bak
+*.lnk
+*.code-workspace
+backend/uploads/
+web/.pgdata/
+web/.env*
+!web/.env.example
+web/uploads/
 
 # Demo/Showcase projects (ayrı repo'da)
 optimist-projects/
@@ -69,3 +83,11 @@ minibarproject/
 .kilocode/
 .agentic-tools-mcp/
 ULTRA_CODEBASE_AUDIT_REPORT.md
+
+# Kök dizindeki kişisel/artık dosyalar
+/More Actions*.md
+/Ekran görüntüsü*.png
+/image.png
+
+# Drizzle migration dosyaları izlenir
+!web/drizzle/*.sql
