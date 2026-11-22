@@ -40,6 +40,8 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 | `TRUSTED_IP_HEADER` | evet | Ters vekilin istemci IP'sini yazdığı başlık. Traefik/Coolify arkasında `x-real-ip` |
 | `SETTINGS_ENCRYPTION_KEY` | evet (bu yığında) | Ayarlardaki SMTP parolasını şifreler; 32 bayt base64: `openssl rand -base64 32`. Kaybedilirse kayıtlı SMTP parolası çözülemez, yeniden girilir |
 | `QR_SIGNING_KEY` | hayır | QR belirteçleri için HMAC anahtarı (en az 32 karakter). Boşsa `BETTER_AUTH_SECRET`'tan türetilir. **Değişirse dağıtılmış QR'lar geçersiz olur** |
+| `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 12 karakter). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
+| `ADMIN_USERNAME` | hayır | Otomatik oluşturulan yöneticinin kullanıcı adı; varsayılan `admin` (büyük/küçük harf duyarlı) |
 | `WEB_IMAGE` | hayır | Coolify dosyasında imaj adı; varsayılan `ghcr.io/optimus825482/eventflow-web:latest`. Geri alma için `:<commit-sha>` verin |
 
 `UPLOAD_DIR` compose içinde `/data/uploads` olarak sabittir (adlandırılmış volume). Uygulama `NODE_ENV=production` iken
