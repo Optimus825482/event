@@ -1,33 +1,39 @@
+import { Shield } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ROLE_LABELS } from "@/components/layout/role-labels";
-import { visibleNavItems } from "@/features/auth/nav";
+import { redirect } from "next/navigation";
+import { ModuleCard } from "@/components/dashboard/module-card";
+import { EmptyState } from "@/components/layout/empty-state";
+import { visibleNavGroups } from "@/features/auth/nav";
 import { requirePolicyActor } from "@/features/auth/permissions";
+import { launcherModules, roleLanding } from "@/features/dashboard/modules";
 
-export const metadata: Metadata = { title: "Ana sayfa | EventFlow" };
+export const metadata: Metadata = { title: "Modül Seçin | EventFlow" };
 
-export default async function DashboardPage() {
+export default async function ModuleLauncherPage() {
   const actor = await requirePolicyActor();
-  const items = visibleNavItems(actor);
+  const landing = roleLanding(actor.role);
+  if (landing) redirect(landing);
+
+  const modules = launcherModules(actor, visibleNavGroups(actor));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Merhaba, {actor.username}</h1>
-        <p className="text-sm text-muted-foreground">{ROLE_LABELS[actor.role]} olarak giriş yaptınız.</p>
+    <div className="mx-auto w-full max-w-7xl py-4 sm:py-8">
+      <div className="mb-8 text-center sm:mb-10 lg:mb-12">
+        <h1 className="mb-2 text-2xl font-bold text-white sm:text-3xl lg:text-4xl">Modül Seçin</h1>
+        <p className="text-sm text-slate-400 sm:text-base">Çalışmak istediğiniz modülü seçerek devam edin</p>
       </div>
-      {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Erişebileceğiniz bir modül yok.</p>
+
+      {modules.length === 0 ? (
+        <EmptyState
+          icon={<Shield aria-hidden="true" />}
+          title="Erişim izniniz olan modül bulunmuyor."
+          description="Lütfen yöneticinizle iletişime geçin."
+        />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {items.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className="block rounded-(--radius) border border-border bg-card p-4 text-sm font-medium text-card-foreground shadow-sm transition-colors hover:bg-accent"
-              >
-                {item.label}
-              </Link>
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:grid-cols-4">
+          {modules.map((module) => (
+            <li key={module.key}>
+              <ModuleCard module={module} />
             </li>
           ))}
         </ul>

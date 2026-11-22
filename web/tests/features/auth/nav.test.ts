@@ -11,8 +11,9 @@ function hrefs(role: Role, staffId: string | null = null): string[] {
 }
 
 describe("NAV_ITEMS", () => {
-  it("modül gruplarıyla belirtilen sırada 13 öğe içerir", () => {
+  it("modül gruplarıyla belirtilen sırada 15 öğe içerir", () => {
     expect(NAV_ITEMS.map((i) => [i.href, i.label, i.module, i.group])).toEqual([
+      ["/dashboard", "Pano", "events", "events"],
       ["/events", "Etkinlikler", "events", "events"],
       ["/staff", "Ekipler", "staff", "events"],
       ["/venues", "Şablonlar", "venues", "events"],
@@ -22,6 +23,7 @@ describe("NAV_ITEMS", () => {
       ["/customers", "Müşteriler", "customers", "reservations"],
       ["/guests", "Misafirler", "customers", "reservations"],
       ["/check-in", "Check-in", "check_in", "check_in"],
+      ["/admin", "Yönetim Paneli", "users", "admin"],
       ["/admin/users", "Kullanıcılar", "users", "admin"],
       ["/settings/table-types", "Masa Tipleri", "settings", "admin"],
       ["/admin/settings", "Sistem Ayarları", "settings", "admin"],

@@ -50,6 +50,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
  * rotalar zaten buradaki yollara karşılık gelir. Etiketler eski arayüzdeki adlandırmayı izler.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
+  { href: "/dashboard", label: "Pano", module: "events", group: "events", icon: "layout-template" },
   { href: "/events", label: "Etkinlikler", module: "events", group: "events", icon: "calendar" },
   { href: "/staff", label: "Ekipler", module: "staff", group: "events", icon: "users" },
   { href: "/venues", label: "Şablonlar", module: "venues", group: "events", icon: "layout-template" },
@@ -59,6 +60,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/customers", label: "Müşteriler", module: "customers", group: "reservations", icon: "user-round" },
   { href: "/guests", label: "Misafirler", module: "customers", group: "reservations", icon: "contact" },
   { href: "/check-in", label: "Check-in", module: "check_in", group: "check_in", icon: "scan-line" },
+  { href: "/admin", label: "Yönetim Paneli", module: "users", group: "admin", icon: "shield" },
   { href: "/admin/users", label: "Kullanıcılar", module: "users", group: "admin", icon: "users" },
   // Sayfa `settings` görüntüleme yetkisi ister (yalnızca yönetici); menü de aynı modüle bağlı.
   { href: "/settings/table-types", label: "Masa Tipleri", module: "settings", group: "admin", icon: "table" },
