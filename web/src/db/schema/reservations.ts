@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -88,6 +89,10 @@ export const checkInEvents = pgTable(
     clientTimestamp: tstz("client_timestamp"),
     actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
     outcome: checkInOutcome("outcome").notNull(),
+    // İsteğin özeti (sha256): aynı anahtar farklı bir istekle gelirse tekrar sayılmaz.
+    requestFingerprint: text("request_fingerprint"),
+    // İlk çağrının yanıtı (ActionResult); aynı anahtarlı tekrarlar bunu aynen alır. Eski kayıtlarda boş.
+    response: jsonb("response"),
     ...createdOnly(),
   },
   (t) => [
