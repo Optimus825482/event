@@ -154,12 +154,19 @@ export async function expectPending(page: Page, count: number): Promise<void> {
   await expect(queueRegion(page).getByText(text)).toBeVisible();
 }
 
+/** Check-in konsolunun sekmesine geçer; gizli sekmedeki alanlar kullanılamaz. */
+export async function openConsoleTab(page: Page, name: "Tarama" | "Ara" | "Geçmiş" | "Walk-in"): Promise<void> {
+  await page.getByRole("tablist", { name: "Check-in bölümleri" }).getByRole("tab", { name, exact: true }).click();
+}
+
 export async function scanCode(page: Page, code: string): Promise<void> {
+  await openConsoleTab(page, "Tarama");
   await page.getByRole("textbox", { name: "QR kod" }).fill(code);
   await page.getByRole("textbox", { name: "QR kod" }).press("Enter");
 }
 
 export async function submitWalkIn(page: Page, input: { table: string; name: string; guests: number }): Promise<void> {
+  await openConsoleTab(page, "Walk-in");
   const form = page.getByRole("form", { name: "Walk-in misafir kaydı" });
   const select = form.getByLabel("Masa");
   const value = await select.locator("option", { hasText: new RegExp(`^${input.table} `) }).first().getAttribute("value");
