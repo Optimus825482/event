@@ -1,14 +1,26 @@
 "use client";
 
 import type Konva from "konva";
-import { Minus, Plus, Scan, Search } from "lucide-react";
+import { Minus, Plus, Scan, Search, SquareDashedMousePointer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Shape, Stage } from "react-konva";
 import { Button } from "@/components/ui/button";
-import { zoomAround } from "../editor/geometry";
+import { zoomAround, type Point } from "../editor/geometry";
 import { distinctGroups, safeGroupColor } from "../editor/groups";
-import { PLAN_STATUS_COLORS, PLAN_STATUS_LABELS, PLAN_STATUS_ORDER, statusColor } from "../plan-status";
-import { centerOn, fitView, isZoomAtLimit, searchTables, zoomBy, type Size, type View } from "../plan-view-math";
+import { PLAN_STATUS_COLORS, PLAN_STATUS_LABELS, PLAN_STATUS_ORDER, planTableFill } from "../plan-status";
+import {
+  centerOn,
+  fitView,
+  isLassoDrag,
+  isZoomAtLimit,
+  rectFromPoints,
+  searchTables,
+  tablesInRect,
+  toWorld,
+  zoomBy,
+  type Size,
+  type View,
+} from "../plan-view-math";
 import { DecorNode, type ItemHandlers } from "./canvas-items";
 import { DEFAULT_TABLE_COLOR, LOCA_COLOR } from "./editor-context";
 import { PlanTableNode, SELECTED_STROKE } from "./floor-plan-nodes";
@@ -90,7 +102,7 @@ function Legend({ showSelected }: { showSelected: boolean }) {
 }
 
 export default function FloorPlanScene(props: FloorPlanViewProps) {
-  const { plan, statuses, selectedId = null, onSelect } = props;
+  const { plan, statuses, selectedId = null, onSelect, colorByTable, onSelectMany } = props;
   const compact = props.compact === true;
   const interactive = !compact;
   const height = props.height ?? (compact ? 220 : 420);
@@ -100,9 +112,16 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
   const [view, setView] = useState<View | null>(null);
   const [query, setQuery] = useState("");
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [lassoMode, setLassoMode] = useState(false);
+  /** Kement köşeleri ekran koordinatında (sahne kapsayıcısına göre). */
+  const [lasso, setLasso] = useState<{ start: Point; end: Point } | null>(null);
+  const suppressClick = useRef(false);
+  const lassoOn = interactive && onSelectMany !== undefined && lassoMode;
 
   const current = view ?? fitView(plan.canvas, size);
   const disabled = useMemo(() => new Set(disabledIds), [disabledIds]);
+  const outlinedIds = props.outlinedIds ?? NO_IDS;
+  const outlined = useMemo(() => new Set(outlinedIds), [outlinedIds]);
   const matches = useMemo(() => searchTables(plan.tables, query), [plan.tables, query]);
   const matchIds = useMemo(() => new Set(matches.map((t) => t.id)), [matches]);
   const hovered = hoverId ? plan.tables.find((t) => t.id === hoverId) : undefined;
@@ -114,6 +133,8 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
 
   const pick = useCallback(
     (id: string) => {
+      // Kement bırakılırken altında kalan masaya düşen tıklama seçimi bozmasın.
+      if (suppressClick.current) return;
       if (disabled.has(id)) return;
       onSelect?.(id);
     },
@@ -132,6 +153,37 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
     setView(zoomAround(current, pointer, current.scale * (e.evt.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP)));
   }
 
+  function pointerOf(e: Konva.KonvaEventObject<PointerEvent>): Point | null {
+    return e.target.getStage()?.getPointerPosition() ?? null;
+  }
+
+  function onPointerDown(e: Konva.KonvaEventObject<PointerEvent>) {
+    if (!lassoOn) return;
+    const p = pointerOf(e);
+    if (p) setLasso({ start: p, end: p });
+  }
+
+  function onPointerMove(e: Konva.KonvaEventObject<PointerEvent>) {
+    if (!lasso) return;
+    const p = pointerOf(e);
+    if (p) setLasso({ start: lasso.start, end: p });
+  }
+
+  function finishLasso() {
+    if (!lasso) return;
+    setLasso(null);
+    if (!isLassoDrag(lasso.start, lasso.end)) return;
+    suppressClick.current = true;
+    setTimeout(() => {
+      suppressClick.current = false;
+    }, 0);
+    const rect = rectFromPoints(toWorld(lasso.start, current), toWorld(lasso.end, current));
+    const ids = tablesInRect(plan.tables, rect).filter((id) => !disabled.has(id));
+    if (ids.length > 0) onSelectMany?.(ids);
+  }
+
+  const lassoRect = lasso ? rectFromPoints(toWorld(lasso.start, current), toWorld(lasso.end, current)) : null;
+
   function onDragEnd(e: Konva.KonvaEventObject<DragEvent>) {
     if (e.target !== e.target.getStage()) return;
     setView({ scale: current.scale, x: e.target.x(), y: e.target.y() });
@@ -141,7 +193,7 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
     ? [
         hovered.label,
         `${hovered.capacity} kişilik`,
-        statuses ? PLAN_STATUS_LABELS[statuses[hovered.id] ?? "free"] : null,
+        statuses && !colorByTable ? PLAN_STATUS_LABELS[statuses[hovered.id] ?? "free"] : null,
         hovered.group ? `Grup: ${hovered.group.name}` : null,
         disabled.has(hovered.id) ? "seçilemez" : null,
       ]
@@ -179,6 +231,19 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
             </span>
           ) : null}
           <div className="ml-auto flex items-center gap-1">
+            {onSelectMany ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={lassoMode ? "default" : "outline"}
+                aria-pressed={lassoMode}
+                title="Açıkken planda sürükleyerek dikdörtgen içindeki masaları seçin"
+                onClick={() => setLassoMode((v) => !v)}
+              >
+                <SquareDashedMousePointer aria-hidden className="size-4" />
+                Alan seç
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="icon"
@@ -224,9 +289,13 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
             y={current.y}
             scaleX={current.scale}
             scaleY={current.scale}
-            draggable={interactive}
+            draggable={interactive && !lassoOn}
             onWheel={interactive ? onWheel : undefined}
             onDragEnd={interactive ? onDragEnd : undefined}
+            onPointerDown={lassoOn ? onPointerDown : undefined}
+            onPointerMove={lassoOn ? onPointerMove : undefined}
+            onPointerUp={lassoOn ? finishLasso : undefined}
+            onPointerLeave={lassoOn ? finishLasso : undefined}
           >
             <Layer listening={false}>
               <Rect width={plan.canvas.width} height={plan.canvas.height} fill="#0f172a" stroke="#334155" strokeWidth={2} />
@@ -248,9 +317,15 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
                 <PlanTableNode
                   key={table.id}
                   table={table}
-                  fill={statusColor(statuses?.[table.id]) ?? (table.isLoca ? LOCA_COLOR : (table.color ?? DEFAULT_TABLE_COLOR))}
+                  fill={planTableFill(
+                    table.id,
+                    table.isLoca ? LOCA_COLOR : (table.color ?? DEFAULT_TABLE_COLOR),
+                    statuses,
+                    colorByTable,
+                  )}
                   selected={table.id === selectedId}
                   highlighted={matchIds.has(table.id)}
+                  outlined={outlined.has(table.id)}
                   disabled={disabled.has(table.id)}
                   interactive={interactive}
                   onPick={pick}
@@ -258,6 +333,17 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
                 />
               ))}
             </Layer>
+            {lassoRect ? (
+              <Layer listening={false}>
+                <Rect
+                  {...lassoRect}
+                  fill="rgba(59,130,246,0.15)"
+                  stroke="#60a5fa"
+                  strokeWidth={1 / current.scale}
+                  dash={[6 / current.scale, 4 / current.scale]}
+                />
+              </Layer>
+            ) : null}
           </Stage>
         ) : null}
       </div>
@@ -265,7 +351,7 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
       {interactive ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="space-y-1">
-            {statuses ? <Legend showSelected={onSelect !== undefined} /> : null}
+            {statuses && !colorByTable ? <Legend showSelected={onSelect !== undefined} /> : null}
             {groups.length > 0 ? <GroupLegend groups={groups} /> : null}
           </div>
           <p className="min-h-4 text-xs text-slate-300" aria-live="polite">

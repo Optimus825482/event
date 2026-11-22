@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const TIPS = [
-  "Masa Grupları: grup ekleyin, planda masalara tıklayarak seçili gruba atayın. Bir masa tek grupta olabilir.",
+  "Masa Grupları: grup ekleyin, planda masalara tıklayarak seçili gruba atayın; \"Alan seç\" ile dikdörtgen çizerek birden çok masayı ekleyin. Bir masa tek grupta olabilir. Grup satırındaki personel düğmesi grubun personelini açar.",
   "Ekipler: ekip kurun, üyelerini seçin, lider belirleyin ve her grubu bir ekibe bağlayın.",
-  "Personel Atama: masa, özel görev ve servis noktası atamalarını yapın; otomatik dağıtım da kullanabilirsiniz.",
+  "Personel Atama: masa, özel görev ve servis noktası atamalarını yapın; servis noktası kartlarından personel seçebilir, otomatik dağıtım da kullanabilirsiniz.",
   "Ekstra Personel: kadro dışı geçici personeli ad soyad ile ekleyin.",
+  "Geri al / Yinele (Ctrl+Z, Ctrl+Y) taslaktaki değişiklikleri adım adım geri alır; kaydedilen durum etkilenmez.",
   "Özet ve Kaydet: uyarıları kontrol edin ve tümünü tek seferde kaydedin. Kaydetmeden ayrılırsanız değişiklikler kaybolur.",
 ] as const;
 

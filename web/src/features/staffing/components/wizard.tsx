@@ -9,6 +9,7 @@ import type { TeamOrganizationData } from "../queries";
 import { AssignmentsStep } from "./assignments-step";
 import { ExtraStaffStep } from "./extra-staff-step";
 import { GroupsStep } from "./groups-step";
+import { HistoryControls } from "./history-controls";
 import { createOrganizationStore, OrganizationStoreContext, useOrganization, WIZARD_STEPS, type WizardStepId } from "./store";
 import { SummaryStep } from "./summary-step";
 import { TeamsStep } from "./teams-step";
@@ -99,6 +100,7 @@ function WizardBody({ data }: { data: TeamOrganizationData }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-white">{current?.title}</h2>
         <div className="flex flex-wrap gap-2">
+          {readOnly ? null : <HistoryControls />}
           <TutorialDialog />
           <Dialog>
             <DialogTrigger asChild>

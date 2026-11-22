@@ -49,3 +49,16 @@ export function isTableSelectable(table: { available: boolean; capacity: number 
   if (!table.available) return false;
   return guestCount === undefined || !Number.isFinite(guestCount) || guestCount <= table.capacity;
 }
+
+/**
+ * Masanın dolgu rengi: çağıranın verdiği masa rengi (ör. ekip organizasyonunda grup rengi)
+ * önce gelir, sonra durum rengi, en son masa tipinin rengi.
+ */
+export function planTableFill(
+  tableId: string,
+  fallback: string,
+  statuses?: Readonly<Record<string, PlanStatus>>,
+  colorByTable?: Readonly<Record<string, string>>,
+): string {
+  return colorByTable?.[tableId] ?? statusColor(statuses?.[tableId]) ?? fallback;
+}

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AssignmentRow, ASSIGNMENT_TYPE_LABELS } from "./assignment-row";
 import { AutoAssignPanel } from "./auto-assign-panel";
 import { EmptyState, Section } from "./bits";
+import { ServicePointsSection } from "./service-point-dialog";
 import { useOrganization, type DraftAssignment } from "./store";
 
 const TYPES: DraftAssignment["assignmentType"][] = ["table", "special_task", "service_point"];
@@ -17,6 +18,7 @@ export function AssignmentsStep({ readOnly }: { readOnly: boolean }) {
   return (
     <div className="space-y-4">
       {readOnly || !hasStaff ? null : <AutoAssignPanel />}
+      <ServicePointsSection readOnly={readOnly} />
       {TYPES.map((type) => {
         const rows = assignments.filter((a) => a.assignmentType === type);
         return (

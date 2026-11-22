@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { assignTablesToGroup, clearGroupTables, groupCoverage, groupPlanStatuses } from "@/features/staffing/group-plan";
+import {
+  assignTablesToGroup,
+  clearGroupTables,
+  groupCoverage,
+  groupPlanColors,
+  groupPlanStatuses,
+  UNGROUPED_PLAN_COLOR,
+  withDraftGroups,
+} from "@/features/staffing/group-plan";
 
 const groups = [
   { id: "g1", tableIds: ["a", "b"] },
@@ -32,5 +40,27 @@ describe("grup planı yardımcıları", () => {
       percent: 50,
     });
     expect(groupCoverage([], groups).percent).toBe(0);
+  });
+});
+
+describe("planda grup renkleri", () => {
+  const colored = [
+    { id: "g1", name: "A", color: "#ff0000", tableIds: ["a"] },
+    { id: "g2", name: "", color: "bozuk", tableIds: ["b"] },
+  ];
+
+  it("masa grubun kendi rengini alır, grupsuz gri, geçersiz renk varsayılana düşer", () => {
+    const out = groupPlanColors([{ id: "a" }, { id: "b" }, { id: "c" }], colored);
+    expect(out.a).toBe("#ff0000");
+    expect(out.b).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(out.c).toBe(UNGROUPED_PLAN_COLOR);
+  });
+
+  it("halkalar taslaktaki gruptan çizilir; girdi değişmez", () => {
+    const plan = { tables: [{ id: "a", group: { name: "eski", color: "#000000" } }, { id: "c", group: null }] };
+    const out = withDraftGroups(plan, colored);
+    expect(out.tables[0]?.group).toEqual({ name: "A", color: "#ff0000" });
+    expect(out.tables[1]?.group).toBeNull();
+    expect(plan.tables[0]?.group?.name).toBe("eski");
   });
 });

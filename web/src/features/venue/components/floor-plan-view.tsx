@@ -15,6 +15,18 @@ export type FloorPlanViewProps = {
   disabledIds?: readonly string[];
   /** Seçilebilir bir masaya tıklanınca çağrılır; verilmezse plan yalnızca gösterir. */
   onSelect?: (tableId: string) => void;
+  /**
+   * Masa kimliği -> dolgu rengi (#RRGGBB). Verilen masalarda durum renginin önüne geçer; verilince
+   * durum açıklaması ve ipucundaki durum etiketi gizlenir (renkler çağıranın açıklamasına aittir).
+   */
+  colorByTable?: Readonly<Record<string, string>>;
+  /** Kalın beyaz kenarlıkla vurgulanan masalar (ör. seçili grubun masaları). */
+  outlinedIds?: readonly string[];
+  /**
+   * Verilirse araç çubuğunda "Alan seç" düğmesi çıkar: açıkken boş alanda sürüklenen dikdörtgenin
+   * içindeki seçilebilir masalar tek çağrıda bildirilir. Verilmezse kement seçimi yoktur.
+   */
+  onSelectMany?: (tableIds: string[]) => void;
   /** Araç çubuğu, yakınlaştırma ve kaydırma olmayan küçük önizleme. */
   compact?: boolean;
   /** Piksel; varsayılan 420 (compact: 220). */

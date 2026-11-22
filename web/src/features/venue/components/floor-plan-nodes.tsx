@@ -11,12 +11,15 @@ import { GroupRing } from "./group-ring";
 
 export const SELECTED_STROKE = "#facc15";
 export const FOUND_STROKE = "#22d3ee";
+export const OUTLINE_STROKE = "#ffffff";
 
 type PlanTableNodeProps = {
   table: PlanTable;
   fill: string;
   selected: boolean;
   highlighted: boolean;
+  /** Kalın beyaz kenarlık (seçim ve arama vurgusundan sonra gelir). */
+  outlined?: boolean;
   disabled: boolean;
   interactive: boolean;
   onPick: (id: string) => void;
@@ -32,11 +35,20 @@ function setCursor(e: Konva.KonvaEventObject<MouseEvent>, cursor: string) {
 export const PlanTableNode = memo(function PlanTableNode(p: PlanTableNodeProps) {
   const { table } = p;
   const { width, height } = tableSize(table.shape, table.capacity);
-  const stroke = p.selected ? SELECTED_STROKE : p.highlighted ? FOUND_STROKE : table.isLoca ? LOCA_COLOR : "#0f172a";
+  const outlined = p.outlined === true;
+  const stroke = p.selected
+    ? SELECTED_STROKE
+    : p.highlighted
+      ? FOUND_STROKE
+      : outlined
+        ? OUTLINE_STROKE
+        : table.isLoca
+          ? LOCA_COLOR
+          : "#0f172a";
   const common = {
     fill: p.fill,
     stroke,
-    strokeWidth: p.selected || p.highlighted ? 4 : 2,
+    strokeWidth: p.selected || p.highlighted ? 4 : outlined ? 5 : 2,
     shadowColor: p.selected ? SELECTED_STROKE : "#000",
     shadowBlur: p.selected ? 10 : 2,
     shadowOpacity: p.selected ? 0.8 : 0.35,

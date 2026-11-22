@@ -7,15 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FloorPlanSwitcher } from "@/features/venue/components/floor-plan-switcher";
 import type { FloorPlanData } from "@/features/venue/plan-types";
-import { groupCoverage, groupPlanStatuses } from "../group-plan";
+import { groupCoverage, groupPlanColors, groupPlanStatuses, UNGROUPED_PLAN_COLOR, withDraftGroups } from "../group-plan";
 import { Chip, EmptyState, Section, Swatch } from "./bits";
+import { GroupStaffDialog } from "./group-staff-dialog";
 import { useOrganization } from "./store";
-
-const LEGEND = [
-  { color: "#3b82f6", label: "Seçili grup" },
-  { color: "#f59e0b", label: "Başka grup" },
-  { color: "#22c55e", label: "Grupsuz" },
-] as const;
 
 /** Adım 1: masaları gruplara ayırma (alan planında masaya tıklayarak). Bir masa yalnızca tek grupta olabilir. */
 export function GroupsStep({ readOnly, plan }: { readOnly: boolean; plan: FloorPlanData }) {
@@ -35,7 +30,11 @@ export function GroupsStep({ readOnly, plan }: { readOnly: boolean; plan: FloorP
   const groupOfTable = new Map<string, (typeof groups)[number]>();
   for (const g of groups) for (const t of g.tableIds) groupOfTable.set(t, g);
   const coverage = groupCoverage(tables, groups);
+  // 3B görünüm yalnızca durum renklerini bilir: orada seçili grup mavi, diğerleri amber, grupsuz yeşil.
   const statuses = useMemo(() => groupPlanStatuses(plan.tables, groups, activeId), [plan.tables, groups, activeId]);
+  const colors = useMemo(() => groupPlanColors(plan.tables, groups), [plan.tables, groups]);
+  const draftPlan = useMemo(() => withDraftGroups(plan, groups), [plan, groups]);
+  const outlinedIds = active?.tableIds;
   const ungroupedIds = tables.filter((t) => !groupOfTable.has(t.id)).map((t) => t.id);
 
   return (
@@ -70,6 +69,7 @@ export function GroupsStep({ readOnly, plan }: { readOnly: boolean; plan: FloorP
                     {g.name || "Adsız grup"}
                   </button>
                   <Badge variant="secondary">{g.tableIds.length} masa</Badge>
+                  <GroupStaffDialog group={g} readOnly={readOnly} />
                 </div>
                 {g.id === activeId && !readOnly ? (
                   <div className="flex items-center gap-2">
@@ -125,24 +125,35 @@ export function GroupsStep({ readOnly, plan }: { readOnly: boolean; plan: FloorP
       >
         <p className="text-xs text-slate-400">
           {canEdit
-            ? "Planda masaya tıklayın: seçili gruba eklenir (başka gruptaysa oradan taşınır) ya da gruptan çıkar."
+            ? "Planda masaya tıklayın: seçili gruba eklenir (başka gruptaysa oradan taşınır) ya da gruptan çıkar. Birden çok masa için \"Alan seç\" ile dikdörtgen çizin."
             : "Masaları atamak için bir grup seçin."}{" "}
           Grupsuz masa: {coverage.ungrouped} / {coverage.total} (grup kapsamı %{coverage.percent})
         </p>
         <ul aria-label="Plan açıklaması" className="flex flex-wrap gap-3 text-xs text-slate-400">
-          {LEGEND.map((l) => (
-            <li key={l.label} className="inline-flex items-center gap-1.5">
-              <Swatch color={l.color} /> {l.label}
+          {groups.map((g) => (
+            <li key={g.id} className="inline-flex items-center gap-1.5">
+              <Swatch color={g.color} /> {g.name || "Adsız grup"}
             </li>
           ))}
+          <li className="inline-flex items-center gap-1.5">
+            <Swatch color={UNGROUPED_PLAN_COLOR} /> Grupsuz
+          </li>
+          {active ? (
+            <li className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="inline-block size-3 rounded-full border-2 border-white" /> Seçili grup (kalın kenarlık)
+            </li>
+          ) : null}
         </ul>
         {tables.length === 0 ? (
           <EmptyState>Bu etkinlikte masa yok. Önce yerleşim planında masa oluşturun.</EmptyState>
         ) : (
           <>
             <FloorPlanSwitcher
-              plan={plan}
+              plan={draftPlan}
               statuses={statuses}
+              colorByTable={colors}
+              outlinedIds={outlinedIds}
+              onSelectMany={canEdit ? (ids) => active && assignTables(active.id, ids) : undefined}
               height={420}
               ariaLabel="Masa gruplama planı"
               onSelect={canEdit ? (id) => active && toggleTable(active.id, id) : undefined}

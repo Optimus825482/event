@@ -35,3 +35,30 @@ export function searchTables<T extends { label: string }>(tables: readonly T[], 
   if (!q) return [];
   return tables.filter((t) => t.label.toLocaleLowerCase("tr").includes(q));
 }
+
+export type PlanRect = { x: number; y: number; width: number; height: number };
+
+/** Ekran (sahne kapsayıcısı) noktasını görünümün dünya koordinatına çevirir. */
+export function toWorld(point: Point, view: View): Point {
+  const scale = view.scale === 0 ? 1 : view.scale;
+  return { x: (point.x - view.x) / scale, y: (point.y - view.y) / scale };
+}
+
+/** İki köşeden pozitif boyutlu dikdörtgen (sürükleme yönünden bağımsız). */
+export function rectFromPoints(a: Point, b: Point): PlanRect {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+}
+
+/** Merkezi (x, y) dikdörtgenin içinde (kenarlar dahil) kalan masaların kimlikleri, plan sırasıyla. */
+export function tablesInRect<T extends { id: string; x: number; y: number }>(tables: readonly T[], rect: PlanRect): string[] {
+  const right = rect.x + rect.width;
+  const bottom = rect.y + rect.height;
+  return tables.filter((t) => t.x >= rect.x && t.x <= right && t.y >= rect.y && t.y <= bottom).map((t) => t.id);
+}
+
+/** Kement seçimi en az bu kadar ekran pikseli sürüklenince sayılır; daha azı tıklamadır. */
+export const LASSO_MIN_PX = 4;
+
+export function isLassoDrag(start: Point, end: Point, minPx = LASSO_MIN_PX): boolean {
+  return Math.abs(end.x - start.x) >= minPx || Math.abs(end.y - start.y) >= minPx;
+}

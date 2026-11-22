@@ -5,6 +5,8 @@ import { createStore, useStore, type StoreApi } from "zustand";
 import type { Organization } from "../organization-service";
 import { planAutoAssign } from "../auto-assign";
 import { assignTablesToGroup, clearGroupTables } from "../group-plan";
+import { addGroupStaff, addServicePointStaff, removeGroupStaff, type StaffPick } from "../group-staff";
+import { emptyHistory, isDirty, record, redo as redoHistory, undo as undoHistory, type History } from "../history";
 import type { AutoAssignStrategy } from "../schemas";
 
 export type DraftTeam = Organization["teams"][number];
@@ -24,7 +26,7 @@ export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];
 const COLORS = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#a855f7", "#06b6d4", "#ec4899", "#84cc16"];
 const pickColor = (n: number) => COLORS[n % COLORS.length] ?? "#3b82f6";
 
-type Draft = {
+export type Draft = {
   teams: DraftTeam[];
   groups: DraftGroup[];
   assignments: DraftAssignment[];
@@ -35,6 +37,10 @@ export type OrganizationState = Draft & {
   reference: Pick<Organization, "tables" | "staff" | "shifts" | "servicePoints">;
   step: WizardStepId;
   dirty: boolean;
+  /** Taslak değişikliklerinin geri al / yinele geçmişi (adım ve referans veri dahil değil). */
+  history: History<Draft>;
+  undo: () => void;
+  redo: () => void;
   setStep: (step: WizardStepId) => void;
   reset: (org: Organization) => void;
   addGroup: () => void;
@@ -57,14 +63,24 @@ export type OrganizationState = Draft & {
   removeAssignment: (id: string) => void;
   toggleAssignmentTable: (id: string, tableId: string) => void;
   autoAssign: (staffIds: string[], strategy: AutoAssignStrategy, shiftId: string | null, seed?: number) => void;
+  /** Grup personeli penceresi: personeli grubun masalarına atar (mevcut masa atamasıyla birleşir). */
+  addGroupStaff: (groupId: string, pick: StaffPick) => void;
+  /** Grubun masalarını atamadan çıkarır; başka masası kalmazsa atama silinir. */
+  removeGroupStaff: (groupId: string, assignmentId: string) => void;
+  addServicePointStaff: (servicePointId: string, pick: StaffPick) => void;
+  /** Ekstra personeli gruba bağlar ya da bağı kaldırır. */
+  toggleExtraGroup: (extraId: string, groupId: string) => void;
   addExtra: () => void;
   updateExtra: (id: string, patch: Partial<DraftExtra>) => void;
   removeExtra: (id: string) => void;
 };
 
-function draftOf(org: Organization): Draft {
-  return { teams: org.teams, groups: org.groups, assignments: org.assignments, extraStaff: org.extraStaff };
+function draftOf(src: Draft): Draft {
+  return { teams: src.teams, groups: src.groups, assignments: src.assignments, extraStaff: src.extraStaff };
 }
+
+/** Aynı kaydın aynı alanlarına art arda yazım tek geri alma adımıdır. */
+const patchKey = (kind: string, id: string, patch: object) => `${kind}:${id}:${Object.keys(patch).sort().join(",")}`;
 
 function newAssignment(type: DraftAssignment["assignmentType"], staffId: string, sortOrder: number): DraftAssignment {
   return {
@@ -87,164 +103,211 @@ function newAssignment(type: DraftAssignment["assignmentType"], staffId: string,
   };
 }
 
+function pickedAssignment(pick: StaffPick, sortOrder: number): DraftAssignment {
+  return {
+    ...newAssignment("table", pick.staffId, sortOrder),
+    shiftId: pick.shiftId,
+    role: pick.role,
+    shiftStart: pick.shiftStart ?? null,
+    shiftEnd: pick.shiftEnd ?? null,
+  };
+}
+
 const replaceById = <T extends { id: string }>(list: T[], id: string, patch: Partial<T>) =>
   list.map((item) => (item.id === id ? { ...item, ...patch } : item));
 
 const toggle = (ids: string[], id: string) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
 
 export function createOrganizationStore(org: Organization): StoreApi<OrganizationState> {
-  return createStore<OrganizationState>()((set, get) => ({
-    ...draftOf(org),
-    reference: { tables: org.tables, staff: org.staff, shifts: org.shifts, servicePoints: org.servicePoints },
-    step: "groups",
-    dirty: false,
-    setStep: (step) => set({ step }),
-    reset: (next) =>
-      set({
-        ...draftOf(next),
-        reference: { tables: next.tables, staff: next.staff, shifts: next.shifts, servicePoints: next.servicePoints },
-        dirty: false,
-      }),
-    addGroup: () =>
-      set((s) => ({
-        dirty: true,
-        groups: [
-          ...s.groups,
-          {
-            id: crypto.randomUUID(),
-            name: `Grup ${s.groups.length + 1}`,
-            color: pickColor(s.groups.length),
-            teamId: null,
-            supervisorStaffId: null,
-            groupType: "standard",
-            sortOrder: s.groups.length,
-            notes: null,
-            tableIds: [],
-          },
-        ],
-      })),
-    updateGroup: (id, patch) => set((s) => ({ dirty: true, groups: replaceById(s.groups, id, patch) })),
-    removeGroup: (id) =>
-      set((s) => ({
-        dirty: true,
-        groups: s.groups.filter((g) => g.id !== id),
-        extraStaff: s.extraStaff.map((e) => ({ ...e, groupIds: e.groupIds.filter((g) => g !== id) })),
-      })),
-    toggleTable: (groupId, tableId) =>
-      set((s) => ({
-        dirty: true,
-        groups: s.groups.map((g) => {
-          if (g.id === groupId) return { ...g, tableIds: toggle(g.tableIds, tableId) };
-          return g.tableIds.includes(tableId) ? { ...g, tableIds: g.tableIds.filter((t) => t !== tableId) } : g;
-        }),
-      })),
-    assignTables: (groupId, tableIds) => set((s) => ({ dirty: true, groups: assignTablesToGroup(s.groups, groupId, tableIds) })),
-    clearGroupTables: (groupId) => set((s) => ({ dirty: true, groups: clearGroupTables(s.groups, groupId) })),
-    setGroupTeam: (groupId, teamId) =>
+  return createStore<OrganizationState>()((set, get) => {
+    /** Taslağı değiştiren her eylem buradan geçer: önce geçmişe kayıt, sonra değişiklik. */
+    const change = (updater: (s: OrganizationState) => Partial<Draft>, key: string | null = null) =>
       set((s) => {
-        const group = s.groups.find((g) => g.id === groupId);
-        const team = s.teams.find((t) => t.id === teamId);
-        if (!group) return {};
-        return {
-          dirty: true,
-          groups: replaceById(s.groups, groupId, team ? { teamId: team.id, color: team.color } : { teamId: null }),
-          // Eski assignTeamToGroup davranışı: gruptaki masalara atanmış personel ekibe geçer.
-          assignments: team
-            ? s.assignments.map((a) => (a.tableIds.some((t) => group.tableIds.includes(t)) ? { ...a, teamId: team.id } : a))
-            : s.assignments,
-        };
-      }),
-    addTeam: () =>
-      set((s) => ({
-        dirty: true,
-        teams: [
-          ...s.teams,
-          {
-            id: crypto.randomUUID(),
-            name: `Ekip ${s.teams.length + 1}`,
-            color: pickColor(s.teams.length + 3),
-            leaderStaffId: null,
-            sortOrder: s.teams.length,
-            isActive: true,
-            members: [],
-          },
-        ],
-      })),
-    updateTeam: (id, patch) => set((s) => ({ dirty: true, teams: replaceById(s.teams, id, patch) })),
-    removeTeam: (id) =>
-      set((s) => ({
-        dirty: true,
-        teams: s.teams.filter((t) => t.id !== id),
-        groups: s.groups.map((g) => (g.teamId === id ? { ...g, teamId: null } : g)),
-        assignments: s.assignments.map((a) => (a.teamId === id ? { ...a, teamId: null } : a)),
-      })),
-    toggleMember: (teamId, staffId) =>
-      set((s) => ({
-        dirty: true,
-        teams: s.teams.map((t) => {
-          if (t.id !== teamId) return t;
-          const has = t.members.some((m) => m.staffId === staffId);
+        const patch = updater(s);
+        if (Object.keys(patch).length === 0) return {};
+        return { ...patch, history: record(s.history, draftOf(s), key), dirty: true };
+      });
+    return {
+      ...draftOf(org),
+      reference: { tables: org.tables, staff: org.staff, shifts: org.shifts, servicePoints: org.servicePoints },
+      step: "groups",
+      dirty: false,
+      history: emptyHistory<Draft>(),
+      undo: () =>
+        set((s) => {
+          const r = undoHistory(s.history, draftOf(s));
+          return r ? { ...r.snapshot, history: r.history, dirty: isDirty(r.history) } : {};
+        }),
+      redo: () =>
+        set((s) => {
+          const r = redoHistory(s.history, draftOf(s));
+          return r ? { ...r.snapshot, history: r.history, dirty: isDirty(r.history) } : {};
+        }),
+      setStep: (step) => set({ step }),
+      reset: (next) =>
+        set({
+          ...draftOf(next),
+          reference: { tables: next.tables, staff: next.staff, shifts: next.shifts, servicePoints: next.servicePoints },
+          dirty: false,
+          history: emptyHistory<Draft>(),
+        }),
+      addGroup: () =>
+        change((s) => ({
+          groups: [
+            ...s.groups,
+            {
+              id: crypto.randomUUID(),
+              name: `Grup ${s.groups.length + 1}`,
+              color: pickColor(s.groups.length),
+              teamId: null,
+              supervisorStaffId: null,
+              groupType: "standard",
+              sortOrder: s.groups.length,
+              notes: null,
+              tableIds: [],
+            },
+          ],
+        })),
+      updateGroup: (id, patch) => change((s) => ({ groups: replaceById(s.groups, id, patch) }), patchKey("group", id, patch)),
+      removeGroup: (id) =>
+        change((s) => ({
+          groups: s.groups.filter((g) => g.id !== id),
+          extraStaff: s.extraStaff.map((e) => ({ ...e, groupIds: e.groupIds.filter((g) => g !== id) })),
+        })),
+      toggleTable: (groupId, tableId) =>
+        change((s) => ({
+          groups: s.groups.map((g) => {
+            if (g.id === groupId) return { ...g, tableIds: toggle(g.tableIds, tableId) };
+            return g.tableIds.includes(tableId) ? { ...g, tableIds: g.tableIds.filter((t) => t !== tableId) } : g;
+          }),
+        })),
+      assignTables: (groupId, tableIds) =>
+        change((s) => {
+          const group = s.groups.find((g) => g.id === groupId);
+          if (!group || tableIds.every((t) => group.tableIds.includes(t))) return {};
+          return { groups: assignTablesToGroup(s.groups, groupId, tableIds) };
+        }),
+      clearGroupTables: (groupId) => change((s) => ({ groups: clearGroupTables(s.groups, groupId) })),
+      setGroupTeam: (groupId, teamId) =>
+        change((s) => {
+          const group = s.groups.find((g) => g.id === groupId);
+          const team = s.teams.find((t) => t.id === teamId);
+          if (!group) return {};
           return {
-            ...t,
-            leaderStaffId: has && t.leaderStaffId === staffId ? null : t.leaderStaffId,
-            members: has
-              ? t.members.filter((m) => m.staffId !== staffId)
-              : [...t.members, { staffId, isLeader: false, role: null, shiftStart: null, shiftEnd: null }],
+            groups: replaceById(s.groups, groupId, team ? { teamId: team.id, color: team.color } : { teamId: null }),
+            // Eski assignTeamToGroup davranışı: gruptaki masalara atanmış personel ekibe geçer.
+            assignments: team
+              ? s.assignments.map((a) => (a.tableIds.some((t) => group.tableIds.includes(t)) ? { ...a, teamId: team.id } : a))
+              : s.assignments,
           };
         }),
-      })),
-    addAssignment: (type) => {
-      const firstStaff = get().reference.staff[0];
-      if (!firstStaff) return;
-      set((s) => ({ dirty: true, assignments: [...s.assignments, newAssignment(type, firstStaff.id, s.assignments.length)] }));
-    },
-    updateAssignment: (id, patch) => set((s) => ({ dirty: true, assignments: replaceById(s.assignments, id, patch) })),
-    removeAssignment: (id) => set((s) => ({ dirty: true, assignments: s.assignments.filter((a) => a.id !== id) })),
-    toggleAssignmentTable: (id, tableId) =>
-      set((s) => ({
-        dirty: true,
-        assignments: s.assignments.map((a) => (a.id === id ? { ...a, tableIds: toggle(a.tableIds, tableId) } : a)),
-      })),
-    autoAssign: (staffIds, strategy, shiftId, seed) =>
-      set((s) => {
-        const plan = planAutoAssign(s.reference.tables, staffIds, strategy, seed);
-        let assignments = [...s.assignments];
-        for (const entry of plan) {
-          const existing = assignments.find(
-            (a) => a.staffId === entry.staffId && a.shiftId === shiftId && a.assignmentType === "table",
-          );
-          if (existing) {
-            assignments = replaceById(assignments, existing.id, { tableIds: entry.tableIds });
-          } else {
-            assignments.push({ ...newAssignment("table", entry.staffId, assignments.length), shiftId, tableIds: entry.tableIds });
+      addTeam: () =>
+        change((s) => ({
+          teams: [
+            ...s.teams,
+            {
+              id: crypto.randomUUID(),
+              name: `Ekip ${s.teams.length + 1}`,
+              color: pickColor(s.teams.length + 3),
+              leaderStaffId: null,
+              sortOrder: s.teams.length,
+              isActive: true,
+              members: [],
+            },
+          ],
+        })),
+      updateTeam: (id, patch) => change((s) => ({ teams: replaceById(s.teams, id, patch) }), patchKey("team", id, patch)),
+      removeTeam: (id) =>
+        change((s) => ({
+          teams: s.teams.filter((t) => t.id !== id),
+          groups: s.groups.map((g) => (g.teamId === id ? { ...g, teamId: null } : g)),
+          assignments: s.assignments.map((a) => (a.teamId === id ? { ...a, teamId: null } : a)),
+        })),
+      toggleMember: (teamId, staffId) =>
+        change((s) => ({
+          teams: s.teams.map((t) => {
+            if (t.id !== teamId) return t;
+            const has = t.members.some((m) => m.staffId === staffId);
+            return {
+              ...t,
+              leaderStaffId: has && t.leaderStaffId === staffId ? null : t.leaderStaffId,
+              members: has
+                ? t.members.filter((m) => m.staffId !== staffId)
+                : [...t.members, { staffId, isLeader: false, role: null, shiftStart: null, shiftEnd: null }],
+            };
+          }),
+        })),
+      addAssignment: (type) => {
+        const firstStaff = get().reference.staff[0];
+        if (!firstStaff) return;
+        change((s) => ({ assignments: [...s.assignments, newAssignment(type, firstStaff.id, s.assignments.length)] }));
+      },
+      updateAssignment: (id, patch) =>
+        change((s) => ({ assignments: replaceById(s.assignments, id, patch) }), patchKey("assignment", id, patch)),
+      removeAssignment: (id) => change((s) => ({ assignments: s.assignments.filter((a) => a.id !== id) })),
+      toggleAssignmentTable: (id, tableId) =>
+        change((s) => ({
+          assignments: s.assignments.map((a) => (a.id === id ? { ...a, tableIds: toggle(a.tableIds, tableId) } : a)),
+        })),
+      autoAssign: (staffIds, strategy, shiftId, seed) =>
+        change((s) => {
+          const plan = planAutoAssign(s.reference.tables, staffIds, strategy, seed);
+          let assignments = [...s.assignments];
+          for (const entry of plan) {
+            const existing = assignments.find(
+              (a) => a.staffId === entry.staffId && a.shiftId === shiftId && a.assignmentType === "table",
+            );
+            if (existing) {
+              assignments = replaceById(assignments, existing.id, { tableIds: entry.tableIds });
+            } else {
+              assignments.push({ ...newAssignment("table", entry.staffId, assignments.length), shiftId, tableIds: entry.tableIds });
+            }
           }
-        }
-        return { dirty: true, assignments };
-      }),
-    addExtra: () =>
-      set((s) => ({
-        dirty: true,
-        extraStaff: [
-          ...s.extraStaff,
-          {
-            id: crypto.randomUUID(),
-            fullName: "",
-            position: null,
-            role: null,
-            shiftStart: null,
-            shiftEnd: null,
-            color: null,
-            notes: null,
-            sortOrder: s.extraStaff.length,
-            isActive: true,
-            tableIds: [],
-            groupIds: [],
-          },
-        ],
-      })),
-    updateExtra: (id, patch) => set((s) => ({ dirty: true, extraStaff: replaceById(s.extraStaff, id, patch) })),
-    removeExtra: (id) => set((s) => ({ dirty: true, extraStaff: s.extraStaff.filter((e) => e.id !== id) })),
-  }));
+          return { assignments };
+        }),
+      addGroupStaff: (groupId, pick) =>
+        change((s) => {
+          const group = s.groups.find((g) => g.id === groupId);
+          if (!group) return {};
+          return { assignments: addGroupStaff(s.assignments, pick, group, (p) => pickedAssignment(p, s.assignments.length)) };
+        }),
+      removeGroupStaff: (groupId, assignmentId) =>
+        change((s) => {
+          const group = s.groups.find((g) => g.id === groupId);
+          return group ? { assignments: removeGroupStaff(s.assignments, assignmentId, group) } : {};
+        }),
+      addServicePointStaff: (servicePointId, pick) =>
+        change((s) => ({
+          assignments: addServicePointStaff(s.assignments, pick, servicePointId, (p) => pickedAssignment(p, s.assignments.length)),
+        })),
+      toggleExtraGroup: (extraId, groupId) =>
+        change((s) => ({
+          extraStaff: s.extraStaff.map((e) => (e.id === extraId ? { ...e, groupIds: toggle(e.groupIds, groupId) } : e)),
+        })),
+      addExtra: () =>
+        change((s) => ({
+          extraStaff: [
+            ...s.extraStaff,
+            {
+              id: crypto.randomUUID(),
+              fullName: "",
+              position: null,
+              role: null,
+              shiftStart: null,
+              shiftEnd: null,
+              color: null,
+              notes: null,
+              sortOrder: s.extraStaff.length,
+              isActive: true,
+              tableIds: [],
+              groupIds: [],
+            },
+          ],
+        })),
+      updateExtra: (id, patch) => change((s) => ({ extraStaff: replaceById(s.extraStaff, id, patch) }), patchKey("extra", id, patch)),
+      removeExtra: (id) => change((s) => ({ extraStaff: s.extraStaff.filter((e) => e.id !== id) })),
+    };
+  });
 }
 
 export const OrganizationStoreContext = createContext<StoreApi<OrganizationState> | null>(null);
