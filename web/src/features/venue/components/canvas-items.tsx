@@ -6,6 +6,7 @@ import { Circle, Group, Path, Rect, Text } from "react-konva";
 import { effectiveTableSize } from "../editor/geometry";
 import type { EditorTable } from "../editor/store";
 import type { DecorElement } from "../schemas";
+import { GroupRing } from "./group-ring";
 import { ICON_PATHS, resolveDecorStyle } from "./decor-style";
 import { LOCA_COLOR, tableShapeOf, type TableTypeOption } from "./editor-context";
 import { LocaBooth, TableBadges } from "./table-shapes";
@@ -22,9 +23,15 @@ export type ItemHandlers = {
   onDragEnd: () => void;
 };
 
-type TableNodeProps = ItemHandlers & { table: EditorTable; type: TableTypeOption | undefined; selected: boolean };
+type TableNodeProps = ItemHandlers & {
+  table: EditorTable;
+  type: TableTypeOption | undefined;
+  selected: boolean;
+  /** Masa bir ekip grubundaysa halka rengi. */
+  groupColor?: string | undefined;
+};
 
-export const TableNode = memo(function TableNode({ table, type, selected, ...h }: TableNodeProps) {
+export const TableNode = memo(function TableNode({ table, type, selected, groupColor, ...h }: TableNodeProps) {
   const shape = tableShapeOf(type);
   const size = effectiveTableSize({ size: table.size, capacity: table.capacity, isLoca: table.isLoca });
   const { width, height } = tableDims(shape, table.isLoca, size);
@@ -58,6 +65,7 @@ export const TableNode = memo(function TableNode({ table, type, selected, ...h }
       onDragMove={(e) => h.onDragMove(table.key, e.target)}
       onDragEnd={h.onDragEnd}
     >
+      {groupColor ? <GroupRing width={width} height={height} round={!table.isLoca && shape === "round"} color={groupColor} /> : null}
       {table.isLoca ? (
         <LocaBooth width={width} height={height} vip={table.isVip} stroke={selected ? SELECTED_STROKE : undefined} />
       ) : shape === "round" ? (

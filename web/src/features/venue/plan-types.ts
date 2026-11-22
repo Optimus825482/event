@@ -12,6 +12,8 @@ export type PlanTable = {
   shape: TableShape;
   /** Masa tipinin rengi; tipsiz masada `null`. */
   color: string | null;
+  /** Ekip masa grubu (varsa); planda masanın çevresine grup renginde halka çizilir. */
+  group?: { name: string; color: string } | null;
 };
 
 export type FloorPlanData = {

@@ -7,7 +7,10 @@ import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
 import { Button } from "@/components/ui/button";
 import { layoutItems } from "../editor/collision";
 import { clampDelta, containsPoint, normalizeRect, zoomAround, type Point, type Rect as Box } from "../editor/geometry";
+import { cellName } from "../editor/view-chrome";
+import type { GroupBadge } from "../editor/groups";
 import { decorKey, isDecorKey, shapeResolver, type Placement } from "../editor/store";
+import { CanvasRulers } from "./canvas-rulers";
 import { DecorNode, TableNode, type ItemHandlers } from "./canvas-items";
 import { CanvasContextMenu, type ContextTarget } from "./canvas-context-menu";
 import { reportMove, type Notify } from "./editor-commands";
@@ -19,6 +22,8 @@ type Props = {
   notify: Notify;
   onOpenAdd: (kind: "table" | "loca", start?: Point) => void;
   onOpenSpacing: () => void;
+  /** Masa kimliği → ekip grubu (halka rengi). */
+  groups?: ReadonlyMap<string, GroupBadge>;
 };
 type View = { scale: number; x: number; y: number };
 
@@ -57,7 +62,7 @@ function pinnedKeys(s: PinSource): Set<string> {
   ]);
 }
 
-export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, onOpenSpacing }: Props) {
+export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, onOpenSpacing, groups }: Props) {
   const store = useEditorStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const size = useContainerSize(containerRef);
@@ -67,6 +72,8 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
   const selection = useEditor((s) => s.selection);
   const tool = useEditor((s) => s.tool);
   const gridSize = useEditor((s) => s.gridSize);
+  const showGrid = useEditor((s) => s.showGrid);
+  const [pointerCell, setPointerCell] = useState<string | null>(null);
   const [view, setView] = useState<View | null>(null);
   const [lasso, setLasso] = useState<{ start: Point; end: Point; additive: boolean } | null>(null);
   const nodes = useRef(new Map<string, Konva.Node>());
@@ -226,10 +233,12 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
   }
 
   function onStageMove(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
-    if (!lasso) return;
     const stage = e.target.getStage();
     const p = stage ? worldPointer(stage) : null;
-    if (p) setLasso({ ...lasso, end: p });
+    if (!p) return;
+    const inside = p.x <= canvas.width && p.y <= canvas.height;
+    setPointerCell(inside ? cellName(p, gridSize * 2) : null);
+    if (lasso) setLasso({ ...lasso, end: p });
   }
 
   function onStageUp() {
@@ -294,12 +303,13 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
           onMouseUp={onStageUp}
           onTouchEnd={onStageUp}
           onWheel={onWheel}
+          onMouseLeave={() => setPointerCell(null)}
           onContextMenu={onContextMenu}
           style={{ cursor: tool === "pan" ? "grab" : "default" }}
         >
           <Layer>
             <Rect name="background" width={canvas.width} height={canvas.height} fill="#1e293b" stroke="#475569" />
-            {gridLines.map((l) => (
+            {(showGrid ? gridLines : []).map((l) => (
               <Line key={l.key} points={l.points} stroke="#334155" strokeWidth={1} listening={false} />
             ))}
           </Layer>
@@ -320,6 +330,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
                 table={t}
                 type={t.tableTypeId ? typeById.get(t.tableTypeId) : undefined}
                 selected={selected.has(t.key)}
+                groupColor={t.id ? groups?.get(t.id)?.color : undefined}
                 {...handlers}
                 draggable={canDrag && !t.isPinned}
               />
@@ -335,6 +346,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
             ) : null}
           </Layer>
         </Stage>
+        <CanvasRulers canvas={canvas} cellSize={gridSize * 2} view={current} size={size} position={pointerCell} />
         <div className="absolute bottom-3 right-3 flex gap-1 rounded-md bg-background/90 p-1 shadow">
           <Button size="icon" variant="ghost" aria-label="Uzaklaştır" onClick={() => zoomBy(1 / 1.2)}>
             <Minus className="size-4" />

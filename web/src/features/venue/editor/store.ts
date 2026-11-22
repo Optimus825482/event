@@ -1,7 +1,8 @@
 import { createStore } from "zustand/vanilla";
 import type { DecorElement, DecorKind } from "../schemas";
 import { decorItemKey, type ShapeOf } from "./collision";
-import { findFreeSpot, normalizeAngle, nextLabel, snap, snapPoint, GRID_SIZE, type Point } from "./geometry";
+import { findFreeSpot, normalizeAngle, nextLabel, snap, snapPoint, type Point } from "./geometry";
+import { DEFAULT_VIEW_SETTINGS, type ViewSettings } from "./view-chrome";
 import { emptyHistory, record, redo, undo } from "./history";
 import {
   applyMoves,
@@ -87,7 +88,7 @@ function toEditorTables(layout: InitialLayout): EditorTable[] {
   }));
 }
 
-export function createEditorStore(initial: InitialLayout) {
+export function createEditorStore(initial: InitialLayout, view: ViewSettings = DEFAULT_VIEW_SETTINGS) {
   return createStore<EditorState & EditorActions>()((set, get) => {
     /** Durumu değiştiren her işlem önce mevcut durumu geçmişe yazar. */
     const change = (next: Partial<Snapshot> & Partial<Pick<EditorState, "selection">>) => {
@@ -119,8 +120,9 @@ export function createEditorStore(initial: InitialLayout) {
       selection: [],
       history: emptyHistory(),
       dirty: false,
-      snapEnabled: true,
-      gridSize: GRID_SIZE,
+      snapEnabled: view.snap,
+      showGrid: view.showGrid,
+      gridSize: view.gridSize,
       tool: "select",
       tableShapes: {},
 
@@ -307,6 +309,7 @@ export function createEditorStore(initial: InitialLayout) {
       },
 
       setSnap: (enabled) => set({ snapEnabled: enabled }),
+      setShowGrid: (show) => set({ showGrid: show }),
       setTool: (tool) => set({ tool }),
       setCanvasSize: (size) => {
         const s = get();

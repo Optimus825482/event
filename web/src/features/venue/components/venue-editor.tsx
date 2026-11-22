@@ -1,8 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDraftTime } from "../editor/draft";
+import { groupsByTable, type TableGroupInfo } from "../editor/groups";
+import { DEFAULT_VIEW_SETTINGS, type ViewSettings } from "../editor/view-chrome";
 import type { Point } from "../editor/geometry";
 import { createEditorStore, isLayoutEmpty, type InitialLayout } from "../editor/store";
 import type { TableShape } from "../schemas";
@@ -17,6 +19,7 @@ import { PropertiesPanel } from "./properties-panel";
 import { TemplateDialog, type TemplateOption } from "./template-dialog";
 import { SpacingDialog } from "./spacing-dialog";
 import { useEditorShortcuts } from "./use-editor-shortcuts";
+import { useFullscreen } from "./use-fullscreen";
 import { useLayoutDraft } from "./use-layout-draft";
 
 const Loading = () => (
@@ -38,6 +41,10 @@ export type VenueEditorProps = {
   templates: TemplateOption[];
   canEdit: boolean;
   canSaveTemplate: boolean;
+  /** Ekip masa grupları (planda halka); verilmezse gösterilmez. */
+  tableGroups?: readonly TableGroupInfo[];
+  /** Izgara boyutu / yapışma / görünürlük varsayılanları (sistem ayarları). */
+  viewSettings?: ViewSettings;
 };
 
 function toInitial(result: Pick<WriteLayoutResult, "tables" | "decor" | "lockedTableIds">): InitialLayout {
@@ -74,7 +81,7 @@ function groupTableErrors(fieldErrors: Record<string, string[]>, keys: readonly 
 }
 
 export function VenueEditor(props: VenueEditorProps) {
-  const [store] = useState(() => createEditorStore(props.initial));
+  const [store] = useState(() => createEditorStore(props.initial, props.viewSettings ?? DEFAULT_VIEW_SETTINGS));
   return (
     <EditorStoreContext.Provider value={store}>
       <EditorShell {...props} />
@@ -82,7 +89,7 @@ export function VenueEditor(props: VenueEditorProps) {
   );
 }
 
-function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveTemplate }: VenueEditorProps) {
+function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveTemplate, tableGroups }: VenueEditorProps) {
   const store = useEditorStore();
   const dirty = useEditor((s) => s.dirty);
   const layoutEmpty = useEditor(isLayoutEmpty);
@@ -93,6 +100,8 @@ function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveT
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [addRequest, setAddRequest] = useState<(AddRequest & { id: number }) | null>(null);
   const [spacingOpen, setSpacingOpen] = useState(false);
+  const { fullscreen, toggle: toggleFullscreen } = useFullscreen();
+  const groups = useMemo(() => groupsByTable(tableGroups ?? []), [tableGroups]);
   const draft = useLayoutDraft({ store, eventId, userId, enabled: canEdit });
   const clearDraft = draft.clear;
   const notify: Notify = useCallback((kind, text) => setMessage({ kind, text }), []);
@@ -143,11 +152,19 @@ function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveT
   }, [dirty]);
 
   return (
-    <div className="flex h-[calc(100dvh-9rem)] min-h-[480px] flex-col overflow-hidden rounded-md border border-border">
+    <div
+      className={
+        fullscreen
+          ? "fixed inset-0 z-50 flex h-screen flex-col overflow-hidden bg-background"
+          : "flex h-[calc(100dvh-9rem)] min-h-[480px] flex-col overflow-hidden rounded-md border border-border"
+      }
+    >
       <EditorToolbar
         readOnly={!canEdit}
         saving={saving}
         show3d={show3d}
+        fullscreen={fullscreen}
+        onToggleFullscreen={toggleFullscreen}
         onToggle3d={() => setShow3d((v) => !v)}
         onSave={() => void save()}
         onOpenTemplates={() => setTemplatesOpen(true)}
@@ -180,6 +197,7 @@ function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveT
               notify={notify}
               onOpenAdd={openAdd}
               onOpenSpacing={() => setSpacingOpen(true)}
+              groups={groups}
             />
           )}
           {draft.lastSavedAt ? (

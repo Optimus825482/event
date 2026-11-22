@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Shape, Stage } from "react-konva";
 import { Button } from "@/components/ui/button";
 import { zoomAround } from "../editor/geometry";
+import { distinctGroups, safeGroupColor } from "../editor/groups";
 import { PLAN_STATUS_COLORS, PLAN_STATUS_LABELS, PLAN_STATUS_ORDER, statusColor } from "../plan-status";
 import { centerOn, fitView, isZoomAtLimit, searchTables, zoomBy, type Size, type View } from "../plan-view-math";
 import { DecorNode, type ItemHandlers } from "./canvas-items";
@@ -56,6 +57,19 @@ function drawGrid(canvas: Size) {
   };
 }
 
+function GroupLegend({ groups }: { groups: ReadonlyArray<{ name: string; color: string }> }) {
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300" aria-label="Grup açıklaması">
+      {groups.map((g) => (
+        <li key={`${g.name}|${g.color}`} className="flex items-center gap-1.5">
+          <span aria-hidden className="inline-block size-3 rounded-full border-2" style={{ borderColor: safeGroupColor(g.color) }} />
+          {g.name}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Legend({ showSelected }: { showSelected: boolean }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300" aria-label="Renk açıklaması">
@@ -93,6 +107,10 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
   const matchIds = useMemo(() => new Set(matches.map((t) => t.id)), [matches]);
   const hovered = hoverId ? plan.tables.find((t) => t.id === hoverId) : undefined;
   const limits = isZoomAtLimit(current);
+  const groups = useMemo(
+    () => distinctGroups(plan.tables.flatMap((t) => (t.group ? [t.group] : []))),
+    [plan.tables],
+  );
 
   const pick = useCallback(
     (id: string) => {
@@ -124,6 +142,7 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
         hovered.label,
         `${hovered.capacity} kişilik`,
         statuses ? PLAN_STATUS_LABELS[statuses[hovered.id] ?? "free"] : null,
+        hovered.group ? `Grup: ${hovered.group.name}` : null,
         disabled.has(hovered.id) ? "seçilemez" : null,
       ]
         .filter((part): part is string => part !== null)
@@ -245,7 +264,10 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
 
       {interactive ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {statuses ? <Legend showSelected={onSelect !== undefined} /> : <span />}
+          <div className="space-y-1">
+            {statuses ? <Legend showSelected={onSelect !== undefined} /> : null}
+            {groups.length > 0 ? <GroupLegend groups={groups} /> : null}
+          </div>
           <p className="min-h-4 text-xs text-slate-300" aria-live="polite">
             {caption}
           </p>

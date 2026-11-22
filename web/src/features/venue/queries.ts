@@ -4,10 +4,11 @@ import { can, authorize } from "@/features/auth/policy";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { DomainError } from "@/lib/action";
 import { isUuid } from "@/lib/identifiers";
-import { getFloorPlan } from "./plan-service";
+import { getFloorPlan, listTableGroupMembers } from "./plan-service";
 import { getVenueLayout } from "./service";
 import { listTableTypes } from "./table-types-service";
 import { listVenueTemplates } from "./templates-service";
+import { getEditorViewSettings } from "./view-settings-service";
 
 /** Yerleşim düzenleyicisi için her şey. Kimlik geçersizse ya da etkinlik görünmüyorsa 404. */
 export async function loadVenueEditor(eventId: string) {
@@ -18,6 +19,7 @@ export async function loadVenueEditor(eventId: string) {
     const layout = await getVenueLayout(db, actor, eventId);
     const tableTypes = await listTableTypes(db);
     const templates = can(actor, "venues", "view") ? await listVenueTemplates(db, actor) : [];
+    const [tableGroups, viewSettings] = await Promise.all([listTableGroupMembers(db, eventId), getEditorViewSettings(db)]);
     return {
       layout,
       // Pasif tipler yalnızca zaten kullanılıyorsa listelenir (mevcut masaların rengi kaybolmasın).
@@ -25,6 +27,9 @@ export async function loadVenueEditor(eventId: string) {
         .filter((t) => t.isActive || layout.tables.some((table) => table.tableTypeId === t.id))
         .map((t) => ({ id: t.id, name: t.name, color: t.color, shape: t.shape, capacity: t.capacity, isActive: t.isActive })),
       templates: templates.map((t) => ({ id: t.id, name: t.name, tableCount: t.tableCount, isPublic: t.isPublic })),
+      /** Ekip masa grupları (planda halka olarak gösterilir) ve ızgara ayarları. */
+      tableGroups,
+      viewSettings,
       canEdit: can(actor, "events", "edit") && layout.editable,
       canSaveTemplate: can(actor, "venues", "create"),
       /** Yerleşim taslağı anahtarı için (paylaşılan cihazda kullanıcılar birbirinin taslağını görmez). */

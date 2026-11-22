@@ -5,7 +5,10 @@ import {
   Copy,
   Grid3x3,
   Hand,
+  Maximize2,
+  Minimize2,
   LayoutTemplate,
+  Magnet,
   MousePointer2,
   Plus,
   Presentation,
@@ -29,6 +32,8 @@ type Props = {
   readOnly: boolean;
   saving: boolean;
   show3d: boolean;
+  fullscreen: boolean;
+  onToggleFullscreen: () => void;
   onToggle3d: () => void;
   onSave: () => void;
   onOpenTemplates: () => void;
@@ -71,10 +76,11 @@ function ToolButton({
 const Divider = () => <span className="mx-1 h-6 w-px bg-border" aria-hidden />;
 
 export function EditorToolbar(props: Props) {
-  const { readOnly, saving, show3d, onToggle3d, onSave, onOpenTemplates, onBlocked } = props;
+  const { readOnly, saving, show3d, fullscreen, onToggleFullscreen, onToggle3d, onSave, onOpenTemplates, onBlocked } = props;
   const store = useEditorStore();
   const tool = useEditor((s) => s.tool);
   const snapEnabled = useEditor((s) => s.snapEnabled);
+  const showGrid = useEditor((s) => s.showGrid);
   const canUndo = useEditor((s) => s.history.past.length > 0);
   const canRedo = useEditor((s) => s.history.future.length > 0);
   const hasSelection = useEditor((s) => s.selection.length > 0);
@@ -90,6 +96,9 @@ export function EditorToolbar(props: Props) {
         <Hand className="size-4" />
       </ToolButton>
       <ToolButton label="Izgaraya hizala" active={snapEnabled} onClick={() => s().setSnap(!snapEnabled)}>
+        <Magnet className="size-4" />
+      </ToolButton>
+      <ToolButton label="Izgarayı göster" active={showGrid} onClick={() => s().setShowGrid(!showGrid)}>
         <Grid3x3 className="size-4" />
       </ToolButton>
       {readOnly ? null : (
@@ -142,6 +151,9 @@ export function EditorToolbar(props: Props) {
       <ToolButton label="3B önizleme" active={show3d} onClick={onToggle3d}>
         <Box className="size-4" />
         <span className="hidden sm:inline">3B</span>
+      </ToolButton>
+      <ToolButton label={fullscreen ? "Tam ekrandan çık" : "Tam ekran"} active={fullscreen} onClick={onToggleFullscreen}>
+        {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
       </ToolButton>
       <ToolButton label="Şablonlar" onClick={onOpenTemplates}>
         <LayoutTemplate className="size-4" />

@@ -5,7 +5,9 @@ import { memo } from "react";
 import { Circle, Group, Rect, Text } from "react-konva";
 import { tableSize } from "../editor/geometry";
 import type { PlanTable } from "../plan-types";
+import { safeGroupColor } from "../editor/groups";
 import { LOCA_COLOR } from "./editor-context";
+import { GroupRing } from "./group-ring";
 
 export const SELECTED_STROKE = "#facc15";
 export const FOUND_STROKE = "#22d3ee";
@@ -58,6 +60,9 @@ export const PlanTableNode = memo(function PlanTableNode(p: PlanTableNodeProps) 
         setCursor(e, "");
       }}
     >
+      {table.group ? (
+        <GroupRing width={width} height={height} round={table.shape === "round"} color={safeGroupColor(table.group.color)} />
+      ) : null}
       {table.shape === "round" ? (
         <Circle radius={width / 2} {...common} />
       ) : (

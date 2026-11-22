@@ -17,7 +17,7 @@ function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-/** Klavye kısayolları: Sil, Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z), Ctrl+A, Ctrl+D, Ctrl+S, oklar, Esc. */
+/** Klavye kısayolları: V/L seç, H kaydır, Sil, Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z), Ctrl+A, Ctrl+D, Ctrl+S, oklar, Esc. */
 export function useEditorShortcuts({ store, enabled, onSave, onBlocked, notify }: Options): void {
   useEffect(() => {
     if (!enabled) return;
@@ -47,6 +47,13 @@ export function useEditorShortcuts({ store, enabled, onSave, onBlocked, notify }
         e.preventDefault();
         const { blocked } = s.deleteSelection();
         if (blocked.length > 0) onBlocked(blocked);
+      } else if (!mod && !e.altKey && key === "v") {
+        s.setTool("select");
+      } else if (!mod && !e.altKey && key === "l") {
+        // Seçim aracı zaten sürükleyerek çerçeve seçimi yapar; L onu etkinleştirir.
+        s.setTool("select");
+      } else if (!mod && !e.altKey && key === "h") {
+        s.setTool("pan");
       } else if (e.key === "Escape") {
         s.clearSelection();
       } else if (e.key.startsWith("Arrow") && s.selection.length > 0) {

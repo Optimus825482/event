@@ -43,6 +43,8 @@ export type EditorState = Snapshot & {
   history: History<Snapshot>;
   dirty: boolean;
   snapEnabled: boolean;
+  /** Izgara çizgileri görünür mü (yalnızca görünüm; kayıtlı veriyi etkilemez). */
+  showGrid: boolean;
   gridSize: number;
   tool: Tool;
   /** Masa tipi kimliği → biçim (çakışma ve yerleşim hesapları için). */
@@ -81,6 +83,7 @@ export type EditorActions = {
   undo: () => void;
   redo: () => void;
   setSnap: (enabled: boolean) => void;
+  setShowGrid: (show: boolean) => void;
   setTool: (tool: Tool) => void;
   setCanvasSize: (size: { width: number; height: number }) => void;
   toSaveInput: () => { tables: TableInput[]; decor: Decor };
