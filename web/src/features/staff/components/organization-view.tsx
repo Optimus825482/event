@@ -23,6 +23,8 @@ import {
 import type { OrganizationCatalogs } from "../queries";
 import { CatalogManager, type CatalogRow, type FieldDef } from "./catalog-manager";
 
+const TRIGGER = "data-[state=active]:bg-amber-600 data-[state=active]:text-white";
+
 type Access = { canCreate: boolean; canEdit: boolean; canDelete: boolean };
 
 const SORT: FieldDef = { name: "sortOrder", label: "Sıra", type: "number" };
@@ -32,12 +34,12 @@ const DESCRIPTION: FieldDef = { name: "description", label: "Açıklama", type: 
 export function OrganizationView({ catalogs, access }: { catalogs: OrganizationCatalogs; access: Access }) {
   return (
     <Tabs defaultValue="departments" className="space-y-4">
-      <TabsList className="flex-wrap">
-        <TabsTrigger value="departments">Bölümler</TabsTrigger>
-        <TabsTrigger value="positions">Unvanlar</TabsTrigger>
-        <TabsTrigger value="locations">Görev yerleri</TabsTrigger>
-        <TabsTrigger value="shifts">Vardiyalar</TabsTrigger>
-        <TabsTrigger value="roles">Personel rolleri</TabsTrigger>
+      <TabsList className="h-auto flex-wrap border border-slate-700 bg-slate-800">
+        <TabsTrigger value="departments" className={TRIGGER}>Bölümler</TabsTrigger>
+        <TabsTrigger value="positions" className={TRIGGER}>Unvanlar</TabsTrigger>
+        <TabsTrigger value="locations" className={TRIGGER}>Görev yerleri</TabsTrigger>
+        <TabsTrigger value="shifts" className={TRIGGER}>Vardiyalar</TabsTrigger>
+        <TabsTrigger value="roles" className={TRIGGER}>Personel rolleri</TabsTrigger>
       </TabsList>
 
       <TabsContent value="departments">

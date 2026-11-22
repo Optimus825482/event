@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ActionResult } from "@/lib/action";
 import { Field, textOrNull, type FieldErrors } from "./field";
@@ -47,6 +48,7 @@ function readValues(fd: FormData, fields: FieldDef[], isActive: boolean) {
 export function CatalogManager(props: Props) {
   const { noun, items, fields, columns, canCreate, canEdit, canDelete } = props;
   const router = useRouter();
+  const toast = useToast();
   const [editing, setEditing] = useState<CatalogRow | "new" | null>(null);
   const [errors, setErrors] = useState<FieldErrors>();
   const [message, setMessage] = useState<string | null>(null);
@@ -72,8 +74,10 @@ export function CatalogManager(props: Props) {
       if (!result.ok) {
         setErrors(result.fieldErrors);
         setMessage(result.message);
+        toast.error(result.message);
         return;
       }
+      toast.success(current === "new" ? `${noun} eklendi` : `${noun} güncellendi`);
       open(null);
       router.refresh();
     });
@@ -87,8 +91,10 @@ export function CatalogManager(props: Props) {
       setToDelete(null);
       if (!result.ok) {
         setMessage(result.message);
+        toast.error(result.message);
         return;
       }
+      toast.success(`${noun} silindi`);
       setMessage(null);
       router.refresh();
     });

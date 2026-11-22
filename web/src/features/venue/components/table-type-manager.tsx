@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ActionResult } from "@/lib/action";
 import { createTableTypeAction, deleteTableTypeAction, updateTableTypeAction } from "../actions";
@@ -46,6 +47,7 @@ function Errors({ messages }: { messages: string[] | undefined }) {
 
 export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const ids = useId();
   const [editing, setEditing] = useState<TableTypeRowView | "new" | null>(null);
   const [deleting, setDeleting] = useState<TableTypeRowView | null>(null);
@@ -53,7 +55,7 @@ export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: 
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
-  async function run(task: () => Promise<ActionResult<unknown>>, after: () => void) {
+  async function run(task: () => Promise<ActionResult<unknown>>, after: () => void, successMessage: string) {
     setPending(true);
     setError(null);
     setFieldErrors({});
@@ -62,12 +64,15 @@ export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: 
       if (!res.ok) {
         setError(res.message);
         setFieldErrors(res.fieldErrors ?? {});
+        toast.error(res.message);
         return;
       }
+      toast.success(successMessage);
       after();
       router.refresh();
     } catch {
       setError("Beklenmeyen bir hata oluştu");
+      toast.error("Beklenmeyen bir hata oluştu");
     } finally {
       setPending(false);
     }
@@ -89,6 +94,7 @@ export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: 
     void run(
       () => (target && target !== "new" ? updateTableTypeAction({ id: target.id, ...values }) : createTableTypeAction(values)),
       () => setEditing(null),
+      target && target !== "new" ? "Masa tipi güncellendi" : "Masa tipi eklendi",
     );
   }
 
@@ -97,7 +103,7 @@ export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: 
   return (
     <div className="space-y-4">
       {canCreate ? (
-        <Button onClick={() => setEditing("new")} disabled={pending}>
+        <Button onClick={() => setEditing("new")} disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">
           Yeni masa tipi
         </Button>
       ) : null}
@@ -108,12 +114,13 @@ export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: 
       ) : null}
 
       {tableTypes.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
           Henüz masa tipi yok.
         </p>
       ) : (
+        <div className="overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-900/50">
             <TableRow>
               <TableHead>Ad</TableHead>
               <TableHead>Şekil</TableHead>
@@ -158,6 +165,7 @@ export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: 
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       <Dialog open={editing !== null} onOpenChange={(open) => (open ? null : setEditing(null))}>
@@ -232,7 +240,7 @@ export function TableTypeManager({ tableTypes, canCreate, canEdit, canDelete }: 
         loading={pending}
         onConfirm={() => {
           const target = deleting;
-          if (target) void run(() => deleteTableTypeAction({ id: target.id }), () => setDeleting(null));
+          if (target) void run(() => deleteTableTypeAction({ id: target.id }), () => setDeleting(null), "Masa tipi silindi");
         }}
       />
     </div>

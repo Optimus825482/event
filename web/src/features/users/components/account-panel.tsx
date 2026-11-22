@@ -1,43 +1,32 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { resetPasswordAction, setUserActiveAction } from "../actions";
-import { Field, FormStatus, toFormState, type FormState } from "./field";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
+import { setUserActiveAction } from "../actions";
+import { ResetPasswordForm } from "./reset-password-form";
 
 type Props = { userId: string; isActive: boolean; isSelf: boolean };
 
 /** Pasifleştirme/etkinleştirme ve parola sıfırlama. */
 export function AccountPanel({ userId, isActive, isSelf }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
-  const [activeState, setActiveState] = useState<FormState>(null);
-  const [passwordState, setPasswordState] = useState<FormState>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  function toggleActive() {
-    const next = !isActive;
-    if (!next && !window.confirm("Kullanıcı pasifleştirilecek ve tüm oturumları kapatılacak. Devam edilsin mi?")) {
-      return;
-    }
-    setActiveState(null);
+  function apply(next: boolean) {
     startTransition(async () => {
       const result = await setUserActiveAction({ id: userId, active: next });
-      setActiveState(toFormState(result, next ? "Kullanıcı etkinleştirildi" : "Kullanıcı pasifleştirildi"));
-      if (result.ok) router.refresh();
-    });
-  }
-
-  function onReset(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    setPasswordState(null);
-    startTransition(async () => {
-      const result = await resetPasswordAction({ id: userId, password: String(data.get("password") ?? "") });
-      setPasswordState(toFormState(result, "Parola sıfırlandı; kullanıcının açık oturumları kapatıldı"));
-      if (result.ok) form.reset();
+      setConfirming(false);
+      if (result.ok) {
+        toast.success(next ? "Kullanıcı etkinleştirildi" : "Kullanıcı pasifleştirildi");
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
     });
   }
 
@@ -48,27 +37,25 @@ export function AccountPanel({ userId, isActive, isSelf }: Props) {
           type="button"
           variant={isActive ? "destructive" : "default"}
           disabled={pending || (isSelf && isActive)}
-          onClick={toggleActive}
+          onClick={() => (isActive ? setConfirming(true) : apply(true))}
         >
           {isActive ? "Pasifleştir" : "Etkinleştir"}
         </Button>
         {isSelf && isActive ? (
           <span className="text-xs text-muted-foreground">Kendi hesabınızı pasifleştiremezsiniz</span>
         ) : null}
-        <FormStatus state={activeState} />
       </div>
-
-      <form onSubmit={onReset} className="flex flex-wrap items-end gap-3" noValidate>
-        <div className="w-full max-w-xs">
-          <Field id="new-password" label="Yeni parola" errors={passwordState?.fieldErrors?.password} hint="En az 12 karakter">
-            <Input id="new-password" name="password" type="password" autoComplete="new-password" required />
-          </Field>
-        </div>
-        <Button type="submit" variant="outline" disabled={pending}>
-          Parolayı sıfırla
-        </Button>
-        <FormStatus state={passwordState} />
-      </form>
+      <ResetPasswordForm userId={userId} />
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Kullanıcı pasifleştirilsin mi?"
+        description="Kullanıcı pasifleştirilecek ve tüm oturumları kapatılacak."
+        confirmText="Pasifleştir"
+        variant="destructive"
+        loading={pending}
+        onConfirm={() => apply(false)}
+      />
     </div>
   );
 }

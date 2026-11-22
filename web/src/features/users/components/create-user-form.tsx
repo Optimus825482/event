@@ -4,13 +4,17 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { ROLE_LABELS } from "@/components/layout/role-labels";
 import { ROLES } from "@/features/auth/roles";
 import { createUserAction } from "../actions";
 import { Field, FormStatus, SELECT_CLASS, toFormState, type FormState } from "./field";
 
-export function CreateUserForm() {
+const CREATED_MESSAGE = "Kullanıcı oluşturuldu";
+
+export function CreateUserForm({ onDone }: { onDone?: (message: string) => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(null);
 
@@ -27,10 +31,14 @@ export function CreateUserForm() {
         role: String(data.get("role") ?? ""),
         password: String(data.get("password") ?? ""),
       });
-      setState(toFormState(result, "Kullanıcı oluşturuldu"));
+      setState(toFormState(result, CREATED_MESSAGE));
       if (result.ok) {
+        toast.success(CREATED_MESSAGE);
         form.reset();
         router.refresh();
+        onDone?.(CREATED_MESSAGE);
+      } else {
+        toast.error(result.message);
       }
     });
   }
@@ -67,10 +75,10 @@ export function CreateUserForm() {
         />
       </Field>
       <div className="flex items-end gap-3 sm:col-span-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">
           {pending ? "Oluşturuluyor…" : "Kullanıcı oluştur"}
         </Button>
-        <FormStatus state={state} />
+        {state && !state.ok ? <FormStatus state={state} /> : null}
       </div>
     </form>
   );

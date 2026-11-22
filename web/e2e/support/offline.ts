@@ -99,6 +99,7 @@ export async function signOut(page: Page): Promise<void> {
 export async function createDoorUser(page: Page, username: string): Promise<string> {
   const password = `Kp-${randomBytes(12).toString("base64url")}`;
   await page.goto("/admin/users");
+  await page.getByRole("button", { name: "Yeni kullanıcı" }).click();
   await page.getByLabel("Kullanıcı adı", { exact: true }).fill(username);
   await page.getByLabel("Ad soyad").fill("Kapı Görevlisi");
   await page.getByLabel("Rol", { exact: true }).selectOption({ label: "Kontrolör" });

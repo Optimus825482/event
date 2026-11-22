@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
+import { Settings } from "lucide-react";
 import { notFound } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
 import { db } from "@/db/client";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
-import { LogoForm } from "@/features/settings/components/logo-form";
 import { SettingsForm } from "@/features/settings/components/settings-form";
 import { getSettings } from "@/features/settings/service";
 
@@ -16,22 +16,20 @@ export default async function SettingsPage() {
   const settings = await getSettings(db, actor);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <h1 className="text-2xl font-semibold">Sistem ayarları</h1>
+    <div className="mx-auto max-w-4xl">
+      <PageHeader
+        title="Sistem ayarları"
+        description="Firma, e-posta ve bildirim ayarlarını yönetin"
+        icon={
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
+            <Settings className="h-5 w-5" aria-hidden="true" />
+          </div>
+        }
+      />
       {can(actor, "settings", "edit") ? (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Logo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LogoForm logo={settings.logo} />
-            </CardContent>
-          </Card>
-          <SettingsForm settings={settings} />
-        </>
+        <SettingsForm settings={settings} />
       ) : (
-        <p className="text-sm text-muted-foreground">Ayarları düzenleme yetkiniz yok.</p>
+        <p className="text-sm text-slate-400">Ayarları düzenleme yetkiniz yok.</p>
       )}
     </div>
   );

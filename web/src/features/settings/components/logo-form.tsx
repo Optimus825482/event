@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { Field, FormStatus, toFormState, type FormState } from "@/features/users/components/field";
 import { uploadLogoAction } from "../actions";
 
 export function LogoForm({ logo }: { logo: string | null }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(null);
 
@@ -21,7 +23,9 @@ export function LogoForm({ logo }: { logo: string | null }) {
     startTransition(async () => {
       const result = await uploadLogoAction(data);
       setState(toFormState(result, "Logo güncellendi"));
+      if (!result.ok) toast.error(result.message);
       if (result.ok) {
+        toast.success("Logo güncellendi");
         form.reset();
         router.refresh();
       }

@@ -67,6 +67,12 @@ export function ProfileMenu({ username, roleLabel, isAdmin, modules, general, ac
             Ana Sayfa
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuItem asChild className={ITEM}>
+          <Link href="/profile">
+            <User aria-hidden="true" className="h-4 w-4" />
+            Profilim
+          </Link>
+        </DropdownMenuItem>
         {general.map((item) => (
           <DropdownMenuItem key={item.href} asChild className={ITEM}>
             <Link href={item.href}>

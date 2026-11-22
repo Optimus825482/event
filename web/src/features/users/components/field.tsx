@@ -42,7 +42,7 @@ export function Field({
 export function FormStatus({ state }: { state: FormState }) {
   if (!state) return null;
   return (
-    <p role={state.ok ? "status" : "alert"} className={state.ok ? "text-sm text-emerald-600" : "text-sm text-destructive"}>
+    <p role={state.ok ? "status" : "alert"} className={state.ok ? "text-sm text-emerald-400" : "text-sm text-destructive"}>
       {state.message}
     </p>
   );

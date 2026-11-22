@@ -13,6 +13,7 @@ test.describe("Yetkiler", () => {
     // Yönetici arayüzünden check-in yetkili bir "Kapı kontrolörü" oluşturulur.
     await page.goto("/admin/users");
     await expect(page.getByRole("heading", { name: "Kullanıcılar", level: 1 })).toBeVisible();
+    await page.getByRole("button", { name: "Yeni kullanıcı" }).click();
     await page.getByLabel("Kullanıcı adı", { exact: true }).fill(USERNAME);
     await page.getByLabel("Ad soyad").fill("Kapı Görevlisi");
     await page.getByLabel("Rol", { exact: true }).selectOption({ label: "Kontrolör" });
