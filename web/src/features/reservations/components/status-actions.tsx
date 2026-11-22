@@ -28,7 +28,7 @@ export function ReservationStatusActions({ id, status, canEdit, canOverrideBlack
   const size = compact ? "sm" : "default";
   const overrideBlacklist = isBlacklisted && canOverrideBlacklist;
   const confirm = () =>
-    run(changeReservationStatusAction, { id, status: "confirmed", overrideBlacklist }, () => router.refresh());
+    run(changeReservationStatusAction, { id, status: "confirmed", overrideBlacklist }, () => router.refresh(), "Rezervasyon onaylandı");
 
   return (
     <div className="space-y-1">
@@ -64,10 +64,15 @@ export function ReservationStatusActions({ id, status, canEdit, canOverrideBlack
         variant="destructive"
         loading={pending}
         onConfirm={() =>
-          run(cancelReservationAction, { id }, () => {
-            setConfirmCancel(false);
-            router.refresh();
-          })
+          run(
+            cancelReservationAction,
+            { id },
+            () => {
+              setConfirmCancel(false);
+              router.refresh();
+            },
+            "Rezervasyon iptal edildi",
+          )
         }
       />
     </div>

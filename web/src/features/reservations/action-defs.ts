@@ -1,13 +1,21 @@
 import type { z } from "zod";
 import type { ActionOptions } from "@/lib/action";
 import {
+  bulkCancelReservationsInput,
   changeReservationStatusInput,
   createReservationInput,
   eventIdInput,
   reservationIdInput,
   updateReservationInput,
 } from "./schemas";
-import { cancelReservation, changeReservationStatus, createReservation, markNoShows, updateReservation } from "./service";
+import {
+  cancelReservation,
+  cancelReservations,
+  changeReservationStatus,
+  createReservation,
+  markNoShows,
+  updateReservation,
+} from "./service";
 
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
   return options;
@@ -53,6 +61,12 @@ export const reservationActionDefs = {
       const row = await cancelReservation(db, actor, input);
       return { id: row.id, status: row.status };
     },
+  }),
+  bulkCancel: def({
+    module: "reservations",
+    verb: "edit",
+    input: bulkCancelReservationsInput,
+    handler: async ({ actor, input, db }) => cancelReservations(db, actor, input),
   }),
   markNoShows: def({
     module: "reservations",

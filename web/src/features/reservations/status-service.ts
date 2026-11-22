@@ -19,7 +19,12 @@ import {
   type ReservationRow,
 } from "./internal";
 import { RESERVATION_STATUS_LABELS } from "./labels";
-import type { ChangeReservationStatusInput, EventIdInput, ReservationIdInput } from "./schemas";
+import type {
+  BulkCancelReservationsInput,
+  ChangeReservationStatusInput,
+  EventIdInput,
+  ReservationIdInput,
+} from "./schemas";
 
 /**
  * Durum değişikliği (`canTransitionReservation`). Check-in (giriş ekranı, Task 16) ve gelmedi
@@ -87,6 +92,23 @@ export async function cancelReservation(
   input: ReservationIdInput,
 ): Promise<ReservationRow> {
   return changeReservationStatus(db, actor, { id: input.id, status: "cancelled" });
+}
+
+/**
+ * Toplu iptal: tek transaction içinde her rezervasyon tek tek `cancelReservation` yolundan geçer
+ * (aynı kilit sırası, sahiplik ve geçiş kuralları). Biri reddedilirse (ör. başkasının etkinliği,
+ * geçersiz geçiş) hiçbiri iptal edilmez. Kimlikler sıralanır; eşzamanlı toplu işlemler kilitlenmez.
+ */
+export async function cancelReservations(
+  db: Executor,
+  actor: Actor,
+  input: BulkCancelReservationsInput,
+): Promise<{ cancelled: number }> {
+  const ids = [...input.ids].sort();
+  return inTransaction(db, async (tx) => {
+    for (const id of ids) await cancelReservation(tx, actor, { id });
+    return { cancelled: ids.length };
+  });
 }
 
 /**

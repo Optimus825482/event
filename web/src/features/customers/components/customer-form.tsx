@@ -52,6 +52,7 @@ export function CustomerForm({ customer }: Props) {
           ...(vip === "" ? {} : { vipScore: Number(vip) }),
         },
         () => router.refresh(),
+        "Müşteri güncellendi",
       );
       return;
     }
@@ -68,6 +69,7 @@ export function CustomerForm({ customer }: Props) {
           .filter(Boolean),
       },
       (data) => router.push(`/customers/${data.id}`),
+      "Müşteri oluşturuldu",
     );
   }
 

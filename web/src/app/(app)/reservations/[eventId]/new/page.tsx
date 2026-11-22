@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { ArrowLeft, Ticket } from "lucide-react";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { can } from "@/features/auth/policy";
 import { ReservationForm } from "@/features/reservations/components/reservation-form";
@@ -21,14 +23,17 @@ export default async function NewReservationPage({ params, searchParams }: { par
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div className="space-y-1">
-        <Link href={`/reservations/${eventId}`} className="text-sm text-muted-foreground hover:underline">
+      <div className="space-y-3">
+        <Link href={`/reservations/${eventId}`} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white">
+          <ArrowLeft className="size-4" />
           {event.name}
         </Link>
-        <h1 className="text-2xl font-semibold">Yeni rezervasyon</h1>
-        <p className="text-sm text-muted-foreground">
-          {freeCount} / {tables.length} masa boş
-        </p>
+        <PageHeader
+          className="mb-0"
+          title="Yeni rezervasyon"
+          description={`${freeCount} / ${tables.length} masa boş`}
+          icon={<Ticket className="size-8 text-purple-400" />}
+        />
       </div>
 
       {!can(actor, "reservations", "create") ? (

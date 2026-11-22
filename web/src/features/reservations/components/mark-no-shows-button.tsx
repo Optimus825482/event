@@ -43,7 +43,7 @@ export function MarkNoShowsButton({ eventId, candidates }: { eventId: string; ca
             setOpen(false);
             setDone(data.updated);
             router.refresh();
-          })
+          }, "Gelmeyenler işaretlendi")
         }
       />
     </div>

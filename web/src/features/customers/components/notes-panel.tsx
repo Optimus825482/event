@@ -35,10 +35,15 @@ function NoteItem({ note, canEdit }: { note: NoteView; canEdit: boolean }) {
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    run(updateNoteAction, { id: note.id, content: draft }, () => {
-      setEditing(false);
-      router.refresh();
-    });
+    run(
+      updateNoteAction,
+      { id: note.id, content: draft },
+      () => {
+        setEditing(false);
+        router.refresh();
+      },
+      "Not güncellendi",
+    );
   }
 
   return (
@@ -74,7 +79,7 @@ function NoteItem({ note, canEdit }: { note: NoteView; canEdit: boolean }) {
             size="sm"
             variant="ghost"
             disabled={pending}
-            onClick={() => run(deleteNoteAction, { id: note.id }, () => router.refresh())}
+            onClick={() => run(deleteNoteAction, { id: note.id }, () => router.refresh(), "Not silindi")}
           >
             Sil
           </Button>
@@ -97,10 +102,15 @@ export function NotesPanel({ customerId, notes, canEdit }: Props) {
 
   function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    run(addNoteAction, { customerId, content, noteType }, () => {
-      setContent("");
-      router.refresh();
-    });
+    run(
+      addNoteAction,
+      { customerId, content, noteType },
+      () => {
+        setContent("");
+        router.refresh();
+      },
+      "Not eklendi",
+    );
   }
 
   return (

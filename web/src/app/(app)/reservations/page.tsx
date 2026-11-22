@@ -1,88 +1,129 @@
+import { Calendar, Clock, Search, Ticket, UserCheck } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import { EmptyState } from "@/components/layout/empty-state";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard } from "@/components/layout/stat-card";
 import { buttonVariants } from "@/components/ui/button";
-import { EVENT_STATUS_LABELS } from "@/features/events/labels";
-import { loadReservationEvents } from "@/features/reservations/queries";
+import { can } from "@/features/auth/policy";
+import { ReservationEventCard } from "@/features/reservations/components/event-card";
+import { ReservationsHero } from "@/features/reservations/components/reservations-hero";
+import { loadReservationDashboard } from "@/features/reservations/queries";
 
 export const metadata: Metadata = { title: "Rezervasyonlar | EventFlow" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+const first = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Europe/Istanbul",
-});
-
-function pageHref(page: number, search?: string): string {
-  const params = new URLSearchParams();
-  if (search) params.set("search", search);
-  params.set("page", String(page));
-  return `/reservations?${params.toString()}`;
-}
-
-export default async function ReservationEventsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function ReservationsDashboardPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const sp = await searchParams;
-  const search = first(sp.search);
-  const list = await loadReservationEvents({ search, page: first(sp.page) });
-  const totalPages = Math.max(1, Math.ceil(list.total / list.pageSize));
+  const { actor, search, items, todayCount } = await loadReservationDashboard({
+    search: first(sp.search),
+  });
+  const next = items[0];
+  const others = items.slice(1);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">Rezervasyonlar</h1>
-        <p className="text-sm text-muted-foreground">Rezervasyonlarını yönetmek için bir etkinlik seçin.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6 pb-8 md:space-y-8">
+      <PageHeader
+        title="Rezervasyonlar"
+        description="Rezervasyonlarını yönetmek için bir etkinlik seçin."
+        icon={<Ticket className="size-8 text-purple-400" />}
+      />
 
-      <form className="flex flex-wrap gap-2" role="search">
-        <input
-          name="search"
-          defaultValue={search ?? ""}
-          placeholder="Etkinlik ara"
-          aria-label="Etkinlik ara"
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+      {next && !search ? (
+        <ReservationsHero
+          event={next}
+          canCheckIn={can(actor, "check_in", "view")}
         />
-        <button type="submit" className={buttonVariants({ variant: "outline" })}>
-          Ara
-        </button>
-      </form>
-
-      {list.items.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          Etkinlik bulunamadı.
-        </p>
-      ) : (
-        <ul className="divide-y divide-border rounded-md border border-border">
-          {list.items.map((event) => (
-            <li key={event.id}>
-              <Link
-                href={`/reservations/${event.id}`}
-                className="flex flex-wrap items-center justify-between gap-2 p-4 hover:bg-accent"
-              >
-                <div>
-                  <p className="font-medium">{event.name}</p>
-                  <p className="text-sm text-muted-foreground">{dateFormat.format(event.startsAt)}</p>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="text-muted-foreground">{event.reservationCount} rezervasyon</span>
-                  <span className="rounded-full border border-border px-2 py-0.5">{EVENT_STATUS_LABELS[event.status]}</span>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      ) : search ? null : (
+        <EmptyState
+          icon={<Calendar />}
+          title="Yaklaşan etkinlik bulunmuyor"
+          description="Yayınlanan etkinlikler burada görünür."
+        />
       )}
 
-      {totalPages > 1 ? (
-        <nav className="flex items-center justify-between text-sm" aria-label="Sayfalar">
-          {list.page > 1 ? <Link href={pageHref(list.page - 1, search)}>Önceki</Link> : <span />}
-          <span>
-            {list.page} / {totalPages}
-          </span>
-          {list.page < totalPages ? <Link href={pageHref(list.page + 1, search)}>Sonraki</Link> : <span />}
-        </nav>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <StatCard
+          tone="purple"
+          icon={<Calendar className="size-5" />}
+          value={items.length}
+          label="Yaklaşan Etkinlik"
+        />
+        <StatCard
+          tone="amber"
+          icon={<Clock className="size-5" />}
+          value={todayCount}
+          label="Bugün"
+        />
+        <StatCard
+          tone="emerald"
+          icon={<UserCheck className="size-5" />}
+          value={next?.checkedInCount ?? 0}
+          label="Check-in"
+          className="col-span-2 md:col-span-1"
+        />
+      </div>
+
+      {items.length > 1 || search ? (
+        <section className="space-y-4" aria-labelledby="all-events">
+          <div className="flex items-center justify-between px-1">
+            <h2
+              id="all-events"
+              className="text-base font-semibold tracking-wide text-white md:text-lg"
+            >
+              Tüm Yaklaşan Etkinlikler
+            </h2>
+            <span className="rounded-full border border-purple-500/30 px-3 py-1 text-sm text-purple-300">
+              {items.length}
+            </span>
+          </div>
+
+          <form className="flex flex-wrap gap-2" role="search">
+            <div className="relative min-w-64 flex-1">
+              <Search
+                className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-500"
+                aria-hidden
+              />
+              <input
+                name="search"
+                defaultValue={search ?? ""}
+                placeholder="Etkinlik ara..."
+                aria-label="Etkinlik ara"
+                className="h-12 w-full rounded-2xl border border-slate-700/50 bg-slate-800/50 pl-12 pr-4 text-base text-white placeholder:text-slate-500 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+              />
+            </div>
+            <button
+              type="submit"
+              className={buttonVariants({
+                variant: "outline",
+                className: "h-12",
+              })}
+            >
+              Ara
+            </button>
+          </form>
+
+          {items.length === 0 ? (
+            <EmptyState
+              title={
+                search ? "Etkinlik bulunamadı" : "Yaklaşan etkinlik bulunmuyor"
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {(search ? items : others).map((event) => (
+                <ReservationEventCard key={event.id} event={event} />
+              ))}
+            </div>
+          )}
+        </section>
       ) : null}
     </div>
   );

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { db } from "@/db/client";
 import { can } from "@/features/auth/policy";
 import { requirePolicyActor } from "@/features/auth/permissions";
+import { CustomerSummary } from "@/features/customers/components/customer-summary";
 import { CustomerControls } from "@/features/customers/components/customer-controls";
 import { CustomerForm } from "@/features/customers/components/customer-form";
 import { NotesPanel } from "@/features/customers/components/notes-panel";
@@ -23,6 +24,8 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 // Sunucu bileşeni kapsayıcının saat dilimini (UTC) kullanırdı; gece yarısına yakın etkinlikler önceki günü gösterirdi.
+const CARD = "space-y-3 rounded-2xl border border-slate-700 bg-slate-800/50 p-5";
+
 const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -41,20 +44,23 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
-      <div className="space-y-1">
-        <Link href="/customers" className="text-sm text-muted-foreground hover:underline">
+      <div className="space-y-3">
+        <Link href="/customers" className="text-sm text-slate-400 hover:text-white">
           ← Müşteriler
         </Link>
-        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
-          {customer.fullName}
-          {customer.isBlacklisted ? <Badge variant="destructive">Kara liste</Badge> : null}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {customer.totalReservations} rezervasyon, {customer.totalAttendedEvents} katılım, {customer.noShowCount} gelmedi
-        </p>
+        <CustomerSummary
+          fullName={customer.fullName}
+          vipScore={customer.vipScore}
+          isBlacklisted={customer.isBlacklisted}
+          totalReservations={customer.totalReservations}
+          totalAttendedEvents={customer.totalAttendedEvents}
+          noShowCount={customer.noShowCount}
+          lastEventAt={customer.lastEventAt}
+          tags={detail.tags}
+        />
       </div>
 
-      <section aria-labelledby="info" className="space-y-3">
+      <section aria-labelledby="info" className={CARD}>
         <h2 id="info" className="text-lg font-medium">
           Bilgiler
         </h2>
@@ -85,14 +91,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         />
       </section>
 
-      <section aria-labelledby="tags" className="space-y-3">
+      <section aria-labelledby="tags" className={CARD}>
         <h2 id="tags" className="text-lg font-medium">
           Etiketler
         </h2>
         <TagsEditor customerId={customer.id} tags={detail.tags} canEdit={canEdit} />
       </section>
 
-      <section id="notes" aria-labelledby="notes-title" className="space-y-3">
+      <section id="notes" aria-labelledby="notes-title" className={CARD}>
         <h2 id="notes-title" className="text-lg font-medium">
           Misafir notları
         </h2>
@@ -103,14 +109,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         />
       </section>
 
-      <section aria-labelledby="history" className="space-y-3">
+      <section aria-labelledby="history" className={CARD}>
         <h2 id="history" className="text-lg font-medium">
           Rezervasyon geçmişi
         </h2>
         {detail.reservations.length === 0 ? (
           <p className="text-sm text-muted-foreground">Rezervasyon yok.</p>
         ) : (
-          <ul className="divide-y divide-border rounded-(--radius) border border-border text-sm">
+          <ul className="divide-y divide-slate-700 rounded-xl border border-slate-700 text-sm">
             {detail.reservations.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
                 <span className="font-medium">{r.eventName}</span>

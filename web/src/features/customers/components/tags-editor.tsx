@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { addTagAction, removeTagAction } from "../actions";
+import { tagStyle } from "../vip";
 import { useRunAction } from "./use-run-action";
 
 type Props = { customerId: string; tags: string[]; canEdit: boolean };
@@ -18,10 +19,15 @@ export function TagsEditor({ customerId, tags, canEdit }: Props) {
   function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (draft.trim() === "") return;
-    run(addTagAction, { customerId, tag: draft }, () => {
-      setDraft("");
-      router.refresh();
-    });
+    run(
+      addTagAction,
+      { customerId, tag: draft },
+      () => {
+        setDraft("");
+        router.refresh();
+      },
+      "Etiket eklendi",
+    );
   }
 
   const tagErrors = failure?.fieldErrors.tag;
@@ -34,7 +40,7 @@ export function TagsEditor({ customerId, tags, canEdit }: Props) {
         <ul className="flex flex-wrap gap-2">
           {tags.map((tag) => (
             <li key={tag}>
-              <Badge variant="secondary" className="gap-1">
+              <span className={cn("inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium", tagStyle(tag).className)}>
                 {tag}
                 {canEdit ? (
                   <button
@@ -42,12 +48,12 @@ export function TagsEditor({ customerId, tags, canEdit }: Props) {
                     aria-label={`${tag} etiketini kaldır`}
                     disabled={pending}
                     className="ml-1 rounded-sm px-1 hover:bg-background/60"
-                    onClick={() => run(removeTagAction, { customerId, tag }, () => router.refresh())}
+                    onClick={() => run(removeTagAction, { customerId, tag }, () => router.refresh(), "Etiket kaldırıldı")}
                   >
                     ×
                   </button>
                 ) : null}
-              </Badge>
+              </span>
             </li>
           ))}
         </ul>

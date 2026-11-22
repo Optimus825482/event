@@ -71,6 +71,16 @@ export type ChangeReservationStatusInput = z.infer<typeof changeReservationStatu
 export const reservationIdInput = z.object({ id });
 export type ReservationIdInput = z.infer<typeof reservationIdInput>;
 
+/** Toplu iptal: en fazla 200 rezervasyon; tekrar eden kimlikler tek sayılır. */
+export const bulkCancelReservationsInput = z.object({
+  ids: z
+    .array(id)
+    .min(1, "En az bir rezervasyon seçin")
+    .max(200, "Tek seferde en fazla 200 rezervasyon iptal edilebilir")
+    .transform((list) => [...new Set(list)]),
+});
+export type BulkCancelReservationsInput = z.infer<typeof bulkCancelReservationsInput>;
+
 export const eventIdInput = z.object({ eventId: id });
 export type EventIdInput = z.infer<typeof eventIdInput>;
 

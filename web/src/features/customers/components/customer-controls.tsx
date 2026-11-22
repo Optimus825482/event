@@ -24,12 +24,17 @@ export function CustomerControls({ customerId, isBlacklisted, canEdit, canDelete
 
   function onConfirm() {
     if (confirm === "blacklist") {
-      run(setBlacklistAction, { id: customerId, isBlacklisted: !isBlacklisted }, () => {
-        setConfirm(null);
-        router.refresh();
-      });
+      run(
+        setBlacklistAction,
+        { id: customerId, isBlacklisted: !isBlacklisted },
+        () => {
+          setConfirm(null);
+          router.refresh();
+        },
+        isBlacklisted ? "Müşteri kara listeden çıkarıldı" : "Müşteri kara listeye alındı",
+      );
     } else if (confirm === "delete") {
-      run(deleteCustomerAction, { id: customerId }, () => router.push("/customers"));
+      run(deleteCustomerAction, { id: customerId }, () => router.push("/customers"), "Müşteri silindi");
     }
   }
 

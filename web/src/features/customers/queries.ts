@@ -3,6 +3,7 @@ import type { Db, Tx } from "@/db/client";
 import { customers, customerTags, events, guestNotes, reservations, users } from "@/db/schema";
 import { authorize, type PolicyActor } from "@/features/auth/policy";
 import { searchCustomersInput, type SearchCustomersInput } from "./schemas";
+import { VIP_SCORE_THRESHOLD } from "./vip";
 import { escapeLike } from "@/lib/identifiers";
 
 type Executor = Db | Tx;
@@ -121,3 +122,22 @@ export async function getCustomerDetail(db: Executor, actor: PolicyActor, id: st
 }
 
 export type CustomerDetail = NonNullable<Awaited<ReturnType<typeof getCustomerDetail>>>;
+
+/**
+ * CRM/VIP analizi başlığı: tüm kayıtlar üzerinden toplam, VIP (puan eşiği ya da "VIP" etiketi),
+ * kara liste ve toplam katılım. `searchCustomers` ile aynı görünürlük (`customers:view`).
+ */
+export async function getCustomerStats(db: Executor, actor: PolicyActor) {
+  authorize(actor, "customers", "view");
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      vip: sql<number>`(count(*) filter (where ${customers.vipScore} >= ${VIP_SCORE_THRESHOLD} or exists (select 1 from customer_tags t where t.customer_id = "customers"."id" and lower(t.tag) = 'vip')))::int`,
+      blacklisted: sql<number>`(count(*) filter (where ${customers.isBlacklisted}))::int`,
+      attended: sql<number>`coalesce(sum(${customers.totalAttendedEvents}), 0)::int`,
+    })
+    .from(customers);
+  return { total: row?.total ?? 0, vip: row?.vip ?? 0, blacklisted: row?.blacklisted ?? 0, attended: row?.attended ?? 0 };
+}
+
+export type CustomerStats = Awaited<ReturnType<typeof getCustomerStats>>;

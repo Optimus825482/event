@@ -53,6 +53,7 @@ export function ReservationEditForm({ reservation, tables }: Props) {
         setSaved(true);
         router.refresh();
       },
+      "Rezervasyon güncellendi",
     );
   }
 

@@ -26,7 +26,7 @@ import { signQrToken } from "./qr-token";
 import type { CreateReservationInput, UpdateReservationInput } from "./schemas";
 
 export { availableTables, lookupReservationByQr, type AvailableTable, type QrLookup } from "./read-service";
-export { cancelReservation, changeReservationStatus, markNoShows } from "./status-service";
+export { cancelReservation, cancelReservations, changeReservationStatus, markNoShows } from "./status-service";
 export type { ReservationRow } from "./internal";
 
 /**

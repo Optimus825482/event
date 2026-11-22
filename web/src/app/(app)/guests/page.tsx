@@ -1,8 +1,11 @@
+import { UserRound } from "lucide-react";
 import type { Metadata } from "next";
+import { PageHeader } from "@/components/layout/page-header";
 import { db } from "@/db/client";
 import { can } from "@/features/auth/policy";
 import { requirePolicyActor } from "@/features/auth/permissions";
-import { CustomerList, SearchForm } from "@/features/customers/components/customer-list";
+import { SearchForm } from "@/features/customers/components/customer-list";
+import { GuestList } from "@/features/customers/components/guest-list";
 import { searchCustomers } from "@/features/customers/queries";
 
 export const metadata: Metadata = { title: "Misafirler | EventFlow" };
@@ -13,12 +16,16 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 
 /**
  * Misafir listesi: her rezervasyon bir müşteriye bağlı olduğundan misafir = müşteri.
- * Not sayısı görünür; notlar müşteri sayfasında yönetilir.
+ * Notlar "Yeni Not" penceresinden eklenir; geçmiş notlar müşteri sayfasında yönetilir.
  */
 export default async function GuestsPage({ searchParams }: { searchParams: SearchParams }) {
   const actor = await requirePolicyActor();
   if (!can(actor, "customers", "view")) {
-    return <p className="text-sm text-muted-foreground">Bu sayfaya erişim yetkiniz yok.</p>;
+    return (
+      <p role="alert" className="text-sm text-muted-foreground">
+        Bu sayfaya erişim yetkiniz yok.
+      </p>
+    );
   }
 
   const params = await searchParams;
@@ -29,14 +36,13 @@ export default async function GuestsPage({ searchParams }: { searchParams: Searc
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Misafirler</h1>
-        <p className="text-sm text-muted-foreground">
-          Misafir notları için bir kaydı açın; etkinlik öncesi, sırası ve sonrası notları orada tutulur.
-        </p>
-      </div>
+      <PageHeader
+        title="Misafirler"
+        description="Etkinlik öncesi, sırası ve sonrası notları misafir kartından ekleyin."
+        icon={<UserRound className="size-8 text-purple-400" />}
+      />
       <SearchForm basePath="/guests" q={q} />
-      <CustomerList list={list} basePath="/guests" q={q} showReservations={false} />
+      <GuestList list={list} q={q} canAddNote={can(actor, "customers", "edit")} />
     </div>
   );
 }

@@ -1,12 +1,12 @@
-import { and, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, ne, or, sql, type SQL } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db as defaultDb } from "@/db/client";
 import { customers, eventTables, events, reservations } from "@/db/schema";
 import { RESERVATION_STATUSES, type ReservationStatus } from "@/domain/reservation-status";
 import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
 import { authorize, can } from "@/features/auth/policy";
+import { listRecipients } from "@/features/invitations/event-invitation";
 import { searchCustomers } from "@/features/customers/queries";
-import { listEvents } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { escapeLike, isUuid } from "@/lib/identifiers";
 import { canAccessEvent, MSG, type Executor } from "./internal";
@@ -62,6 +62,7 @@ export async function listReservations(db: Executor, actor: ActorWithPermissions
         guestCount: reservations.guestCount,
         guestName: reservations.guestName,
         guestPhone: reservations.guestPhone,
+        guestEmail: reservations.guestEmail,
         specialRequests: reservations.specialRequests,
         tableId: reservations.tableId,
         tableLabel: eventTables.label,
@@ -139,16 +140,6 @@ function rethrowNotFound(error: unknown): never {
 
 // --- Sunucu Bileşenleri için yükleyiciler (oturumdaki kullanıcıyla) ---
 
-export async function loadReservationEvents(raw: { search?: string; page?: string }) {
-  const actor = await requirePolicyActor();
-  authorize(actor, "reservations", "view");
-  const page = Number(raw.page);
-  return listEvents(defaultDb, actor, {
-    search: raw.search?.trim() || undefined,
-    page: Number.isInteger(page) && page > 0 ? page : 1,
-  });
-}
-
 export async function loadReservationList(eventId: string, raw: Omit<ListReservationsInput, "eventId">) {
   const actor = await requirePolicyActor();
   authorize(actor, "reservations", "view");
@@ -196,4 +187,51 @@ export async function loadReservationMap(eventId: string) {
   } catch (error) {
     return rethrowNotFound(error);
   }
+}
+
+/** Türkiye saatiyle bugünün başlangıcı (Türkiye yıl boyu UTC+3). */
+function istanbulDayStart(now: Date): Date {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(now);
+  return new Date(`${day}T00:00:00+03:00`);
+}
+
+/**
+ * Rezervasyon ana ekranı: bugünden itibaren (iptal edilmemiş) yaklaşan etkinlikler, en yakın önce.
+ * Organizatör yalnızca kendi etkinliklerini görür; ilk etkinlik hero kartında gösterilir.
+ */
+export async function loadReservationDashboard(raw: { search?: string }) {
+  const actor = await requirePolicyActor();
+  authorize(actor, "reservations", "view");
+  const search = raw.search?.trim() || undefined;
+  const dayStart = istanbulDayStart(new Date());
+
+  const conditions: SQL[] = [gte(events.startsAt, dayStart), ne(events.status, "cancelled")];
+  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
+  if (search) conditions.push(ilike(events.name, `%${escapeLike(search)}%`));
+
+  const items = await defaultDb
+    .select({
+      id: events.id,
+      name: events.name,
+      status: events.status,
+      startsAt: events.startsAt,
+      reservationCount: sql<number>`(select count(*)::int from ${reservations} where ${reservations.eventId} = "events"."id")`,
+      checkedInCount: sql<number>`(select count(*)::int from ${reservations} where ${reservations.eventId} = "events"."id" and ${reservations.status} = 'checked_in')`,
+      tableCount: sql<number>`(select count(*)::int from ${eventTables} where ${eventTables.eventId} = "events"."id")`,
+      capacity: sql<number>`(select coalesce(sum(${eventTables.capacity}), 0)::int from ${eventTables} where ${eventTables.eventId} = "events"."id")`,
+    })
+    .from(events)
+    .where(and(...conditions))
+    .orderBy(asc(events.startsAt), asc(events.id))
+    .limit(48);
+
+  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  const todayCount = items.filter((e) => e.startsAt < dayEnd).length;
+  return { actor, search, items, todayCount };
+}
+
+/** E-davetiye penceresi için alıcılar; yalnızca `invitations:view` olanlara döner, yoksa `null`. */
+export async function loadInvitationRecipients(actor: ActorWithPermissions, eventId: string) {
+  if (!can(actor, "invitations", "view")) return null;
+  return listRecipients(defaultDb, actor, { eventId });
 }
