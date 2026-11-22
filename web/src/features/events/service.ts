@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { eventTables, events, reservations } from "@/db/schema";
+import { eventStaffAssignments, eventTables, events, reservations } from "@/db/schema";
 import { canTransitionEvent } from "@/domain/event-status";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
@@ -12,6 +12,7 @@ import type {
   CreateEventInput,
   DeleteEventInput,
   ListEventsFilter,
+  ReviewSettingsInput,
   UpdateEventInput,
 } from "./schemas";
 
@@ -89,6 +90,26 @@ export async function updateEvent(db: Db, actor: Actor, input: UpdateEventInput)
         reservationEnabled: input.reservationEnabled ?? existing.reservationEnabled,
         reviewEnabled: input.reviewEnabled ?? existing.reviewEnabled,
         reviewHistoryVisible: input.reviewHistoryVisible ?? existing.reviewHistoryVisible,
+        updatedAt: new Date(),
+      })
+      .where(eq(events.id, input.id))
+      .returning();
+    if (!row) throw new DomainError("not_found", NOT_FOUND);
+    return row;
+  });
+}
+
+/** Değerlendirme anahtarları: durumdan bağımsız (etkinlik bittikten sonra da açılıp kapanabilir). */
+export async function setReviewSettings(db: Db, actor: Actor, input: ReviewSettingsInput): Promise<EventRow> {
+  return db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
+    if (!locked) throw new DomainError("not_found", NOT_FOUND);
+    assertAccess(actor, locked);
+    const [row] = await tx
+      .update(events)
+      .set({
+        reviewEnabled: input.reviewEnabled ?? locked.reviewEnabled,
+        reviewHistoryVisible: input.reviewHistoryVisible ?? locked.reviewHistoryVisible,
         updatedAt: new Date(),
       })
       .where(eq(events.id, input.id))
@@ -181,15 +202,53 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
 
 export async function getEvent(db: Executor, actor: Actor, id: string) {
   const event = await getAccessibleEvent(db, actor, id);
-  const [tables, capacity, reserved] = await Promise.all([
+  const [tables, capacity, reserved, assigned] = await Promise.all([
     db.select({ n: count() }).from(eventTables).where(eq(eventTables.eventId, id)),
     totalCapacity(db, id),
     db.select({ n: count() }).from(reservations).where(eq(reservations.eventId, id)),
+    db.select({ n: count() }).from(eventStaffAssignments).where(eq(eventStaffAssignments.eventId, id)),
   ]);
   return {
     ...event,
     capacity,
     tableCount: tables[0]?.n ?? 0,
     reservationCount: reserved[0]?.n ?? 0,
+    assignmentCount: assigned[0]?.n ?? 0,
   };
+}
+
+const BOARD_LIMIT = 500;
+
+/**
+ * Etkinlik panosu: sekmelere bölmek için tüm (sınırlı) liste, hazırlık göstergeleriyle.
+ * Alan hazır = en az bir masa; ekip hazır = en az bir personel ataması.
+ */
+export async function listEventBoard(db: Executor, actor: Actor, filter: { search?: string | undefined }) {
+  const conditions: SQL[] = [];
+  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
+  if (filter.search) conditions.push(ilike(events.name, `%${escapeLike(filter.search)}%`));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const reservationCount = sql<number>`(select count(*)::int from ${reservations} where ${reservations.eventId} = "events"."id")`;
+  const tableCount = sql<number>`(select count(*)::int from ${eventTables} where ${eventTables.eventId} = "events"."id")`;
+  const assignmentCount = sql<number>`(select count(*)::int from ${eventStaffAssignments} where ${eventStaffAssignments.eventId} = "events"."id")`;
+
+  return db
+    .select({
+      id: events.id,
+      name: events.name,
+      description: events.description,
+      status: events.status,
+      startsAt: events.startsAt,
+      endsAt: events.endsAt,
+      eventType: events.eventType,
+      reservationEnabled: events.reservationEnabled,
+      reservationCount,
+      tableCount,
+      assignmentCount,
+    })
+    .from(events)
+    .where(where)
+    .orderBy(desc(events.startsAt), asc(events.id))
+    .limit(BOARD_LIMIT);
 }

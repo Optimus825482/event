@@ -1,8 +1,11 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { EVENT_TYPE_SUGGESTIONS } from "../board";
 import { createEventAction, updateEventAction } from "../actions";
 
 export type EventFormValues = {
@@ -15,8 +18,19 @@ export type EventFormValues = {
   reservationEnabled: boolean;
 };
 
-const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+type Props = {
+  event?: EventFormValues;
+  /** Verilirse kayıttan sonra yönlendirme yapılmaz; çağıran (iletişim kutusu, sihirbaz) devam eder. */
+  onSaved?: (id: string) => void;
+  /** Verilirse "Vazgeç" bu işlevi çağırır; yoksa bir önceki sayfaya dönülür. */
+  onCancel?: () => void;
+  submitLabel?: string;
+  /** Hata alanlarının id çakışmaması için (aynı sayfada birden çok form). */
+  idPrefix?: string;
+};
+
+export const eventInputClass =
+  "w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500";
 
 /** ISO anını tarayıcının yerel saatiyle `datetime-local` değerine çevirir. */
 function toLocalInput(iso: string | null): string {
@@ -41,16 +55,16 @@ function Field({
   label: string;
   name: string;
   errors?: string[] | undefined;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div className="space-y-1">
-      <label htmlFor={name} className="block text-sm font-medium">
+    <div className="space-y-1.5">
+      <label htmlFor={name} className="block text-sm text-slate-400">
         {label}
       </label>
       {children}
       {errors?.map((message) => (
-        <p key={message} role="alert" className="text-sm text-destructive">
+        <p key={message} role="alert" className="text-sm text-red-400">
           {message}
         </p>
       ))}
@@ -58,11 +72,13 @@ function Field({
   );
 }
 
-export function EventForm({ event }: { event?: EventFormValues }) {
+export function EventForm({ event, onSaved, onCancel, submitLabel, idPrefix = "" }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const id = (name: string) => `${idPrefix}${name}`;
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -79,80 +95,99 @@ export function EventForm({ event }: { event?: EventFormValues }) {
     setFormError(null);
     setFieldErrors({});
     try {
-      const res = event
-        ? await updateEventAction({ ...payload, id: event.id })
-        : await createEventAction(payload);
+      const res = event ? await updateEventAction({ ...payload, id: event.id }) : await createEventAction(payload);
       if (!res.ok) {
         setFormError(res.message);
         setFieldErrors(res.fieldErrors ?? {});
+        toast.error(res.message);
+        return;
+      }
+      toast.success(event ? "Etkinlik güncellendi" : "Etkinlik oluşturuldu");
+      if (onSaved) {
+        onSaved(res.data.id);
         return;
       }
       router.push(`/events/${res.data.id}`);
       router.refresh();
     } catch {
       setFormError("Beklenmeyen bir hata oluştu");
+      toast.error("Beklenmeyen bir hata oluştu");
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl space-y-4" noValidate>
-      <Field label="Etkinlik adı" name="name" errors={fieldErrors.name}>
-        <input id="name" name="name" defaultValue={event?.name ?? ""} required className={inputClass} />
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      <Field label="Etkinlik adı" name={id("name")} errors={fieldErrors.name}>
+        <input id={id("name")} name="name" defaultValue={event?.name ?? ""} required className={eventInputClass} />
       </Field>
-      <Field label="Açıklama" name="description" errors={fieldErrors.description}>
+      <Field label="Açıklama" name={id("description")} errors={fieldErrors.description}>
         <textarea
-          id="description"
+          id={id("description")}
           name="description"
           rows={3}
           defaultValue={event?.description ?? ""}
-          className={inputClass}
+          className={eventInputClass}
         />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Başlangıç" name="startsAt" errors={fieldErrors.startsAt}>
+        <Field label="Başlangıç" name={id("startsAt")} errors={fieldErrors.startsAt}>
           <input
-            id="startsAt"
+            id={id("startsAt")}
             name="startsAt"
             type="datetime-local"
             defaultValue={toLocalInput(event?.startsAt ?? null)}
             required
-            className={inputClass}
+            className={eventInputClass}
           />
         </Field>
-        <Field label="Bitiş (isteğe bağlı)" name="endsAt" errors={fieldErrors.endsAt}>
+        <Field label="Bitiş (isteğe bağlı)" name={id("endsAt")} errors={fieldErrors.endsAt}>
           <input
-            id="endsAt"
+            id={id("endsAt")}
             name="endsAt"
             type="datetime-local"
             defaultValue={toLocalInput(event?.endsAt ?? null)}
-            className={inputClass}
+            className={eventInputClass}
           />
         </Field>
       </div>
-      <Field label="Etkinlik türü" name="eventType" errors={fieldErrors.eventType}>
-        <input id="eventType" name="eventType" defaultValue={event?.eventType ?? ""} className={inputClass} />
-      </Field>
-      <label className="flex items-center gap-2 text-sm">
+      <Field label="Etkinlik türü" name={id("eventType")} errors={fieldErrors.eventType}>
         <input
-          type="checkbox"
-          name="reservationEnabled"
-          defaultChecked={event?.reservationEnabled ?? true}
+          id={id("eventType")}
+          name="eventType"
+          list={id("eventTypeList")}
+          defaultValue={event?.eventType ?? ""}
+          className={eventInputClass}
         />
+        <datalist id={id("eventTypeList")}>
+          {EVENT_TYPE_SUGGESTIONS.map((type) => (
+            <option key={type} value={type} />
+          ))}
+        </datalist>
+      </Field>
+      <label className="flex items-center gap-2 text-sm text-slate-300">
+        <input type="checkbox" name="reservationEnabled" defaultChecked={event?.reservationEnabled ?? true} />
         Rezervasyon alınabilir
       </label>
       {formError ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-red-400">
           {formError}
         </p>
       ) : null}
-      <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Kaydediliyor…" : event ? "Kaydet" : "Etkinlik oluştur"}
-        </Button>
-        <Button type="button" variant="outline" onClick={() => router.back()} disabled={pending}>
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="border-slate-600 bg-transparent"
+          onClick={() => (onCancel ? onCancel() : router.back())}
+          disabled={pending}
+        >
           Vazgeç
+        </Button>
+        <Button type="submit" disabled={pending} className="bg-blue-600 text-white hover:bg-blue-700">
+          {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          {pending ? "Kaydediliyor…" : (submitLabel ?? (event ? "Kaydet" : "Etkinlik oluştur"))}
         </Button>
       </div>
     </form>

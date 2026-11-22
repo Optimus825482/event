@@ -65,6 +65,18 @@ export const changeEventStatusSchema = z.object({
   status: z.enum(EVENT_STATUSES, { error: "Geçersiz durum" }),
 });
 
+/** Değerlendirme anahtarları: en az biri verilmeli. */
+export const reviewSettingsSchema = z
+  .object({
+    id: z.uuid(),
+    reviewEnabled: z.boolean().optional(),
+    reviewHistoryVisible: z.boolean().optional(),
+  })
+  .refine((v) => v.reviewEnabled !== undefined || v.reviewHistoryVisible !== undefined, {
+    path: ["reviewEnabled"],
+    error: "En az bir ayar verilmeli",
+  });
+
 export const deleteEventSchema = z.object({ id: z.uuid() });
 
 export const listEventsFilterSchema = z.object({
@@ -77,5 +89,6 @@ export const listEventsFilterSchema = z.object({
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type ChangeEventStatusInput = z.infer<typeof changeEventStatusSchema>;
+export type ReviewSettingsInput = z.infer<typeof reviewSettingsSchema>;
 export type DeleteEventInput = z.infer<typeof deleteEventSchema>;
 export type ListEventsFilter = z.infer<typeof listEventsFilterSchema>;

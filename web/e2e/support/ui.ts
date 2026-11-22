@@ -2,13 +2,15 @@ import { expect, type Page } from "@playwright/test";
 
 export type TableSpec = { label: string; capacity: number };
 
-/** Yeni etkinlik oluşturur (taslak) ve kimliğini döndürür. */
+/** Yeni etkinlik sihirbazının ilk adımıyla etkinlik oluşturur (taslak) ve kimliğini döndürür. */
 export async function createEvent(page: Page, name: string): Promise<string> {
   await page.goto("/events/new");
   await page.getByLabel("Etkinlik adı").fill(name);
   await page.getByLabel("Başlangıç", { exact: true }).fill("2030-06-15T20:00");
   await page.getByLabel("Etkinlik türü").fill("Gala");
   await page.getByRole("button", { name: "Etkinlik oluştur" }).click();
+  // Sihirbaz oluşturmadan sonra şablon adımına geçer; şablonsuz doğrudan etkinliğe gidilir.
+  await page.getByRole("link", { name: "Etkinliğe git" }).click();
   await page.waitForURL(/\/events\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
   const id = page.url().split("/").pop();

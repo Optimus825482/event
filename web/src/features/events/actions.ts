@@ -7,3 +7,4 @@ export const createEventAction = defineAction(eventActionDefs.create);
 export const updateEventAction = defineAction(eventActionDefs.update);
 export const changeEventStatusAction = defineAction(eventActionDefs.changeStatus);
 export const deleteEventAction = defineAction(eventActionDefs.remove);
+export const setEventReviewSettingsAction = defineAction(eventActionDefs.reviewSettings);

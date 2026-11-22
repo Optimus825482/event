@@ -1,19 +1,23 @@
+import { CalendarPlus } from "lucide-react";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { can } from "@/features/auth/policy";
-import { requirePolicyActor } from "@/features/auth/permissions";
-import { EventForm } from "@/features/events/components/event-form";
+import { PageHeader } from "@/components/layout/page-header";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { NewEventWizard } from "@/features/events/components/new-event-wizard";
+import { loadWizardOptions } from "@/features/events/queries";
 
 export const metadata: Metadata = { title: "Yeni etkinlik | EventFlow" };
 
 export default async function NewEventPage() {
-  const actor = await requirePolicyActor();
-  if (!can(actor, "events", "create")) notFound();
+  const options = await loadWizardOptions();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <h1 className="text-2xl font-semibold">Yeni etkinlik</h1>
-      <EventForm />
-    </div>
+    <PageContainer maxWidth="4xl">
+      <PageHeader
+        title="Yeni etkinlik"
+        description="Adım adım etkinlik oluşturun"
+        icon={<CalendarPlus className="h-8 w-8 text-emerald-400" aria-hidden />}
+      />
+      <NewEventWizard {...options} />
+    </PageContainer>
   );
 }

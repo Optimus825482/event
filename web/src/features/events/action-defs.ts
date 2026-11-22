@@ -5,9 +5,10 @@ import {
   changeEventStatusSchema,
   createEventSchema,
   deleteEventSchema,
+  reviewSettingsSchema,
   updateEventSchema,
 } from "./schemas";
-import { changeEventStatus, createEvent, deleteEvent, updateEvent } from "./service";
+import { changeEventStatus, createEvent, deleteEvent, setReviewSettings, updateEvent } from "./service";
 
 /** Seçenek nesnesine bağlam türlerini verir (handler parametreleri çıkarılır). */
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
@@ -44,6 +45,15 @@ export const eventActionDefs = {
     handler: async ({ actor, input }) => {
       const event = await changeEventStatus(db, actor, input);
       return { id: event.id, status: event.status };
+    },
+  }),
+  reviewSettings: def({
+    module: "events",
+    verb: "edit",
+    input: reviewSettingsSchema,
+    handler: async ({ actor, input }) => {
+      const event = await setReviewSettings(db, actor, input);
+      return { id: event.id, reviewEnabled: event.reviewEnabled, reviewHistoryVisible: event.reviewHistoryVisible };
     },
   }),
   remove: def({
