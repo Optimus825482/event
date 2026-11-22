@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/layout/page-header";
 import { db } from "@/db/client";
 import { ForbiddenError } from "@/features/auth/errors";
 import { requirePolicyActor } from "@/features/auth/permissions";
@@ -27,13 +28,11 @@ export default async function ReviewBoardPage({ params }: { params: Promise<{ ev
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-1">
-        <Link href="/leader/reviews" className="text-sm text-muted-foreground hover:underline">
-          Değerlendirmeler
-        </Link>
-        <h1 className="text-2xl font-semibold">{board.event.name}</h1>
-      </div>
+    <div className="mx-auto max-w-4xl">
+      <Link href="/leader/reviews" className="text-sm text-slate-400 hover:text-cyan-300 hover:underline">
+        Değerlendirmeler
+      </Link>
+      <PageHeader className="mt-2" title={board.event.name} description="Ekip üyelerini değerlendirin" />
       <ReviewBoardView board={board} />
     </div>
   );

@@ -9,6 +9,7 @@ import { BAND_LABELS, RATING_LABELS } from "../labels";
 import type { ReviewView } from "../queries";
 import { RATING_KEYS, RATING_WEIGHTS, computeScore, ratingBand, type RatingKey } from "../score";
 import { RatingInput } from "./rating-input";
+import { useToast } from "@/components/ui/toast";
 
 type Props = { eventId: string; staffId: string; review: ReviewView | null };
 
@@ -57,6 +58,7 @@ function Notes({
 
 export function ReviewForm({ eventId, staffId, review }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [ratings, setRatings] = useState<Ratings>(review?.ratings ?? EMPTY_RATINGS);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -93,6 +95,7 @@ export function ReviewForm({ eventId, staffId, review }: Props) {
     if (!res.ok) {
       setFieldErrors(res.fieldErrors ?? {});
       setMessage({ kind: "error", text: res.message });
+      toast.error(res.message);
       return false;
     }
     setFieldErrors({});
@@ -108,15 +111,19 @@ export function ReviewForm({ eventId, staffId, review }: Props) {
         const done = await completeReviewAction({ eventId, staffId });
         if (!done.ok) {
           setMessage({ kind: "error", text: done.message });
+          toast.error(done.message);
           return;
         }
+        toast.success("Değerlendirme tamamlandı");
         router.refresh();
         return;
       }
       setMessage({ kind: "ok", text: "Taslak kaydedildi" });
+      toast.success("Taslak kaydedildi");
       router.refresh();
     } catch {
       setMessage({ kind: "error", text: "Beklenmeyen bir hata oluştu" });
+      toast.error("Beklenmeyen bir hata oluştu");
     } finally {
       setPending(false);
       setConfirm(false);

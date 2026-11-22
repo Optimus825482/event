@@ -60,7 +60,7 @@ export function ReviewBoardView({ board }: { board: ReviewBoard }) {
       {writable && totalMembers > 0 ? <CompleteAllButton eventId={board.event.id} /> : null}
       {board.teams.map((team) => (
         <section key={team.id} aria-labelledby={`team-${team.id}`} className="space-y-3">
-          <h2 id={`team-${team.id}`} className="flex items-center gap-2 text-lg font-semibold">
+          <h2 id={`team-${team.id}`} className="flex items-center gap-2 text-lg font-semibold text-white">
             <span aria-hidden className="size-3 rounded-full" style={{ backgroundColor: team.color }} />
             {team.name}
           </h2>
@@ -69,13 +69,13 @@ export function ReviewBoardView({ board }: { board: ReviewBoard }) {
           ) : (
             <ul className="space-y-2">
               {team.members.map((member) => (
-                <li key={member.staffId} className="rounded-lg border border-border">
+                <li key={member.staffId} className="rounded-xl border border-slate-700 bg-slate-800/50">
                   <details className="group">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus-visible:outline-2">
-                      <span className="font-medium">{member.fullName}</span>
+                      <span className="font-medium text-white">{member.fullName}</span>
                       <StatusBadge member={member} />
                     </summary>
-                    <div className="border-t border-border px-4 py-4">
+                    <div className="border-t border-slate-700 px-4 py-4">
                       <MemberReview eventId={board.event.id} member={member} writable={writable} />
                     </div>
                   </details>

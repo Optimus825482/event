@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { deleteStaff, setStaffStatus } from "../actions/staff";
 
 type Status = "active" | "inactive" | "terminated";
@@ -23,6 +24,7 @@ export function StaffStatusControls({
   canDelete: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -36,7 +38,12 @@ export function StaffStatusControls({
         terminationReason: next === "terminated" ? reason : null,
       });
       setMessage(result.ok ? null : result.message);
-      if (result.ok) router.refresh();
+      if (result.ok) {
+        toast.success("Personel durumu güncellendi");
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
     });
   }
 
@@ -46,8 +53,10 @@ export function StaffStatusControls({
       setConfirmDelete(false);
       if (!result.ok) {
         setMessage(result.message);
+        toast.error(result.message);
         return;
       }
+      toast.success("Personel silindi");
       router.push("/staff");
     });
   }
