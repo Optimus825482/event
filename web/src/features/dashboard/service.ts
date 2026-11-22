@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, notInArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, notInArray, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import {
   eventStaffAssignments,
@@ -12,7 +12,7 @@ import {
   users,
   venueTemplates,
 } from "@/db/schema";
-import { authorize } from "@/features/auth/policy";
+import { authorize, can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 
 type Executor = Db | Tx;
@@ -79,10 +79,17 @@ export async function getEventsDashboard(db: Executor, actor: Actor): Promise<Ev
     .orderBy(asc(events.startsAt))
     .limit(UPCOMING_LIMIT);
 
-  const [staffRow] = await db.select({ n: count() }).from(staff).where(eq(staff.status, "active"));
-  const [teamRow] = await db.select({ n: count() }).from(teams).where(eq(teams.isActive, true));
-  const [venueRow] = await db.select({ n: count() }).from(venueTemplates);
-  const [orgRow] = await db.select({ n: count() }).from(organizationTemplates).where(eq(organizationTemplates.isActive, true));
+  // Sayılar yalnızca ilgili modülü görebilenlere verilir; şablonlarda görünürlük kuralı (herkese açık ya da kendi) uygulanır.
+  const seeStaff = can(actor, "staff", "view");
+  const seeVenues = can(actor, "venues", "view");
+  const templateScope = actor.role === "admin" ? undefined : or(eq(venueTemplates.isPublic, true), eq(venueTemplates.createdById, actor.id));
+  const none = [{ n: 0 }];
+  const [staffRow] = seeStaff ? await db.select({ n: count() }).from(staff).where(eq(staff.status, "active")) : none;
+  const [teamRow] = seeStaff ? await db.select({ n: count() }).from(teams).where(eq(teams.isActive, true)) : none;
+  const [venueRow] = seeVenues ? await db.select({ n: count() }).from(venueTemplates).where(templateScope) : none;
+  const [orgRow] = seeStaff
+    ? await db.select({ n: count() }).from(organizationTemplates).where(eq(organizationTemplates.isActive, true))
+    : none;
 
   return {
     totalEvents: stats?.total ?? 0,
