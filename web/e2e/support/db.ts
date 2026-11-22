@@ -56,6 +56,14 @@ export async function checkInKeys(reservationId: string): Promise<string[]> {
   });
 }
 
+/** Kullanıcının tüm oturum satırlarını siler (sunucu tarafında oturumu sona erdirir); silinen satır sayısını döndürür. */
+export async function deleteSessionsOf(username: string): Promise<number> {
+  return withDb(async (pool) => {
+    const res = await pool.query("delete from sessions where user_id = (select id from users where username = $1)", [username]);
+    return res.rowCount ?? 0;
+  });
+}
+
 export async function checkedInCount(eventName: string): Promise<number> {
   return withDb(async (pool) => {
     const res = await pool.query<{ n: string }>(
