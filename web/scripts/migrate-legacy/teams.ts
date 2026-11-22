@@ -103,11 +103,8 @@ async function migrateTableGroups(ctx: Ctx, teamIdMap: Map<string, string>): Pro
   const owner = new Map<string, { groupId: string; teamId: string | null }>();
 
   const link = (eventId: string, groupId: string, teamId: string | null, ref: string, source: string, sourceId: string) => {
-    const tableId = ctx.resolveTable(eventId, ref);
-    if (tableId === null) {
-      ctx.add("orphanTableReferences", { table: source, id: sourceId, eventId, legacyRef: ref, action: "bağlantı taşınmadı" });
-      return;
-    }
+    const tableId = ctx.linkTable(eventId, ref, source, sourceId);
+    if (tableId === null) return;
     const key = `${eventId}:${tableId}`;
     const prev = owner.get(key);
     if (prev) {

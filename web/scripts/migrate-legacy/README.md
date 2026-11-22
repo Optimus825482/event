@@ -37,6 +37,10 @@ npx tsx scripts/migrate-legacy/index.ts [--dry-run] [--report raporlar/taşıma]
    - `orphanTableReferences` / `placeholderTables`: yerleşimde olmayan masaya yapılmış
      rezervasyonlar için "Eski …" etiketli, (0,0) konumlu yer tutucu masalar oluşturulur. Taşıma
      sonrası yerleşim düzenleyicide konumlandırın ya da rezervasyonu doğru masaya taşıyın.
+     Grup, atama, ekip ve ek personel masa referansları eski uygulamadaki sırayla çözülür:
+     yerleşim kimliği → masa numarası/etiketi → loca adı (eski Excel içe aktarımı numara yazıyordu).
+     Etiketle çözülenler `tablesResolvedByLabel`'da; hiçbiri tutmayanlar yer tutucu oluşturulmadan
+     `orphanTableReferences`'ta listelenir.
    - `conflictingReservations`: aynı masadaki ikinci aktif rezervasyon `cancelled` taşınır; gerekçe
      rezervasyona bağlı müşteri notundadır. Gerçekten iki masa gerekiyorsa taşımadan sonra düzeltin.
    - `capacityRaised`: eski sistem masa kapasitesini denetlemiyordu; kişi sayısı masanın kapasitesini

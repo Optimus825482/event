@@ -45,9 +45,8 @@ export async function migrateAssignments(ctx: Ctx, teamIdMap: Map<string, string
     const set = tables.get(owner.id) ?? new Set<string>();
     tables.set(owner.id, set);
     for (const ref of tableRefs) {
-      const tableId = ctx.resolveTable(row.eventId, ref);
-      if (tableId === null) ctx.add("orphanTableReferences", { table: source, id: row.id, eventId: row.eventId, legacyRef: ref, action: "bağlantı taşınmadı" });
-      else set.add(tableId);
+      const tableId = ctx.linkTable(row.eventId, ref, source, row.id);
+      if (tableId !== null) set.add(tableId);
     }
   };
   const shiftOf = (r: Row, table: string): string | null => {
@@ -146,9 +145,8 @@ async function migrateExtraStaff(ctx: Ctx): Promise<void> {
   const rows = ctx.legacy.event_extra_staff.map((r) => {
     const eventId = r.text("event_id");
     for (const ref of new Set(jsonStrings(r.json("assigned_tables")))) {
-      const tableId = ctx.resolveTable(eventId, ref);
-      if (tableId === null) ctx.add("orphanTableReferences", { table: "event_extra_staff", id: r.id, eventId, legacyRef: ref, action: "bağlantı taşınmadı" });
-      else if (!tableLinks.some((l) => l.extraStaffId === r.id && l.tableId === tableId)) tableLinks.push({ eventId, extraStaffId: r.id, tableId });
+      const tableId = ctx.linkTable(eventId, ref, "event_extra_staff", r.id);
+      if (tableId !== null && !tableLinks.some((l) => l.extraStaffId === r.id && l.tableId === tableId)) tableLinks.push({ eventId, extraStaffId: r.id, tableId });
     }
     for (const ref of new Set(jsonStrings(r.json("assigned_groups")))) {
       const groupId = asUuid(ref);

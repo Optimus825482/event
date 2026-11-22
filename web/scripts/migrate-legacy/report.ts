@@ -14,7 +14,8 @@ export const CATEGORIES = {
   eventsWithoutOrganizer: "Organizatörsüz etkinlikler (varsayılan organizatör atandı)",
   // Ek kategoriler
   placeholderTables: "Yer tutucu masalar (yetim referanslı rezervasyonlar için oluşturuldu)",
-  tablesResolvedByLabel: "Masa kimliği yerine etiket/numara ile eşlenen rezervasyonlar",
+  tablesResolvedByLabel:
+    "Masa kimliği yerine etiket/numara/loca adı ile eşlenen referanslar (rezervasyonlar; gruplar, atamalar, ekip ve ek personel masaları)",
   userStaffLinks: "Kullanıcı ↔ personel eşleşmeleri",
   customerMerges: "Birleştirilen müşteriler (normalize telefon/e-posta aynı)",
   customersFromGuest: "Misafir bilgisinden oluşturulan/eşlenen müşteriler",

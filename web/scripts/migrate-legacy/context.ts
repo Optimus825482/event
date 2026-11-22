@@ -1,3 +1,4 @@
+import { normalizeLabel } from "@/features/venue/schemas";
 import type { LegacyData } from "./legacy";
 import type { CategoryKey, Finding, ReportBuilder } from "./report";
 import type { Writer } from "./target";
@@ -57,6 +58,25 @@ export class Ctx {
   /** Eski masa referansı (yerleşim kimliği) → yeni masa kimliği; yoksa NULL. */
   resolveTable(eventId: string, ref: string): string | null {
     return this.tables.get(eventId)?.byLegacyId.get(ref) ?? null;
+  }
+
+  /**
+   * Gruplar, atamalar, ekip ve ek personel masaları için masa referansı. Eski Excel içe aktarımı ve
+   * ekip organizasyonu bu alanlara yerleşim kimliği yerine masa numarasını/etiketini ya da loca
+   * adını yazıyordu; eski uygulama da kimlik → etiket → loca adı sırasıyla çözüyordu
+   * (`Step5Summary.resolveToTableId`). Aynı sıra burada uygulanır; etiketle çözülenler
+   * `tablesResolvedByLabel` altında raporlanır, hiçbiri tutmazsa `orphanTableReferences`.
+   */
+  linkTable(eventId: string, ref: string, source: string, sourceId: string): string | null {
+    const byId = this.resolveTable(eventId, ref);
+    if (byId !== null) return byId;
+    const byLabel = this.tables.get(eventId)?.byLabel.get(normalizeLabel(ref)) ?? null;
+    if (byLabel !== null) {
+      this.add("tablesResolvedByLabel", { table: source, id: sourceId, eventId, legacyRef: ref, tableId: byLabel });
+      return byLabel;
+    }
+    this.add("orphanTableReferences", { table: source, id: sourceId, eventId, legacyRef: ref, action: "bağlantı taşınmadı" });
+    return null;
   }
 
   /**

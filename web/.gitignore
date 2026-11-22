@@ -20,3 +20,6 @@ next-env.d.ts
 /playwright-report/
 /.next-e2e/
 /e2e/.auth/
+
+# yerel taşıma provası (gerçek veri; asla commit edilmez)
+/.rehearsal/
