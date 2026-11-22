@@ -11,14 +11,18 @@ function hrefs(role: Role, staffId: string | null = null): string[] {
 }
 
 describe("NAV_ITEMS", () => {
-  it("modül gruplarıyla belirtilen sırada 15 öğe içerir", () => {
+  it("modül gruplarıyla belirtilen sırada 19 öğe içerir", () => {
     expect(NAV_ITEMS.map((i) => [i.href, i.label, i.module, i.group])).toEqual([
       ["/dashboard", "Pano", "events", "events"],
       ["/events", "Etkinlikler", "events", "events"],
       ["/staff", "Ekipler", "staff", "events"],
       ["/venues", "Şablonlar", "venues", "events"],
       ["/templates", "Davetiye Şablonları", "invitations", "events"],
-      ["/leader/reviews", "Değerlendirmeler", "reviews", "events"],
+      ["/leader", "Pano", "reviews", "leader"],
+      ["/leader/events", "Etkinlikler", "reviews", "leader"],
+      ["/leader/team", "Ekip", "reviews", "leader"],
+      ["/leader/reviews", "Değerlendirmeler", "reviews", "leader"],
+      ["/leader/reports", "Raporlar", "reviews", "leader"],
       ["/reservations", "Rezervasyonlar", "reservations", "reservations"],
       ["/customers", "Müşteriler", "customers", "reservations"],
       ["/guests", "Misafirler", "customers", "reservations"],
@@ -60,7 +64,15 @@ describe("visibleNavItems", () => {
   });
 
   it("leader check-in, değerlendirme ve bildirimleri görür", () => {
-    expect(hrefs("leader", "s1")).toEqual(["/leader/reviews", "/check-in", "/notifications"]);
+    expect(hrefs("leader", "s1")).toEqual([
+      "/leader",
+      "/leader/events",
+      "/leader/team",
+      "/leader/reviews",
+      "/leader/reports",
+      "/check-in",
+      "/notifications",
+    ]);
   });
 
   it("controller yalnızca check-in görür", () => {
@@ -87,8 +99,8 @@ describe("visibleNavItems", () => {
 });
 
 describe("visibleNavGroups", () => {
-  it("admin dört modül ve genel grubu görür", () => {
-    expect(visibleNavGroups(actor("admin")).map((g) => g.key)).toEqual(["events", "reservations", "check_in", "admin", "general"]);
+  it("admin tüm modülleri ve genel grubu görür", () => {
+    expect(visibleNavGroups(actor("admin")).map((g) => g.key)).toEqual(["events", "leader", "reservations", "check_in", "admin", "general"]);
   });
 
   it("yetkisiz modül atılır; öğesi olmayan grup listelenmez", () => {

@@ -1,7 +1,9 @@
 import {
+  BarChart3,
   Bell,
   CalendarDays,
   Contact,
+  LayoutDashboard,
   LayoutTemplate,
   Mail,
   ScanLine,
@@ -30,6 +32,8 @@ const ICONS: Record<NavIconName, LucideIcon> = {
   settings: Settings,
   table: Table2,
   bell: Bell,
+  "layout-dashboard": LayoutDashboard,
+  "bar-chart": BarChart3,
 };
 
 export function NavIcon({ name, className }: { name: NavIconName; className?: string }) {

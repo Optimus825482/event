@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildCrumbs, findActiveGroup } from "@/components/layout/active-module";
-import type { ShellGroup } from "@/components/layout/shell-nav";
+import { buildCrumbs, findActiveGroup, isItemActive } from "@/components/layout/active-module";
+import type { ShellGroup, ShellItem } from "@/components/layout/shell-nav";
 
 const groups: ShellGroup[] = [
   { key: "events", label: "Etkinlik", accent: "blue", icon: "calendar", extraPrefixes: ["/import/assignments"], items: [{ href: "/events", label: "Etkinlikler", icon: "calendar" }] },
@@ -15,6 +15,25 @@ describe("findActiveGroup", () => {
 
   it("uyuşmayan yolda ilk modüle düşer", () => {
     expect(findActiveGroup(groups, "/")?.key).toBe("events");
+  });
+});
+
+describe("isItemActive", () => {
+  const root: ShellItem = { href: "/leader", label: "Pano", icon: "star" };
+  const events: ShellItem = { href: "/leader/events", label: "Etkinlikler", icon: "calendar" };
+  const items: ShellItem[] = [root, events, { href: "/leader/team", label: "Ekip", icon: "users" }];
+
+  it("kök öğe yalnızca tam eşleşmede ya da daha uzun kardeş uymadığında etkindir", () => {
+    expect(isItemActive("/leader", root, items)).toBe(true);
+    expect(isItemActive("/leader/events", root, items)).toBe(false);
+    expect(isItemActive("/leader/events/abc", root, items)).toBe(false);
+    expect(isItemActive("/leader/events/abc", events, items)).toBe(true);
+    expect(isItemActive("/leader/other", root, items)).toBe(true);
+  });
+
+  it("kardeşsiz öğe önek eşleşmesini korur", () => {
+    expect(isItemActive("/events/1", { href: "/events", label: "E", icon: "calendar" })).toBe(true);
+    expect(isItemActive("/eventsx", { href: "/events", label: "E", icon: "calendar" })).toBe(false);
   });
 });
 

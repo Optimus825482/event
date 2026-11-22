@@ -1,4 +1,4 @@
-import { Calendar, QrCode, Shield, Ticket, type LucideIcon } from "lucide-react";
+import { Calendar, QrCode, Shield, Star, Ticket, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { NavAccent } from "@/features/auth/nav";
 import type { LauncherIcon, LauncherModule } from "@/features/dashboard/modules";
@@ -8,6 +8,7 @@ const ICONS: Record<LauncherIcon, LucideIcon> = {
   ticket: Ticket,
   "qr-code": QrCode,
   shield: Shield,
+  star: Star,
 };
 
 type CardColors = { gradient: string; iconBg: string; border: string; glow: string; icon: string };

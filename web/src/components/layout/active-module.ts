@@ -18,8 +18,14 @@ export function findActiveGroup(groups: readonly ShellGroup[], pathname: string)
   return best?.group ?? groups[0];
 }
 
-export function isItemActive(pathname: string, item: ShellItem): boolean {
-  return pathMatches(pathname, item.href);
+/**
+ * Bir öğe, yola tam uyduğunda ya da yolun öncülü olduğu hâlde daha uzun bir kardeş öğe
+ * (ör. /leader ve /leader/events) yola uymuyorsa etkindir.
+ */
+export function isItemActive(pathname: string, item: ShellItem, siblings: readonly ShellItem[] = []): boolean {
+  if (!pathMatches(pathname, item.href)) return false;
+  if (pathname === item.href) return true;
+  return !siblings.some((other) => other.href.length > item.href.length && pathMatches(pathname, other.href));
 }
 
 const ID_SEGMENT = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d+)$/i;

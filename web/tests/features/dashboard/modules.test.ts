@@ -11,12 +11,18 @@ const keys = (role: PolicyActor["role"]) => {
 };
 
 describe("launcherModules", () => {
-  it("yönetici dört modülü de görür", () => {
-    expect(keys("admin")).toEqual(["events", "reservations", "check_in", "admin"]);
+  it("yönetici tüm modülleri görür", () => {
+    expect(keys("admin")).toEqual(["events", "leader", "reservations", "check_in", "admin"]);
+  });
+
+  it("lider Ekip Lideri kartını görür ve /leader panosuna gider", () => {
+    const a = { ...actor("leader"), staffId: "s1" };
+    const cards = launcherModules(a, visibleNavGroups(a));
+    expect(cards.find((m) => m.key === "leader")).toMatchObject({ name: "Ekip Lideri", accent: "cyan", href: "/leader" });
   });
 
   it("organizatör sistem yönetimini görmez", () => {
-    expect(keys("organizer")).toEqual(["events", "reservations", "check_in"]);
+    expect(keys("organizer")).toEqual(["events", "leader", "reservations", "check_in"]);
   });
 
   it("personel yalnızca rezervasyon ve check-in görür", () => {
@@ -41,7 +47,7 @@ describe("launcherModules", () => {
 
 describe("roleLanding", () => {
   it("rollere göre çalışma alanı adresi verir", () => {
-    expect(roleLanding("leader")).toBe("/leader/reviews");
+    expect(roleLanding("leader")).toBe("/leader");
     expect(roleLanding("controller")).toBe("/check-in");
     expect(roleLanding("venue_owner")).toBe("/venues");
     expect(roleLanding("admin")).toBeNull();

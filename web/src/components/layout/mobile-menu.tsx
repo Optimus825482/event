@@ -59,7 +59,7 @@ export function MobileMenu({ username, roleLabel, modules, general }: MobileMenu
           {active && (
             <nav aria-label="Mobil gezinme" className="space-y-1">
               {active.items.map((item) => {
-                const isActive = isItemActive(pathname, item);
+                const isActive = isItemActive(pathname, item, active.items);
                 return (
                   <Link
                     key={item.href}

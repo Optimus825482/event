@@ -1,7 +1,7 @@
 import { can, type Module, type PolicyActor } from "./policy";
 
 /** Menü modülleri (eski arayüzdeki modül şeridi). `general` yalnızca zil/profil menüsünden erişilir. */
-export type NavGroupKey = "events" | "reservations" | "check_in" | "admin" | "general";
+export type NavGroupKey = "events" | "leader" | "reservations" | "check_in" | "admin" | "general";
 export type NavAccent = "blue" | "purple" | "emerald" | "amber" | "cyan" | "slate";
 /** Lucide simge anahtarı; sunucudan istemciye bileşen geçirilemediğinden ad olarak taşınır. */
 export type NavIconName =
@@ -17,7 +17,9 @@ export type NavIconName =
   | "shield"
   | "settings"
   | "table"
-  | "bell";
+  | "bell"
+  | "layout-dashboard"
+  | "bar-chart";
 
 export type NavItem = {
   href: string;
@@ -39,6 +41,7 @@ export type NavGroup = {
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   { key: "events", label: "Etkinlik Planlama", accent: "blue", icon: "calendar", extraPrefixes: ["/import/assignments", "/import/template"] },
+  { key: "leader", label: "Ekip Lideri", accent: "cyan", icon: "star", extraPrefixes: [] },
   { key: "reservations", label: "Rezervasyon", accent: "purple", icon: "ticket", extraPrefixes: ["/import/reservations"] },
   { key: "check_in", label: "Check-in", accent: "emerald", icon: "scan-line", extraPrefixes: [] },
   { key: "admin", label: "Sistem Yönetimi", accent: "amber", icon: "shield", extraPrefixes: ["/settings/organization"] },
@@ -55,7 +58,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/staff", label: "Ekipler", module: "staff", group: "events", icon: "users" },
   { href: "/venues", label: "Şablonlar", module: "venues", group: "events", icon: "layout-template" },
   { href: "/templates", label: "Davetiye Şablonları", module: "invitations", group: "events", icon: "mail" },
-  { href: "/leader/reviews", label: "Değerlendirmeler", module: "reviews", group: "events", icon: "star" },
+  { href: "/leader", label: "Pano", module: "reviews", group: "leader", icon: "layout-dashboard" },
+  { href: "/leader/events", label: "Etkinlikler", module: "reviews", group: "leader", icon: "calendar" },
+  { href: "/leader/team", label: "Ekip", module: "reviews", group: "leader", icon: "users" },
+  { href: "/leader/reviews", label: "Değerlendirmeler", module: "reviews", group: "leader", icon: "star" },
+  { href: "/leader/reports", label: "Raporlar", module: "reviews", group: "leader", icon: "bar-chart" },
   { href: "/reservations", label: "Rezervasyonlar", module: "reservations", group: "reservations", icon: "ticket" },
   { href: "/customers", label: "Müşteriler", module: "customers", group: "reservations", icon: "user-round" },
   { href: "/guests", label: "Misafirler", module: "customers", group: "reservations", icon: "contact" },

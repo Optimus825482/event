@@ -18,7 +18,7 @@ export function NavLinks({ modules }: { modules: readonly ShellGroup[] }) {
   return (
     <nav aria-label="Ana menü" className="hidden min-w-0 items-center gap-1 overflow-x-auto md:flex">
       {group.items.map((item) => {
-        const active = isItemActive(pathname, item);
+        const active = isItemActive(pathname, item, group.items);
         return (
           <Link
             key={item.href}
