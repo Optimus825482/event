@@ -4,9 +4,9 @@ import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { loadCheckInPlan } from "@/features/check-in/plan-queries";
 import { RESERVATION_STATUS_LABELS } from "@/features/reservations/labels";
-import { FloorPlanView } from "@/features/venue/components/floor-plan-view";
+import { FloorPlanSwitcher } from "@/features/venue/components/floor-plan-switcher";
 
-export const metadata: Metadata = { title: "Kat planı | EventFlow" };
+export const metadata: Metadata = { title: "Alan planı | EventFlow" };
 
 type Params = Promise<{ eventId: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -31,7 +31,7 @@ export default async function CheckInPlanPage({ params, searchParams }: { params
         Kapı girişine dön
       </Link>
       <PageHeader
-        title="Kat planı"
+        title="Alan planı"
         description={plan.eventName}
         icon={
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
@@ -40,12 +40,12 @@ export default async function CheckInPlanPage({ params, searchParams }: { params
         }
       />
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-        <FloorPlanView
+        <FloorPlanSwitcher
           plan={plan}
           statuses={statuses}
           selectedId={focus?.table.id ?? null}
           height={520}
-          ariaLabel={`${plan.eventName} kat planı`}
+          ariaLabel={`${plan.eventName} alan planı`}
         />
         <aside aria-label="Masa ayrıntısı" className="space-y-3">
           {focus ? (

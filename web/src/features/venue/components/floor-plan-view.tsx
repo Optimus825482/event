@@ -35,7 +35,7 @@ const Scene = dynamic(() => import("./floor-plan-scene"), {
   ),
 });
 
-/** Salt okunur kat planı: sığdır, yakınlaştır/kaydır, masa seçimi, durum renkleri ve masa arama. */
+/** Salt okunur alan planı: sığdır, yakınlaştır/kaydır, masa seçimi, durum renkleri ve masa arama. */
 export function FloorPlanView(props: FloorPlanViewProps) {
   if (props.plan.tables.length === 0 && props.plan.decor.length === 0) {
     return (

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { FloorPlanView } from "@/features/venue/components/floor-plan-view";
+import { FloorPlanSwitcher } from "@/features/venue/components/floor-plan-switcher";
 import { PLAN_STATUS_LABELS } from "@/features/venue/plan-status";
 import { RESERVATION_STATUS_LABELS } from "../labels";
 import type { ReservationPlan } from "../plan-service";
@@ -15,7 +15,7 @@ export function ReservationMap({ eventId, data }: { eventId: string; data: Reser
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
-      <FloorPlanView
+      <FloorPlanSwitcher
         plan={data.plan}
         statuses={data.statuses}
         selectedId={selectedId}

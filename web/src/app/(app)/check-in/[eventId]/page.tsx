@@ -40,7 +40,7 @@ export default async function CheckInEventPage({ params }: { params: Params }) {
             className="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-700"
           >
             <MapIcon className="h-4 w-4" aria-hidden="true" />
-            Kat planı
+            Alan planı
           </Link>
         }
       />

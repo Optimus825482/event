@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FloorPlanView } from "@/features/venue/components/floor-plan-view";
+import { FloorPlanSwitcher } from "@/features/venue/components/floor-plan-switcher";
 import type { FloorPlanData } from "@/features/venue/plan-types";
 import { cn } from "@/lib/utils";
 import type { LeaderEventTeam } from "../leader-queries";
@@ -13,7 +13,7 @@ type Props = {
   tableLabels: Record<string, string>;
 };
 
-/** Atanan masaların kat planı: ekip ya da personel seçilince yalnızca onların masaları vurgulanır. */
+/** Atanan masaların alan planı: ekip ya da personel seçilince yalnızca onların masaları vurgulanır. */
 export function LeaderEventPlan({ plan, teams, assignedTableIds, tableLabels }: Props) {
   const [staffId, setStaffId] = useState<string | null>(null);
 
@@ -39,7 +39,7 @@ export function LeaderEventPlan({ plan, teams, assignedTableIds, tableLabels }: 
           <span aria-hidden className="size-3 rounded-full bg-slate-600" /> Diğer masalar
         </span>
       </div>
-      <FloorPlanView plan={plan} disabledIds={dimmed} ariaLabel="Atanan masaların kat planı" height={460} />
+      <FloorPlanSwitcher plan={plan} disabledIds={dimmed} ariaLabel="Atanan masaların alan planı" height={460} />
       <p className="text-sm text-slate-300">
         {labels.length === 0 ? "Bu seçim için atanmış masa yok." : `Masalar: ${labels.sort((a, b) => a.localeCompare(b, "tr", { numeric: true })).join(", ")}`}
       </p>

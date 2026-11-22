@@ -1,6 +1,6 @@
 import type { DecorElement, TableShape } from "./schemas";
 
-/** Salt okunur kat planı için masa: yalnızca çizim için gereken alanlar (yeni isteğe bağlı alanlar eklenebilir). */
+/** Salt okunur alan planı için masa: yalnızca çizim için gereken alanlar (yeni isteğe bağlı alanlar eklenebilir). */
 export type PlanTable = {
   id: string;
   label: string;

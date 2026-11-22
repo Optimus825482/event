@@ -16,7 +16,7 @@ import { searchGuests, type GuestRow } from "./read-service";
 export type PlanFocus = { table: PlanTable; guests: GuestRow[] };
 
 /**
- * `/check-in/[eventId]/plan`: kapı görevlisi için salt okunur kat planı. Check-in görüntüleme izni
+ * `/check-in/[eventId]/plan`: kapı görevlisi için salt okunur alan planı. Check-in görüntüleme izni
  * ve etkinliğe erişim (`getFloorPlan`) gerekir; masa renkleri aktif rezervasyon durumundan türetilir.
  * `masa` (kimlik ya da etiket) verilirse o masa ve masadaki misafirler de döner.
  */

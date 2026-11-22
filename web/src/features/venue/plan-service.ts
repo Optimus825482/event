@@ -16,7 +16,7 @@ function shapeOf(value: string | undefined): TableShape {
 }
 
 /**
- * Etkinliğin salt okunur yerleşimi (kat planı çizimi için). Organizatör yalnızca kendi etkinliğini görür;
+ * Etkinliğin salt okunur yerleşimi (alan planı çizimi için). Organizatör yalnızca kendi etkinliğini görür;
  * yoksa ya da erişilemiyorsa `not_found`. Rol/izin denetimi çağıranın işidir.
  */
 export async function getFloorPlan(db: Db | Tx, actor: Actor, eventId: string): Promise<{ eventName: string } & FloorPlanData> {
