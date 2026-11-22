@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { decorSchema, tableInputSchema } from "../schemas";
+import { linesForSave } from "./lines";
 import type { DraftContent, EditorTable } from "./types";
 
 /** Otomatik taslak kaydı aralığı (ms). */
@@ -38,7 +39,12 @@ export function serializeDraft(eventId: string, userId: string, content: DraftCo
     userId,
     savedAt: now.toISOString(),
     tables: content.tables,
-    decor: { width: content.canvas.width, height: content.canvas.height, elements: content.elements },
+    decor: {
+      width: content.canvas.width,
+      height: content.canvas.height,
+      elements: content.elements,
+      ...(content.lines ? { lines: linesForSave(content.lines, content.canvas) } : {}),
+    },
   });
 }
 
@@ -74,7 +80,12 @@ export function parseDraft(raw: string | null, eventId: string, userId: string):
   }));
   return {
     savedAt: d.savedAt,
-    content: { tables, elements: d.decor.elements, canvas: { width: d.decor.width, height: d.decor.height } },
+    content: {
+      tables,
+      elements: d.decor.elements,
+      ...(d.decor.lines ? { lines: d.decor.lines } : {}),
+      canvas: { width: d.decor.width, height: d.decor.height },
+    },
   };
 }
 

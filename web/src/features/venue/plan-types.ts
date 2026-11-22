@@ -1,4 +1,4 @@
-import type { DecorElement, TableShape } from "./schemas";
+import type { DecorElement, DecorLine, TableShape } from "./schemas";
 
 /** Salt okunur alan planı için masa: yalnızca çizim için gereken alanlar (yeni isteğe bağlı alanlar eklenebilir). */
 export type PlanTable = {
@@ -20,4 +20,6 @@ export type FloorPlanData = {
   canvas: { width: number; height: number };
   tables: PlanTable[];
   decor: DecorElement[];
+  /** Ayırıcı çizgiler; yoksa çizgi yok. */
+  lines?: DecorLine[];
 };

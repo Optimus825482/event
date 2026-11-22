@@ -26,8 +26,11 @@ export type PreviewElementInput = {
 
 export type PreviewLayoutInput = {
   tables: readonly PreviewTableInput[];
-  decor: { width: number; height: number; elements: readonly PreviewElementInput[] };
+  decor: { width: number; height: number; elements: readonly PreviewElementInput[]; lines?: readonly PreviewLine[] };
 };
+
+/** Ayırıcı çizgi (kayıtlı biçimle aynı alanlar). */
+export type PreviewLine = { id: string; x1: number; y1: number; x2: number; y2: number; color: string; width: number };
 
 export type PreviewTableKind = "standard" | "vip" | "loca";
 
@@ -60,6 +63,7 @@ export type TemplatePreviewModel = {
   viewBox: { x: number; y: number; width: number; height: number };
   tables: PreviewTable[];
   elements: PreviewElement[];
+  lines: PreviewLine[];
   /** Masa ve dekor yok. */
   empty: boolean;
 };
@@ -131,6 +135,7 @@ export function buildTemplatePreview(layout: PreviewLayoutInput): TemplatePrevie
     },
     tables,
     elements,
-    empty: tables.length === 0 && elements.length === 0,
+    lines: [...(layout.decor.lines ?? [])],
+    empty: tables.length === 0 && elements.length === 0 && (layout.decor.lines?.length ?? 0) === 0,
   };
 }

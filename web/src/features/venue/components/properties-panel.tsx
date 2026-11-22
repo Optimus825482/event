@@ -2,12 +2,14 @@
 
 import { useId } from "react";
 import { Label } from "@/components/ui/label";
+import { lineKey } from "../editor/lines";
 import { isDecorKey, decorKey } from "../editor/store";
 import { LABEL_MAX, MAX_TABLE_CAPACITY } from "../schemas";
 import { CommitField, fieldClass, toInt } from "./commit-field";
 import { DecorStyleSection } from "./decor-style-section";
 import { useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
 import { LayoutStats } from "./layout-stats";
+import { LineStyleSection } from "./line-style-section";
 import { TableAttributesSection } from "./table-attributes-section";
 
 type Props = {
@@ -22,9 +24,11 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
   const selection = useEditor((s) => s.selection);
   const tables = useEditor((s) => s.tables);
   const elements = useEditor((s) => s.elements);
+  const lines = useEditor((s) => s.lines);
   const typeId = useId();
   const selectedTables = tables.filter((t) => selection.includes(t.key));
   const selectedDecor = elements.filter((e) => selection.includes(decorKey(e.id)));
+  const selectedLines = lines.filter((l) => selection.includes(lineKey(l.id)));
   const keys = selectedTables.map((t) => t.key);
   const first = selectedTables[0];
   const single = selectedTables.length === 1 && selectedDecor.length === 0 ? first : undefined;
@@ -143,6 +147,8 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
       ) : null}
 
       {decor ? <DecorStyleSection element={decor} readOnly={readOnly} /> : null}
+
+      {selectedLines.length > 0 ? <LineStyleSection lines={selectedLines} readOnly={readOnly} /> : null}
 
       {selection.some(isDecorKey) && selectedTables.length > 0 ? (
         <p className="text-muted-foreground">Masa ve dekor birlikte seçiliyken yalnızca taşıma ve döndürme yapılabilir.</p>

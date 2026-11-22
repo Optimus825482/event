@@ -15,6 +15,7 @@ import {
   RectangleHorizontal,
   Redo2,
   Save,
+  Slash,
   Sofa,
   Square,
   Trash2,
@@ -124,6 +125,9 @@ export function EditorToolbar(props: Props) {
           <ToolButton label="Metin ekle" onClick={() => s().addDecor("label")}>
             <Type className="size-4" />
           </ToolButton>
+          <ToolButton label="Çizgi" active={tool === "line"} onClick={() => s().setTool(tool === "line" ? "select" : "line")}>
+            <Slash className="size-4" />
+          </ToolButton>
           <ArrangeMenu notify={props.notify} onOpenAdd={props.onOpenAdd} onOpenSpacing={props.onOpenSpacing} />
           <Divider />
           <ToolButton label="Geri al (Ctrl+Z)" disabled={!canUndo} onClick={() => s().undo()}>
@@ -160,7 +164,7 @@ export function EditorToolbar(props: Props) {
         <span className="hidden sm:inline">Şablonlar</span>
       </ToolButton>
       {readOnly ? null : (
-        <Button type="button" size="sm" className="ml-auto gap-1.5" disabled={saving || !dirty} onClick={onSave}>
+        <Button type="button" size="sm" className="sticky right-0 ml-auto gap-1.5 shadow-[-8px_0_8px_-4px_rgba(0,0,0,0.5)]" disabled={saving || !dirty} onClick={onSave}>
           <Save className="size-4" />
           {saving ? "Kaydediliyor…" : dirty ? "Kaydet" : "Kaydedildi"}
         </Button>

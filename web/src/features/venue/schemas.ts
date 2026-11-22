@@ -99,12 +99,47 @@ export type DecorElement = z.output<typeof decorElementSchema>;
 
 export const DEFAULT_CANVAS = { width: 1200, height: 800 } as const;
 
-/** Masa olmayan yerleşim öğeleri (`events.layout_decor`, şablonda `layoutData.decor`). */
-export const decorSchema = z.object({
-  width: z.number().int().min(200).max(20_000).default(DEFAULT_CANVAS.width),
-  height: z.number().int().min(200).max(20_000).default(DEFAULT_CANVAS.height),
-  elements: z.array(decorElementSchema).max(MAX_DECOR_ELEMENTS).default([]),
+/** Ayırıcı çizgi paleti (ilk renk eski sistemin grup çizgisi kırmızısı) ve kalınlıkları (px). */
+export const LINE_COLORS = ["#ef4444", "#f59e0b", "#22c55e", "#38bdf8", "#a855f7", "#e2e8f0"] as const;
+export const LINE_WIDTHS = [2, 4, 6, 10] as const;
+export const LINE_WIDTH_MAX = 12;
+export const MAX_LINES = 200;
+/** Çizgi uçlarının tuval dışına taşabileceği en büyük pay (px). */
+export const LINE_BOUNDS_TOLERANCE = 40;
+
+/** Düz ayırıcı/sınır çizgisi (eski sistemdeki "grup çizgileri"). */
+export const decorLineSchema = z.object({
+  id: z.string().min(1).max(64),
+  x1: coordinate,
+  y1: coordinate,
+  x2: coordinate,
+  y2: coordinate,
+  color: hexColor,
+  width: z.number().int("Kalınlık tam sayı olmalı").min(1).max(LINE_WIDTH_MAX),
 });
+export type DecorLine = z.output<typeof decorLineSchema>;
+
+/** Masa olmayan yerleşim öğeleri (`events.layout_decor`, şablonda `layoutData.decor`). */
+export const decorSchema = z
+  .object({
+    width: z.number().int().min(200).max(20_000).default(DEFAULT_CANVAS.width),
+    height: z.number().int().min(200).max(20_000).default(DEFAULT_CANVAS.height),
+    elements: z.array(decorElementSchema).max(MAX_DECOR_ELEMENTS).default([]),
+    /** Eski kayıtlarda yoktur; yoksa çizgi yok demektir. */
+    lines: z.array(decorLineSchema).max(MAX_LINES, `En fazla ${MAX_LINES} çizgi olabilir`).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const t = LINE_BOUNDS_TOLERANCE;
+    const inX = (v: number) => v >= -t && v <= value.width + t;
+    const inY = (v: number) => v >= -t && v <= value.height + t;
+    value.lines?.forEach((l, index) => {
+      if (!inX(l.x1) || !inX(l.x2) || !inY(l.y1) || !inY(l.y2)) {
+        ctx.addIssue({ code: "custom", path: ["lines", index], message: "Çizgi tuvalin dışında" });
+      } else if (l.x1 === l.x2 && l.y1 === l.y2) {
+        ctx.addIssue({ code: "custom", path: ["lines", index], message: "Çizginin uzunluğu sıfır olamaz" });
+      }
+    });
+  });
 export type Decor = z.output<typeof decorSchema>;
 export type DecorInput = z.input<typeof decorSchema>;
 
@@ -115,7 +150,13 @@ export function emptyDecor(): Decor {
 /** Kayıtlı JSON bozuksa ya da yoksa boş dekor döner (eski veriler için tolerans). */
 export function parseDecor(raw: unknown): Decor {
   const parsed = decorSchema.safeParse(raw ?? {});
-  return parsed.success ? parsed.data : emptyDecor();
+  if (parsed.success) return parsed.data;
+  // Bozuk bir çizgi listesi sahne/alan gibi geçerli öğeleri de düşürmesin: çizgiler atılıp yeniden denenir.
+  if (typeof raw === "object" && raw !== null && "lines" in raw) {
+    const withoutLines = decorSchema.safeParse({ ...raw, lines: undefined });
+    if (withoutLines.success) return withoutLines.data;
+  }
+  return emptyDecor();
 }
 
 export const saveLayoutSchema = z

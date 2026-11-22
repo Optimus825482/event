@@ -76,7 +76,7 @@ export function useLayoutDraft({ store, eventId, userId, enabled }: Options): La
       // Kurtarma kararı verilmeden yazmak bulunan taslağın üzerine yazardı.
       if (!s.dirty || waiting.current) return;
       const now = new Date();
-      if (writeDraft(storage(), eventId, userId, { tables: s.tables, elements: s.elements, canvas: s.canvas }, now)) {
+      if (writeDraft(storage(), eventId, userId, { tables: s.tables, elements: s.elements, lines: s.lines, canvas: s.canvas }, now)) {
         setLastSavedAt(now.toISOString());
       }
     };

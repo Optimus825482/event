@@ -27,7 +27,7 @@ export function FloorPlan3D({ plan, statuses, selectedId, disabledIds, colorByTa
   const px = height ?? (compact ? 220 : 420);
   return (
     <div className="overflow-hidden rounded-lg border border-slate-700" style={{ height: px }}>
-      <Scene3D tables={tables} elements={plan.decor} canvas={plan.canvas} ariaLabel={ariaLabel ? `${ariaLabel} (3B)` : "Alan planı (3B)"} />
+      <Scene3D tables={tables} elements={plan.decor} lines={plan.lines} canvas={plan.canvas} ariaLabel={ariaLabel ? `${ariaLabel} (3B)` : "Alan planı (3B)"} />
     </div>
   );
 }

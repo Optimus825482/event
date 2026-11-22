@@ -22,6 +22,7 @@ import {
   type View,
 } from "../plan-view-math";
 import { DecorNode, type ItemHandlers } from "./canvas-items";
+import { PlanLines } from "./canvas-lines";
 import { DEFAULT_TABLE_COLOR, LOCA_COLOR } from "./editor-context";
 import { PlanTableNode, SELECTED_STROKE } from "./floor-plan-nodes";
 import type { FloorPlanViewProps } from "./floor-plan-view";
@@ -311,6 +312,7 @@ export default function FloorPlanScene(props: FloorPlanViewProps) {
                   {...READ_ONLY_HANDLERS}
                 />
               ))}
+              <PlanLines lines={plan.lines} />
             </Layer>
             <Layer>
               {plan.tables.map((table) => (

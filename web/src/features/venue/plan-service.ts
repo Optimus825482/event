@@ -59,5 +59,5 @@ export async function getFloorPlan(db: Db | Tx, actor: Actor, eventId: string): 
       group: groupOf.get(row.id) ?? null,
     };
   });
-  return { eventName: event.name, canvas: { width: decor.width, height: decor.height }, tables, decor: decor.elements };
+  return { eventName: event.name, canvas: { width: decor.width, height: decor.height }, tables, decor: decor.elements, lines: decor.lines ?? [] };
 }

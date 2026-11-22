@@ -204,4 +204,84 @@ test.describe("Alan düzenleyicisi araçları", () => {
     expect((await font).status()).toBe(200);
     expect(external).toEqual([]);
   });
+
+  test("'Çizgi' aracıyla ayırıcı çizgi çizilir, rengi değişir ve kayıt yenilemede kalır", async ({ page }) => {
+    // Ayrı etkinlik: önceki senaryoların taslağı/masaları bu senaryoyu etkilemesin.
+    eventId = await createEvent(page, "E2E Alan Çizgileri");
+    await openEditor(page);
+    await page.getByRole("button", { name: "Çizgi", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Çizgi", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+    // Tuval istemcide yüklenir; Konva sahnesi oluşana kadar beklenir.
+    await page.waitForFunction(() => ((window as unknown as { Konva?: { stages: unknown[] } }).Konva?.stages.length ?? 0) > 0);
+    const start = await worldToScreen(page, 200, 200);
+    const end = await worldToScreen(page, 600, 210);
+    await page.mouse.click(start.x, start.y);
+    // Shift yatay kilitler: bitiş y'si başlangıçla aynı olur.
+    await page.keyboard.down("Shift");
+    await page.mouse.click(end.x, end.y);
+    await page.keyboard.up("Shift");
+    await expect.poll(async () => (await canvasLines(page)).length).toBe(1);
+    const [drawn] = await canvasLines(page);
+    expect(drawn?.points[1]).toBe(drawn?.points[3]);
+    expect(Math.abs((drawn?.points[2] ?? 0) - (drawn?.points[0] ?? 0))).toBeGreaterThan(300);
+
+    // Esc çizgi aracından seçime döner; seçili çizginin bitiş ucu sürüklenir, Ctrl+Z geri alır.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Çizgi", exact: true })).toHaveAttribute("aria-pressed", "false");
+    await page.mouse.click(start.x + (end.x - start.x) / 2, start.y);
+    const handle = await worldToScreen(page, drawn?.points[2] ?? 0, drawn?.points[3] ?? 0);
+    const target = await worldToScreen(page, drawn?.points[2] ?? 0, 400);
+    await page.mouse.move(handle.x, handle.y);
+    await page.mouse.down();
+    await page.mouse.move(target.x, target.y, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await canvasLines(page))[0]?.points[3]).toBe(400);
+    await page.keyboard.press("Control+z");
+    await expect.poll(async () => (await canvasLines(page))[0]?.points).toEqual(drawn?.points);
+
+    const panel = page.getByRole("region", { name: "Çizgi özellikleri" });
+    await expect(panel).toBeVisible();
+    await panel.getByRole("radio", { name: "Mavi" }).click();
+    await expect(panel.getByRole("radio", { name: "Mavi" })).toHaveAttribute("aria-checked", "true");
+    await expect.poll(async () => (await canvasLines(page))[0]?.stroke).toBe("#38bdf8");
+
+    await save(page, "0 masa, 0 kişi");
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Masa ekle" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Kaydedilmemiş Taslak Bulundu" })).toHaveCount(0);
+    await expect.poll(async () => (await canvasLines(page)).length).toBe(1);
+    const [reloaded] = await canvasLines(page);
+    expect(reloaded).toEqual(drawn && { ...drawn, stroke: "#38bdf8" });
+  });
 });
+
+/** Dünya koordinatını (tuval pikseli) ekran koordinatına çevirir (Konva sahnesinin ölçek ve kaymasıyla). */
+function worldToScreen(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
+  return page.evaluate(
+    ([wx, wy]) => {
+      type KonvaStage = { x(): number; y(): number; scaleX(): number; container(): HTMLElement };
+      const stage = (window as unknown as { Konva?: { stages: KonvaStage[] } }).Konva?.stages.at(-1);
+      if (!stage) throw new Error("Konva sahnesi yok");
+      const box = stage.container().getBoundingClientRect();
+      return { x: box.left + stage.x() + wx * stage.scaleX(), y: box.top + stage.y() + wy * stage.scaleX() };
+    },
+    [x, y] as const,
+  );
+}
+
+/** Tuvaldeki ayırıcı çizgiler (gövde çizgisinin noktaları ve rengi). */
+function canvasLines(page: Page): Promise<Array<{ points: number[]; stroke: string }>> {
+  return page.evaluate(() => {
+    type KonvaNode = { find(selector: string): KonvaNode[]; getAttr(name: string): unknown };
+    const stage = (window as unknown as { Konva?: { stages: KonvaNode[] } }).Konva?.stages.at(-1);
+    if (!stage) return [];
+    return stage.find(".line-item").flatMap((group) => {
+      // Seçim halesi dinlemez; gövde çizgisi `hitStrokeWidth` taşıyan çizgidir.
+      const body = group.find("Line").find((l) => typeof l.getAttr("hitStrokeWidth") === "number");
+      const points = body?.getAttr("points");
+      const stroke = body?.getAttr("stroke");
+      return Array.isArray(points) && typeof stroke === "string" ? [{ points: points.map(Number), stroke }] : [];
+    });
+  });
+}

@@ -4,6 +4,8 @@ import { decorItemKey, type ShapeOf } from "./collision";
 import { findFreeSpot, normalizeAngle, nextLabel, snap, snapPoint, type Point } from "./geometry";
 import { DEFAULT_VIEW_SETTINGS, type ViewSettings } from "./view-chrome";
 import { emptyHistory, record, redo, undo } from "./history";
+import { createLineActions } from "./line-actions";
+import { copyLines, lineKey, linesForSave } from "./lines";
 import {
   applyMoves,
   autoAlignTables,
@@ -39,8 +41,8 @@ export const decorKey = decorItemKey;
 const NEW_TABLE_SPACING_CELLS = 4;
 
 /** Düzenleyicide ne masa ne dekor varsa (sunucu verisinden bağımsız, anlık durum) true. */
-export function isLayoutEmpty(state: Pick<EditorState, "tables" | "elements">): boolean {
-  return state.tables.length === 0 && state.elements.length === 0;
+export function isLayoutEmpty(state: Pick<EditorState, "tables" | "elements"> & { lines?: readonly unknown[] }): boolean {
+  return state.tables.length === 0 && state.elements.length === 0 && (state.lines?.length ?? 0) === 0;
 }
 
 export const isDecorKey = (key: string) => key.startsWith(DECOR_KEY_PREFIX);
@@ -64,7 +66,7 @@ const DECOR_DEFAULTS: Record<DecorKind, { width: number; height: number; label: 
 };
 
 function snapshot(state: Snapshot): Snapshot {
-  return { tables: state.tables, elements: state.elements };
+  return { tables: state.tables, elements: state.elements, lines: state.lines };
 }
 
 function toEditorTables(layout: InitialLayout): EditorTable[] {
@@ -116,6 +118,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
     return {
       tables: toEditorTables(initial),
       elements: initial.decor.elements,
+      lines: initial.decor.lines ?? [],
       canvas: { width: initial.decor.width, height: initial.decor.height },
       selection: [],
       history: emptyHistory(),
@@ -125,11 +128,13 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
       gridSize: view.gridSize,
       tool: "select",
       tableShapes: {},
+      ...createLineActions(get, change, () => uid("l-")),
 
       load: (layout) =>
         set({
           tables: toEditorTables(layout),
           elements: layout.decor.elements,
+          lines: layout.decor.lines ?? [],
           canvas: { width: layout.decor.width, height: layout.decor.height },
           selection: [],
           history: emptyHistory(),
@@ -239,7 +244,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
         // Kilit (rezervasyon) bilgisi taslaktan değil, sunucudan gelen güncel durumdan alınır.
         const locked = new Set(s.tables.filter((t) => t.locked && t.id).map((t) => t.id));
         const tables = draft.tables.map((t) => ({ ...t, locked: t.id !== null && locked.has(t.id) }));
-        change({ tables, elements: draft.elements, selection: [] });
+        change({ tables, elements: draft.elements, lines: draft.lines ?? [], selection: [] });
         set({ canvas: draft.canvas });
       },
 
@@ -249,8 +254,9 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
         const blocked = s.tables.filter((t) => selected.has(t.key) && t.locked).map((t) => t.label);
         const tables = s.tables.filter((t) => !selected.has(t.key) || t.locked);
         const elements = s.elements.filter((e) => !selected.has(decorKey(e.id)));
-        if (tables.length !== s.tables.length || elements.length !== s.elements.length) {
-          change({ tables, elements, selection: s.selection.filter((k) => tables.some((t) => t.key === k)) });
+        const lines = s.lines.filter((l) => !selected.has(lineKey(l.id)));
+        if (tables.length !== s.tables.length || elements.length !== s.elements.length || lines.length !== s.lines.length) {
+          change({ tables, elements, lines, selection: s.selection.filter((k) => tables.some((t) => t.key === k)) });
         }
         return { blocked };
       },
@@ -270,11 +276,13 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
         const decorCopies = s.elements
           .filter((e) => selected.has(decorKey(e.id)))
           .map((e) => ({ ...e, id: uid("d-"), x: e.x + offset, y: e.y + offset }));
-        if (copies.length + decorCopies.length === 0) return;
+        const lineCopies = copyLines(s.lines, selected, offset, s.canvas, () => uid("l-"));
+        if (copies.length + decorCopies.length + lineCopies.length === 0) return;
         change({
           tables: [...s.tables, ...copies],
           elements: [...s.elements, ...decorCopies],
-          selection: [...copies.map((t) => t.key), ...decorCopies.map((e) => decorKey(e.id))],
+          lines: [...s.lines, ...lineCopies],
+          selection: [...copies.map((t) => t.key), ...decorCopies.map((e) => decorKey(e.id)), ...lineCopies.map((l) => lineKey(l.id))],
         });
       },
 
@@ -291,7 +299,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
       },
       selectAll: () => {
         const s = get();
-        set({ selection: [...s.tables.map((t) => t.key), ...s.elements.map((e) => decorKey(e.id))] });
+        set({ selection: [...s.tables.map((t) => t.key), ...s.elements.map((e) => decorKey(e.id)), ...s.lines.map((l) => lineKey(l.id))] });
       },
       clearSelection: () => set({ selection: [] }),
 
@@ -336,7 +344,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
             floor: t.floor,
             sortNumber: t.sortNumber,
           })),
-          decor: { width: s.canvas.width, height: s.canvas.height, elements: s.elements },
+          decor: { width: s.canvas.width, height: s.canvas.height, elements: s.elements, lines: linesForSave(s.lines, s.canvas) },
         };
       },
     };
@@ -344,6 +352,6 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
 }
 
 function keepExisting(selection: readonly string[], state: Snapshot): string[] {
-  const keys = new Set([...state.tables.map((t) => t.key), ...state.elements.map((e) => decorKey(e.id))]);
+  const keys = new Set([...state.tables.map((t) => t.key), ...state.elements.map((e) => decorKey(e.id)), ...state.lines.map((l) => lineKey(l.id))]);
   return selection.filter((k) => keys.has(k));
 }

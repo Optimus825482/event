@@ -8,13 +8,16 @@ import { Button } from "@/components/ui/button";
 import { layoutItems } from "../editor/collision";
 import { clampDelta, containsPoint, normalizeRect, zoomAround, type Point, type Rect as Box } from "../editor/geometry";
 import { cellName } from "../editor/view-chrome";
+import { linesInRect } from "../editor/lines";
 import type { GroupBadge } from "../editor/groups";
 import { decorKey, isDecorKey, shapeResolver, type Placement } from "../editor/store";
+import { CanvasLines } from "./canvas-lines";
 import { CanvasRulers } from "./canvas-rulers";
 import { DecorNode, TableNode, type ItemHandlers } from "./canvas-items";
 import { CanvasContextMenu, type ContextTarget } from "./canvas-context-menu";
 import { reportMove, type Notify } from "./editor-commands";
 import { useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
+import { useLineDrawing } from "./use-line-drawing";
 
 type Props = {
   readOnly: boolean;
@@ -85,6 +88,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
   const selected = useMemo(() => new Set(selection), [selection]);
   const current = view ?? fitView(canvas, size);
   const canDrag = !readOnly && tool === "select";
+  const drawing = useLineDrawing(store);
 
   useEffect(() => {
     const tr = transformer.current;
@@ -127,6 +131,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
         else nodes.current.delete(key);
       },
       onSelect: (key, e) => {
+        if (store.getState().tool === "line") return; // çizgi aracında tıklama sahneye geçer
         e.cancelBubble = true;
         const evt = e.evt;
         const multi = "shiftKey" in evt && (evt.shiftKey || evt.ctrlKey || evt.metaKey);
@@ -222,7 +227,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
 
   function onStageDown(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
     const stage = e.target.getStage();
-    if (!stage || tool !== "select" || readOnly) return;
+    if (!stage || readOnly || drawing.onStageDown(e) || tool !== "select") return;
     if (e.target !== stage && e.target.name() !== "background") return;
     // Sağ tık seçim çerçevesi başlatmaz (sağ tık menüsü açılır).
     if ("button" in e.evt && e.evt.button !== 0) return;
@@ -239,6 +244,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
     const inside = p.x <= canvas.width && p.y <= canvas.height;
     setPointerCell(inside ? cellName(p, gridSize * 2) : null);
     if (lasso) setLasso({ ...lasso, end: p });
+    drawing.onStageMove(e);
   }
 
   function onStageUp() {
@@ -255,6 +261,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
       ...s.elements
         .filter((el) => containsPoint(rect, { x: el.x + el.width / 2, y: el.y + el.height / 2 }))
         .map((el) => decorKey(el.id)),
+      ...linesInRect(s.lines, rect),
     ];
     s.select(hits, lasso.additive ? "add" : "replace");
   }
@@ -305,7 +312,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
           onWheel={onWheel}
           onMouseLeave={() => setPointerCell(null)}
           onContextMenu={onContextMenu}
-          style={{ cursor: tool === "pan" ? "grab" : "default" }}
+          style={{ cursor: tool === "pan" ? "grab" : tool === "line" ? "crosshair" : "default" }}
         >
           <Layer>
             <Rect name="background" width={canvas.width} height={canvas.height} fill="#1e293b" stroke="#475569" />
@@ -324,6 +331,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
                 draggable={canDrag && el.isPinned !== true}
               />
             ))}
+            <CanvasLines store={store} readOnly={readOnly} preview={drawing.preview} />
             {tables.map((t) => (
               <TableNode
                 key={t.key}

@@ -1,6 +1,7 @@
-import type { Decor, DecorElement, DecorKind, TableInput, TableShape } from "../schemas";
+import type { Decor, DecorElement, DecorKind, DecorLine, TableInput, TableShape } from "../schemas";
 import type { Point } from "./geometry";
 import type { History } from "./history";
+import type { LineActions } from "./line-actions";
 import type { BulkAddOptions } from "./tool-actions";
 
 export type EditorTable = {
@@ -26,8 +27,9 @@ export type EditorTable = {
   locked: boolean;
 };
 
-export type Snapshot = { tables: EditorTable[]; elements: DecorElement[] };
-export type Tool = "select" | "pan";
+export type Snapshot = { tables: EditorTable[]; elements: DecorElement[]; lines: DecorLine[] };
+/** `line`: tıkla-tıkla düz çizgi çizme aracı. */
+export type Tool = "select" | "pan" | "line";
 
 export type InitialLayout = {
   tables: Array<Omit<EditorTable, "key" | "locked"> & { id: string }>;
@@ -56,9 +58,15 @@ export type MoveResult = { ok: true; moved: number } | { ok: false; reason: "col
 export type ArrangeReport = { moved: number; unplaced: string[] };
 export type BulkAddReport = { added: number; requested: number; keys: string[] };
 /** Taslaktan geri yüklenen düzenleyici içeriği. */
-export type DraftContent = { tables: EditorTable[]; elements: DecorElement[]; canvas: { width: number; height: number } };
+export type DraftContent = {
+  tables: EditorTable[];
+  elements: DecorElement[];
+  /** Eski taslaklarda yoktur. */
+  lines?: DecorLine[];
+  canvas: { width: number; height: number };
+};
 
-export type EditorActions = {
+export type EditorActions = LineActions & {
   load: (layout: InitialLayout) => void;
   addTable: (opts?: { at?: Point; capacity?: number; tableTypeId?: string | null; isLoca?: boolean }) => string;
   addDecor: (kind: DecorKind, at?: Point) => string;

@@ -4,9 +4,10 @@ import { Billboard, OrbitControls, Text } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { effectiveTableSize } from "../editor/geometry";
-import type { DecorElement } from "../schemas";
+import type { DecorElement, DecorLine } from "../schemas";
 import { floorElevation, floorLabel, tableDims } from "./table-visual";
 import type { SceneTable } from "./venue-3d-scene-data";
+import Venue3DLines from "./venue-3d-lines";
 import Venue3DWalls from "./venue-3d-walls";
 
 /** Tuvalde 50 piksel = 3B sahnede 1 birim (~1 metre). */
@@ -26,6 +27,8 @@ type ToWorld = (x: number, y: number) => [number, number];
 export type Venue3DSceneProps = {
   tables: readonly SceneTable[];
   elements: readonly DecorElement[];
+  /** Ayırıcı çizgiler (zeminde ince şerit). */
+  lines?: readonly DecorLine[];
   canvas: { width: number; height: number };
   ariaLabel?: string;
 };
@@ -155,7 +158,7 @@ function DecorMesh({ element, toWorld }: { element: DecorElement; toWorld: ToWor
  * masa/loca/sahne yazıları, kata göre yükseltilmiş masalar, vurgulu masa halkası ve PNG ekran görüntüsü.
  * Korkuluklar (balkon) yapılmadı. Düzenleyici ve salt okunur planlar aynı sahneyi kullanır.
  */
-export default function Venue3DScene({ tables, elements, canvas, ariaLabel }: Venue3DSceneProps) {
+export default function Venue3DScene({ tables, elements, lines, canvas, ariaLabel }: Venue3DSceneProps) {
   const capture = useRef<Capture | null>(null);
   const w = canvas.width / PX;
   const h = canvas.height / PX;
@@ -190,6 +193,7 @@ export default function Venue3DScene({ tables, elements, canvas, ariaLabel }: Ve
         {elements.map((e) => (
           <DecorMesh key={e.id} element={e} toWorld={toWorld} />
         ))}
+        <Venue3DLines lines={lines ?? []} px={PX} toWorld={toWorld} />
         {tables.map((t) => (
           <TableMesh key={t.key} table={t} toWorld={toWorld} />
         ))}

@@ -15,6 +15,7 @@ type Props = { tableTypes: readonly TableTypeOption[] };
 export default function Venue3DPreview({ tableTypes }: Props) {
   const tables = useEditor((s) => s.tables);
   const elements = useEditor((s) => s.elements);
+  const lines = useEditor((s) => s.lines);
   const canvas = useEditor((s) => s.canvas);
   const typeById = useMemo(() => new Map(tableTypes.map((t) => [t.id, t])), [tableTypes]);
   const sceneTables = useMemo<SceneTable[]>(
@@ -39,5 +40,5 @@ export default function Venue3DPreview({ tableTypes }: Props) {
       }),
     [tables, typeById],
   );
-  return <Venue3DScene tables={sceneTables} elements={elements} canvas={canvas} />;
+  return <Venue3DScene tables={sceneTables} elements={elements} lines={lines} canvas={canvas} />;
 }
