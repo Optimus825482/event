@@ -1,6 +1,8 @@
 name: web-ci
 
 on:
+  # build-and-push.yml bu iş akışını `needs:` ile çağırır: kırmızı bir commit'ten web imajı üretilmez.
+  workflow_call:
   pull_request:
     paths:
       - "web/**"
@@ -73,6 +75,9 @@ jobs:
 
       - name: Apply migrations
         run: npm run db:migrate
+
+      - name: Apply migrations again (runtime migrator, must be a no-op)
+        run: npm run db:migrate:runtime
 
       - name: Build
         run: npm run build

@@ -1,81 +1,82 @@
-version: "3.8"
+# EventFlow PRO (web/) - Docker Compose (Coolify dışı sunucu / yerel prova)
+# Web yalnızca 127.0.0.1:3000'e bağlanır; önüne kendi ters vekilinizi (Traefik/nginx, HTTPS) koyun ve
+# istemci IP başlığını TRUSTED_IP_HEADER ile belirtin. Volume adları eski yığınınkilerden bilerek farklıdır
+# (eski PostgreSQL 15 verisi yeni 17 sunucusuna bağlanmasın).
+# Eski yığın: docker-compose.legacy.yml (geri dönüş için). Postgres için port yayınlanmaz.
+#
+# Kullanım:
+#   docker compose up -d --build        # postgres -> migrate (tek seferlik) -> web
+
+x-db-url: &db-url postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@postgres:5432/${DB_NAME:-eventflow}
 
 services:
-  # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: eventflow-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD zorunlu}
       POSTGRES_DB: ${DB_NAME:-eventflow}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - web_postgres_data:/var/lib/postgresql/data
     networks:
       - eventflow-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-eventflow}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # NestJS Backend
-  backend:
+  migrate:
     build:
-      context: ./backend
+      context: ./web
       dockerfile: Dockerfile
-    container_name: eventflow-backend
-    restart: unless-stopped
+    image: eventflow-web:local
+    restart: "no"
+    command: ["node", "/opt/migrator/migrate.mjs"]
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: production
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:?required}
-      DB_NAME: ${DB_NAME:-eventflow}
-      JWT_SECRET: ${JWT_SECRET:?required}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?required}
-      CORS_ORIGINS: ${CORS_ORIGINS:?required}
-      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-}
-      PORT: 4004
-    volumes:
-      - uploads_data:/app/uploads
+      DATABASE_URL: *db-url
     networks:
       - eventflow-network
-    ports:
-      - "4004:4004"
 
-  # Next.js Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4004/api}
-    container_name: eventflow-frontend
+  web:
+    image: eventflow-web:local
+    container_name: eventflow-web
     restart: unless-stopped
     depends_on:
-      - backend
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      DATABASE_URL: *db-url
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET zorunlu (en az 32 karakter)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?BETTER_AUTH_URL zorunlu (https://...)}
+      TRUSTED_IP_HEADER: ${TRUSTED_IP_HEADER:?TRUSTED_IP_HEADER zorunlu (Traefik arkasında x-real-ip)}
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY zorunlu (openssl rand -base64 32)}
+      QR_SIGNING_KEY: ${QR_SIGNING_KEY:-}
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - web_uploads_data:/data/uploads
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - eventflow-network
-    ports:
-      - "3003:3003"
 
 volumes:
-  postgres_data:
-  uploads_data:
+  web_postgres_data:
+  web_uploads_data:
 
 networks:
   eventflow-network:

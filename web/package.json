@@ -15,6 +15,7 @@
     "db:reset": "node scripts/pg.mjs reset",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:runtime": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
     "db:migrate-legacy": "tsx scripts/migrate-legacy/index.ts"
   },
   "dependencies": {
