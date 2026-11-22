@@ -21,17 +21,18 @@ async function accessibleEvent(db: Executor, actor: ActorWithPermissions, eventI
   return event;
 }
 
-function searchCondition(q: string): SQL | undefined {
+/** `withCustomer` yalnızca `customers:view` olanlar içindir; yoksa yalnızca rezervasyonun kendi alanlarında aranır. */
+function searchCondition(q: string, withCustomer: boolean): SQL | undefined {
   const pattern = `%${escapeLike(q)}%`;
   const conditions: SQL[] = [
     ilike(reservations.guestName, pattern),
     ilike(reservations.guestEmail, pattern),
-    ilike(customers.fullName, pattern),
     ilike(eventTables.label, pattern),
   ];
+  if (withCustomer) conditions.push(ilike(customers.fullName, pattern));
   const digits = q.replace(/\D/g, "").replace(/^0+/, "");
   if (digits.length >= 3) {
-    conditions.push(ilike(customers.phoneNormalized, `%${digits}%`));
+    if (withCustomer) conditions.push(ilike(customers.phoneNormalized, `%${digits}%`));
     conditions.push(sql`regexp_replace(coalesce(${reservations.guestPhone}, ''), '\\D', '', 'g') like ${`%${digits}%`}`);
   }
   return or(...conditions);
@@ -42,11 +43,12 @@ export async function listReservations(db: Executor, actor: ActorWithPermissions
   authorize(actor, "reservations", "view");
   const input = listReservationsInput.parse(raw);
   const event = await accessibleEvent(db, actor, input.eventId);
+  const seeCustomers = can(actor, "customers", "view");
 
   const conditions: SQL[] = [eq(reservations.eventId, event.id)];
   if (input.status) conditions.push(eq(reservations.status, input.status));
   if (input.q) {
-    const search = searchCondition(input.q);
+    const search = searchCondition(input.q, seeCustomers);
     if (search) conditions.push(search);
   }
   const where = and(...conditions);
@@ -92,10 +94,15 @@ export async function listReservations(db: Executor, actor: ActorWithPermissions
   const statusCounts = Object.fromEntries(RESERVATION_STATUSES.map((s) => [s, 0])) as Record<ReservationStatus, number>;
   for (const row of byStatus) statusCounts[row.status] = row.n;
 
-  return { event, items, total: totals[0]?.n ?? 0, page: input.page, pageSize: input.pageSize, statusCounts };
+  const visible = seeCustomers ? items : items.map((item) => ({ ...item, customerName: null }));
+  return { event, items: visible, total: totals[0]?.n ?? 0, page: input.page, pageSize: input.pageSize, statusCounts };
 }
 
-/** Tek rezervasyon (masa ve müşteri ile). Yoksa ya da erişilemiyorsa `null`. */
+/**
+ * Tek rezervasyon (masa ve müşteri ile). Yoksa ya da erişilemiyorsa `null`. `customer` bloğu
+ * (ad, iletişim, sayaçlar) yalnızca `customers:view` olanlara döner; `isBlacklisted` durum
+ * işlemleri için herkese döner.
+ */
 export async function getReservationDetail(db: Executor, actor: ActorWithPermissions, id: string) {
   authorize(actor, "reservations", "view");
   if (!UUID_RE.test(id)) return null;
@@ -121,7 +128,8 @@ export async function getReservationDetail(db: Executor, actor: ActorWithPermiss
     .innerJoin(events, eq(events.id, reservations.eventId))
     .where(eq(reservations.id, id));
   if (!row || !canAccessEvent(actor, row.event)) return null;
-  return row;
+  const { customer, ...rest } = row;
+  return { ...rest, isBlacklisted: customer.isBlacklisted, customer: can(actor, "customers", "view") ? customer : null };
 }
 
 function rethrowNotFound(error: unknown): never {

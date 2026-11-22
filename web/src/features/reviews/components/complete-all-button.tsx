@@ -22,14 +22,11 @@ export function CompleteAllButton({ eventId }: { eventId: string }) {
         setMessage({ kind: "error", text: res.message });
         return;
       }
-      const { completed, incomplete } = res.data;
-      setMessage({
-        kind: "ok",
-        text:
-          incomplete > 0
-            ? `${completed} değerlendirme tamamlandı; ${incomplete} taslakta eksik puan var.`
-            : `${completed} değerlendirme tamamlandı.`,
-      });
+      const { completed, incomplete, skipped } = res.data;
+      const parts = [`${completed} değerlendirme tamamlandı`];
+      if (incomplete > 0) parts.push(`${incomplete} taslakta eksik puan var`);
+      if (skipped > 0) parts.push(`${skipped} taslak, personel artık ekibinizde olmadığı için atlandı`);
+      setMessage({ kind: "ok", text: `${parts.join("; ")}.` });
       router.refresh();
     } catch {
       setMessage({ kind: "error", text: "Beklenmeyen bir hata oluştu" });

@@ -20,7 +20,7 @@ const dateFormat = new Intl.DateTimeFormat("tr-TR", {
 
 export default async function ReservationDetailPage({ params }: { params: Params }) {
   const { eventId, reservationId } = await params;
-  const { actor, reservation, tableLabel, tableCapacity, customer, event, tables } = await loadReservationDetail(
+  const { actor, reservation, tableLabel, tableCapacity, customer, isBlacklisted, event, tables } = await loadReservationDetail(
     eventId,
     reservationId,
   );
@@ -40,7 +40,7 @@ export default async function ReservationDetailPage({ params }: { params: Params
           {event.name}
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">{reservation.guestName ?? customer.fullName}</h1>
+          <h1 className="text-2xl font-semibold">{reservation.guestName ?? customer?.fullName ?? "Misafir"}</h1>
           <span className="rounded-full border border-border px-3 py-1 text-sm">
             {RESERVATION_STATUS_LABELS[reservation.status]}
           </span>
@@ -55,20 +55,24 @@ export default async function ReservationDetailPage({ params }: { params: Params
           </dd>
           <dt className="text-muted-foreground">Kişi sayısı</dt>
           <dd>{reservation.guestCount}</dd>
-          <dt className="text-muted-foreground">Müşteri</dt>
-          <dd>
-            <Link href={`/customers/${customer.id}`} className="hover:underline">
-              {customer.fullName}
-            </Link>
-            {customer.isBlacklisted ? <span className="ml-2 text-destructive">Kara listede</span> : null}
-            <span className="ml-2 text-muted-foreground">
-              {customer.totalReservations} rezervasyon, {customer.noShowCount} gelmedi
-            </span>
-          </dd>
+          {customer ? (
+            <>
+              <dt className="text-muted-foreground">Müşteri</dt>
+              <dd>
+                <Link href={`/customers/${customer.id}`} className="hover:underline">
+                  {customer.fullName}
+                </Link>
+                {customer.isBlacklisted ? <span className="ml-2 text-destructive">Kara listede</span> : null}
+                <span className="ml-2 text-muted-foreground">
+                  {customer.totalReservations} rezervasyon, {customer.noShowCount} gelmedi
+                </span>
+              </dd>
+            </>
+          ) : null}
           <dt className="text-muted-foreground">Telefon</dt>
-          <dd>{reservation.guestPhone ?? customer.phone ?? "-"}</dd>
+          <dd>{reservation.guestPhone ?? customer?.phone ?? "-"}</dd>
           <dt className="text-muted-foreground">E-posta</dt>
-          <dd>{reservation.guestEmail ?? customer.email ?? "-"}</dd>
+          <dd>{reservation.guestEmail ?? customer?.email ?? "-"}</dd>
           <dt className="text-muted-foreground">Özel istek</dt>
           <dd className="whitespace-pre-wrap">{reservation.specialRequests ?? "-"}</dd>
           <dt className="text-muted-foreground">Oluşturulma</dt>
@@ -98,7 +102,7 @@ export default async function ReservationDetailPage({ params }: { params: Params
         status={reservation.status}
         canEdit={canEdit && event.status !== "completed"}
         canOverrideBlacklist={actor.role === "admin"}
-        isBlacklisted={customer.isBlacklisted}
+        isBlacklisted={isBlacklisted}
       />
 
       {editable ? (

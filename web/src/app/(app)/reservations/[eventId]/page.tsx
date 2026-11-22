@@ -58,6 +58,11 @@ export default async function EventReservationsPage({ params, searchParams }: { 
             {canEdit && event.status === "completed" ? (
               <MarkNoShowsButton eventId={event.id} candidates={statusCounts.pending + statusCounts.confirmed} />
             ) : null}
+            {can(actor, "reservations", "create") ? (
+              <Link href={`/import/reservations/${eventId}`} className={buttonVariants({ variant: "outline" })}>
+                Excel&apos;den içe aktar
+              </Link>
+            ) : null}
             {bookable && can(actor, "reservations", "create") ? (
               <Link href={`/reservations/${eventId}/new`} className={buttonVariants()}>
                 Yeni rezervasyon
@@ -122,7 +127,7 @@ export default async function EventReservationsPage({ params, searchParams }: { 
                 <tr key={r.id}>
                   <td className="p-3">
                     <Link href={`/reservations/${eventId}/${r.id}`} className="font-medium hover:underline">
-                      {r.guestName ?? r.customerName}
+                      {r.guestName ?? r.customerName ?? "Misafir"}
                     </Link>
                     <div className="text-xs text-muted-foreground">
                       {r.guestPhone ?? ""}

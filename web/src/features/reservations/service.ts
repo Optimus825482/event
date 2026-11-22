@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { customers, reservations } from "@/db/schema";
+import { withPermissions } from "@/features/auth/permissions";
+import { can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { findOrCreateCustomer } from "@/features/customers/find-or-create";
 import { DomainError } from "@/lib/action";
@@ -28,6 +30,14 @@ export { cancelReservation, changeReservationStatus, markNoShows } from "./statu
 export type { ReservationRow } from "./internal";
 
 /**
+ * Müşteri kaydını bağlamak/ön doldurmak için `customers:view` gerekir. Yetkisiz kullanıcı için
+ * bilinmeyen müşteriyle aynı hata verilir (varlık sızdırılmaz).
+ */
+async function canReadCustomers(actor: Actor): Promise<boolean> {
+  return can(await withPermissions(actor), "customers", "view");
+}
+
+/**
  * Yeni rezervasyon (durum `confirmed`). Tek transaction: etkinlik ve masa `FOR SHARE` kilitlenir,
  * kapasite güncel masa satırından denetlenir, müşteri bulunur/oluşturulur, kara liste uygulanır,
  * kimlik önceden üretilip imzalı QR belirteciyle tek INSERT yapılır. Masanın boş olup olmadığı
@@ -39,6 +49,8 @@ export async function createReservation(
   actor: Actor,
   input: CreateReservationInput,
 ): Promise<ReservationRow> {
+  const mayReadCustomers = await canReadCustomers(actor);
+  if (input.customerId && !mayReadCustomers) throw new DomainError("not_found", "Müşteri bulunamadı");
   return inTransaction(db, async (tx) => {
     const event = await lockEvent(tx, actor, input.eventId);
     assertBookable(event);
@@ -66,9 +78,10 @@ export async function createReservation(
         tableId: table.id,
         customerId: found.id,
         guestCount: input.guestCount,
-        guestName: input.guestName ?? customer?.fullName ?? null,
-        guestPhone: input.guestPhone ?? customer?.phone ?? null,
-        guestEmail: input.guestEmail ?? customer?.email ?? null,
+        // Eşleşen müşterinin iletişim bilgisi yalnızca `customers:view` olana ön doldurulur.
+        guestName: input.guestName ?? (mayReadCustomers ? customer?.fullName : undefined) ?? null,
+        guestPhone: input.guestPhone ?? (mayReadCustomers ? customer?.phone : undefined) ?? null,
+        guestEmail: input.guestEmail ?? (mayReadCustomers ? customer?.email : undefined) ?? null,
         specialRequests: input.specialRequests ?? null,
         status: "confirmed",
         qrToken: signQrToken(id),
