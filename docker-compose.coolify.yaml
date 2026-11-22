@@ -10,7 +10,7 @@
 
 x-web-env: &web-env
   NODE_ENV: production
-  DATABASE_URL: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@postgres:5432/${DB_NAME:-eventflow}
+  DATABASE_URL: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@eventflow-db:5432/${DB_NAME:-eventflow}
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET zorunlu (en az 32 karakter)}
   BETTER_AUTH_URL: ${BETTER_AUTH_URL:?BETTER_AUTH_URL zorunlu (https://...)}
   TRUSTED_IP_HEADER: ${TRUSTED_IP_HEADER:?TRUSTED_IP_HEADER zorunlu (Traefik arkasında x-real-ip)}
@@ -19,8 +19,10 @@ x-web-env: &web-env
   UPLOAD_DIR: /data/uploads
 
 services:
-  # PostgreSQL (port yayınlanmaz; yalnızca iç ağdan erişilir)
-  postgres:
+  # PostgreSQL (port yayınlanmaz; yalnızca iç ağdan erişilir).
+  # Servis adı bilerek benzersizdir: web, paylaşılan `coolify` ağına da bağlıdır ve orada başka projelerin
+  # `postgres` adlı servisleri olabilir; genel ad yanlış veritabanına çözümlenir.
+  eventflow-db:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -51,10 +53,10 @@ services:
     restart: "no"
     command: ["node", "/opt/migrator/migrate.mjs"]
     depends_on:
-      postgres:
+      eventflow-db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@postgres:5432/${DB_NAME:-eventflow}
+      DATABASE_URL: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@eventflow-db:5432/${DB_NAME:-eventflow}
     networks:
       - default
 
@@ -66,10 +68,10 @@ services:
     restart: "no"
     entrypoint: ["node", "/opt/migrator/create-admin.mjs"]
     depends_on:
-      postgres:
+      eventflow-db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@postgres:5432/${DB_NAME:-eventflow}
+      DATABASE_URL: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@eventflow-db:5432/${DB_NAME:-eventflow}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     networks:
       - default
@@ -79,7 +81,7 @@ services:
     image: ${WEB_IMAGE:-ghcr.io/optimus825482/eventflow-web:latest}
     restart: unless-stopped
     depends_on:
-      postgres:
+      eventflow-db:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
