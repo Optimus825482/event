@@ -39,6 +39,17 @@ npx tsx scripts/migrate-legacy/index.ts [--dry-run] [--report raporlar/taşıma]
      sonrası yerleşim düzenleyicide konumlandırın ya da rezervasyonu doğru masaya taşıyın.
    - `conflictingReservations`: aynı masadaki ikinci aktif rezervasyon `cancelled` taşınır; gerekçe
      rezervasyona bağlı müşteri notundadır. Gerçekten iki masa gerekiyorsa taşımadan sonra düzeltin.
+   - `capacityRaised`: eski sistem masa kapasitesini denetlemiyordu; kişi sayısı masanın kapasitesini
+     aşan **aktif** rezervasyonlar silinmez ve kişi sayısı kısaltılmaz. Bunun yerine masanın kapasitesi
+     o masadaki en büyük aktif kişi sayısına yükseltilir (yoksa yeni uygulama o rezervasyonu
+     düzenlemeyi ve yerleşimi kaydetmeyi reddederdi). Listelenen her masayı/rezervasyonu (eski ve yeni
+     kapasite, rezervasyon kimlikleri) sahibiyle gözden geçirin; iptal edilmiş rezervasyonlar sayılmaz.
+   - `customerCounterChanges`: müşteri sayaçları (`total_reservations`, `no_show_count`,
+     `total_attended_events`) eski değerlerden kopyalanmaz; taşınan rezervasyon satırlarından
+     uygulamanın kuralıyla yeniden hesaplanır (iptal edilmeyenler, `no_show`, `checked_in`). Eski
+     değerden farklı olanlar burada eski/yeni değerle listelenir (çakışma nedeniyle iptal edilenler,
+     müşteri birleştirmeleri). `event_count`, `total_spent`, `last_event_*` rezervasyondan türetilemez
+     ve eski değerleriyle kalır.
    - `unmatchedStaff`, `userStaffLinks`, `unresolvedStaffReferences`: kullanıcı ↔ personel eşlemesi.
      Ad soyadla (`matchedBy=fullName`) yapılan eşleşmeleri gözle doğrulayın.
    - `caseOnlyUsernames`: iki hesap da korunur; giriş büyük/küçük harf duyarlıdır.
@@ -50,8 +61,10 @@ npx tsx scripts/migrate-legacy/index.ts [--dry-run] [--report raporlar/taşıma]
    edilen kararla düzeltin ve 4. adımı tekrarlayın. Rapor temizlenmeden canlı geçiş yapılmaz.
 6. **Gerçek çalıştırma.** Aynı komutu `--dry-run` olmadan, `--report raporlar/gercek` ile çalıştırın.
    Sonuç `committed` olmalı; aksi halde işlem geri alınmıştır ve hedef değişmemiştir.
-7. **Doğrulama.** Raporun "Doğrulama" bölümündeki her satır OK olmalı (satır sayısı uzlaştırma,
-   her rezervasyonun masası/müşterisi, masa başına tek aktif rezervasyon, her kullanıcının parola
+7. **Doğrulama.** Raporun "Doğrulama" bölümündeki her satır OK olmalı; kapasite aşımı ya da sayaç uyumsuzluğu varsa
+   doğrulama başarısız olur ve tüm işlem geri alınır (satır sayısı uzlaştırma,
+   her rezervasyonun masası/müşterisi, masa başına tek aktif rezervasyon, **hiçbir aktif rezervasyonun masa kapasitesini aşmaması**,
+   **müşteri sayaçlarının rezervasyon satırlarıyla uyumu**, her kullanıcının parola
    hesabı, QR imzaları, dekor biçimi, varsayılanlar/diziler). Ek olarak elle: birkaç eski kullanıcıyla
    giriş, bir etkinliğin yerleşimi, bir rezervasyonun QR check-in'i.
 8. **Geri alma.** Betik eski veritabanına hiç yazmaz. Geri dönüş = hedefi 2. adımdaki yedekten geri

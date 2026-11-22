@@ -37,6 +37,8 @@ export class CustomerDirectory {
   private readonly tags = new Map<string, Set<string>>();
   private readonly byPhone = new Map<string, string>();
   private readonly byEmail = new Map<string, string>();
+  /** Eski kayıttan türeyen (birleştirilmiş) müşteriler; sayaç farkı yalnızca bunlar için raporlanır. */
+  private readonly fromLegacy = new Set<string>();
 
   constructor(private readonly ctx: Ctx) {}
 
@@ -115,6 +117,7 @@ export class CustomerDirectory {
       updatedAt,
     };
     this.rows.set(row.id, row);
+    this.fromLegacy.add(row.id);
     this.tags.set(row.id, new Set(members.flatMap((m) => m.strings("tags").map((t) => t.trim()).filter((t) => t !== ""))));
     for (const m of members) {
       ctx.customerAlias.set(m.id, row.id);
@@ -145,7 +148,6 @@ export class CustomerDirectory {
     const byEmail = email ? this.byEmail.get(email) : undefined;
     const found = byPhone ?? byEmail;
     if (found) {
-      this.bumpReservations(found);
       return { customerId: found, kind: "matched", matchedBy: byPhone ? "phone" : "email" };
     }
     const name = reservation.trimmed("guestName") ?? UNKNOWN_GUEST;
@@ -158,7 +160,6 @@ export class CustomerDirectory {
       phoneNormalized: phone,
       email: rawEmail,
       emailNormalized: email,
-      totalReservations: 1,
       createdAt: reservation.date("createdAt") ?? undefined,
       updatedAt: reservation.date("createdAt") ?? undefined,
     });
@@ -167,9 +168,34 @@ export class CustomerDirectory {
     return { customerId: id, kind: identified ? "created" : "placeholder", matchedBy: null };
   }
 
-  private bumpReservations(id: string): void {
-    const row = this.rows.get(id);
-    if (row && !this.ctx.customerAlias.has(id)) row.totalReservations = (row.totalReservations ?? 0) + 1;
+  /**
+   * Sayaçlar taşınan rezervasyon satırlarından yeniden hesaplanır (uygulamanın kuralıyla): iptal
+   * edilmeyen rezervasyon sayısı, `no_show` sayısı, `checked_in` sayısı. Eski değerler taşınmaz;
+   * çakışma nedeniyle iptal edilen rezervasyonlar ve birleşen müşteriler zaten onları bozardı.
+   * Eski değerden farklı olanlar raporlanır. `eventCount`/`totalSpent`/`lastEvent*` rezervasyondan
+   * türetilemez, eski değerleriyle kalır.
+   */
+  recomputeCounters(reservations: ReadonlyArray<{ customerId: string; status?: string }>): void {
+    const counts = new Map<string, { total: number; noShow: number; attended: number }>();
+    for (const r of reservations) {
+      const c = counts.get(r.customerId) ?? { total: 0, noShow: 0, attended: 0 };
+      if (r.status !== "cancelled") c.total += 1;
+      if (r.status === "no_show") c.noShow += 1;
+      if (r.status === "checked_in") c.attended += 1;
+      counts.set(r.customerId, c);
+    }
+    for (const row of this.rows.values()) {
+      const c = counts.get(row.id) ?? { total: 0, noShow: 0, attended: 0 };
+      const next = { totalReservations: c.total, noShowCount: c.noShow, totalAttendedEvents: c.attended } as const;
+      if (this.fromLegacy.has(row.id)) {
+        for (const field of ["totalReservations", "noShowCount", "totalAttendedEvents"] as const) {
+          if ((row[field] ?? 0) !== next[field]) {
+            this.ctx.add("customerCounterChanges", { customerId: row.id, field, legacy: row[field] ?? 0, recomputed: next[field] });
+          }
+        }
+      }
+      Object.assign(row, next);
+    }
   }
 
   async flush(): Promise<void> {

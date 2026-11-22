@@ -32,6 +32,9 @@ export const CATEGORIES = {
   layoutIssues: "Yerleşim (venueLayout) dönüşüm notları",
   skippedRows: "Taşınmayan satırlar",
   catalogEntriesCreated: "Serbest metinden oluşturulan katalog kayıtları",
+  capacityRaised:
+    "Kapasitesi yükseltilen masalar (aktif rezervasyonun kişi sayısı masa kapasitesini aşıyordu; rezervasyon korundu, masa kapasitesi en büyük aktif kişi sayısına çıkarıldı; yayına almadan önce gözden geçirin)",
+  customerCounterChanges: "Müşteri sayaçları (eski değer taşınan rezervasyonlardan yeniden hesaplanan değerle farklıydı; yeniden hesaplanan yazıldı)",
   tableIdMap: "Eski yerleşim masa kimliği → yeni event_tables.id eşlemesi",
   information: "Bilgi",
 } as const;

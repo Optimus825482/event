@@ -117,12 +117,14 @@ export async function seedLegacy(client: pg.Client): Promise<void> {
   await res(R.r1, E.e1, "t-1", C.c1, "confirmed", "2025-05-01 10:00:00", { totalAmount: "2500.00" });
   await res(R.r2, E.e1, "t-1", C.c2, "pending", "2025-05-02 10:00:00");
   await res(R.r3, E.e1, "t-2", null, "checked_in", "2025-05-03 10:00:00", { guestName: "Misafir Bir", guestPhone: "0533 222 33 44", checkInTime: "2025-06-01 21:30:00" });
-  await res(R.r4, E.e1, "loca-1", null, "cancelled", "2025-05-04 10:00:00", { guestName: "Sadece Ad" });
+  // r4: iptal edilmiş, kapasiteyi (6) aşıyor -> kapasite yükseltmeyi TETİKLEMEMELİ.
+  await res(R.r4, E.e1, "loca-1", null, "cancelled", "2025-05-04 10:00:00", { guestName: "Sadece Ad", guestCount: 9 });
   await res(R.r5, E.e1, "ghost-7", C.c3, "confirmed", "2025-05-05 10:00:00", { guestCount: 60 });
   await res(R.r6, E.e2, "T2", null, "no_show", "2025-05-06 10:00:00", { guestPhone: "05321112233" });
   await res(R.r7, E.e3, "X9", C.c3, "confirmed", "2025-05-07 10:00:00");
   await res(R.r8, E.e3, "X9", C.c4, "pending", "2025-05-08 10:00:00");
-  await res(R.r9, E.e1, "A1", C.c4, "pending", "2025-05-09 10:00:00");
+  // r9: aktif, loca kapasitesini (6) aşıyor -> kapasite 7'ye yükselir, rezervasyon korunur (I2).
+  await res(R.r9, E.e1, "A1", C.c4, "pending", "2025-05-09 10:00:00", { guestCount: 7 });
 
   await ins(client, "guest_notes", { id: IDS.notes.n1, customerId: C.c2, eventId: E.e1, content: "Pencere kenarı", createdBy: U.admin });
   await ins(client, "guest_notes", { id: IDS.notes.n2, customerId: C.c3, content: "Not", createdBy: "unknown-user" });

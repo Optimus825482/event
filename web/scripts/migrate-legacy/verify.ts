@@ -53,6 +53,18 @@ export async function verifyTarget(client: pg.Client, exp: Expectations): Promis
     `SELECT count(*)::text AS n FROM (SELECT 1 FROM reservations WHERE status IN (${active}) GROUP BY event_id, table_id HAVING count(*) > 1) d`,
   );
   check("masada birden çok aktif rezervasyon yok", dupes === 0, `${dupes} çakışan masa`);
+  const overCapacity = await scalar(
+    client,
+    `SELECT count(*)::text AS n FROM reservations r JOIN event_tables t ON t.event_id = r.event_id AND t.id = r.table_id WHERE r.status IN (${active}) AND r.guest_count > t.capacity`,
+  );
+  check("aktif rezervasyon masa kapasitesini aşmıyor", overCapacity === 0, `${overCapacity} kapasite aşımı`);
+  const counted = (cond: string) => `(SELECT count(*) FROM reservations r WHERE r.customer_id = c.id${cond})`;
+  const badCounters = await scalar(
+    client,
+    `SELECT count(*)::text AS n FROM customers c WHERE c.total_reservations <> ${counted(" AND r.status <> 'cancelled'")}
+        OR c.no_show_count <> ${counted(" AND r.status = 'no_show'")} OR c.total_attended_events <> ${counted(" AND r.status = 'checked_in'")}`,
+  );
+  check("müşteri sayaçları rezervasyon satırlarıyla uyumlu", badCounters === 0, `${badCounters} uyumsuz müşteri`);
   const noAccount = await scalar(
     client,
     `SELECT count(*)::text AS n FROM users u WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.user_id = u.id AND a.provider_id = 'credential' AND a.account_id = u.id::text AND a.password IS NOT NULL)`,

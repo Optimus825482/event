@@ -5,6 +5,7 @@ import { openLegacy } from "../../../scripts/migrate-legacy/legacy";
 import type { Finding, MigrationReport } from "../../../scripts/migrate-legacy/report";
 import { renderSummary, renderText } from "../../../scripts/migrate-legacy/report";
 import { runMigration } from "../../../scripts/migrate-legacy/run";
+import { verifyTarget } from "../../../scripts/migrate-legacy/verify";
 import { checksum, createLegacyDb, createTargetDb, dbUrl, dropDb, totalRows, uniqueDbName, withClient } from "./harness";
 import { IDS, LEGACY_PASSWORD, seedLegacy } from "./seed";
 
@@ -250,6 +251,65 @@ describe("hedef durum", () => {
       expect(gone.rowCount).toBe(0);
       const n1 = await c.query<{ customer_id: string }>("SELECT customer_id FROM guest_notes WHERE id = $1", [IDS.notes.n1]);
       expect(n1.rows[0]?.customer_id).toBe(IDS.customers.c1);
+    });
+  });
+
+  it("I2: kapasiteyi aşan aktif rezervasyon korunur, masa kapasitesi yükselir ve raporlanır", async () => {
+    expect(real.categories.capacityRaised).toEqual([
+      expect.objectContaining({ eventId: E.e1, label: "A1", fromCapacity: 6, toCapacity: 7, reservationIds: [R.r9] }),
+    ]);
+    await withClient(TARGET, async (c) => {
+      const loca = await c.query<{ capacity: number }>("SELECT capacity FROM event_tables WHERE event_id = $1 AND label = 'A1'", [E.e1]);
+      expect(loca.rows[0]?.capacity).toBe(7);
+      const r9 = await c.query<{ guest_count: number; status: string }>("SELECT guest_count, status FROM reservations WHERE id = $1", [R.r9]);
+      expect(r9.rows[0]).toEqual({ guest_count: 7, status: "pending" });
+      // İptal edilmiş (r4, 9 kişi) rezervasyon kapasiteyi yükseltmez ve kısaltılmaz.
+      const r4 = await c.query<{ guest_count: number }>("SELECT guest_count FROM reservations WHERE id = $1", [R.r4]);
+      expect(r4.rows[0]?.guest_count).toBe(9);
+      const over = await c.query<{ n: string }>(
+        "SELECT count(*)::text AS n FROM reservations r JOIN event_tables t ON t.id = r.table_id WHERE r.status IN ('pending','confirmed','checked_in') AND r.guest_count > t.capacity",
+      );
+      expect(over.rows[0]?.n).toBe("0");
+    });
+    expect(real.verification.find((v) => v.name === "aktif rezervasyon masa kapasitesini aşmıyor")).toMatchObject({ ok: true });
+  });
+
+  it("M9: müşteri sayaçları taşınan rezervasyon satırlarından hesaplanır", async () => {
+    await withClient(TARGET, async (c) => {
+      const res = await c.query<{ id: string; total_reservations: number; no_show_count: number; total_attended_events: number }>(
+        "SELECT id, total_reservations, no_show_count, total_attended_events FROM customers",
+      );
+      const by = new Map(res.rows.map((r) => [r.id, r]));
+      // c1 (c2 ile birleşti; eski toplam 3): r1 onaylı, r2 çakışmadan iptal, r6 no_show -> 2 iptal edilmemiş.
+      expect(by.get(IDS.customers.c1)).toMatchObject({ total_reservations: 2, no_show_count: 1, total_attended_events: 0 });
+      expect(by.get(IDS.customers.c3)).toMatchObject({ total_reservations: 2 });
+      expect(by.get(IDS.customers.c4)).toMatchObject({ total_reservations: 1 });
+      for (const r of res.rows) {
+        const rows = await c.query<{ status: string }>("SELECT status FROM reservations WHERE customer_id = $1", [r.id]);
+        const st = rows.rows.map((x) => x.status);
+        expect(r.total_reservations).toBe(st.filter((x) => x !== "cancelled").length);
+        expect(r.no_show_count).toBe(st.filter((x) => x === "no_show").length);
+        expect(r.total_attended_events).toBe(st.filter((x) => x === "checked_in").length);
+      }
+    });
+    expect(real.categories.customerCounterChanges).toEqual(
+      expect.arrayContaining([expect.objectContaining({ customerId: IDS.customers.c1, field: "totalReservations", legacy: 3, recomputed: 2 })]),
+    );
+    expect(real.verification.find((v) => v.name === "müşteri sayaçları rezervasyon satırlarıyla uyumlu")).toMatchObject({ ok: true });
+  });
+
+  it("doğrulama bozulmuş veriyi yüksek sesle reddeder (kapasite aşımı, sayaç sapması)", async () => {
+    await withClient(TARGET, async (c) => {
+      await c.query("BEGIN");
+      try {
+        await c.query("UPDATE event_tables SET capacity = 1 WHERE event_id = $1 AND label = 'A1'", [E.e1]);
+        await c.query("UPDATE customers SET total_reservations = total_reservations + 5 WHERE id = $1", [IDS.customers.c1]);
+        const results = await verifyTarget(c, { written: {}, reconcile: {}, legacyQrHashes: 0, makeQrToken: () => "" });
+        expect(results.find((v) => v.name === "aktif rezervasyon masa kapasitesini aşmıyor")).toMatchObject({ ok: false });
+        expect(results.find((v) => v.name === "müşteri sayaçları rezervasyon satırlarıyla uyumlu")).toMatchObject({ ok: false });
+      } finally {
+        await c.query("ROLLBACK");
+      }
     });
   });
 

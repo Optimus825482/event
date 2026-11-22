@@ -2,6 +2,7 @@ import * as schema from "@/db/schema";
 import { ACTIVE_RESERVATION_STATUSES, RESERVATION_STATUSES, type ReservationStatus } from "@/domain/reservation-status";
 import { LABEL_MAX, normalizeLabel } from "@/features/venue/schemas";
 import { timestamps } from "./catalogs";
+import { raiseCapacities } from "./capacity";
 import type { Ctx } from "./context";
 import type { CustomerDirectory } from "./customers";
 import { byCreatedThenId, clampInt, stableId, uniqueName } from "./values";
@@ -14,6 +15,8 @@ import { byCreatedThenId, clampInt, stableId, uniqueName } from "./values";
  * - Aynı masada birden çok aktif rezervasyon (yeni kısmi tekil index'i ihlal eder): en eski
  *   oluşturulan aktif kalır, diğerleri `cancelled` olarak taşınır; gerekçe rezervasyona bağlı bir
  *   `guest_notes` satırına yazılır (rezervasyon tablosunda not sütunu yok).
+ * - Kapasite (I2): aktif rezervasyon masa kapasitesini aşıyorsa masa kapasitesi yükseltilir (capacity.ts).
+ * - Müşteri sayaçları (M9): son satırlardan yeniden hesaplanır (customers.ts `recomputeCounters`).
  * - QR: eski `qrCodeHash` → `legacy_qr_hash`; `qr_token` uygulamanın imzalı belirteci (qr.ts).
  */
 
@@ -108,6 +111,10 @@ export async function migrateReservations(
   }
 
   const notes = resolveDoubleBookings(ctx, rows);
+  // I2: kapasiteyi aşan aktif rezervasyonlar için masa kapasitesi yükseltilir (yer tutucular zaten uyumlu).
+  await raiseCapacities(ctx, rows, new Set([...placeholders.values()].map((p) => p.row.id)));
+  // M9: müşteri sayaçları eski değerlerden değil, taşınan rezervasyon satırlarından hesaplanır.
+  customers.recomputeCounters(rows);
 
   for (const ph of placeholders.values()) {
     ctx.add("placeholderTables", { eventId: ph.row.eventId, tableId: ph.row.id, label: ph.row.label, legacyRef: ph.ref, reservationIds: ph.reservationIds });
