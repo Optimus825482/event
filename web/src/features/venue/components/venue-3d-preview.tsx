@@ -8,11 +8,17 @@ import type { EditorTable } from "../editor/store";
 import type { DecorElement } from "../schemas";
 import { tableShapeOf, useEditor, LOCA_COLOR, type TableTypeOption } from "./editor-context";
 import { capacityColor, floorElevation, floorLabel, tableDims, VIP_FILL } from "./table-visual";
+import Venue3DWalls from "./venue-3d-walls";
 
 /** Tuvalde 50 piksel = 3B sahnede 1 birim (~1 metre). */
 const PX = 50;
 const TABLE_HEIGHT = 0.75;
 const LOCA_HEIGHT = 0.9;
+/**
+ * 3B etiket yazı tipi: drei `Text` varsayılanı yazı tipini bir CDN'den indirir (CSP'ye takılır, çevrimdışı çalışmaz).
+ * Türkçe karakterleri kapsayan Geist (SIL OFL 1.1) yerelden sunulur.
+ */
+const LABEL_FONT = "/fonts/Geist-Regular.ttf";
 const DECOR_HEIGHT: Record<DecorElement["kind"], number> = { stage: 0.6, area: 0.02, wall: 2.6, label: 0 };
 
 type Props = { tableTypes: readonly TableTypeOption[] };
@@ -48,6 +54,7 @@ function Label({ text, position, size, flat = true }: { text: string; position: 
   if (!text) return null;
   const content = (
     <Text
+      font={LABEL_FONT}
       fontSize={size}
       color="#ffffff"
       outlineWidth={size * 0.08}
@@ -172,6 +179,7 @@ export default function Venue3DPreview({ tableTypes }: Props) {
         {tables.map((t) => (
           <TableMesh key={t.key} table={t} type={t.tableTypeId ? typeById.get(t.tableTypeId) : undefined} toWorld={toWorld} />
         ))}
+        <Venue3DWalls canvasWidth={canvas.width} canvasHeight={canvas.height} />
         <CaptureBridge captureRef={capture} />
         <OrbitControls makeDefault maxPolarAngle={Math.PI / 2.1} />
       </Canvas>
