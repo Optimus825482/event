@@ -11,7 +11,7 @@
 ## Mimari
 
 ```
-Traefik/Coolify (HTTPS, x-real-ip) -> web (Next.js standalone, :3000) -> postgres (17, iç ağ, port yayınlanmaz)
+Traefik/Coolify (HTTPS, x-real-ip) -> web (Next.js standalone, :3000) -> eventflow-db (PostgreSQL 17, iç ağ, port yayınlanmaz)
                                       ^-- migrate (tek seferlik: node /opt/migrator/migrate.mjs)
                                       ^-- create-admin (isteğe bağlı tek seferlik, profil `tools`; bkz. İlk yönetici)
 ```
@@ -51,7 +51,7 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 2. Yukarıdaki ortam değişkenlerini tanımlayın.
 3. `web` servisine alan adını `https://<alan-adı>:3000` biçiminde atayın (Coolify Traefik etiketlerini üretir; yeni
    etiket elle yazılmaz). `eventflow-db`, `migrate` ve `create-admin` için alan adı atamayın (Coolify otomatik ürettiyse silin).
-4. Deploy. Sıra: postgres sağlıklı olunca `migrate` çalışır ve çıkar; ardından `web` başlar.
+4. Deploy. Sıra: veritabanı sağlıklı olunca `migrate` çalışır ve çıkar; ardından `web` başlar.
 5. İmaj, GitHub Actions'ın `build-and-push.yml` iş akışıyla `ghcr.io/optimus825482/eventflow-web` olarak yayımlanır;
    `web-test` işi (lint, typecheck, test, build) geçmeden `build-web` çalışmaz, yani kırmızı commit'ten imaj üretilmez.
 
@@ -133,7 +133,7 @@ docker exec <eski-db-kapsayıcısı> pg_dump -U <kullanıcı> -Fc eventflow > es
 # Eski yüklemeler (volume uploads_data)
 docker run --rm -v <proje>_uploads_data:/u -v "$PWD":/b alpine tar czf /b/eski-uploads-$(date +%F).tgz -C /u .
 # Yeni veritabanı (taşımadan önce boş olsa da; sonraki yedekler için aynı komut)
-docker compose exec -T postgres pg_dump -U "$DB_USERNAME" -Fc "$DB_NAME" > yeni-$(date +%F).dump
+docker compose exec -T eventflow-db pg_dump -U "$DB_USERNAME" -Fc "$DB_NAME" > yeni-$(date +%F).dump
 ```
 
 Yedeği geri yüklemeyi bir kez deneyin (`pg_restore --clean -d ...`). Eski yığının volume'larını **cutover sonrası da
