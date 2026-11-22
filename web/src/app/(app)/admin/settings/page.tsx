@@ -6,7 +6,9 @@ import { db } from "@/db/client";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { SettingsForm } from "@/features/settings/components/settings-form";
+import { getSecurityOverview } from "@/features/settings/security-queries";
 import { getSettings } from "@/features/settings/service";
+import { currentSessionId } from "@/features/users/current-session";
 
 export const metadata: Metadata = { title: "Ayarlar | EventFlow" };
 
@@ -14,6 +16,7 @@ export default async function SettingsPage() {
   const actor = await requirePolicyActor();
   if (!can(actor, "settings", "view")) notFound();
   const settings = await getSettings(db, actor);
+  const security = actor.role === "admin" ? await getSecurityOverview(db, actor, await currentSessionId()) : null;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -27,7 +30,7 @@ export default async function SettingsPage() {
         }
       />
       {can(actor, "settings", "edit") ? (
-        <SettingsForm settings={settings} />
+        <SettingsForm settings={settings} security={security} />
       ) : (
         <p className="text-sm text-slate-400">Ayarları düzenleme yetkiniz yok.</p>
       )}

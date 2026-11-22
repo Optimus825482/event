@@ -1,11 +1,13 @@
 "use client";
 
-import { Bell, Globe, Mail, SlidersHorizontal } from "lucide-react";
+import { Bell, Globe, Mail, Shield, SlidersHorizontal } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { SecurityOverview } from "../security-queries";
 import type { PublicSettings } from "../service";
 import { EmailSection } from "./email-section";
 import { LogoForm } from "./logo-form";
+import { SecurityTab } from "./security-tab";
 import { BehaviorSection, GeneralSection, NotificationsSection } from "./settings-sections";
 
 const TRIGGER = "data-[state=active]:bg-amber-600 data-[state=active]:text-white";
@@ -13,9 +15,10 @@ const TRIGGER = "data-[state=active]:bg-amber-600 data-[state=active]:text-white
 /**
  * Sistem ayarları sekmeleri (eski arayüzdeki Genel / E-posta / Bildirimler düzeni). Her sekme kendi
  * alanlarını ayrı kaydeder; `updateSettingsAction` kısmi güncellemeyi zaten destekler.
- * Eski "Güvenlik" sekmesinin karşılığı yeni şemada yoktur, bu yüzden yapılmadı.
+ * "Güvenlik" sekmesi yalnızca yöneticiye (`security` verilmişse) gösterilir; eski sekmedeki
+ * rezervasyon/check-in tercihleri zaten "Genel" ve "Davranış" sekmelerindedir.
  */
-export function SettingsForm({ settings }: { settings: PublicSettings }) {
+export function SettingsForm({ settings, security = null }: { settings: PublicSettings; security?: SecurityOverview | null }) {
   return (
     <Tabs defaultValue="general" className="w-full">
       <TabsList className="h-auto flex-wrap border border-slate-700 bg-slate-800">
@@ -35,6 +38,12 @@ export function SettingsForm({ settings }: { settings: PublicSettings }) {
           <Bell className="h-4 w-4" aria-hidden="true" />
           Bildirimler
         </TabsTrigger>
+        {security ? (
+          <TabsTrigger value="security" className={TRIGGER}>
+            <Shield className="h-4 w-4" aria-hidden="true" />
+            Güvenlik
+          </TabsTrigger>
+        ) : null}
       </TabsList>
 
       <TabsContent value="general" className="mt-6 space-y-6">
@@ -57,6 +66,11 @@ export function SettingsForm({ settings }: { settings: PublicSettings }) {
       <TabsContent value="notifications" className="mt-6">
         <NotificationsSection settings={settings} />
       </TabsContent>
+      {security ? (
+        <TabsContent value="security" className="mt-6">
+          <SecurityTab overview={security} />
+        </TabsContent>
+      ) : null}
     </Tabs>
   );
 }
