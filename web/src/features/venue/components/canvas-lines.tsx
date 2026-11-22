@@ -88,7 +88,7 @@ export function CanvasLines({ store, readOnly, preview }: Props) {
         const l = override?.key === key ? override.line : stored;
         const isSelected = selected.has(key);
         return (
-          <Group key={stored.id} name="line-item">
+          <Group key={stored.id} id={key} name="line-item">
             {isSelected ? <Line points={points(l)} stroke={SELECTED_HALO} strokeWidth={l.width + 8} lineCap="round" listening={false} /> : null}
             <Line
               points={points(l)}

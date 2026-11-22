@@ -254,6 +254,41 @@ test.describe("Alan düzenleyicisi araçları", () => {
     const [reloaded] = await canvasLines(page);
     expect(reloaded).toEqual(drawn && { ...drawn, stroke: "#38bdf8" });
   });
+
+  test("seçili çizgi ok tuşuyla kayar; sağ tık menüsünden çoğaltılır ve silinir", async ({ page }) => {
+    eventId = await createEvent(page, "E2E Çizgi Menüsü");
+    await openEditor(page);
+    await page.getByRole("button", { name: "Çizgi", exact: true }).click();
+    await page.waitForFunction(() => ((window as unknown as { Konva?: { stages: unknown[] } }).Konva?.stages.length ?? 0) > 0);
+    const start = await worldToScreen(page, 200, 200);
+    const end = await worldToScreen(page, 600, 200);
+    await page.mouse.click(start.x, start.y);
+    await page.mouse.click(end.x, end.y);
+    await expect.poll(async () => (await canvasLines(page)).length).toBe(1);
+    await page.keyboard.press("Escape");
+    const [drawn] = await canvasLines(page);
+    // Çizimden sonra tuval yeniden ölçeklenebilir; ekran koordinatı çizginin gerçek konumundan hesaplanır.
+    const mid = await worldToScreen(page, ((drawn?.points[0] ?? 0) + (drawn?.points[2] ?? 0)) / 2, drawn?.points[1] ?? 0);
+
+    // Ok tuşu çizgiyi sağa kaydırır (y değişmez); Ctrl+Z tek adımda geri alır.
+    await expect(page.getByRole("button", { name: "Çizgi", exact: true })).toHaveAttribute("aria-pressed", "false");
+    await page.mouse.click(mid.x, mid.y);
+    await expect(page.getByRole("region", { name: "Çizgi özellikleri" })).toBeVisible();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(async () => (await canvasLines(page))[0]?.points[0]).toBeGreaterThan(drawn?.points[0] ?? 0);
+    expect((await canvasLines(page))[0]?.points[1]).toBe(drawn?.points[1]);
+    await page.keyboard.press("Control+z");
+    await expect.poll(async () => (await canvasLines(page))[0]?.points).toEqual(drawn?.points);
+
+    // Sağ tık menüsü: çoğalt, sonra asıl çizgiyi sil.
+    await page.mouse.click(mid.x, mid.y, { button: "right" });
+    await page.getByTestId("line-context-duplicate").click();
+    await expect.poll(async () => (await canvasLines(page)).length).toBe(2);
+    await page.mouse.click(mid.x, mid.y, { button: "right" });
+    await page.getByTestId("line-context-delete").click();
+    await expect.poll(async () => (await canvasLines(page)).length).toBe(1);
+    expect((await canvasLines(page))[0]?.points).not.toEqual(drawn?.points);
+  });
 });
 
 /** Dünya koordinatını (tuval pikseli) ekran koordinatına çevirir (Konva sahnesinin ölçek ve kaymasıyla). */

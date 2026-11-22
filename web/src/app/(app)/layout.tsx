@@ -12,6 +12,7 @@ import { visibleNavGroups } from "@/features/auth/nav";
 import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { countUnread } from "@/features/notifications/service";
+import { currentSessionExpiry } from "@/features/users/current-session";
 import { getOwnAvatar } from "@/features/users/profile";
 
 async function currentActorOrLogin(): Promise<ActorWithPermissions> {
@@ -28,9 +29,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const actor = await currentActorOrLogin();
   const nav = buildShellNav(actor.role, visibleNavGroups(actor));
   const showBell = can(actor, "notifications", "view");
-  const [unreadCount, avatarUrl] = await Promise.all([
+  const [unreadCount, avatarUrl, sessionExpiresAt] = await Promise.all([
     showBell ? countUnread(db, actor) : Promise.resolve(0),
     getOwnAvatar(db, actor),
+    currentSessionExpiry(),
   ]);
 
   return (
@@ -47,7 +49,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         >
           {children}
         </AppShell>
-        <AppOverlays />
+        <AppOverlays sessionExpiresAt={sessionExpiresAt} />
       </ToastProvider>
     </QueryProvider>
   );

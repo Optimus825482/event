@@ -5,7 +5,7 @@ import { findFreeSpot, normalizeAngle, nextLabel, snap, snapPoint, type Point } 
 import { DEFAULT_VIEW_SETTINGS, type ViewSettings } from "./view-chrome";
 import { emptyHistory, record, redo, undo } from "./history";
 import { createLineActions } from "./line-actions";
-import { copyLines, lineKey, linesForSave } from "./lines";
+import { copyLines, lineKey, linesForSave, nudgeLines } from "./lines";
 import {
   applyMoves,
   autoAlignTables,
@@ -205,7 +205,16 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
 
       commitPlacements: (placements) => commitMove(applyMoves(ctx(), placements, { snap: true })),
 
-      nudge: (dx, dy) => commitMove(nudgeMoves(ctx(), dx, dy)),
+      nudge: (dx, dy) => {
+        const s = get();
+        const out = nudgeMoves(ctx(), dx, dy);
+        if (!out.ok && out.reason === "collision") return { ok: false, reason: "collision", keys: out.keys };
+        const nudged = nudgeLines(s.lines, new Set(s.selection), dx, dy, s.canvas);
+        if (!out.ok && nudged.moved === 0) return { ok: false, reason: "nothing" };
+        // Masalar ve çizgiler tek geri al girdisiyle birlikte taşınır.
+        change({ ...(out.ok ? { tables: out.tables, elements: out.elements } : {}), ...(nudged.moved > 0 ? { lines: nudged.lines } : {}) });
+        return { ok: true, moved: (out.ok ? out.moved : 0) + nudged.moved };
+      },
 
       addTablesBatch: (opts) => {
         const s = get();
