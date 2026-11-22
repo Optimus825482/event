@@ -92,11 +92,13 @@ services:
     expose:
       - "3000"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 30s
+      # Başarısızlık nedeni `docker inspect <web> --format '{{json .State.Health}}'` çıktısında görünür.
+      # Vekil, kapsayıcı "healthy" olana dek 503 "no available server" döner; kısa aralık bu süreyi kısaltır.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(async (r) => { if (!r.ok) { console.error(r.status, await r.text()); process.exit(1); } }).catch((e) => { console.error(String(e)); process.exit(1); })"]
+      interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 40s
     networks:
       - coolify
       - default
