@@ -83,6 +83,25 @@ export function translateLine(l: DecorLine, dx: number, dy: number, canvas: Canv
   return { ...l, x1: l.x1 + cx, y1: l.y1 + cy, x2: l.x2 + cx, y2: l.y2 + cy };
 }
 
+/** Seçili çizgileri kaydırır (tuvale kırpılır); değişmeyenler aynı nesne kalır. */
+export function nudgeLines(
+  lines: readonly DecorLine[],
+  selected: ReadonlySet<string>,
+  dx: number,
+  dy: number,
+  canvas: Canvas,
+): { lines: DecorLine[]; moved: number } {
+  let moved = 0;
+  const next = lines.map((l) => {
+    if (!selected.has(lineKey(l.id))) return l;
+    const t = translateLine(l, dx, dy, canvas);
+    if (t.x1 === l.x1 && t.y1 === l.y1 && t.x2 === l.x2 && t.y2 === l.y2) return l;
+    moved += 1;
+    return t;
+  });
+  return { lines: next, moved };
+}
+
 /** Kement seçimi: orta noktası dikdörtgenin içindeki çizgiler. */
 export function linesInRect(lines: readonly DecorLine[], rect: Rect): string[] {
   return lines

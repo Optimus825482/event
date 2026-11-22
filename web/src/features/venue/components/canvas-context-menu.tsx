@@ -12,12 +12,13 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cellCenter, cellName, type Point } from "../editor/geometry";
+import { isLineKey, lineKey } from "../editor/lines";
 import { decorKey, isDecorKey } from "../editor/store";
 import type { DecorKind } from "../schemas";
 import { runCenterHorizontally, runDelete, runTogglePin, runToggleVip, type Notify } from "./editor-commands";
 import { useEditor, useEditorStore } from "./editor-context";
 
-export type ContextTarget = { kind: "canvas"; world: Point } | { kind: "table"; key: string } | { kind: "decor"; key: string };
+export type ContextTarget = { kind: "canvas"; world: Point } | { kind: "table"; key: string } | { kind: "decor"; key: string } | { kind: "line"; key: string };
 
 type Props = {
   target: ContextTarget | null;
@@ -30,9 +31,11 @@ type Props = {
 
 const DECOR_NAMES: Record<DecorKind, string> = { stage: "Sahne", area: "Alan", wall: "Duvar", label: "Metin" };
 
-function Item({ icon, onSelect, children, danger, count }: { icon: ReactNode; onSelect: () => void; children: ReactNode; danger?: boolean; count?: number }) {
+type ItemProps = { icon: ReactNode; onSelect: () => void; children: ReactNode; danger?: boolean; count?: number; testId?: string };
+
+function Item({ icon, onSelect, children, danger, count, testId }: ItemProps) {
   return (
-    <ContextMenuItem onSelect={onSelect} className={danger ? "gap-2 text-red-500 focus:text-red-500" : "gap-2"}>
+    <ContextMenuItem onSelect={onSelect} data-testid={testId} className={danger ? "gap-2 text-red-500 focus:text-red-500" : "gap-2"}>
       {icon}
       {children}
       {count !== undefined && count > 1 ? <ContextMenuShortcut>{`(${count})`}</ContextMenuShortcut> : null}
@@ -114,6 +117,26 @@ function DecorItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
   );
 }
 
+function LineItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
+  const store = useEditorStore();
+  const selection = useEditor((s) => s.selection);
+  const exists = useEditor((s) => s.lines.some((l) => lineKey(l.id) === itemKey));
+  if (!exists) return null;
+  const count = selection.filter(isLineKey).length;
+  return (
+    <>
+      <ContextMenuLabel className="text-xs font-normal text-muted-foreground">{count > 1 ? `${count} çizgi seçili` : "Çizgi"}</ContextMenuLabel>
+      <ContextMenuSeparator />
+      <Item testId="line-context-duplicate" icon={<Copy className="size-4 text-emerald-400" />} onSelect={() => store.getState().duplicateSelection()} count={count}>
+        Çoğalt
+      </Item>
+      <Item testId="line-context-delete" danger icon={<Trash2 className="size-4" />} onSelect={() => runDelete(store, notify)} count={count}>
+        Sil
+      </Item>
+    </>
+  );
+}
+
 function TableItems({ itemKey, notify, onOpenSpacing }: { itemKey: string; notify: Notify; onOpenSpacing: () => void }) {
   const store = useEditorStore();
   const selection = useEditor((s) => s.selection);
@@ -170,6 +193,7 @@ export function CanvasContextMenu({ target, disabled, notify, onOpenAdd, onOpenS
       <ContextMenuContent className="min-w-[180px]">
         {target?.kind === "canvas" ? <CanvasItems world={target.world} notify={notify} onOpenAdd={onOpenAdd} /> : null}
         {target?.kind === "decor" ? <DecorItems itemKey={target.key} notify={notify} /> : null}
+        {target?.kind === "line" ? <LineItems itemKey={target.key} notify={notify} /> : null}
         {target?.kind === "table" ? <TableItems itemKey={target.key} notify={notify} onOpenSpacing={onOpenSpacing} /> : null}
       </ContextMenuContent>
     </ContextMenu>

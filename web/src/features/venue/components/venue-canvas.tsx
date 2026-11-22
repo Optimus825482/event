@@ -210,6 +210,14 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
       setMenuTarget(world ? { kind: "canvas", world } : null);
       return;
     }
+    const lineItem = e.target.findAncestor(".line-item", true);
+    if (lineItem) {
+      const lineId = lineItem.id();
+      const s = store.getState();
+      if (!s.selection.includes(lineId)) s.select([lineId]);
+      setMenuTarget({ kind: "line", key: lineId });
+      return;
+    }
     const item = e.target.findAncestor(".item", true);
     const key = [...nodes.current.entries()].find(([, n]) => n === item)?.[0];
     if (!key) {

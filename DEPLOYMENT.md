@@ -161,7 +161,8 @@ Geri alma:
 
 Bunlar ajanın/otomasyonun yapamayacağı ya da yapmaması gereken işlerdir:
 
-1. **Gmail SMTP uygulama parolasını iptal edin.** Parola git geçmişinde `backend/seed-data.sql` dosyasında açıkta
+1. ~~Gmail SMTP uygulama parolasını iptal edin.~~ **Yapıldı (2026-11-22, sahibi iptal etti).** Yeni parolayı yalnızca
+   yeni uygulamanın Ayarlar ekranından girin. Eski parola git geçmişinde `backend/seed-data.sql` dosyasında açıkta
    duruyor (dosya bu çalışmada bilerek açılmadı). Google Hesabı > Güvenlik > Uygulama parolaları'ndan ilgili parolayı
    silin; yenisini yalnızca yeni uygulamanın Ayarlar ekranından (şifreli saklanır) girin. Depo herkese açıksa ya da
    paylaşıldıysa parola ele geçmiş sayılmalıdır.

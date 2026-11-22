@@ -8,6 +8,7 @@ import {
   lineStrip,
   linesForSave,
   linesInRect,
+  nudgeLines,
   resolveEndpoint,
   translateLine,
 } from "@/features/venue/editor/lines";
@@ -173,5 +174,47 @@ describe("çizgi şeması", () => {
     const preview = buildTemplatePreview(layout);
     expect(preview.lines).toHaveLength(1);
     expect(preview.empty).toBe(false);
+  });
+});
+
+describe("çizgileri ok tuşlarıyla kaydırma", () => {
+  const tbl = { id: "00000000-0000-4000-8000-000000000001", label: "M1", capacity: 8, tableTypeId: null, x: 500, y: 300, rotation: 0, isLoca: false, isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null };
+
+  it("nudgeLines yalnızca seçili çizgileri kaydırır ve tuvale kırpar", () => {
+    const lines = [line(), line({ id: "b", x1: 0, x2: 50 })];
+    const out = nudgeLines(lines, new Set([lineKey("l1"), lineKey("b")]), -20, 0, CANVAS);
+    expect(out.moved).toBe(1); // "b" sol kenarda: kıpırdamaz
+    expect(out.lines[0]).toMatchObject({ x1: 80, x2: 280 });
+    expect(out.lines[1]).toBe(lines[1]);
+    expect(nudgeLines(lines, new Set(), 20, 0, CANVAS).moved).toBe(0);
+  });
+
+  it("yalnızca çizgi seçiliyken nudge çizgiyi taşır, tek geri al girdisi oluşturur", () => {
+    const store = createEditorStore(initial([line()]));
+    store.getState().select([lineKey("l1")]);
+    expect(store.getState().nudge(20, 0)).toEqual({ ok: true, moved: 1 });
+    expect(store.getState().lines[0]).toMatchObject({ x1: 120, x2: 320 });
+    expect(store.getState().dirty).toBe(true);
+    store.getState().undo();
+    expect(store.getState().lines[0]).toMatchObject({ x1: 100, x2: 300 });
+  });
+
+  it("tuval kenarında nudge hiçbir şey yapmaz", () => {
+    const store = createEditorStore(initial([line({ x1: 0, x2: 200 })]));
+    store.getState().select([lineKey("l1")]);
+    expect(store.getState().nudge(-20, 0)).toEqual({ ok: false, reason: "nothing" });
+    expect(store.getState().history.past).toHaveLength(0);
+  });
+
+  it("masa ve çizgi birlikte seçiliyken ikisi de tek girdiyle taşınır", () => {
+    const store = createEditorStore({ tables: [tbl], decor: { width: 1000, height: 600, elements: [], lines: [line()] }, lockedTableIds: [] });
+    const s = store.getState();
+    s.select([s.tables[0]?.key ?? "", lineKey("l1")]);
+    expect(store.getState().nudge(0, 20)).toMatchObject({ ok: true, moved: 2 });
+    expect(store.getState().tables[0]?.y).toBe(320);
+    expect(store.getState().lines[0]).toMatchObject({ y1: 120, y2: 120 });
+    store.getState().undo();
+    expect(store.getState().tables[0]?.y).toBe(300);
+    expect(store.getState().lines[0]).toMatchObject({ y1: 100 });
   });
 });
