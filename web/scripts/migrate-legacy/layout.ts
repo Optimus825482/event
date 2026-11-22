@@ -1,7 +1,16 @@
 import {
   type Decor,
   type DecorElement,
+  type DecorFontFamily,
+  type DecorFontSize,
+  type DecorIcon,
+  type DecorTextDirection,
   decorSchema,
+  DECOR_BORDER_MAX,
+  DECOR_FONT_FAMILIES,
+  DECOR_FONT_SIZES,
+  DECOR_ICONS,
+  DECOR_TEXT_DIRECTIONS,
   DEFAULT_CANVAS,
   LABEL_MAX,
   MAX_DECOR_ELEMENTS,
@@ -58,7 +67,10 @@ export type ParsedLayout = {
 };
 
 const TABLE_KEYS = new Set(["id", "label", "tableNumber", "locaName", "type", "capacity", "x", "y", "rotation", "isLoca", "isVip", "isLocked", "size", "floor"]);
-const DECOR_KEYS = new Set(["id", "type", "x", "y", "width", "height", "label", "displayText", "color", "rotation"]);
+const DECOR_KEYS = new Set([
+  "id", "type", "x", "y", "width", "height", "label", "displayText", "color", "rotation",
+  "borderColor", "borderWidth", "iconId", "fontSize", "fontFamily", "textDirection", "isLocked", "floor",
+]);
 const LAYOUT_KEYS = new Set(["placedTables", "tables", "stageElements", "stage", "walls", "drawnLines", "dimensions"]);
 const COORD = 100_000;
 const DEFAULT_CAPACITY = 8;
@@ -173,6 +185,32 @@ function decorKind(type: string | null): DecorElement["kind"] {
   return "area";
 }
 
+/** Eski sahne/alan stil anahtarlarından yeni `decorElementSchema` alanlarını çıkarır (geçersiz değerler atlanır). */
+function decorStyleFrom(item: Record<string, unknown>, displayLabel: string): Partial<DecorElement> {
+  const style: Partial<DecorElement> = {};
+  const borderColor = text(item.borderColor);
+  if (borderColor && HEX.test(borderColor)) style.borderColor = borderColor;
+  const borderWidth = num(item.borderWidth);
+  if (borderWidth !== null) style.borderWidth = Math.min(DECOR_BORDER_MAX, Math.max(0, Math.round(borderWidth)));
+  const icon = text(item.iconId);
+  if (icon && (DECOR_ICONS as readonly string[]).includes(icon) && icon !== "none") style.icon = icon as DecorIcon;
+  const size = text(item.fontSize);
+  if (size && (DECOR_FONT_SIZES as readonly string[]).includes(size)) style.fontSize = size as DecorFontSize;
+  const family = text(item.fontFamily);
+  if (family && (DECOR_FONT_FAMILIES as readonly string[]).includes(family)) style.fontFamily = family as DecorFontFamily;
+  const direction = text(item.textDirection);
+  if (direction && (DECOR_TEXT_DIRECTIONS as readonly string[]).includes(direction)) {
+    style.textDirection = direction as DecorTextDirection;
+  }
+  // Eski sistemde `label` hover açıklamasıdır, `displayText` görünen metindir.
+  const tooltip = text(item.label);
+  if (text(item.displayText) !== null && tooltip !== null && tooltip !== displayLabel) style.tooltip = tooltip.slice(0, 120);
+  if (item.isLocked === true) style.isPinned = true;
+  const floor = num(item.floor);
+  if (floor !== null) style.floor = Math.min(MAX_FLOOR, Math.max(MIN_FLOOR, Math.round(floor)));
+  return style;
+}
+
 function buildDecor(raw: Record<string, unknown>, issues: LayoutIssue[], dropped: Record<string, number>): Decor {
   const elements: DecorElement[] = [];
   const push = (el: DecorElement) => elements.push(el);
@@ -190,6 +228,7 @@ function buildDecor(raw: Record<string, unknown>, issues: LayoutIssue[], dropped
       return;
     }
     const color = text(item.color);
+    const displayLabel = (text(item.displayText) ?? text(item.label) ?? "").slice(0, 60);
     push({
       id,
       kind: decorKind(text(item.type)),
@@ -198,8 +237,9 @@ function buildDecor(raw: Record<string, unknown>, issues: LayoutIssue[], dropped
       width: Math.min(20_000, w),
       height: Math.min(20_000, h),
       rotation: Math.min(3600, Math.max(-3600, num(item.rotation) ?? 0)),
-      label: (text(item.displayText) ?? text(item.label) ?? "").slice(0, 60),
+      label: displayLabel,
       ...(color && HEX.test(color) ? { color } : {}),
+      ...decorStyleFrom(item, displayLabel),
     });
   });
   if (isRecord(raw.stage)) {

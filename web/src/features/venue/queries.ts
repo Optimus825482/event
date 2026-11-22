@@ -27,6 +27,8 @@ export async function loadVenueEditor(eventId: string) {
       templates: templates.map((t) => ({ id: t.id, name: t.name, tableCount: t.tableCount, isPublic: t.isPublic })),
       canEdit: can(actor, "events", "edit") && layout.editable,
       canSaveTemplate: can(actor, "venues", "create"),
+      /** Yerleşim taslağı anahtarı için (paylaşılan cihazda kullanıcılar birbirinin taslağını görmez). */
+      userId: actor.id,
     };
   } catch (error) {
     if (error instanceof DomainError && error.code === "not_found") notFound();

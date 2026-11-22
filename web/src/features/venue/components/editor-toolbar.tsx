@@ -21,6 +21,8 @@ import {
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ArrangeMenu } from "./arrange-menu";
+import type { Notify } from "./editor-commands";
 import { useEditor, useEditorStore } from "./editor-context";
 
 type Props = {
@@ -31,6 +33,9 @@ type Props = {
   onSave: () => void;
   onOpenTemplates: () => void;
   onBlocked: (labels: string[]) => void;
+  notify: Notify;
+  onOpenAdd: (kind: "table" | "loca") => void;
+  onOpenSpacing: () => void;
 };
 
 function ToolButton({
@@ -65,7 +70,8 @@ function ToolButton({
 
 const Divider = () => <span className="mx-1 h-6 w-px bg-border" aria-hidden />;
 
-export function EditorToolbar({ readOnly, saving, show3d, onToggle3d, onSave, onOpenTemplates, onBlocked }: Props) {
+export function EditorToolbar(props: Props) {
+  const { readOnly, saving, show3d, onToggle3d, onSave, onOpenTemplates, onBlocked } = props;
   const store = useEditorStore();
   const tool = useEditor((s) => s.tool);
   const snapEnabled = useEditor((s) => s.snapEnabled);
@@ -109,6 +115,7 @@ export function EditorToolbar({ readOnly, saving, show3d, onToggle3d, onSave, on
           <ToolButton label="Metin ekle" onClick={() => s().addDecor("label")}>
             <Type className="size-4" />
           </ToolButton>
+          <ArrangeMenu notify={props.notify} onOpenAdd={props.onOpenAdd} onOpenSpacing={props.onOpenSpacing} />
           <Divider />
           <ToolButton label="Geri al (Ctrl+Z)" disabled={!canUndo} onClick={() => s().undo()}>
             <Undo2 className="size-4" />

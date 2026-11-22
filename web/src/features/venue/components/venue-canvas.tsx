@@ -5,12 +5,21 @@ import { Minus, Plus, Scan } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
 import { Button } from "@/components/ui/button";
-import { containsPoint, normalizeRect, zoomAround, type Point } from "../editor/geometry";
-import { decorKey, isDecorKey, type Placement } from "../editor/store";
+import { layoutItems } from "../editor/collision";
+import { clampDelta, containsPoint, normalizeRect, zoomAround, type Point, type Rect as Box } from "../editor/geometry";
+import { decorKey, isDecorKey, shapeResolver, type Placement } from "../editor/store";
 import { DecorNode, TableNode, type ItemHandlers } from "./canvas-items";
+import { CanvasContextMenu, type ContextTarget } from "./canvas-context-menu";
+import { reportMove, type Notify } from "./editor-commands";
 import { useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
 
-type Props = { readOnly: boolean; tableTypes: readonly TableTypeOption[] };
+type Props = {
+  readOnly: boolean;
+  tableTypes: readonly TableTypeOption[];
+  notify: Notify;
+  onOpenAdd: (kind: "table" | "loca", start?: Point) => void;
+  onOpenSpacing: () => void;
+};
 type View = { scale: number; x: number; y: number };
 
 const PADDING = 40;
@@ -35,7 +44,20 @@ function fitView(canvas: { width: number; height: number }, size: { width: numbe
   return { scale: s, x: (size.width - canvas.width * s) / 2, y: (size.height - canvas.height * s) / 2 };
 }
 
-export default function VenueCanvas({ readOnly, tableTypes }: Props) {
+type PinSource = {
+  tables: ReadonlyArray<{ key: string; isPinned: boolean }>;
+  elements: ReadonlyArray<{ id: string; isPinned?: boolean }>;
+};
+
+/** Sabitlenmiş öğe anahtarları (sürüklenmez, dönüştürücüye bağlanmaz). */
+function pinnedKeys(s: PinSource): Set<string> {
+  return new Set([
+    ...s.tables.filter((t) => t.isPinned).map((t) => t.key),
+    ...s.elements.filter((e) => e.isPinned === true).map((e) => decorKey(e.id)),
+  ]);
+}
+
+export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, onOpenSpacing }: Props) {
   const store = useEditorStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const size = useContainerSize(containerRef);
@@ -49,15 +71,22 @@ export default function VenueCanvas({ readOnly, tableTypes }: Props) {
   const [lasso, setLasso] = useState<{ start: Point; end: Point; additive: boolean } | null>(null);
   const nodes = useRef(new Map<string, Konva.Node>());
   const dragStart = useRef(new Map<string, Point>());
+  const dragBoxes = useRef<Box[]>([]);
+  const [menuTarget, setMenuTarget] = useState<ContextTarget | null>(null);
   const transformer = useRef<Konva.Transformer>(null);
   const typeById = useMemo(() => new Map(tableTypes.map((t) => [t.id, t])), [tableTypes]);
   const selected = useMemo(() => new Set(selection), [selection]);
   const current = view ?? fitView(canvas, size);
+  const canDrag = !readOnly && tool === "select";
 
   useEffect(() => {
     const tr = transformer.current;
     if (!tr) return;
-    const attached = selection.map((k) => nodes.current.get(k)).filter((n): n is Konva.Node => n !== undefined);
+    const pinned = pinnedKeys({ tables, elements });
+    const attached = selection
+      .filter((k) => !pinned.has(k))
+      .map((k) => nodes.current.get(k))
+      .filter((n): n is Konva.Node => n !== undefined);
     tr.nodes(readOnly ? [] : attached);
     tr.resizeEnabled(selection.length > 0 && selection.every(isDecorKey));
     tr.getLayer()?.batchDraw();
@@ -100,8 +129,13 @@ export default function VenueCanvas({ readOnly, tableTypes }: Props) {
       },
       onDragStart: (key) => {
         const s = store.getState();
-        const moving = s.selection.includes(key) ? s.selection : [key];
+        const pinned = pinnedKeys(s);
+        const moving = (s.selection.includes(key) ? s.selection : [key]).filter((k) => !pinned.has(k));
         if (!s.selection.includes(key)) s.select([key]);
+        const movingSet = new Set(moving);
+        dragBoxes.current = layoutItems(s.tables, s.elements, shapeResolver(s))
+          .filter((i) => movingSet.has(i.key))
+          .map((i) => i.box);
         dragStart.current = new Map(
           moving.flatMap((k) => {
             const n = nodes.current.get(k);
@@ -112,10 +146,11 @@ export default function VenueCanvas({ readOnly, tableTypes }: Props) {
       onDragMove: (key, node) => {
         const origin = dragStart.current.get(key);
         if (!origin) return;
-        const dx = node.x() - origin.x;
-        const dy = node.y() - origin.y;
+        // Grup tuvalin dışına sürüklenemez.
+        const d = clampDelta(dragBoxes.current, { x: node.x() - origin.x, y: node.y() - origin.y }, store.getState().canvas);
         for (const [k, start] of dragStart.current) {
-          if (k !== key) nodes.current.get(k)?.position({ x: start.x + dx, y: start.y + dy });
+          const target = k === key ? node : nodes.current.get(k);
+          target?.position({ x: start.x + d.x, y: start.y + d.y });
         }
       },
       onDragEnd: () => {
@@ -125,11 +160,13 @@ export default function VenueCanvas({ readOnly, tableTypes }: Props) {
           if (n) placements.push({ key: k, x: n.x(), y: n.y() });
         }
         dragStart.current = new Map();
-        store.getState().commitPlacements(placements);
+        dragBoxes.current = [];
+        // Çakışma varsa store değişmez ve düğümler eski yerine döner.
+        reportMove(store.getState().commitPlacements(placements), notify);
         syncNodes(placements.map((p) => p.key));
       },
     }),
-    [readOnly, tool, store, syncNodes],
+    [readOnly, tool, store, syncNodes, notify],
   );
 
   const onTransformEnd = useCallback(() => {
@@ -148,9 +185,29 @@ export default function VenueCanvas({ readOnly, tableTypes }: Props) {
       });
       n.scale({ x: 1, y: 1 });
     }
-    store.getState().commitPlacements(placements);
+    reportMove(store.getState().commitPlacements(placements), notify);
     syncNodes(placements.map((p) => p.key));
-  }, [store, syncNodes]);
+  }, [store, syncNodes, notify]);
+
+  /** Sağ tık hedefi: Konva olayı Radix menüsünden önce gelir, menü bu hedefe göre çizilir. */
+  function onContextMenu(e: Konva.KonvaEventObject<PointerEvent>) {
+    const stage = e.target.getStage();
+    if (!stage || readOnly) return;
+    if (e.target === stage || e.target.name() === "background") {
+      const world = stage.getRelativePointerPosition();
+      setMenuTarget(world ? { kind: "canvas", world } : null);
+      return;
+    }
+    const item = e.target.findAncestor(".item", true);
+    const key = [...nodes.current.entries()].find(([, n]) => n === item)?.[0];
+    if (!key) {
+      setMenuTarget(null);
+      return;
+    }
+    const s = store.getState();
+    if (!s.selection.includes(key)) s.select([key]);
+    setMenuTarget({ kind: isDecorKey(key) ? "decor" : "table", key });
+  }
 
   function worldPointer(stage: Konva.Stage): Point | null {
     return stage.getRelativePointerPosition();
@@ -160,6 +217,8 @@ export default function VenueCanvas({ readOnly, tableTypes }: Props) {
     const stage = e.target.getStage();
     if (!stage || tool !== "select" || readOnly) return;
     if (e.target !== stage && e.target.name() !== "background") return;
+    // Sağ tık seçim çerçevesi başlatmaz (sağ tık menüsü açılır).
+    if ("button" in e.evt && e.evt.button !== 0) return;
     const p = worldPointer(stage);
     if (!p) return;
     const additive = "shiftKey" in e.evt && e.evt.shiftKey;
@@ -215,75 +274,80 @@ export default function VenueCanvas({ readOnly, tableTypes }: Props) {
   const lassoRect = lasso ? normalizeRect(lasso.start, lasso.end) : null;
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-slate-950" data-testid="venue-canvas">
-      <Stage
-        width={size.width}
-        height={size.height}
-        scaleX={current.scale}
-        scaleY={current.scale}
-        x={current.x}
-        y={current.y}
-        draggable={tool === "pan"}
-        onDragEnd={(e) => {
-          if (e.target === e.target.getStage()) setView({ ...current, x: e.target.x(), y: e.target.y() });
-        }}
-        onMouseDown={onStageDown}
-        onTouchStart={onStageDown}
-        onMouseMove={onStageMove}
-        onTouchMove={onStageMove}
-        onMouseUp={onStageUp}
-        onTouchEnd={onStageUp}
-        onWheel={onWheel}
-        style={{ cursor: tool === "pan" ? "grab" : "default" }}
-      >
-        <Layer>
-          <Rect name="background" width={canvas.width} height={canvas.height} fill="#1e293b" stroke="#475569" />
-          {gridLines.map((l) => (
-            <Line key={l.key} points={l.points} stroke="#334155" strokeWidth={1} listening={false} />
-          ))}
-        </Layer>
-        <Layer>
-          {elements.map((el) => (
-            <DecorNode
-              key={el.id}
-              element={el}
-              itemKey={decorKey(el.id)}
-              selected={selected.has(decorKey(el.id))}
-              {...handlers}
+    <CanvasContextMenu target={menuTarget} disabled={readOnly} notify={notify} onOpenAdd={onOpenAdd} onOpenSpacing={onOpenSpacing}>
+      <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-slate-950" data-testid="venue-canvas">
+        <Stage
+          width={size.width}
+          height={size.height}
+          scaleX={current.scale}
+          scaleY={current.scale}
+          x={current.x}
+          y={current.y}
+          draggable={tool === "pan"}
+          onDragEnd={(e) => {
+            if (e.target === e.target.getStage()) setView({ ...current, x: e.target.x(), y: e.target.y() });
+          }}
+          onMouseDown={onStageDown}
+          onTouchStart={onStageDown}
+          onMouseMove={onStageMove}
+          onTouchMove={onStageMove}
+          onMouseUp={onStageUp}
+          onTouchEnd={onStageUp}
+          onWheel={onWheel}
+          onContextMenu={onContextMenu}
+          style={{ cursor: tool === "pan" ? "grab" : "default" }}
+        >
+          <Layer>
+            <Rect name="background" width={canvas.width} height={canvas.height} fill="#1e293b" stroke="#475569" />
+            {gridLines.map((l) => (
+              <Line key={l.key} points={l.points} stroke="#334155" strokeWidth={1} listening={false} />
+            ))}
+          </Layer>
+          <Layer>
+            {elements.map((el) => (
+              <DecorNode
+                key={el.id}
+                element={el}
+                itemKey={decorKey(el.id)}
+                selected={selected.has(decorKey(el.id))}
+                {...handlers}
+                draggable={canDrag && el.isPinned !== true}
+              />
+            ))}
+            {tables.map((t) => (
+              <TableNode
+                key={t.key}
+                table={t}
+                type={t.tableTypeId ? typeById.get(t.tableTypeId) : undefined}
+                selected={selected.has(t.key)}
+                {...handlers}
+                draggable={canDrag && !t.isPinned}
+              />
+            ))}
+            <Transformer
+              ref={transformer}
+              rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+              keepRatio={false}
+              onTransformEnd={onTransformEnd}
             />
-          ))}
-          {tables.map((t) => (
-            <TableNode
-              key={t.key}
-              table={t}
-              type={t.tableTypeId ? typeById.get(t.tableTypeId) : undefined}
-              selected={selected.has(t.key)}
-              {...handlers}
-            />
-          ))}
-          <Transformer
-            ref={transformer}
-            rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
-            keepRatio={false}
-            onTransformEnd={onTransformEnd}
-          />
-          {lassoRect ? (
-            <Rect {...lassoRect} fill="rgba(56,189,248,0.15)" stroke="#38bdf8" dash={[4, 4]} listening={false} />
-          ) : null}
-        </Layer>
-      </Stage>
-      <div className="absolute bottom-3 right-3 flex gap-1 rounded-md bg-background/90 p-1 shadow">
-        <Button size="icon" variant="ghost" aria-label="Uzaklaştır" onClick={() => zoomBy(1 / 1.2)}>
-          <Minus className="size-4" />
-        </Button>
-        <span className="w-12 self-center text-center text-xs tabular-nums">{Math.round(current.scale * 100)}%</span>
-        <Button size="icon" variant="ghost" aria-label="Yakınlaştır" onClick={() => zoomBy(1.2)}>
-          <Plus className="size-4" />
-        </Button>
-        <Button size="icon" variant="ghost" aria-label="Sığdır" onClick={() => setView(null)}>
-          <Scan className="size-4" />
-        </Button>
+            {lassoRect ? (
+              <Rect {...lassoRect} fill="rgba(56,189,248,0.15)" stroke="#38bdf8" dash={[4, 4]} listening={false} />
+            ) : null}
+          </Layer>
+        </Stage>
+        <div className="absolute bottom-3 right-3 flex gap-1 rounded-md bg-background/90 p-1 shadow">
+          <Button size="icon" variant="ghost" aria-label="Uzaklaştır" onClick={() => zoomBy(1 / 1.2)}>
+            <Minus className="size-4" />
+          </Button>
+          <span className="w-12 self-center text-center text-xs tabular-nums">{Math.round(current.scale * 100)}%</span>
+          <Button size="icon" variant="ghost" aria-label="Yakınlaştır" onClick={() => zoomBy(1.2)}>
+            <Plus className="size-4" />
+          </Button>
+          <Button size="icon" variant="ghost" aria-label="Sığdır" onClick={() => setView(null)}>
+            <Scan className="size-4" />
+          </Button>
+        </div>
       </div>
-    </div>
+    </CanvasContextMenu>
   );
 }

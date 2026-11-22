@@ -16,6 +16,16 @@ export type DecorKind = (typeof DECOR_KINDS)[number];
 export const TABLE_SHAPES = ["round", "rectangle", "square"] as const;
 export type TableShape = (typeof TABLE_SHAPES)[number];
 
+export const DECOR_ICONS = ["none", "mic", "footprints", "utensils", "settings", "users", "box", "star"] as const;
+export type DecorIcon = (typeof DECOR_ICONS)[number];
+export const DECOR_FONT_SIZES = ["sm", "md", "lg", "xl"] as const;
+export type DecorFontSize = (typeof DECOR_FONT_SIZES)[number];
+export const DECOR_FONT_FAMILIES = ["sans", "roboto", "playfair", "oswald"] as const;
+export type DecorFontFamily = (typeof DECOR_FONT_FAMILIES)[number];
+export const DECOR_TEXT_DIRECTIONS = ["horizontal", "vertical-down", "vertical-up"] as const;
+export type DecorTextDirection = (typeof DECOR_TEXT_DIRECTIONS)[number];
+export const DECOR_BORDER_MAX = 6;
+
 const coordinate = z.number({ error: "Konum sayı olmalı" }).min(-100_000).max(100_000);
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Renk #RRGGBB biçiminde olmalı");
 
@@ -72,6 +82,18 @@ export const decorElementSchema = z.object({
   rotation: z.number().min(-3600).max(3600).default(0),
   label: z.string().trim().max(60, "Metin en fazla 60 karakter olabilir").default(""),
   color: hexColor.optional(),
+  /** Çerçeve rengi ve kalınlığı (0 = çerçevesiz). */
+  borderColor: hexColor.optional(),
+  borderWidth: z.number().int().min(0).max(DECOR_BORDER_MAX).optional(),
+  icon: z.enum(DECOR_ICONS).optional(),
+  fontSize: z.enum(DECOR_FONT_SIZES).optional(),
+  fontFamily: z.enum(DECOR_FONT_FAMILIES).optional(),
+  textDirection: z.enum(DECOR_TEXT_DIRECTIONS).optional(),
+  /** Fareyle üzerine gelince görünen açıklama (görünen metinden ayrı). */
+  tooltip: z.string().trim().max(120, "Açıklama en fazla 120 karakter olabilir").optional(),
+  /** Düzenleyicide sabitlenmiş (taşınmaz). */
+  isPinned: z.boolean().optional(),
+  floor: z.number().int().min(MIN_FLOOR).max(MAX_FLOOR).optional(),
 });
 export type DecorElement = z.output<typeof decorElementSchema>;
 

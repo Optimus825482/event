@@ -31,6 +31,7 @@ export default async function EventVenuePage({ params }: { params: Promise<{ id:
       ) : null}
       <VenueEditor
         eventId={layout.event.id}
+        userId={data.userId}
         initial={{
           tables: layout.tables.map((t) => ({
             id: t.id,

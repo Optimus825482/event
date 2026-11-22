@@ -95,7 +95,7 @@ describe("parseLayout", () => {
     const out = parseLayout({
       placedTables: [],
       stageElements: [
-        { id: "s", type: "stage", x: 0, y: 0, width: 100, height: 50, label: "Sahne", color: "red", fontSize: "12" },
+        { id: "s", type: "stage", x: 0, y: 0, width: 100, height: 50, label: "Sahne", color: "red", fontSize: "12", legacyOnly: "x" },
         { id: "bad", type: "area", x: 0, y: 0, width: 0, height: 10 },
       ],
       drawnLines: [{ id: "l", points: [{ x: 10, y: 10 }, { x: 110, y: 10 }], width: 6, color: "#00ff00" }],
@@ -111,9 +111,32 @@ describe("parseLayout", () => {
       { id: "l", kind: "wall", x: 10, y: 10, width: 100, height: 6, rotation: 0, label: "", color: "#00ff00" },
     ]);
     expect(out.droppedKeys).toEqual(["tablePlans"]);
-    expect(out.droppedDecorProps).toEqual({ fontSize: 1 });
+    expect(out.droppedDecorProps).toEqual({ legacyOnly: 1 });
     expect(out.issues.map((i) => i.kind)).toContain("decor_skipped");
     expect(out.convertedLines).toBe(1);
+  });
+
+  it("sahne/alan stil anahtarları yeni alanlara eşlenir, geçersiz değerler atlanır", () => {
+    const out = parseLayout({
+      stageElements: [
+        {
+          id: "s", type: "stage", x: 0, y: 0, width: 100, height: 50, label: "Ana sahne", displayText: "KONSER",
+          color: "#dc2626", borderColor: "#f87171", borderWidth: 4, iconId: "mic", fontSize: "xl",
+          fontFamily: "oswald", textDirection: "vertical-up", isLocked: true,
+        },
+        { id: "b", type: "area", x: 0, y: 0, width: 80, height: 80, label: "Büfe", borderColor: "pembe", borderWidth: 99, iconId: "rocket", fontSize: "huge", textDirection: "diagonal", iconId2: 1 },
+      ],
+    });
+    expect(decorSchema.safeParse(out.decor).success).toBe(true);
+    expect(out.decor.elements[0]).toEqual({
+      id: "s", kind: "stage", x: 0, y: 0, width: 100, height: 50, rotation: 0, label: "KONSER", color: "#dc2626",
+      borderColor: "#f87171", borderWidth: 4, icon: "mic", fontSize: "xl", fontFamily: "oswald",
+      textDirection: "vertical-up", tooltip: "Ana sahne", isPinned: true,
+    });
+    expect(out.decor.elements[1]).toEqual({
+      id: "b", kind: "area", x: 0, y: 0, width: 80, height: 80, rotation: 0, label: "Büfe", borderWidth: 6,
+    });
+    expect(out.droppedDecorProps).toEqual({ iconId2: 1 });
   });
 
   it("NULL ve bozuk yerleşim boş sonuç verir", () => {

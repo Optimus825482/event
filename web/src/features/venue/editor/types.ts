@@ -1,0 +1,87 @@
+import type { Decor, DecorElement, DecorKind, TableInput, TableShape } from "../schemas";
+import type { Point } from "./geometry";
+import type { History } from "./history";
+import type { BulkAddOptions } from "./tool-actions";
+
+export type EditorTable = {
+  key: string;
+  id: string | null;
+  label: string;
+  capacity: number;
+  tableTypeId: string | null;
+  x: number;
+  y: number;
+  rotation: number;
+  isLoca: boolean;
+  isVip: boolean;
+  /** Düzenleyicide sabitlenmiş (taşınmaz); `locked` (kullanımda) kavramından bağımsız. */
+  isPinned: boolean;
+  /** Çizim boyutu (px); null = kapasiteden türetilir. */
+  size: number | null;
+  /** Kat, 1..9. */
+  floor: number;
+  /** Sayısal sıralama anahtarı; null = yok. */
+  sortNumber: number | null;
+  /** Rezervasyonu/ataması var: silinemez (sunucu da reddeder). */
+  locked: boolean;
+};
+
+export type Snapshot = { tables: EditorTable[]; elements: DecorElement[] };
+export type Tool = "select" | "pan";
+
+export type InitialLayout = {
+  tables: Array<Omit<EditorTable, "key" | "locked"> & { id: string }>;
+  decor: Decor;
+  lockedTableIds: readonly string[];
+};
+
+export type Placement = { key: string; x: number; y: number; rotation?: number; width?: number; height?: number };
+
+export type EditorState = Snapshot & {
+  canvas: { width: number; height: number };
+  selection: string[];
+  history: History<Snapshot>;
+  dirty: boolean;
+  snapEnabled: boolean;
+  gridSize: number;
+  tool: Tool;
+  /** Masa tipi kimliği → biçim (çakışma ve yerleşim hesapları için). */
+  tableShapes: Readonly<Record<string, TableShape>>;
+};
+
+/** Taşıma sonucu: `ok: false` ise hiçbir şey değişmedi (çakışma ya da taşınacak öğe yok). */
+export type MoveResult = { ok: true; moved: number } | { ok: false; reason: "collision" | "nothing"; keys?: string[] };
+export type ArrangeReport = { moved: number; unplaced: string[] };
+export type BulkAddReport = { added: number; requested: number; keys: string[] };
+/** Taslaktan geri yüklenen düzenleyici içeriği. */
+export type DraftContent = { tables: EditorTable[]; elements: DecorElement[]; canvas: { width: number; height: number } };
+
+export type EditorActions = {
+  load: (layout: InitialLayout) => void;
+  addTable: (opts?: { at?: Point; capacity?: number; tableTypeId?: string | null; isLoca?: boolean }) => string;
+  addDecor: (kind: DecorKind, at?: Point) => string;
+  updateTables: (keys: readonly string[], patch: Partial<Pick<EditorTable, "label" | "capacity" | "tableTypeId" | "isLoca" | "rotation" | "isVip" | "isPinned" | "size" | "floor" | "sortNumber">>) => void;
+  updateDecor: (key: string, patch: Partial<Omit<DecorElement, "id" | "kind">>) => void;
+  commitPlacements: (placements: readonly Placement[]) => MoveResult;
+  nudge: (dx: number, dy: number) => MoveResult;
+  addTablesBatch: (opts: BulkAddOptions) => BulkAddReport;
+  autoAlign: () => ArrangeReport & { scoped: boolean };
+  snapToCells: () => ArrangeReport;
+  setSpacing: (gap: number) => ArrangeReport;
+  centerHorizontally: (keys?: readonly string[]) => MoveResult;
+  setPinned: (keys: readonly string[], pinned: boolean) => void;
+  setVip: (keys: readonly string[], vip: boolean) => void;
+  setTableShapes: (shapes: Readonly<Record<string, TableShape>>) => void;
+  restoreDraft: (draft: DraftContent) => void;
+  deleteSelection: () => { blocked: string[] };
+  duplicateSelection: () => void;
+  select: (keys: readonly string[], mode?: "replace" | "toggle" | "add") => void;
+  selectAll: () => void;
+  clearSelection: () => void;
+  undo: () => void;
+  redo: () => void;
+  setSnap: (enabled: boolean) => void;
+  setTool: (tool: Tool) => void;
+  setCanvasSize: (size: { width: number; height: number }) => void;
+  toSaveInput: () => { tables: TableInput[]; decor: Decor };
+};

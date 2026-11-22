@@ -1,77 +1,39 @@
 import { createStore } from "zustand/vanilla";
-import type { Decor, DecorElement, DecorKind, TableInput } from "../schemas";
+import type { DecorElement, DecorKind } from "../schemas";
+import { decorItemKey, type ShapeOf } from "./collision";
 import { findFreeSpot, normalizeAngle, nextLabel, snap, snapPoint, GRID_SIZE, type Point } from "./geometry";
-import { emptyHistory, record, redo, undo, type History } from "./history";
+import { emptyHistory, record, redo, undo } from "./history";
+import {
+  applyMoves,
+  autoAlignTables,
+  bulkAddTables,
+  centreSelectionHorizontally,
+  nudgeMoves,
+  snapTablesToCells,
+  spaceTables,
+  type MoveOutcome,
+  type ToolCtx,
+} from "./tool-actions";
+import type { ArrangeReport, EditorActions, EditorState, EditorTable, InitialLayout, MoveResult, Snapshot } from "./types";
 
-export type EditorTable = {
-  key: string;
-  id: string | null;
-  label: string;
-  capacity: number;
-  tableTypeId: string | null;
-  x: number;
-  y: number;
-  rotation: number;
-  isLoca: boolean;
-  isVip: boolean;
-  /** Düzenleyicide sabitlenmiş (taşınmaz); `locked` (kullanımda) kavramından bağımsız. */
-  isPinned: boolean;
-  /** Çizim boyutu (px); null = kapasiteden türetilir. */
-  size: number | null;
-  /** Kat, 1..9. */
-  floor: number;
-  /** Sayısal sıralama anahtarı; null = yok. */
-  sortNumber: number | null;
-  /** Rezervasyonu/ataması var: silinemez (sunucu da reddeder). */
-  locked: boolean;
-};
-
-export type Snapshot = { tables: EditorTable[]; elements: DecorElement[] };
-export type Tool = "select" | "pan";
-
-export type InitialLayout = {
-  tables: Array<Omit<EditorTable, "key" | "locked"> & { id: string }>;
-  decor: Decor;
-  lockedTableIds: readonly string[];
-};
-
-export type Placement = { key: string; x: number; y: number; rotation?: number; width?: number; height?: number };
-
-export type EditorState = Snapshot & {
-  canvas: { width: number; height: number };
-  selection: string[];
-  history: History<Snapshot>;
-  dirty: boolean;
-  snapEnabled: boolean;
-  gridSize: number;
-  tool: Tool;
-};
-
-export type EditorActions = {
-  load: (layout: InitialLayout) => void;
-  addTable: (opts?: { at?: Point; capacity?: number; tableTypeId?: string | null; isLoca?: boolean }) => string;
-  addDecor: (kind: DecorKind, at?: Point) => string;
-  updateTables: (keys: readonly string[], patch: Partial<Pick<EditorTable, "label" | "capacity" | "tableTypeId" | "isLoca" | "rotation" | "isVip" | "isPinned" | "size" | "floor" | "sortNumber">>) => void;
-  updateDecor: (key: string, patch: Partial<Pick<DecorElement, "label" | "color" | "width" | "height" | "rotation">>) => void;
-  commitPlacements: (placements: readonly Placement[]) => void;
-  nudge: (dx: number, dy: number) => void;
-  deleteSelection: () => { blocked: string[] };
-  duplicateSelection: () => void;
-  select: (keys: readonly string[], mode?: "replace" | "toggle" | "add") => void;
-  selectAll: () => void;
-  clearSelection: () => void;
-  undo: () => void;
-  redo: () => void;
-  setSnap: (enabled: boolean) => void;
-  setTool: (tool: Tool) => void;
-  setCanvasSize: (size: { width: number; height: number }) => void;
-  toSaveInput: () => { tables: TableInput[]; decor: Decor };
-};
+export type {
+  ArrangeReport,
+  BulkAddReport,
+  DraftContent,
+  EditorActions,
+  EditorState,
+  EditorTable,
+  InitialLayout,
+  MoveResult,
+  Placement,
+  Snapshot,
+  Tool,
+} from "./types";
 
 export type EditorStore = ReturnType<typeof createEditorStore>;
 
 export const DECOR_KEY_PREFIX = "d:";
-export const decorKey = (id: string) => `${DECOR_KEY_PREFIX}${id}`;
+export const decorKey = decorItemKey;
 /** Araç çubuğundan eklenen masalar arasındaki en küçük aralık (ızgara hücresi cinsinden). */
 const NEW_TABLE_SPACING_CELLS = 4;
 
@@ -81,6 +43,11 @@ export function isLayoutEmpty(state: Pick<EditorState, "tables" | "elements">): 
 }
 
 export const isDecorKey = (key: string) => key.startsWith(DECOR_KEY_PREFIX);
+
+/** Masa tipi biçimini (yuvarlak/dikdörtgen/kare) durumdaki tip eşlemesinden çözer; bilinmeyen tip yuvarlaktır. */
+export function shapeResolver(state: Pick<EditorState, "tableShapes">): ShapeOf {
+  return (t) => (t.tableTypeId ? state.tableShapes[t.tableTypeId] : undefined) ?? "round";
+}
 
 let counter = 0;
 function uid(prefix: string): string {
@@ -127,6 +94,19 @@ export function createEditorStore(initial: InitialLayout) {
       const s = get();
       set({ ...next, history: record(s.history, snapshot(s)), dirty: true });
     };
+    const ctx = (): ToolCtx => {
+      const s = get();
+      return { ...s, shapeOf: shapeResolver(s) };
+    };
+    const commitMove = (outcome: MoveOutcome): MoveResult => {
+      if (!outcome.ok) return outcome.reason === "collision" ? { ok: false, reason: "collision", keys: outcome.keys } : { ok: false, reason: "nothing" };
+      change({ tables: outcome.tables, elements: outcome.elements });
+      return { ok: true, moved: outcome.moved };
+    };
+    const arranged = (out: { tables: EditorTable[]; moved: number; unplaced: string[] }): ArrangeReport => {
+      if (out.moved > 0) change({ tables: out.tables });
+      return { moved: out.moved, unplaced: out.unplaced };
+    };
     const center = (): Point => {
       const { canvas, gridSize } = get();
       return { x: snap(canvas.width / 2, gridSize), y: snap(canvas.height / 2, gridSize) };
@@ -142,6 +122,7 @@ export function createEditorStore(initial: InitialLayout) {
       snapEnabled: true,
       gridSize: GRID_SIZE,
       tool: "select",
+      tableShapes: {},
 
       load: (layout) =>
         set({
@@ -215,36 +196,49 @@ export function createEditorStore(initial: InitialLayout) {
         change({ elements: s.elements.map((e) => (decorKey(e.id) === key ? { ...e, ...patch } : e)) });
       },
 
-      commitPlacements: (placements) => {
-        if (placements.length === 0) return;
+      commitPlacements: (placements) => commitMove(applyMoves(ctx(), placements, { snap: true })),
+
+      nudge: (dx, dy) => commitMove(nudgeMoves(ctx(), dx, dy)),
+
+      addTablesBatch: (opts) => {
         const s = get();
-        const byKey = new Map(placements.map((p) => [p.key, p]));
-        const place = (p: Placement) => snapPoint({ x: p.x, y: p.y }, s.gridSize, s.snapEnabled);
-        const tables = s.tables.map((t) => {
-          const p = byKey.get(t.key);
-          if (!p) return t;
-          return { ...t, ...place(p), rotation: normalizeAngle(p.rotation ?? t.rotation) };
-        });
-        const elements = s.elements.map((e) => {
-          const p = byKey.get(decorKey(e.id));
-          if (!p) return e;
-          const size = {
-            width: Math.max(4, p.width ?? e.width),
-            height: Math.max(4, p.height ?? e.height),
-          };
-          return { ...e, ...place(p), ...size, rotation: normalizeAngle(p.rotation ?? e.rotation) };
-        });
-        change({ tables, elements });
+        const added = bulkAddTables(ctx(), opts, () => uid("t:new-"));
+        const keys = added.map((t) => t.key);
+        if (added.length > 0) change({ tables: [...s.tables, ...added], selection: keys });
+        return { added: added.length, requested: opts.count, keys };
       },
 
-      nudge: (dx, dy) => {
+      autoAlign: () => {
+        const out = autoAlignTables(ctx());
+        return { ...arranged(out), scoped: out.scoped };
+      },
+      snapToCells: () => arranged(snapTablesToCells(ctx())),
+      setSpacing: (gap) => arranged(spaceTables(ctx(), gap)),
+      centerHorizontally: (keys) => commitMove(centreSelectionHorizontally(keys ? { ...ctx(), selection: keys } : ctx())),
+
+      setPinned: (keys, pinned) => {
+        const wanted = new Set(keys);
         const s = get();
-        const selected = new Set(s.selection);
-        if (selected.size === 0) return;
-        change({
-          tables: s.tables.map((t) => (selected.has(t.key) ? { ...t, x: t.x + dx, y: t.y + dy } : t)),
-          elements: s.elements.map((e) => (selected.has(decorKey(e.id)) ? { ...e, x: e.x + dx, y: e.y + dy } : e)),
-        });
+        const tables = s.tables.map((t) => (wanted.has(t.key) && t.isPinned !== pinned ? { ...t, isPinned: pinned } : t));
+        const elements = s.elements.map((e) =>
+          wanted.has(decorKey(e.id)) && (e.isPinned === true) !== pinned ? { ...e, isPinned: pinned } : e,
+        );
+        if (tables.some((t, i) => t !== s.tables[i]) || elements.some((e, i) => e !== s.elements[i])) change({ tables, elements });
+      },
+      setVip: (keys, vip) => {
+        const wanted = new Set(keys);
+        const s = get();
+        const tables = s.tables.map((t) => (wanted.has(t.key) && t.isVip !== vip ? { ...t, isVip: vip } : t));
+        if (tables.some((t, i) => t !== s.tables[i])) change({ tables });
+      },
+      setTableShapes: (shapes) => set({ tableShapes: shapes }),
+      restoreDraft: (draft) => {
+        const s = get();
+        // Kilit (rezervasyon) bilgisi taslaktan değil, sunucudan gelen güncel durumdan alınır.
+        const locked = new Set(s.tables.filter((t) => t.locked && t.id).map((t) => t.id));
+        const tables = draft.tables.map((t) => ({ ...t, locked: t.id !== null && locked.has(t.id) }));
+        change({ tables, elements: draft.elements, selection: [] });
+        set({ canvas: draft.canvas });
       },
 
       deleteSelection: () => {

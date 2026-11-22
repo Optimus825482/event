@@ -166,7 +166,7 @@ describe("rapor kategorileri", () => {
     expect(gap("events.venueLayout.groupLines")).toBe(1);
     // Masadaki isLocked artık event_tables.is_pinned'e taşınır; boşluk olarak raporlanmaz.
     expect(gap("events.venueLayout.(placedTables|tables)[].isLocked")).toBeUndefined();
-    expect(gap("events.venueLayout.stageElements[].isLocked")).toBe(1);
+    expect(gap("events.venueLayout.stageElements[].isLocked")).toBeUndefined();
   });
 
   it("rapor ve konsol özeti telefon/e-posta içermez", () => {

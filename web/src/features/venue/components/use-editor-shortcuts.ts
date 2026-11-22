@@ -2,12 +2,14 @@
 
 import { useEffect } from "react";
 import type { EditorStore } from "../editor/store";
+import { reportMove, type Notify } from "./editor-commands";
 
 type Options = {
   store: EditorStore;
   enabled: boolean;
   onSave: () => void;
   onBlocked: (labels: string[]) => void;
+  notify: Notify;
 };
 
 function isTyping(target: EventTarget | null): boolean {
@@ -16,7 +18,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /** Klavye kısayolları: Sil, Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z), Ctrl+A, Ctrl+D, Ctrl+S, oklar, Esc. */
-export function useEditorShortcuts({ store, enabled, onSave, onBlocked }: Options): void {
+export function useEditorShortcuts({ store, enabled, onSave, onBlocked, notify }: Options): void {
   useEffect(() => {
     if (!enabled) return;
     function onKey(e: KeyboardEvent) {
@@ -52,10 +54,10 @@ export function useEditorShortcuts({ store, enabled, onSave, onBlocked }: Option
         const step = e.shiftKey ? 1 : s.gridSize;
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
-        s.nudge(dx, dy);
+        reportMove(s.nudge(dx, dy), notify);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, enabled, onSave, onBlocked]);
+  }, [store, enabled, onSave, onBlocked, notify]);
 }

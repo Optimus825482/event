@@ -2,14 +2,22 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
+import { formatDraftTime } from "../editor/draft";
+import type { Point } from "../editor/geometry";
 import { createEditorStore, isLayoutEmpty, type InitialLayout } from "../editor/store";
+import type { TableShape } from "../schemas";
 import type { WriteLayoutResult } from "../layout-core";
 import { saveLayoutAction } from "../actions";
-import { EditorStoreContext, useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
+import { AddElementsDialog, type AddRequest } from "./add-elements-dialog";
+import { DraftRecoveryDialog } from "./draft-recovery-dialog";
+import type { Notify } from "./editor-commands";
+import { EditorStoreContext, tableShapeOf, useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
 import { EditorToolbar } from "./editor-toolbar";
 import { PropertiesPanel } from "./properties-panel";
 import { TemplateDialog, type TemplateOption } from "./template-dialog";
+import { SpacingDialog } from "./spacing-dialog";
 import { useEditorShortcuts } from "./use-editor-shortcuts";
+import { useLayoutDraft } from "./use-layout-draft";
 
 const Loading = () => (
   <div className="flex h-full items-center justify-center text-sm text-muted-foreground" aria-busy="true">
@@ -23,6 +31,8 @@ const Venue3DPreview = dynamic(() => import("./venue-3d-preview"), { ssr: false,
 
 export type VenueEditorProps = {
   eventId: string;
+  /** Oturumdaki kullanıcı: taslaklar etkinlik + kullanıcı başına saklanır. */
+  userId: string;
   initial: InitialLayout;
   tableTypes: TableTypeOption[];
   templates: TemplateOption[];
@@ -72,7 +82,7 @@ export function VenueEditor(props: VenueEditorProps) {
   );
 }
 
-function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate }: VenueEditorProps) {
+function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveTemplate }: VenueEditorProps) {
   const store = useEditorStore();
   const dirty = useEditor((s) => s.dirty);
   const layoutEmpty = useEditor(isLayoutEmpty);
@@ -81,6 +91,18 @@ function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate 
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [addRequest, setAddRequest] = useState<(AddRequest & { id: number }) | null>(null);
+  const [spacingOpen, setSpacingOpen] = useState(false);
+  const draft = useLayoutDraft({ store, eventId, userId, enabled: canEdit });
+  const clearDraft = draft.clear;
+  const notify: Notify = useCallback((kind, text) => setMessage({ kind, text }), []);
+  const openAdd = useCallback((kind: AddRequest["kind"], start?: Point) => setAddRequest({ kind, start, id: Date.now() }), []);
+
+  useEffect(() => {
+    const shapes: Record<string, TableShape> = {};
+    for (const t of tableTypes) shapes[t.id] = tableShapeOf(t);
+    store.getState().setTableShapes(shapes);
+  }, [store, tableTypes]);
 
   const save = useCallback(async () => {
     const state = store.getState();
@@ -97,19 +119,21 @@ function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate 
         return;
       }
       store.getState().load(toInitial(res.data));
+      clearDraft();
       setMessage({ kind: "ok", text: `Yerleşim kaydedildi (${res.data.tables.length} masa, ${res.data.totalCapacity} kişi).` });
     } catch {
       setMessage({ kind: "error", text: "Beklenmeyen bir hata oluştu" });
     } finally {
       setSaving(false);
     }
-  }, [store, canEdit, saving, eventId]);
+  }, [store, canEdit, saving, eventId, clearDraft]);
 
   const onBlocked = useCallback((labels: string[]) => {
     setMessage({ kind: "error", text: `Rezervasyonu veya ataması olan masalar silinemez: ${labels.join(", ")}` });
   }, []);
 
-  useEditorShortcuts({ store, enabled: !templatesOpen, onSave: () => void save(), onBlocked });
+  const dialogOpen = templatesOpen || addRequest !== null || spacingOpen || draft.recovery !== null;
+  useEditorShortcuts({ store, enabled: !dialogOpen, onSave: () => void save(), onBlocked, notify });
 
   useEffect(() => {
     if (!dirty) return;
@@ -128,6 +152,9 @@ function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate 
         onSave={() => void save()}
         onOpenTemplates={() => setTemplatesOpen(true)}
         onBlocked={onBlocked}
+        notify={notify}
+        onOpenAdd={(kind) => openAdd(kind)}
+        onOpenSpacing={() => setSpacingOpen(true)}
       />
       {canEdit && layoutEmpty ? (
         <p className="border-b border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
@@ -144,7 +171,22 @@ function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate 
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="relative min-h-[320px] flex-1">
-          {show3d ? <Venue3DPreview tableTypes={tableTypes} /> : <VenueCanvas readOnly={!canEdit} tableTypes={tableTypes} />}
+          {show3d ? (
+            <Venue3DPreview tableTypes={tableTypes} />
+          ) : (
+            <VenueCanvas
+              readOnly={!canEdit}
+              tableTypes={tableTypes}
+              notify={notify}
+              onOpenAdd={openAdd}
+              onOpenSpacing={() => setSpacingOpen(true)}
+            />
+          )}
+          {draft.lastSavedAt ? (
+            <span className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-slate-800/90 px-3 py-1 text-xs text-slate-300">
+              {`Taslak: ${formatDraftTime(draft.lastSavedAt)}`}
+            </span>
+          ) : null}
         </div>
         <PropertiesPanel readOnly={!canEdit} tableTypes={tableTypes} errors={errors} />
       </div>
@@ -156,9 +198,19 @@ function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate 
         canApply={canEdit}
         canSave={canSaveTemplate}
         dirty={dirty}
-        onApplied={(result) => store.getState().load(toInitial(result))}
+        onApplied={(result) => {
+          store.getState().load(toInitial(result));
+          clearDraft();
+        }}
         onMessage={(text) => setMessage({ kind: "ok", text })}
       />
+      {addRequest ? (
+        <AddElementsDialog key={addRequest.id} request={addRequest} onClose={() => setAddRequest(null)} notify={notify} />
+      ) : null}
+      {spacingOpen ? <SpacingDialog onClose={() => setSpacingOpen(false)} notify={notify} /> : null}
+      {draft.recovery ? (
+        <DraftRecoveryDialog savedAt={draft.recovery.savedAt} onRestore={draft.restore} onDiscard={draft.discard} />
+      ) : null}
     </div>
   );
 }

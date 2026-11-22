@@ -4,7 +4,11 @@ import { useId } from "react";
 import { Label } from "@/components/ui/label";
 import { isDecorKey, decorKey } from "../editor/store";
 import { LABEL_MAX, MAX_TABLE_CAPACITY } from "../schemas";
+import { CommitField, fieldClass, toInt } from "./commit-field";
+import { DecorStyleSection } from "./decor-style-section";
 import { useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
+import { LayoutStats } from "./layout-stats";
+import { TableAttributesSection } from "./table-attributes-section";
 
 type Props = {
   readOnly: boolean;
@@ -12,55 +16,6 @@ type Props = {
   /** Son kayıttan dönen alan hataları, masa anahtarına göre. */
   errors: Record<string, string[]>;
 };
-
-const fieldClass =
-  "w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
-
-/** Odaktan çıkınca (ya da Enter ile) yazılan alan: her tuş vuruşu geçmişe girmesin. */
-function CommitField({
-  label,
-  value,
-  type = "text",
-  disabled,
-  onCommit,
-  ...rest
-}: {
-  label: string;
-  value: string | number;
-  type?: "text" | "number";
-  disabled: boolean;
-  onCommit: (value: string) => void;
-  min?: number;
-  max?: number;
-  maxLength?: number;
-}) {
-  const id = useId();
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={id}>{label}</Label>
-      <input
-        key={String(value)}
-        id={id}
-        type={type}
-        defaultValue={value}
-        disabled={disabled}
-        className={fieldClass}
-        onBlur={(e) => {
-          if (e.currentTarget.value !== String(value)) onCommit(e.currentTarget.value);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-        {...rest}
-      />
-    </div>
-  );
-}
-
-function toInt(value: string, fallback: number): number {
-  const n = Number.parseInt(value, 10);
-  return Number.isFinite(n) ? n : fallback;
-}
 
 export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
   const store = useEditorStore();
@@ -70,7 +25,6 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
   const typeId = useId();
   const selectedTables = tables.filter((t) => selection.includes(t.key));
   const selectedDecor = elements.filter((e) => selection.includes(decorKey(e.id)));
-  const capacity = tables.reduce((sum, t) => sum + t.capacity, 0);
   const keys = selectedTables.map((t) => t.key);
   const first = selectedTables[0];
   const single = selectedTables.length === 1 && selectedDecor.length === 0 ? first : undefined;
@@ -80,16 +34,7 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
 
   return (
     <aside className="flex w-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-3 text-sm lg:w-72">
-      <dl className="grid grid-cols-2 gap-2">
-        <div className="rounded-md border border-border p-2">
-          <dt className="text-xs text-muted-foreground">Masa</dt>
-          <dd className="text-lg font-semibold">{tables.length}</dd>
-        </div>
-        <div className="rounded-md border border-border p-2">
-          <dt className="text-xs text-muted-foreground">Kapasite</dt>
-          <dd className="text-lg font-semibold">{capacity}</dd>
-        </div>
-      </dl>
+      <LayoutStats tableTypes={tableTypes} />
 
       {errorEntries.length > 0 ? (
         <ul role="alert" className="space-y-1 rounded-md border border-destructive/50 p-2 text-destructive">
@@ -193,52 +138,11 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
         </section>
       ) : null}
 
-      {decor ? (
-        <section className="space-y-3" aria-label="Öğe özellikleri">
-          <h2 className="font-medium">
-            {{ stage: "Sahne", area: "Alan", wall: "Duvar", label: "Metin" }[decor.kind]}
-          </h2>
-          <CommitField
-            label="Metin"
-            value={decor.label}
-            maxLength={60}
-            disabled={readOnly}
-            onCommit={(v) => store.getState().updateDecor(decorKey(decor.id), { label: v })}
-          />
-          <div className="space-y-1">
-            <Label htmlFor={`${typeId}-color`}>Renk</Label>
-            <input
-              id={`${typeId}-color`}
-              type="color"
-              disabled={readOnly}
-              defaultValue={decor.color ?? "#64748b"}
-              key={decor.id + (decor.color ?? "")}
-              onBlur={(e) => store.getState().updateDecor(decorKey(decor.id), { color: e.currentTarget.value })}
-              className="h-8 w-16 rounded border border-input"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <CommitField
-              label="Genişlik"
-              type="number"
-              min={4}
-              value={Math.round(decor.width)}
-              disabled={readOnly}
-              onCommit={(v) => store.getState().updateDecor(decorKey(decor.id), { width: Math.max(4, toInt(v, decor.width)) })}
-            />
-            <CommitField
-              label="Yükseklik"
-              type="number"
-              min={4}
-              value={Math.round(decor.height)}
-              disabled={readOnly}
-              onCommit={(v) =>
-                store.getState().updateDecor(decorKey(decor.id), { height: Math.max(4, toInt(v, decor.height)) })
-              }
-            />
-          </div>
-        </section>
+      {selectedTables.length > 0 && selectedDecor.length === 0 ? (
+        <TableAttributesSection tables={selectedTables} allTables={tables} readOnly={readOnly} />
       ) : null}
+
+      {decor ? <DecorStyleSection element={decor} readOnly={readOnly} /> : null}
 
       {selection.some(isDecorKey) && selectedTables.length > 0 ? (
         <p className="text-muted-foreground">Masa ve dekor birlikte seçiliyken yalnızca taşıma ve döndürme yapılabilir.</p>
