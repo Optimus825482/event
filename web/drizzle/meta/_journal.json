@@ -36,6 +36,13 @@
       "when": 1795347697145,
       "tag": "0004_modern_bastion",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795349125031,
+      "tag": "0005_narrow_mandarin",
+      "breakpoints": true
     }
   ]
 }

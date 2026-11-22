@@ -61,7 +61,7 @@ export const staff = pgTable(
   ],
 );
 
-// Eski sistemdeki 10 modül değeri (policy.ts MODULES'tan bağımsız).
+// policy.ts MODULES ile aynı küme (eski 10 modül + reviews).
 export const permissionModule = pgEnum("permission_module", [
   "events",
   "reservations",
@@ -73,6 +73,7 @@ export const permissionModule = pgEnum("permission_module", [
   "users",
   "invitations",
   "notifications",
+  "reviews",
 ]);
 
 export const userPermissions = pgTable(
