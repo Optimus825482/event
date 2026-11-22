@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Db, Tx } from "@/db/client";
 import { customers, customerTags, events, guestNotes, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
@@ -7,6 +8,8 @@ import { pgCodeOf } from "./pg-error";
 import type { AddNoteInput } from "./schemas";
 
 type Executor = Db | Tx;
+
+const reservationEvents = alias(events, "reservation_events");
 
 async function assertCustomerExists(db: Executor, customerId: string): Promise<void> {
   const [row] = await db.select({ id: customers.id }).from(customers).where(eq(customers.id, customerId));
@@ -95,11 +98,38 @@ export async function addNote(db: Executor, actor: Actor, input: AddNoteInput): 
   return row;
 }
 
+/**
+ * Notu değiştirme/silme yetkisi: not var olmalı, bağlı olduğu etkinlik (doğrudan ya da rezervasyon
+ * üzerinden) erişilebilir olmalı ve yönetici değilse notun yazarı olunmalıdır. Aksi her durumda
+ * "yok" gibi görünür.
+ */
+async function assertNoteAccess(db: Executor, actor: Actor, id: string): Promise<void> {
+  const [row] = await db
+    .select({
+      createdById: guestNotes.createdById,
+      directOrganizerId: events.organizerId,
+      reservationOrganizerId: reservationEvents.organizerId,
+    })
+    .from(guestNotes)
+    .leftJoin(events, eq(events.id, guestNotes.eventId))
+    .leftJoin(reservations, eq(reservations.id, guestNotes.reservationId))
+    .leftJoin(reservationEvents, eq(reservationEvents.id, reservations.eventId))
+    .where(eq(guestNotes.id, id));
+  const notFound = new DomainError("not_found", "Not bulunamadı");
+  if (!row) throw notFound;
+  if (actor.role === "admin") return;
+  for (const organizerId of [row.directOrganizerId, row.reservationOrganizerId]) {
+    if (organizerId && !mayAccessEvent(actor, { organizerId })) throw notFound;
+  }
+  if (row.createdById !== actor.id) throw notFound;
+}
+
 export async function updateNote(
   db: Executor,
-  _actor: Actor,
+  actor: Actor,
   input: { id: string; content: string },
 ): Promise<{ id: string }> {
+  await assertNoteAccess(db, actor, input.id);
   const [row] = await db
     .update(guestNotes)
     .set({ content: input.content, updatedAt: new Date() })
@@ -109,7 +139,8 @@ export async function updateNote(
   return row;
 }
 
-export async function deleteNote(db: Executor, _actor: Actor, input: { id: string }): Promise<{ id: string }> {
+export async function deleteNote(db: Executor, actor: Actor, input: { id: string }): Promise<{ id: string }> {
+  await assertNoteAccess(db, actor, input.id);
   const [row] = await db.delete(guestNotes).where(eq(guestNotes.id, input.id)).returning({ id: guestNotes.id });
   if (!row) throw new DomainError("not_found", "Not bulunamadı");
   return row;
