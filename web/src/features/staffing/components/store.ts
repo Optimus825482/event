@@ -13,6 +13,7 @@ export type DraftTeam = Organization["teams"][number];
 export type DraftGroup = Organization["groups"][number];
 export type DraftAssignment = Organization["assignments"][number];
 export type DraftExtra = Organization["extraStaff"][number];
+export type DraftPointRoles = Organization["servicePointRoles"][number];
 
 export const WIZARD_STEPS = [
   { id: "groups", title: "Masa Grupları", description: "Masaları gruplara ayırın" },
@@ -31,6 +32,8 @@ export type Draft = {
   groups: DraftGroup[];
   assignments: DraftAssignment[];
   extraStaff: DraftExtra[];
+  /** Servis noktası başına izinli roller ve rol başına gereken sayı. */
+  servicePointRoles: DraftPointRoles[];
 };
 
 export type OrganizationState = Draft & {
@@ -68,6 +71,8 @@ export type OrganizationState = Draft & {
   /** Grubun masalarını atamadan çıkarır; başka masası kalmazsa atama silinir. */
   removeGroupStaff: (groupId: string, assignmentId: string) => void;
   addServicePointStaff: (servicePointId: string, pick: StaffPick) => void;
+  /** Noktanın rol listesini değiştirir; `key` verilirse aynı anahtarlı art arda yazımlar tek adımdır. */
+  setPointRoles: (servicePointId: string, roles: DraftPointRoles["roles"], key?: string) => void;
   /** Ekstra personeli gruba bağlar ya da bağı kaldırır. */
   toggleExtraGroup: (extraId: string, groupId: string) => void;
   addExtra: () => void;
@@ -76,7 +81,13 @@ export type OrganizationState = Draft & {
 };
 
 function draftOf(src: Draft): Draft {
-  return { teams: src.teams, groups: src.groups, assignments: src.assignments, extraStaff: src.extraStaff };
+  return {
+    teams: src.teams,
+    groups: src.groups,
+    assignments: src.assignments,
+    extraStaff: src.extraStaff,
+    servicePointRoles: src.servicePointRoles,
+  };
 }
 
 /** Aynı kaydın aynı alanlarına art arda yazım tek geri alma adımıdır. */
@@ -280,6 +291,15 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
         change((s) => ({
           assignments: addServicePointStaff(s.assignments, pick, servicePointId, (p) => pickedAssignment(p, s.assignments.length)),
         })),
+      setPointRoles: (servicePointId, roles, key) =>
+        change(
+          (s) => ({
+            servicePointRoles: s.servicePointRoles.some((p) => p.servicePointId === servicePointId)
+              ? s.servicePointRoles.map((p) => (p.servicePointId === servicePointId ? { ...p, roles } : p))
+              : [...s.servicePointRoles, { servicePointId, roles }],
+          }),
+          key ? `pointRoles:${servicePointId}:${key}` : null,
+        ),
       toggleExtraGroup: (extraId, groupId) =>
         change((s) => ({
           extraStaff: s.extraStaff.map((e) => (e.id === extraId ? { ...e, groupIds: toggle(e.groupIds, groupId) } : e)),
@@ -336,5 +356,6 @@ export function toSavePayload(eventId: string, s: Draft) {
       servicePointId: a.assignmentType === "service_point" ? a.servicePointId : null,
     })),
     extraStaff: s.extraStaff,
+    servicePointRoles: s.servicePointRoles,
   };
 }

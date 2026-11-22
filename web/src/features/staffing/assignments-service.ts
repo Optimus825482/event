@@ -17,6 +17,8 @@ import { planAutoAssign, type AutoAssignPlan } from "./auto-assign";
 import { STAFFING_MESSAGES } from "./db-errors";
 import { diffLinks, unique } from "./diff";
 import { assertTeamsInEvent } from "./groups-service";
+import { overrideTimesError, storedOverride } from "./service-point-roles";
+import { assertServicePointRoles } from "./service-point-roles-service";
 import {
   ASSIGNMENT_TYPES,
   type AssignmentInput,
@@ -54,13 +56,28 @@ function validateItems(items: AssignmentInput[], types: ReadonlySet<AssignmentTy
     if (item.assignmentType === "service_point" && !item.servicePointId) {
       throw new DomainError("conflict", STAFFING_MESSAGES.servicePointRequired);
     }
+    const timeError = overrideTimesError(item.shiftStart, item.shiftEnd);
+    if (timeError) throw new DomainError("conflict", timeError);
     const key = shiftKey(item.staffId, item.shiftId);
     if (keys.has(key)) throw new DomainError("conflict", STAFFING_MESSAGES.duplicateShift);
     keys.add(key);
   }
 }
 
-function rowValues(eventId: string, item: AssignmentInput, index: number) {
+type ShiftTimes = ReadonlyMap<string, { startTime: string; endTime: string }>;
+
+/** Atamalardaki vardiyaların saatleri (özel saat vardiyanınkiyle aynıysa saklanmaz). */
+async function loadShiftTimes(tx: Tx, items: AssignmentInput[]): Promise<ShiftTimes> {
+  const ids = unique(items.flatMap((i) => (i.shiftId ? [i.shiftId] : [])));
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select({ id: workShifts.id, startTime: workShifts.startTime, endTime: workShifts.endTime })
+    .from(workShifts)
+    .where(inArray(workShifts.id, ids));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+function rowValues(eventId: string, item: AssignmentInput, index: number, shifts: ShiftTimes) {
   return {
     eventId,
     staffId: item.staffId,
@@ -69,8 +86,7 @@ function rowValues(eventId: string, item: AssignmentInput, index: number) {
     assignmentType: item.assignmentType,
     servicePointId: item.assignmentType === "service_point" ? (item.servicePointId ?? null) : null,
     role: item.role ?? null,
-    shiftStart: item.shiftStart ?? null,
-    shiftEnd: item.shiftEnd ?? null,
+    ...storedOverride(item.shiftStart, item.shiftEnd, item.shiftId ? shifts.get(item.shiftId) : null),
     specialTaskLocation: item.specialTaskLocation ?? null,
     specialTaskStartTime: item.specialTaskStartTime ?? null,
     specialTaskEndTime: item.specialTaskEndTime ?? null,
@@ -170,6 +186,8 @@ export async function applyAssignments(
   const byId = new Map<string, ExistingRow>(existing.map((r) => [r.id, r]));
   await assertStaffActive(tx, items, byId);
   await assertTeamMatchesGroups(tx, eventId, items);
+  await assertServicePointRoles(tx, eventId, items);
+  const shiftTimes = await loadShiftTimes(tx, items);
   const keep = new Set(items.flatMap((i) => (i.id && byId.has(i.id) ? [i.id] : [])));
   const rekeyed = new Set(
     [...keep].filter((id) => {
@@ -186,7 +204,7 @@ export async function applyAssignments(
   const saved: SavedAssignment[] = [];
   const desired = new Map<string, string[]>();
   for (const [index, item] of items.entries()) {
-    const values = rowValues(eventId, item, index);
+    const values = rowValues(eventId, item, index, shiftTimes);
     let id: string;
     if (item.id && keep.has(item.id) && !rekeyed.has(item.id)) {
       await tx

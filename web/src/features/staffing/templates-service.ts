@@ -10,6 +10,8 @@ import { applyAssignments } from "./assignments-service";
 import { unique } from "./diff";
 import { applyGroups } from "./groups-service";
 import { getOrganization } from "./organization-service";
+import { isRoleAllowed, overrideTimesError } from "./service-point-roles";
+import { loadServicePointRoles } from "./service-point-roles-service";
 import type { ApplyTemplateInput, AssignmentInput, CreateTemplateInput, DeleteTemplateInput, GroupInput, TeamInput } from "./schemas";
 import { applyTeams } from "./teams-service";
 import { templateSnapshotSchema, type TableRef, type TemplateSnapshot } from "./template-snapshot";
@@ -40,6 +42,8 @@ export type TemplateApplyReport = {
   missingShiftIds: string[];
   /** Hedef etkinlikte adı bulunamayan servis noktaları (o atamalar atlanır). */
   missingServicePoints: string[];
+  /** Görevi hedef servis noktasının izinli rolleri arasında olmadığı için atlanan atamalar ("personel @ nokta"). */
+  roleMismatches: string[];
 };
 
 /** Etkinliğin mevcut organizasyonunu şablon olarak saklar (tek satır yazar). */
@@ -231,6 +235,8 @@ export async function applyOrganizationTemplate(
       .from(servicePoints)
       .where(eq(servicePoints.eventId, eventId));
     const pointByName = new Map(points.map((p) => [p.name, p.id]));
+    const pointRoles = await loadServicePointRoles(tx, eventId);
+    const roleMismatches: string[] = [];
     const missingShifts = new Set<string>();
     const missingPoints = new Set<string>();
 
@@ -270,7 +276,13 @@ export async function applyOrganizationTemplate(
           missingPoints.add(a.servicePointName ?? "?");
           return [];
         }
+        if (!isRoleAllowed(pointRoles.get(servicePointId)?.roles ?? [], a.role)) {
+          roleMismatches.push(`${a.staffId} @ ${a.servicePointName ?? "?"}`);
+          return [];
+        }
       }
+      // Eski şablonlarda eksik/eşit özel saat olabilir: geçersizse vardiyanın saati kullanılır.
+      const validTimes = overrideTimesError(a.shiftStart, a.shiftEnd) === null;
       return [
         {
           staffId: a.staffId,
@@ -279,8 +291,8 @@ export async function applyOrganizationTemplate(
           assignmentType: a.assignmentType,
           servicePointId,
           role: a.role,
-          shiftStart: a.shiftStart,
-          shiftEnd: a.shiftEnd,
+          shiftStart: validTimes ? a.shiftStart : null,
+          shiftEnd: validTimes ? a.shiftEnd : null,
           specialTaskLocation: a.specialTaskLocation,
           specialTaskStartTime: a.specialTaskStartTime,
           specialTaskEndTime: a.specialTaskEndTime,
@@ -304,6 +316,7 @@ export async function applyOrganizationTemplate(
       missingStaffIds: [...missingStaff],
       missingShiftIds: [...missingShifts],
       missingServicePoints: [...missingPoints],
+      roleMismatches,
     };
   });
 }

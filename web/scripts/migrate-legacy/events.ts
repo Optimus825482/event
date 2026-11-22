@@ -1,4 +1,5 @@
 import * as schema from "@/db/schema";
+import { normalizeRole } from "@/features/staffing/service-point-roles";
 import { EVENT_STATUSES, type EventStatus } from "@/domain/event-status";
 import { normalizeLabel } from "@/features/venue/schemas";
 import { timestamps } from "./catalogs";
@@ -172,10 +173,38 @@ export async function migrateEvents(ctx: Ctx): Promise<void> {
   await migrateShifts(ctx);
 }
 
+/**
+ * Yeni sistem rol tanımlı noktaya yalnızca izinli roldeki personeli kabul eder. Eski sistem bunu
+ * denetlemiyordu: noktanın eski atamalarında kullanılan ama listede olmayan roller listeye eklenir
+ * (raporlanır), böylece taşınan organizasyon ilk kayıtta reddedilmez. Boş liste "her rol" demektir.
+ */
+export function allowedRolesWithUsed(allowed: readonly string[], used: ReadonlyArray<string | null>): { roles: string[]; added: string[] } {
+  if (allowed.length === 0) return { roles: [...allowed], added: [] };
+  const seen = new Set(allowed.map((r) => normalizeRole(r)));
+  const added: string[] = [];
+  for (const role of used) {
+    const key = normalizeRole(role);
+    if (key === null || seen.has(key)) continue;
+    seen.add(key);
+    added.push(role?.trim() ?? key);
+  }
+  return { roles: [...allowed, ...added], added };
+}
+
 async function migrateServicePoints(ctx: Ctx): Promise<void> {
+  const usedRoles = new Map<string, Array<string | null>>();
+  for (const a of ctx.legacy.service_point_staff_assignments) {
+    const list = usedRoles.get(a.text("servicePointId")) ?? [];
+    list.push(a.str("role"));
+    usedRoles.set(a.text("servicePointId"), list);
+  }
   await ctx.w.insert(
     schema.servicePoints,
     ctx.legacy.service_points.map((r) => {
+      const roles = allowedRolesWithUsed(r.strings("allowedRoles"), usedRoles.get(r.id) ?? []);
+      if (roles.added.length > 0) {
+        ctx.add("invalidValues", { table: "service_points", id: r.id, field: "allowedRoles", from: r.strings("allowedRoles"), to: roles.roles });
+      }
       const required = r.int("requiredStaffCount") ?? 1;
       if (required < 0) ctx.add("invalidValues", { table: "service_points", id: r.id, field: "requiredStaffCount", from: required, to: 0 });
       return {
@@ -184,7 +213,7 @@ async function migrateServicePoints(ctx: Ctx): Promise<void> {
         name: r.text("name"),
         pointType: r.text("pointType", "bar"),
         requiredStaffCount: Math.max(0, required),
-        allowedRoles: r.strings("allowedRoles"),
+        allowedRoles: roles.roles,
         x: r.num("x") ?? 0,
         y: r.num("y") ?? 0,
         color: r.text("color", "#06b6d4"),

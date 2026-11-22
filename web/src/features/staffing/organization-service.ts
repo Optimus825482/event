@@ -21,11 +21,12 @@ import { applyAssignments, type SavedAssignment } from "./assignments-service";
 import { applyExtraStaff, type SavedExtraStaff } from "./extra-staff-service";
 import { applyGroups, type SavedGroup } from "./groups-service";
 import type { SaveOrganizationInput } from "./schemas";
+import { applyServicePointRoles, loadServicePointRoles } from "./service-point-roles-service";
 import { applyTeams, type SavedTeam } from "./teams-service";
 
 /**
- * Sihirbazın tamamını tek transaction'da kaydeder: ekipler → gruplar → atamalar → ekstra
- * personel. Yeni ekip/grup için istemcinin ürettiği kimlik aynı kayıtta referans verilebilir.
+ * Sihirbazın tamamını tek transaction'da kaydeder: ekipler → gruplar → servis noktası rolleri →
+ * atamalar (rol denetimi yeni rollerle) → ekstra personel. Yeni ekip/grup için istemcinin ürettiği kimlik aynı kayıtta referans verilebilir.
  * Herhangi bir adımda hata olursa önceki adımlar da geri alınır.
  */
 export async function saveOrganization(
@@ -36,6 +37,7 @@ export async function saveOrganization(
   return withEventWrite(db, actor, input.eventId, async (tx) => {
     const savedTeams = await applyTeams(tx, input.eventId, input.teams);
     const groups = await applyGroups(tx, input.eventId, input.groups);
+    await applyServicePointRoles(tx, input.eventId, input.servicePointRoles ?? []);
     const assignments = await applyAssignments(tx, input.eventId, input.assignments);
     const extraStaff = await applyExtraStaff(tx, input.eventId, input.extraStaff ?? []);
     return { teams: savedTeams, groups, assignments, extraStaff };
@@ -57,7 +59,7 @@ function groupBy<T, K extends string>(rows: T[], key: (row: T) => K): Map<K, T[]
 export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string) {
   const event = await getReadableEvent(db, actor, eventId);
 
-  const [tables, teamRows, groupRows, assignmentRows, extraRows, points, shifts, activeStaff] = await Promise.all([
+  const [tables, teamRows, groupRows, assignmentRows, extraRows, points, shifts, activeStaff, pointRoles] = await Promise.all([
     db
       .select({
         id: eventTables.id,
@@ -109,6 +111,7 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
       .where(and(eq(workShifts.isActive, true), or(isNull(workShifts.eventId), eq(workShifts.eventId, eventId))))
       .orderBy(asc(workShifts.sortOrder), asc(workShifts.name)),
     listActiveStaff(db, {}),
+    loadServicePointRoles(db, eventId),
   ]);
 
   const teamIds = teamRows.map((t) => t.id);
@@ -189,6 +192,8 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
       groupIds: (groupsByExtra.get(e.id) ?? []).map((l) => l.tableGroupId),
     })),
     servicePoints: points,
+    /** Taslakta düzenlenir (geri al / yinele kapsamında); nokta başına rol + gereken sayı. */
+    servicePointRoles: points.map((p) => ({ servicePointId: p.id, roles: pointRoles.get(p.id)?.roles ?? [] })),
     shifts,
     staff: activeStaff.map((s) => ({ id: s.id, fullName: s.fullName, sicilNo: s.sicilNo, color: s.color })),
   };

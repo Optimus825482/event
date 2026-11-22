@@ -20,6 +20,7 @@ function fakeOrganization(): Organization {
     assignments: [],
     extraStaff: [],
     servicePoints: [{ id: SP, name: "Bar 1", pointType: "bar", requiredStaffCount: 2, color: "#06b6d4" }],
+    servicePointRoles: [{ servicePointId: SP, roles: [] }],
     shifts: [],
     staff: [{ id: P1, fullName: "Ali Veli", sicilNo: "001", color: null }],
   };

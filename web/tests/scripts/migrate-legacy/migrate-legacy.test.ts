@@ -152,7 +152,7 @@ describe("rapor kategorileri", () => {
     expect(c.userIdentityFixes.map((f) => [f.userId, f.field])).toEqual(
       expect.arrayContaining([[IDS.users.blank, "username"], [IDS.users.blank, "email"]]),
     );
-    expect(c.invalidValues.map((f) => f.field)).toEqual(expect.arrayContaining(["guestCount", "eventEndDate", "shiftStart", "categoryScores.communication"]));
+    expect(c.invalidValues.map((f) => f.field)).toEqual(expect.arrayContaining(["guestCount", "eventEndDate", "shiftStart", "categoryScores.communication", "shiftStart/shiftEnd", "allowedRoles"]));
     expect(c.skippedRows.map((f) => f.id)).toEqual(expect.arrayContaining([IDS.invitations.orphan]));
     expect(c.catalogEntriesCreated.map((f) => f.name)).toEqual(expect.arrayContaining(["Servis", "Komi"]));
   });
@@ -358,6 +358,16 @@ describe("hedef durum", () => {
       expect(byId.get(IDS.assignments.spa2)?.assignment_type).toBe("service_point");
       expect(byId.get(IDS.assignments.sa1)).toMatchObject({ staff_id: createdStaff, n: "1" });
       expect(byId.has(IDS.assignments.spa1)).toBe(false);
+
+      // Eski tek saatli (18:00, bitişsiz) atama vardiya saatine döner; noktada kullanılan ama izinli
+      // listede olmayan rol ("barmen") listeye eklenir ki taşınan organizasyon ilk kayıtta reddedilmesin.
+      const times = await c.query<{ shift_start: string | null; shift_end: string | null }>(
+        "SELECT shift_start, shift_end FROM event_staff_assignments WHERE id = $1",
+        [IDS.assignments.a1],
+      );
+      expect(times.rows[0]).toEqual({ shift_start: null, shift_end: null });
+      const point = await c.query<{ allowed_roles: string[] }>("SELECT allowed_roles FROM service_points WHERE id = $1", [IDS.servicePoint]);
+      expect(point.rows[0]?.allowed_roles).toEqual(["garson", "barmen"]);
 
       const review = await c.query<{ staff_id: string; communication: number; strengths: string[] }>(
         "SELECT staff_id, communication, strengths FROM staff_performance_reviews WHERE id = $1",

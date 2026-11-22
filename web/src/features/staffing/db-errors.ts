@@ -14,12 +14,17 @@ export const STAFFING_MESSAGES = {
   servicePointRequired: "Servis noktası ataması için servis noktası seçilmeli",
   teamTableMismatch: "Bir masa tek ekibe ait olabilir: atamanın ekibi masanın grubundaki ekiple aynı olmalı",
   tablesOnlyForTable: "Yalnızca masa ataması masa içerebilir",
+  overrideTimesPaired: "Özel saatte başlangıç ve bitiş birlikte girilmeli",
+  overrideTimesDistinct: "Özel saatte başlangıç ve bitiş aynı olamaz",
+  duplicatePointRole: "Aynı rol iki kez eklenmiş",
+  invalidPointRole: "Servis noktası rolü geçersiz (boş rol ya da sıfırdan küçük sayı)",
 } as const;
 
 // Sıra önemlidir: ilk eşleşen kural kazanır.
 const UNIQUE_RULES: Array<[RegExp, string]> = [
   [/^table_group_tables_event_table_uq$/, STAFFING_MESSAGES.tableInTwoGroups],
   [/^event_staff_assignments_event_staff_shift_uq$/, STAFFING_MESSAGES.duplicateShift],
+  [/^service_point_role_requirements_point_role_uq$/, STAFFING_MESSAGES.duplicatePointRole],
   [/_pkey$/, STAFFING_MESSAGES.foreignRecord],
 ];
 
@@ -30,6 +35,12 @@ const FOREIGN_KEY_RULES: Array<[RegExp, string]> = [
   [/_shift_id_/, STAFFING_MESSAGES.shiftNotInEvent],
   [/_team_id_/, STAFFING_MESSAGES.teamNotInEvent],
   [/staff_id_/, STAFFING_MESSAGES.staffNotFound],
+];
+
+const CHECK_RULES: Array<[RegExp, string]> = [
+  [/^event_staff_assignments_shift_times_paired$/, STAFFING_MESSAGES.overrideTimesPaired],
+  [/^event_staff_assignments_shift_times_distinct$/, STAFFING_MESSAGES.overrideTimesDistinct],
+  [/^service_point_role_requirements_/, STAFFING_MESSAGES.invalidPointRole],
 ];
 
 function match(rules: Array<[RegExp, string]>, constraint: string, fallback: string): string {
@@ -47,7 +58,7 @@ export function mapStaffingDbError(error: unknown): unknown {
     case "23503":
       return new DomainError("conflict", match(FOREIGN_KEY_RULES, info.constraint, "İlişkili kayıt bulunamadı"));
     case "23514":
-      return new DomainError("conflict", STAFFING_MESSAGES.servicePointRequired);
+      return new DomainError("conflict", match(CHECK_RULES, info.constraint, STAFFING_MESSAGES.servicePointRequired));
     default:
       return error;
   }

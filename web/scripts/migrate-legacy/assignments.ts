@@ -1,4 +1,5 @@
 import * as schema from "@/db/schema";
+import { overrideTimesError } from "@/features/staffing/service-point-roles";
 import { timestamps } from "./catalogs";
 import { type Ctx, jsonStrings } from "./context";
 import { asUuid, byCreatedThenId, type Row, toTime } from "./values";
@@ -20,6 +21,18 @@ function time(ctx: Ctx, r: Row, table: string, field: string): string | null {
   const t = toTime(r.str(field));
   if (!t.ok) ctx.add("invalidValues", { table, id: r.id, field, from: r.str(field), to: null });
   return t.value;
+}
+
+/**
+ * Kişiye özel saat çifti (yeni CHECK: ikisi birlikte, eşit değil). Eksik ya da eşit çift
+ * vardiyanın saatine döner (iki alan NULL) ve raporlanır; gece yarısını geçen aralık geçerlidir.
+ */
+export function shiftTimes(ctx: Ctx, r: Row, table: string): { shiftStart: string | null; shiftEnd: string | null } {
+  const shiftStart = time(ctx, r, table, "shiftStart");
+  const shiftEnd = time(ctx, r, table, "shiftEnd");
+  if (overrideTimesError(shiftStart, shiftEnd) === null) return { shiftStart, shiftEnd };
+  ctx.add("invalidValues", { table, id: r.id, field: "shiftStart/shiftEnd", from: `${shiftStart ?? "-"}–${shiftEnd ?? "-"}`, to: null });
+  return { shiftStart: null, shiftEnd: null };
 }
 
 export async function migrateAssignments(ctx: Ctx, teamIdMap: Map<string, string>): Promise<void> {
@@ -71,8 +84,7 @@ export async function migrateAssignments(ctx: Ctx, teamIdMap: Map<string, string
         shiftId: shiftOf(r, "event_staff_assignments"),
         teamId: rawTeam ? (teamIdMap.get(rawTeam) ?? null) : null,
         assignmentType: type,
-        shiftStart: time(ctx, r, "event_staff_assignments", "shiftStart"),
-        shiftEnd: time(ctx, r, "event_staff_assignments", "shiftEnd"),
+        ...shiftTimes(ctx, r, "event_staff_assignments"),
         specialTaskLocation: r.str("specialTaskLocation"),
         specialTaskStartTime: time(ctx, r, "event_staff_assignments", "specialTaskStartTime"),
         specialTaskEndTime: time(ctx, r, "event_staff_assignments", "specialTaskEndTime"),
@@ -102,8 +114,7 @@ export async function migrateAssignments(ctx: Ctx, teamIdMap: Map<string, string
         assignmentType: "service_point",
         servicePointId: r.text("servicePointId"),
         role: r.str("role"),
-        shiftStart: time(ctx, r, "service_point_staff_assignments", "shiftStart"),
-        shiftEnd: time(ctx, r, "service_point_staff_assignments", "shiftEnd"),
+        ...shiftTimes(ctx, r, "service_point_staff_assignments"),
         notes: r.str("notes"),
         sortOrder: r.int("sortOrder") ?? 0,
         isActive: r.bool("isActive", true),

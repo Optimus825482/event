@@ -5,9 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { servicePointAssignments, servicePointAvailability, servicePointTypeLabel, staffingLabel } from "../group-staff";
+import { isRoleAllowed } from "../service-point-roles";
 import { EmptyState, Section, Swatch } from "./bits";
+import { hasShortRole, PointRolesEditor } from "./point-roles-editor";
+import { usePointRoles } from "./role-field";
 import { AssignedStaffRow, StaffPicker } from "./staff-picker";
-import { useOrganization } from "./store";
+import { useOrganization, type DraftAssignment } from "./store";
 
 type ServicePoint = ReturnType<typeof useServicePoints>[number];
 
@@ -20,8 +23,9 @@ export function ServicePointStaffDialog({ point, readOnly }: { point: ServicePoi
   const assignments = useOrganization((s) => s.assignments);
   const addStaff = useOrganization((s) => s.addServicePointStaff);
   const remove = useOrganization((s) => s.removeAssignment);
+  const roles = usePointRoles(point.id);
   const rows = servicePointAssignments(assignments, point.id);
-  const short = point.requiredStaffCount > 0 && rows.length < point.requiredStaffCount;
+  const short = (point.requiredStaffCount > 0 && rows.length < point.requiredStaffCount) || hasShortRole(roles, rows);
 
   return (
     <Dialog>
@@ -42,6 +46,7 @@ export function ServicePointStaffDialog({ point, readOnly }: { point: ServicePoi
             {short ? " · gerekli sayıya ulaşılmadı" : ""}
           </DialogDescription>
         </DialogHeader>
+        <PointRolesEditor servicePointId={point.id} assignments={rows} readOnly={readOnly} />
         <section className="space-y-2">
           <h3 className="text-sm font-medium text-white">Atanan personel ({rows.length})</h3>
           {rows.length === 0 ? (
@@ -49,7 +54,14 @@ export function ServicePointStaffDialog({ point, readOnly }: { point: ServicePoi
           ) : (
             <ul className="space-y-1.5">
               {rows.map((a) => (
-                <AssignedStaffRow key={a.id} assignment={a} readOnly={readOnly} onRemove={() => remove(a.id)} />
+                <AssignedStaffRow
+                  key={a.id}
+                  assignment={a}
+                  readOnly={readOnly}
+                  roles={roles}
+                  note={isRoleAllowed(roles, a.role) ? undefined : "görevi bu noktada izinli değil"}
+                  onRemove={() => remove(a.id)}
+                />
               ))}
             </ul>
           )}
@@ -58,6 +70,7 @@ export function ServicePointStaffDialog({ point, readOnly }: { point: ServicePoi
           <section className="space-y-2">
             <h3 className="text-sm font-medium text-white">Personel ekle</h3>
             <StaffPicker
+              roles={roles}
               availability={(pick) => servicePointAvailability(assignments, pick, point.id)}
               onPick={(pick) => addStaff(point.id, pick)}
             />
@@ -76,22 +89,38 @@ export function ServicePointsSection({ readOnly }: { readOnly: boolean }) {
   return (
     <Section title={`Servis noktaları (${points.length})`}>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {points.map((p) => {
-          const count = servicePointAssignments(assignments, p.id).length;
-          const short = p.requiredStaffCount > 0 && count < p.requiredStaffCount;
-          return (
-            <li key={p.id} className="flex items-center gap-2 rounded-lg border border-slate-700 p-2 text-sm">
-              <Swatch color={p.color} />
-              <span className="flex-1 text-slate-100">
-                {p.name}
-                <span className="block text-xs text-slate-400">{servicePointTypeLabel(p.pointType)}</span>
-              </span>
-              <Badge variant={short ? "destructive" : "secondary"}>{staffingLabel(count, p.requiredStaffCount)}</Badge>
-              <ServicePointStaffDialog point={p} readOnly={readOnly} />
-            </li>
-          );
-        })}
+        {points.map((p) => (
+          <ServicePointCard key={p.id} point={p} assignments={assignments} readOnly={readOnly} />
+        ))}
       </ul>
     </Section>
+  );
+}
+
+function ServicePointCard({
+  point: p,
+  assignments,
+  readOnly,
+}: {
+  point: ServicePoint;
+  assignments: readonly DraftAssignment[];
+  readOnly: boolean;
+}) {
+  const roles = usePointRoles(p.id);
+  const rows = servicePointAssignments(assignments, p.id);
+  const short = (p.requiredStaffCount > 0 && rows.length < p.requiredStaffCount) || hasShortRole(roles, rows);
+  return (
+    <li className="flex items-center gap-2 rounded-lg border border-slate-700 p-2 text-sm">
+      <Swatch color={p.color} />
+      <span className="flex-1 text-slate-100">
+        {p.name}
+        <span className="block text-xs text-slate-400">
+          {servicePointTypeLabel(p.pointType)}
+          {roles.length > 0 ? ` · ${roles.length} görev` : ""}
+        </span>
+      </span>
+      <Badge variant={short ? "destructive" : "secondary"}>{staffingLabel(rows.length, p.requiredStaffCount)}</Badge>
+      <ServicePointStaffDialog point={p} readOnly={readOnly} />
+    </li>
   );
 }

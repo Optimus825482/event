@@ -127,6 +127,8 @@ export const eventStaffAssignments = pgTable(
     // (event_id, service_point_id) → service_points(event_id, id) bileşik yabancı anahtarı aşağıda.
     servicePointId: uuid("service_point_id"),
     role: text("role"),
+    // Kişiye özel çalışma saati ("Özel saat"); ikisi de NULL ise vardiyanın saatleri geçerlidir.
+    // Gece yarısını geçen vardiya (18:00–02:00) olağan olduğundan başlangıç < bitiş aranmaz.
     shiftStart: time("shift_start"),
     shiftEnd: time("shift_end"),
     specialTaskLocation: text("special_task_location"),
@@ -150,6 +152,11 @@ export const eventStaffAssignments = pgTable(
     check(
       "event_staff_assignments_service_point_matches_type",
       sql`(${t.assignmentType} = 'service_point') = (${t.servicePointId} IS NOT NULL)`,
+    ),
+    check("event_staff_assignments_shift_times_paired", sql`(${t.shiftStart} IS NULL) = (${t.shiftEnd} IS NULL)`),
+    check(
+      "event_staff_assignments_shift_times_distinct",
+      sql`${t.shiftStart} IS NULL OR ${t.shiftStart} <> ${t.shiftEnd}`,
     ),
     index("event_staff_assignments_staff_id_idx").on(t.staffId),
     index("event_staff_assignments_shift_id_idx").on(t.shiftId),
@@ -181,6 +188,35 @@ export const assignmentTables = pgTable(
     unique("assignment_tables_assignment_table_uq").on(t.assignmentId, t.tableId),
     index("assignment_tables_assignment_idx").on(t.eventId, t.assignmentId),
     index("assignment_tables_table_idx").on(t.eventId, t.tableId),
+  ],
+);
+
+/**
+ * Servis noktasında rol başına gereken personel sayısı. İzin verilen roller eski sistemdeki gibi
+ * `service_points.allowed_roles` dizisindedir; bu tablo yalnızca sayısı belirtilen rolleri tutar
+ * (sayı > 0). Rol, karşılaştırma için kırpılmış ve küçük harfe çevrilmiş saklanır.
+ */
+export const servicePointRoleRequirements = pgTable(
+  "service_point_role_requirements",
+  {
+    id: pk(),
+    eventId: uuid("event_id").notNull(),
+    servicePointId: uuid("service_point_id").notNull(),
+    role: text("role").notNull(),
+    requiredCount: integer("required_count").notNull().default(1),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [
+    foreignKey({
+      name: "service_point_role_requirements_service_point_fk",
+      columns: [t.eventId, t.servicePointId],
+      foreignColumns: [servicePoints.eventId, servicePoints.id],
+    }).onDelete("cascade"),
+    unique("service_point_role_requirements_point_role_uq").on(t.servicePointId, t.role),
+    check("service_point_role_requirements_count_positive", sql`${t.requiredCount} > 0`),
+    check("service_point_role_requirements_role_not_blank", sql`btrim(${t.role}) <> ''`),
+    index("service_point_role_requirements_point_idx").on(t.eventId, t.servicePointId),
   ],
 );
 

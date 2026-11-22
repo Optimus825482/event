@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ROLE_COUNT, MAX_ROLES_PER_POINT, normalizeRole, overrideTimesError } from "./service-point-roles";
 
 /** Form alanları boş string gönderebilir; boş değer "yok" demektir. */
 function emptyToNull(value: unknown): unknown {
@@ -131,6 +132,9 @@ export const assignmentInputSchema = z.object({
   notes: text(1000),
   sortOrder,
   tableIds: idList,
+}).superRefine((a, ctx) => {
+  const error = overrideTimesError(a.shiftStart, a.shiftEnd);
+  if (error) ctx.addIssue({ code: "custom", path: ["shiftStart"], message: error });
 });
 
 const assignmentList = z
@@ -184,6 +188,34 @@ const extraStaffList = z
 
 export const saveExtraStaffSchema = z.object({ eventId, extraStaff: extraStaffList });
 
+// ---- Servis noktası rolleri ----
+
+export const roleRequirementSchema = z.object({
+  role: z
+    .string({ error: "Rol gerekli" })
+    .trim()
+    .min(1, "Rol gerekli")
+    .max(50, "Rol en fazla 50 karakter olabilir"),
+  requiredCount: z
+    .number()
+    .int("Sayı tam sayı olmalı")
+    .min(0, "Sayı negatif olamaz")
+    .max(MAX_ROLE_COUNT, `Sayı en fazla ${MAX_ROLE_COUNT} olabilir`),
+});
+
+export const servicePointRolesInputSchema = z.object({
+  servicePointId: id,
+  roles: z
+    .array(roleRequirementSchema)
+    .max(MAX_ROLES_PER_POINT, `En fazla ${MAX_ROLES_PER_POINT} rol tanımlanabilir`)
+    .refine((r) => uniqueBy(r, (x) => normalizeRole(x.role)), "Aynı rol iki kez eklenmiş"),
+});
+
+const servicePointRolesList = z
+  .array(servicePointRolesInputSchema)
+  .max(500)
+  .refine((p) => uniqueBy(p, (x) => x.servicePointId), "Aynı servis noktası iki kez gönderilmiş");
+
 // ---- Tüm organizasyon ----
 
 export const saveOrganizationSchema = z.object({
@@ -192,6 +224,8 @@ export const saveOrganizationSchema = z.object({
   groups: groupList,
   assignments: assignmentList,
   extraStaff: extraStaffList.default([]),
+  /** Gönderilmezse servis noktası rollerine dokunulmaz; gönderilen noktaların rolleri bununla değişir. */
+  servicePointRoles: servicePointRolesList.optional(),
 });
 
 // ---- Şablonlar ----
@@ -222,7 +256,9 @@ export type SaveOrganizationInput = {
   groups: GroupInput[];
   assignments: AssignmentInput[];
   extraStaff?: ExtraStaffInput[];
+  servicePointRoles?: ServicePointRolesInput[];
 };
+export type ServicePointRolesInput = z.infer<typeof servicePointRolesInputSchema>;
 export type CreateTemplateInput = z.infer<typeof createTemplateSchema>;
 export type ApplyTemplateInput = z.infer<typeof applyTemplateSchema>;
 export type DeleteTemplateInput = z.infer<typeof deleteTemplateSchema>;

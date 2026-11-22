@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Chip, NativeSelect, hhmm, orNull } from "./bits";
+import { CustomTimeField } from "./custom-time-field";
+import { RoleField, usePointRoles } from "./role-field";
 import { useOrganization, type DraftAssignment } from "./store";
 
 export const ASSIGNMENT_TYPE_LABELS: Record<DraftAssignment["assignmentType"], string> = {
@@ -21,6 +23,7 @@ export function AssignmentRow({ assignment, readOnly }: { assignment: DraftAssig
   const toggleTable = useOrganization((s) => s.toggleAssignmentTable);
   const [showTables, setShowTables] = useState(false);
   const a = assignment;
+  const pointRoles = usePointRoles(a.assignmentType === "service_point" ? a.servicePointId : null);
   const patch = (p: Partial<DraftAssignment>) => update(a.id, p);
 
   return (
@@ -80,14 +83,9 @@ export function AssignmentRow({ assignment, readOnly }: { assignment: DraftAssig
             </option>
           ))}
         </NativeSelect>
-        <Input
-          aria-label="Görev / rol"
-          placeholder="Görev (ör. garson)"
-          value={a.role ?? ""}
-          disabled={readOnly}
-          onChange={(e) => patch({ role: orNull(e.target.value) })}
-        />
+        <RoleField label="Görev / rol" value={a.role} roles={pointRoles} disabled={readOnly} onChange={(role) => patch({ role })} />
       </div>
+      {a.assignmentType === "special_task" ? null : <CustomTimeField assignment={a} readOnly={readOnly} />}
 
       {a.assignmentType === "table" ? (
         <div className="space-y-2">

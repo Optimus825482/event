@@ -5,33 +5,42 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Availability, StaffPick } from "../group-staff";
+import type { RoleRequirement } from "../service-point-roles";
 import { NativeSelect, hhmm, orNull } from "./bits";
+import { CustomTimeField } from "./custom-time-field";
+import { RoleField } from "./role-field";
 import { useOrganization } from "./store";
+
+const NO_ROLES: RoleRequirement[] = [];
 
 const MAX_LISTED = 40;
 
 /**
  * Pencerelerdeki "personel ekle" bölümü: vardiya ve görev seçilir, personel aranır; her satırda
  * eklenebilirlik (`availability`) gösterilir, eklenemeyen personelin düğmesi kapalıdır.
+ * `roles` verilirse görev yalnızca o rollerden seçilir. Saat vardiyadan gelir (özel saat satırda).
  */
 export function StaffPicker({
   availability,
   onPick,
   defaultRole = "",
+  roles = NO_ROLES,
 }: {
   availability: (pick: Pick<StaffPick, "staffId" | "shiftId">) => Availability;
   onPick: (pick: StaffPick) => void;
   defaultRole?: string;
+  roles?: readonly RoleRequirement[];
 }) {
   const { staff, shifts } = useOrganization((s) => s.reference);
   const [query, setQuery] = useState("");
   const [shiftId, setShiftId] = useState("");
-  const [role, setRole] = useState(defaultRole);
+  const [chosenRole, setRole] = useState<string | null>(orNull(defaultRole));
+  // Rol listesi varsa geçerli bir seçim olmalı: liste değişip seçim düşerse ilk rol kullanılır.
+  const role = roles.length === 0 || roles.some((r) => r.role === chosenRole) ? chosenRole : (roles[0]?.role ?? null);
   const q = query.trim().toLocaleLowerCase("tr");
   const matches = staff.filter(
     (p) => !q || p.fullName.toLocaleLowerCase("tr").includes(q) || p.sicilNo.toLocaleLowerCase("tr").includes(q),
   );
-  const shift = shifts.find((s) => s.id === shiftId);
 
   return (
     <div className="space-y-2 rounded-lg border border-slate-700 p-3">
@@ -55,7 +64,7 @@ export function StaffPicker({
             </option>
           ))}
         </NativeSelect>
-        <Input aria-label="Eklenecek görev" placeholder="Görev (ör. garson)" value={role} onChange={(e) => setRole(e.target.value)} />
+        <RoleField label="Eklenecek görev" value={role} roles={roles} onChange={setRole} />
       </div>
       {staff.length === 0 ? (
         <p className="text-xs text-slate-400">Aktif personel yok.</p>
@@ -78,9 +87,9 @@ export function StaffPicker({
                     onPick({
                       staffId: p.id,
                       shiftId: shiftId || null,
-                      role: orNull(role),
-                      shiftStart: shift?.startTime ?? null,
-                      shiftEnd: shift?.endTime ?? null,
+                      role,
+                      shiftStart: null,
+                      shiftEnd: null,
                     })
                   }
                 >
@@ -100,16 +109,18 @@ export function StaffPicker({
   );
 }
 
-/** Atanmış personel satırı: ad, vardiya, düzenlenebilir görev ve çıkarma düğmesi. */
+/** Atanmış personel satırı: ad, vardiya, düzenlenebilir görev, özel saat ve çıkarma düğmesi. */
 export function AssignedStaffRow({
   assignment,
   readOnly,
   note,
+  roles = NO_ROLES,
   onRemove,
 }: {
-  assignment: { id: string; staffId: string; shiftId: string | null; role: string | null };
+  assignment: { id: string; staffId: string; shiftId: string | null; role: string | null; shiftStart: string | null; shiftEnd: string | null };
   readOnly: boolean;
   note?: string;
+  roles?: readonly RoleRequirement[];
   onRemove: () => void;
 }) {
   const { staff, shifts } = useOrganization((s) => s.reference);
@@ -126,19 +137,23 @@ export function AssignedStaffRow({
           {note ? ` · ${note}` : ""}
         </span>
       </span>
-      <Input
-        aria-label={`${name} görevi`}
+      <RoleField
+        label={`${name} görevi`}
         placeholder="Görev"
         className="h-8 w-36"
-        value={assignment.role ?? ""}
+        value={assignment.role}
+        roles={roles}
         disabled={readOnly}
-        onChange={(e) => update(assignment.id, { role: orNull(e.target.value) })}
+        onChange={(role) => update(assignment.id, { role })}
       />
       {readOnly ? null : (
         <Button size="sm" variant="ghost" onClick={onRemove} aria-label={`${name} çıkar`}>
           Çıkar
         </Button>
       )}
+      <div className="basis-full">
+        <CustomTimeField assignment={assignment} readOnly={readOnly} />
+      </div>
     </li>
   );
 }

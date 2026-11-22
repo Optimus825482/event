@@ -54,6 +54,7 @@ export function TemplatePanel({ eventId, templates, canApply, canCreate, canDele
       if (r.missingStaffIds.length > 0) lines.push(`Bulunamayan ya da aktif olmayan personel: ${r.missingStaffIds.length}`);
       if (r.missingShiftIds.length > 0) lines.push(`Kullanılamayan vardiya nedeniyle atlanan atama vardiyası: ${r.missingShiftIds.length}`);
       if (r.missingServicePoints.length > 0) lines.push(`Bulunamayan servis noktaları: ${r.missingServicePoints.join(", ")}`);
+      if (r.roleMismatches.length > 0) lines.push(`Görevi servis noktasının rollerine uymadığı için atlanan atama: ${r.roleMismatches.length}`);
       return { error: false, lines };
     });
 

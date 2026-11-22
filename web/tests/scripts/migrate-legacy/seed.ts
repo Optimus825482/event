@@ -133,7 +133,7 @@ export async function seedLegacy(client: pg.Client): Promise<void> {
   await ins(client, "work_shifts", { id: S.ws1, name: "Akşam", startTime: "18:00", endTime: "02:00", createdAt: "2024-01-01 00:00:00" });
   await ins(client, "work_shifts", { id: S.ws2, name: "Akşam", startTime: "19:00", endTime: "03:00", createdAt: "2024-01-02 00:00:00" });
   await ins(client, "work_shifts", { id: S.ws3, name: "Akşam", startTime: "18:00", endTime: "02:00", eventId: E.e1 });
-  await ins(client, "service_points", { id: IDS.servicePoint, eventId: E.e1, name: "Bar 1", requiredStaffCount: null, allowedRoles: null });
+  await ins(client, "service_points", { id: IDS.servicePoint, eventId: E.e1, name: "Bar 1", requiredStaffCount: null, allowedRoles: ["garson"] });
 
   const T = IDS.teams;
   await ins(client, "teams", { id: T.global, name: "Ekip A", leaderId: U.linked, memberIds: [IDS.staff.s1, U.reviewed] });
