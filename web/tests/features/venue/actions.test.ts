@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
+import { eq } from "drizzle-orm";
 import { eventTables, tableTypes, venueTemplates } from "@/db/schema";
 import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
@@ -19,6 +20,8 @@ function actionsFor(actor: Actor | null) {
     saveLayout: defineAction(venueActionDefs.saveLayout),
     saveAsTemplate: defineAction(venueActionDefs.saveAsTemplate),
     createTableType: defineAction(venueActionDefs.createTableType),
+    updateTemplate: defineAction(venueActionDefs.updateTemplate),
+    deleteTemplate: defineAction(venueActionDefs.deleteTemplate),
   };
 }
 
@@ -97,5 +100,43 @@ describe("venue actions", () => {
     const admin = await makeActor("admin");
     expect((await actionsFor(admin).createTableType(input)).ok).toBe(true);
     expect(await db.select().from(tableTypes)).toHaveLength(1);
+  });
+
+  describe("mekân sahibi şablonları", () => {
+    async function template(createdById: string) {
+      const [row] = await db
+        .insert(venueTemplates)
+        .values({ name: "Şablon", layoutData: { tables: [], decor }, createdById, isPublic: true })
+        .returning();
+      if (!row) throw new Error("şablon eklenemedi");
+      return row;
+    }
+
+    it("kendi şablonunu günceller ve siler", async () => {
+      const owner = await makeActor("venue_owner");
+      const mine = await template(owner.id);
+      const actions = actionsFor(owner);
+      expect((await actions.updateTemplate({ id: mine.id, name: "Yeni" })).ok).toBe(true);
+      expect((await actions.deleteTemplate({ id: mine.id })).ok).toBe(true);
+      expect(await db.select().from(venueTemplates).where(eq(venueTemplates.id, mine.id))).toHaveLength(0);
+    });
+
+    it("başkasının (herkese açık) şablonunu değiştiremez ve silemez", async () => {
+      const owner = await makeActor("venue_owner");
+      const other = await makeActor("venue_owner");
+      const theirs = await template(other.id);
+      const actions = actionsFor(owner);
+      expect(await actions.updateTemplate({ id: theirs.id, name: "Ele geçir" })).toMatchObject({ ok: false, code: "forbidden" });
+      expect(await actions.deleteTemplate({ id: theirs.id })).toMatchObject({ ok: false, code: "forbidden" });
+      expect(await db.select().from(venueTemplates).where(eq(venueTemplates.id, theirs.id))).toHaveLength(1);
+    });
+
+    it("olmayan şablon, başkasınınkiyle aynı yanıtı verir (varlık sızmaz)", async () => {
+      const owner = await makeActor("venue_owner");
+      const res = await actionsFor(owner).deleteTemplate({ id: crypto.randomUUID() });
+      expect(res).toMatchObject({ ok: false, code: "forbidden" });
+      const admin = await makeActor("admin");
+      expect(await actionsFor(admin).deleteTemplate({ id: crypto.randomUUID() })).toMatchObject({ ok: false, code: "not_found" });
+    });
   });
 });

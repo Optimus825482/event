@@ -74,6 +74,23 @@ describe("events service", () => {
       await expectDomain(updateEvent(db, actor, { id: ev.id, name: "Z", startsAt: inDays(5) }), "conflict");
     });
 
+    it("eşzamanlı tamamlama araya girerse düzenleme conflict olur ve yazılmaz", async () => {
+      const actor = await makeActor();
+      const ev = await f.createEvent(db, { organizerId: actor.id, status: "active", name: "Eski" });
+      let pending: Promise<unknown> = Promise.resolve();
+      await db.transaction(async (tx) => {
+        await tx.select().from(events).where(eq(events.id, ev.id)).for("update");
+        pending = updateEvent(db, actor, { id: ev.id, name: "Yeni", startsAt: inDays(5) }).catch((e: unknown) => e);
+        await new Promise((r) => setTimeout(r, 300));
+        await tx.update(events).set({ status: "completed" }).where(eq(events.id, ev.id));
+      });
+      const err = await pending;
+      expect(err).toBeInstanceOf(DomainError);
+      expect((err as DomainError).code).toBe("conflict");
+      const [row] = await db.select().from(events).where(eq(events.id, ev.id));
+      expect(row?.name).toBe("Eski");
+    });
+
     it("olmayan etkinlik not_found", async () => {
       const actor = await makeActor();
       await expectDomain(

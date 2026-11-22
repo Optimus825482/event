@@ -15,7 +15,12 @@ import {
 } from "./schemas";
 import { applyVenueTemplate, saveAsTemplate, saveLayout } from "./service";
 import { createTableType, deleteTableType, updateTableType } from "./table-types-service";
-import { deleteVenueTemplate, duplicateVenueTemplate, updateVenueTemplate } from "./templates-service";
+import {
+  deleteVenueTemplate,
+  duplicateVenueTemplate,
+  templateOwnerResource,
+  updateVenueTemplate,
+} from "./templates-service";
 
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
   return options;
@@ -53,6 +58,7 @@ export const venueActionDefs = {
     module: "venues",
     verb: "edit",
     input: updateTemplateSchema,
+    resource: ({ input }) => templateOwnerResource(db, input.id),
     handler: async ({ actor, input }) => {
       const row = await updateVenueTemplate(db, actor, input);
       return { id: row.id };
@@ -62,6 +68,7 @@ export const venueActionDefs = {
     module: "venues",
     verb: "delete",
     input: templateIdSchema,
+    resource: ({ input }) => templateOwnerResource(db, input.id),
     handler: async ({ actor, input }) => deleteVenueTemplate(db, actor, input),
   }),
   duplicateTemplate: def({

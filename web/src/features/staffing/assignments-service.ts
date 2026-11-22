@@ -1,6 +1,14 @@
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { assignmentTables, eventStaffAssignments, eventTables, staff, workShifts } from "@/db/schema";
+import {
+  assignmentTables,
+  eventStaffAssignments,
+  eventTables,
+  staff,
+  tableGroups,
+  tableGroupTables,
+  workShifts,
+} from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
@@ -73,6 +81,46 @@ function rowValues(eventId: string, item: AssignmentInput, index: number) {
   };
 }
 
+/**
+ * Yeni eklenen ya da personeli değişen atamalarda personel aktif olmalı (otomatik atamayla aynı kural).
+ * Değişmeyen satırlar bu denetimden geçmez; sonradan pasife alınan personelin eski ataması düzenlenebilir kalır.
+ */
+async function assertStaffActive(tx: Tx, items: AssignmentInput[], byId: ReadonlyMap<string, ExistingRow>) {
+  const ids = unique(
+    items.filter((i) => !i.id || byId.get(i.id)?.staffId !== i.staffId).map((i) => i.staffId),
+  );
+  if (ids.length === 0) return;
+  const rows = await tx
+    .select({ id: staff.id })
+    .from(staff)
+    .where(and(inArray(staff.id, ids), eq(staff.status, "active")));
+  if (rows.length !== ids.length) throw new DomainError("conflict", "Yalnızca aktif personel atanabilir");
+}
+
+/**
+ * §13.10 "bir masa tek ekip": atamanın ekibi boş ya da masalarını tutan grupların ekibi olmalıdır.
+ * Ekip atanmış bir gruptaki masaya başka ekibin atanması reddedilir.
+ */
+async function assertTeamMatchesGroups(tx: Tx, eventId: string, items: AssignmentInput[]) {
+  const tableIds = unique(items.flatMap((i) => (i.teamId ? i.tableIds : [])));
+  if (tableIds.length === 0) return;
+  const rows = await tx
+    .select({ tableId: tableGroupTables.tableId, teamId: tableGroups.teamId })
+    .from(tableGroupTables)
+    .innerJoin(tableGroups, eq(tableGroups.id, tableGroupTables.tableGroupId))
+    .where(and(eq(tableGroupTables.eventId, eventId), inArray(tableGroupTables.tableId, tableIds)));
+  const teamOfTable = new Map(rows.flatMap((r) => (r.teamId ? [[r.tableId, r.teamId] as const] : [])));
+  for (const item of items) {
+    if (!item.teamId) continue;
+    if (item.tableIds.some((t) => {
+      const groupTeam = teamOfTable.get(t);
+      return groupTeam !== undefined && groupTeam !== item.teamId;
+    })) {
+      throw new DomainError("conflict", STAFFING_MESSAGES.teamTableMismatch);
+    }
+  }
+}
+
 /** Atamaların masa bağlantılarını istenen duruma getirir (yalnızca `desired` içindeki atamalar). */
 export async function syncAssignmentTables(tx: Tx, eventId: string, desired: ReadonlyMap<string, readonly string[]>) {
   const owners = [...desired.keys()];
@@ -117,6 +165,8 @@ export async function applyAssignments(
 
   const existing = await tx.select().from(eventStaffAssignments).where(eq(eventStaffAssignments.eventId, eventId));
   const byId = new Map<string, ExistingRow>(existing.map((r) => [r.id, r]));
+  await assertStaffActive(tx, items, byId);
+  await assertTeamMatchesGroups(tx, eventId, items);
   const keep = new Set(items.flatMap((i) => (i.id && byId.has(i.id) ? [i.id] : [])));
   const rekeyed = new Set(
     [...keep].filter((id) => {

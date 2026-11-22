@@ -52,6 +52,15 @@ describe("updateReservation", () => {
     expect((await reservationRow(row.id)).guestCount).toBe(3);
   });
 
+  it("kapasiteyi önceden aşan rezervasyonun adı düzenlenebilir; masa ya da kişi sayısı değişince kapasite denetlenir", async () => {
+    const { event, table, customer } = await bookable();
+    const row = await seedReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id, guestCount: 12 });
+
+    const renamed = await updateReservation(db, admin, { id: row.id, guestName: "Yeni Ad", tableId: table.id, guestCount: 12 });
+    expect(renamed).toMatchObject({ guestName: "Yeni Ad", guestCount: 12 });
+    await expectDomain(updateReservation(db, admin, { id: row.id, guestCount: 13 }), "conflict", /kapasitesini/);
+  });
+
   it("başka etkinliğin masasına taşınamaz", async () => {
     const { event, table, customer } = await bookable();
     const foreign = await bookable();

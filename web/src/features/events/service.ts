@@ -70,28 +70,33 @@ export async function createEvent(db: Executor, actor: Actor, input: CreateEvent
 }
 
 /** Form tam gönderilir: boş bırakılan isteğe bağlı alanlar temizlenir. */
-export async function updateEvent(db: Executor, actor: Actor, input: UpdateEventInput): Promise<EventRow> {
-  const existing = await getAccessibleEvent(db, actor, input.id);
-  if (existing.status === "completed" || existing.status === "cancelled") {
-    throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinlik düzenlenemez");
-  }
-  const [row] = await db
-    .update(events)
-    .set({
-      name: input.name,
-      description: input.description ?? null,
-      startsAt: input.startsAt,
-      endsAt: input.endsAt ?? null,
-      eventType: input.eventType ?? null,
-      reservationEnabled: input.reservationEnabled ?? existing.reservationEnabled,
-      reviewEnabled: input.reviewEnabled ?? existing.reviewEnabled,
-      reviewHistoryVisible: input.reviewHistoryVisible ?? existing.reviewHistoryVisible,
-      updatedAt: new Date(),
-    })
-    .where(eq(events.id, input.id))
-    .returning();
-  if (!row) throw new DomainError("not_found", NOT_FOUND);
-  return row;
+export async function updateEvent(db: Db, actor: Actor, input: UpdateEventInput): Promise<EventRow> {
+  return db.transaction(async (tx) => {
+    // Durum denetimi ile yazma arasında eşzamanlı bir durum geçişi araya girmesin diye satır kilitlenir.
+    const [existing] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
+    if (!existing) throw new DomainError("not_found", NOT_FOUND);
+    assertAccess(actor, existing);
+    if (existing.status === "completed" || existing.status === "cancelled") {
+      throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinlik düzenlenemez");
+    }
+    const [row] = await tx
+      .update(events)
+      .set({
+        name: input.name,
+        description: input.description ?? null,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt ?? null,
+        eventType: input.eventType ?? null,
+        reservationEnabled: input.reservationEnabled ?? existing.reservationEnabled,
+        reviewEnabled: input.reviewEnabled ?? existing.reviewEnabled,
+        reviewHistoryVisible: input.reviewHistoryVisible ?? existing.reviewHistoryVisible,
+        updatedAt: new Date(),
+      })
+      .where(eq(events.id, input.id))
+      .returning();
+    if (!row) throw new DomainError("not_found", NOT_FOUND);
+    return row;
+  });
 }
 
 export async function changeEventStatus(

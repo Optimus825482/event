@@ -17,6 +17,19 @@ export async function getTemplateOrThrow(db: Executor, id: string): Promise<Venu
   return row;
 }
 
+/**
+ * Eylem kapısı için şablonun sahibi. Olmayan şablon varlığını sızdırmasın diye hata atmaz:
+ * sahipsiz kaynak mekân sahibi için `forbidden` olur (başkasının şablonuyla aynı), yönetici ise
+ * servisten `not_found` alır.
+ */
+export async function templateOwnerResource(db: Executor, id: string): Promise<{ ownerId?: string }> {
+  const [row] = await db
+    .select({ createdById: venueTemplates.createdById })
+    .from(venueTemplates)
+    .where(eq(venueTemplates.id, id));
+  return row?.createdById ? { ownerId: row.createdById } : {};
+}
+
 /** Yönetici hepsini, diğerleri kendi şablonlarını ve herkese açık olanları görür. */
 export function canSeeTemplate(actor: Actor, template: Pick<VenueTemplateRow, "isPublic" | "createdById">): boolean {
   return actor.role === "admin" || template.isPublic || template.createdById === actor.id;

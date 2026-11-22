@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { eventStaffAssignments, servicePoints } from "@/db/schema";
+import { eventStaffAssignments, servicePoints, staff } from "@/db/schema";
+import { saveTableGroups } from "@/features/staffing/groups-service";
 import { saveAssignments } from "@/features/staffing/assignments-service";
 import { saveTeams } from "@/features/staffing/teams-service";
 import { truncateAll } from "../../helpers/db";
@@ -236,5 +237,67 @@ describe("saveAssignments (masa + özel görev + servis noktası tek transaction
       }),
       "conflict",
     );
+  });
+  it("pasif personel atanamaz (otomatik atamayla aynı kural); satır yazılmaz", async () => {
+    const { actor, event, tables, people } = await setupEvent();
+    await db.update(staff).set({ status: "inactive" }).where(eq(staff.id, people[0]!.id));
+    await expectDomain(
+      saveAssignments(db, actor, {
+        eventId: event.id,
+        assignments: [{ staffId: people[0]!.id, assignmentType: "table", tableIds: [tables[0]!.id] }],
+      }),
+      "conflict",
+    );
+    expect(await assignmentsOf(event.id)).toHaveLength(0);
+  });
+
+  it("sonradan pasife alınan personelin değişmeyen ataması yeniden kaydedilebilir", async () => {
+    const { actor, event, tables, people } = await setupEvent();
+    const first = await saveAssignments(db, actor, {
+      eventId: event.id,
+      assignments: [{ staffId: people[0]!.id, assignmentType: "table", tableIds: [tables[0]!.id] }],
+    });
+    await db.update(staff).set({ status: "inactive" }).where(eq(staff.id, people[0]!.id));
+    await saveAssignments(db, actor, {
+      eventId: event.id,
+      assignments: [
+        { id: first.assignments[0]!.id, staffId: people[0]!.id, assignmentType: "table", tableIds: [tables[0]!.id], notes: "x" },
+      ],
+    });
+    expect((await assignmentsOf(event.id))[0]?.notes).toBe("x");
+  });
+
+  it("bir masa tek ekip: grubun ekibinden farklı ekip conflict, aynı ekip ve boş ekip kabul", async () => {
+    const { actor, event, tables, people } = await setupEvent();
+    const teamsRes = await saveTeams(db, actor, {
+      eventId: event.id,
+      teams: [
+        { name: "A", members: [] },
+        { name: "B", members: [] },
+      ],
+    });
+    const teamA = teamsRes.teams.find((t) => t.name === "A")!.id;
+    const teamB = teamsRes.teams.find((t) => t.name === "B")!.id;
+    await saveTableGroups(db, actor, {
+      eventId: event.id,
+      groups: [{ name: "G", teamId: teamA, tableIds: [tables[0]!.id] }],
+    });
+    await expectDomain(
+      saveAssignments(db, actor, {
+        eventId: event.id,
+        assignments: [{ staffId: people[0]!.id, teamId: teamB, assignmentType: "table", tableIds: [tables[0]!.id] }],
+      }),
+      "conflict",
+    );
+    expect(await assignmentsOf(event.id)).toHaveLength(0);
+    await saveAssignments(db, actor, {
+      eventId: event.id,
+      assignments: [
+        { staffId: people[0]!.id, teamId: teamA, assignmentType: "table", tableIds: [tables[0]!.id] },
+        { staffId: people[1]!.id, assignmentType: "table", tableIds: [tables[0]!.id] },
+        { staffId: people[2]!.id, teamId: teamB, assignmentType: "table", tableIds: [tables[1]!.id] },
+      ],
+    });
+    expect(await assignmentsOf(event.id)).toHaveLength(3);
   });
 });

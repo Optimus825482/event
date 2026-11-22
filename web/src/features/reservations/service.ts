@@ -48,8 +48,10 @@ export async function createReservation(
   db: Executor,
   actor: Actor,
   input: CreateReservationInput,
+  /** Açık bir transaction içinden çağıran, izni önceden çözüp verir (havuzdan ikinci bağlantı alınmaz). */
+  options: { mayReadCustomers?: boolean } = {},
 ): Promise<ReservationRow> {
-  const mayReadCustomers = await canReadCustomers(actor);
+  const mayReadCustomers = options.mayReadCustomers ?? (await canReadCustomers(actor));
   if (input.customerId && !mayReadCustomers) throw new DomainError("not_found", "Müşteri bulunamadı");
   return inTransaction(db, async (tx) => {
     const event = await lockEvent(tx, actor, input.eventId);
@@ -114,7 +116,9 @@ export async function updateReservation(
     }
     const guestCount = input.guestCount ?? reservation.guestCount;
     const table = await lockTable(tx, event.id, input.tableId ?? reservation.tableId);
-    assertCapacity(guestCount, table);
+    // Kapasite yalnızca masa ya da kişi sayısı değişince denetlenir; önceden kapasiteyi aşan
+    // (örn. içe aktarılmış) bir rezervasyonun yalnızca adı/telefonu düzenlenebilir.
+    if (table.id !== reservation.tableId || guestCount !== reservation.guestCount) assertCapacity(guestCount, table);
 
     const [row] = await tx
       .update(reservations)

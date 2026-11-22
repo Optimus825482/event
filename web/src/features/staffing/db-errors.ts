@@ -26,6 +26,7 @@ export const STAFFING_MESSAGES = {
   staffNotFound: "Personel bulunamadı",
   foreignRecord: "Kayıt başka bir etkinliğe ait",
   servicePointRequired: "Servis noktası ataması için servis noktası seçilmeli",
+  teamTableMismatch: "Bir masa tek ekibe ait olabilir: atamanın ekibi masanın grubundaki ekiple aynı olmalı",
   tablesOnlyForTable: "Yalnızca masa ataması masa içerebilir",
 } as const;
 
