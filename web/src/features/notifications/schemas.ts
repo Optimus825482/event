@@ -17,6 +17,8 @@ export function normalizeInternalPath(value: string): string | null {
   try {
     const url = new URL(value, URL_BASE);
     if (url.origin !== URL_BASE) return null;
+    // Nokta bölütleri çözülünce yol `//host` biçimine dönebilir (ör. `/.//evil.com`); çıktı da denetlenir.
+    if (url.pathname.startsWith("//")) return null;
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return null;
