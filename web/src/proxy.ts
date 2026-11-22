@@ -15,6 +15,11 @@ export function proxy(request: NextRequest): NextResponse {
   if (isPublic(pathname)) return NextResponse.next();
   if (SESSION_COOKIES.some((name) => request.cookies.has(name))) return NextResponse.next();
 
+  // API istemcileri (fetch, EventSource) giriş sayfasına yönlendirilmez; 401 alır.
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ message: "Oturum gerekli" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+
   const url = request.nextUrl.clone();
   url.pathname = "/login";
   url.search = "";
