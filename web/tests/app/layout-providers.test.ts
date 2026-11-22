@@ -14,6 +14,7 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/db/client", () => ({ db: {} }));
 vi.mock("@/features/notifications/service", () => ({ countUnread: async () => 3 }));
 vi.mock("@/features/users/profile", () => ({ getOwnAvatar: async () => null }));
+vi.mock("@/features/users/current-session", () => ({ currentSessionExpiry: async () => null }));
 
 import AppLayout from "@/app/(app)/layout";
 import { AppShell } from "@/components/layout/app-shell";

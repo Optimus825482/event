@@ -18,12 +18,13 @@ async function fetchExpiry(): Promise<number | null> {
 }
 
 /**
- * Oturum bitmeden önce uyarı penceresi (eski `SessionTimeoutModal`). Bitiş zamanı Better Auth'un
- * `get-session` yanıtından okunur; "Oturumu uzat" oturumu yeniden okur (sunucu kaydırmalı yenileme
+ * Oturum bitmeden önce uyarı penceresi (eski `SessionTimeoutModal`). İlk bitiş zamanı sunucudan (kabuk
+ * düzeni) gelir; sayfa yüklemesinde `get-session` çağrılmaz (uç nokta hız sınırlıdır). Uyarı zamanı
+ * geldiğinde ve "Oturumu uzat"ta oturum yeniden okunur (sunucu kaydırmalı yenileme
  * yapar) ve geri sayım süre uzadıysa kapanır. Süre dolarsa oturum kapatılır.
  */
-export function SessionTimeoutModal() {
-  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+export function SessionTimeoutModal({ initialExpiresAt }: { initialExpiresAt: number | null }) {
+  const [expiresAt, setExpiresAt] = useState<number | null>(initialExpiresAt);
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [notExtended, setNotExtended] = useState(false);
@@ -34,16 +35,6 @@ export function SessionTimeoutModal() {
     const next = await fetchExpiry();
     setExpiresAt(next);
     return next;
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchExpiry().then((next) => {
-      if (!cancelled) setExpiresAt(next);
-    });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   useEffect(() => {
