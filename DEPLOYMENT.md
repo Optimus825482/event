@@ -16,7 +16,7 @@ Traefik/Coolify (HTTPS, x-real-ip) -> web (Next.js standalone, :3000) -> postgre
                                       ^-- create-admin (isteğe bağlı tek seferlik, profil `tools`; bkz. İlk yönetici)
 ```
 
-- `postgres`: `postgres:17-alpine`, verisi `web_postgres_data` volume'unda. Port yayınlanmaz. Volume adı eski yığınınkinden
+- `eventflow-db`: `postgres:17-alpine`, verisi `web_postgres_data` volume'unda. Port yayınlanmaz. Volume adı eski yığınınkinden
   bilerek farklıdır (eski PostgreSQL 15 verisi 17'ye bağlanıp hata vermesin, geri dönüşte eski veri sağlam kalsın).
 - `migrate`: web ile **aynı imaj**; Drizzle migration'larını uygulayıp çıkar. `web`, `depends_on:
   migrate: condition: service_completed_successfully` ile yalnızca bu başarılıysa başlar. Migration web sürecine
@@ -50,7 +50,7 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 1. Proje > yeni kaynak > **Docker Compose** > depoyu bağlayın, dosya olarak `docker-compose.coolify.yaml` seçin.
 2. Yukarıdaki ortam değişkenlerini tanımlayın.
 3. `web` servisine alan adını `https://<alan-adı>:3000` biçiminde atayın (Coolify Traefik etiketlerini üretir; yeni
-   etiket elle yazılmaz). `postgres` ve `migrate` için alan adı atamayın.
+   etiket elle yazılmaz). `eventflow-db`, `migrate` ve `create-admin` için alan adı atamayın (Coolify otomatik ürettiyse silin).
 4. Deploy. Sıra: postgres sağlıklı olunca `migrate` çalışır ve çıkar; ardından `web` başlar.
 5. İmaj, GitHub Actions'ın `build-and-push.yml` iş akışıyla `ghcr.io/optimus825482/eventflow-web` olarak yayımlanır;
    `web-test` işi (lint, typecheck, test, build) geçmeden `build-web` çalışmaz, yani kırmızı commit'ten imaj üretilmez.
