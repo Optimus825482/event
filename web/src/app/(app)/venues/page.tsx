@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { buildTemplatePreview } from "@/features/venue/components/template-preview-model";
 import { TemplateList } from "@/features/venue/components/template-list";
 import { loadVenueTemplates } from "@/features/venue/queries";
 
@@ -25,6 +26,8 @@ export default async function VenuesPage() {
           capacity: t.capacity,
           createdByName: t.createdByName,
           canManage: t.canManage,
+          createdAt: t.createdAt.toISOString(),
+          preview: buildTemplatePreview(t.layout),
         }))}
         canEdit={canEdit}
         canDelete={canDelete}

@@ -15,7 +15,9 @@ import {
 } from "./schemas";
 import { applyVenueTemplate, saveAsTemplate, saveLayout } from "./service";
 import { createTableType, deleteTableType, updateTableType } from "./table-types-service";
+import { createBlankTemplateSchema } from "./template-schemas";
 import {
+  createBlankTemplate,
   deleteVenueTemplate,
   duplicateVenueTemplate,
   templateOwnerResource,
@@ -78,6 +80,15 @@ export const venueActionDefs = {
     handler: async ({ actor, input }) => {
       const row = await duplicateVenueTemplate(db, actor, input);
       return { id: row.id };
+    },
+  }),
+  createBlankTemplate: def({
+    module: "venues",
+    verb: "create",
+    input: createBlankTemplateSchema,
+    handler: async ({ actor, input }) => {
+      const row = await createBlankTemplate(db, actor, input);
+      return { id: row.id, name: row.name };
     },
   }),
   createTableType: def({

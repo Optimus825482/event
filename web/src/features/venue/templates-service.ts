@@ -3,7 +3,8 @@ import type { Db, Tx } from "@/db/client";
 import { users, venueTemplates } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
-import type { TemplateIdInput, UpdateTemplateInput } from "./schemas";
+import { emptyDecor, type TemplateIdInput, type TemplateLayout, type UpdateTemplateInput } from "./schemas";
+import type { CreateBlankTemplateInput } from "./template-schemas";
 import { parseTemplateLayout } from "./template-layout";
 
 type Executor = Db | Tx;
@@ -63,7 +64,10 @@ export type VenueTemplateSummary = {
   capacity: number;
   createdByName: string | null;
   canManage: boolean;
+  createdAt: Date;
   updatedAt: Date;
+  /** Önizleme çizimi için ayrıştırılmış yerleşim. */
+  layout: TemplateLayout;
 };
 
 export async function listVenueTemplates(db: Executor, actor: Actor): Promise<VenueTemplateSummary[]> {
@@ -87,7 +91,9 @@ export async function listVenueTemplates(db: Executor, actor: Actor): Promise<Ve
       capacity: layout.tables.reduce((sum, t) => sum + t.capacity, 0),
       createdByName,
       canManage: canManageTemplate(actor, template),
+      createdAt: template.createdAt,
       updatedAt: template.updatedAt,
+      layout,
     };
   });
 }
@@ -113,6 +119,23 @@ export async function deleteVenueTemplate(db: Executor, actor: Actor, input: Tem
   await getManageableTemplate(db, actor, input.id);
   await db.delete(venueTemplates).where(eq(venueTemplates.id, input.id));
   return { id: input.id };
+}
+
+/** Masasız, varsayılan tuvalli boş şablon; sahibi işlemi yapandır. */
+export async function createBlankTemplate(db: Executor, actor: Actor, input: CreateBlankTemplateInput) {
+  const layoutData: TemplateLayout = { version: 1, tables: [], decor: emptyDecor() };
+  const [row] = await db
+    .insert(venueTemplates)
+    .values({
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      isPublic: input.isPublic ?? false,
+      layoutData,
+      createdById: actor.id,
+    })
+    .returning();
+  if (!row) throw new Error("şablon eklenemedi");
+  return row;
 }
 
 /** Görülebilen bir şablonu işlemi yapanın özel kopyası olarak çoğaltır. */
