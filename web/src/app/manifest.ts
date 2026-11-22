@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 /** PWA bildirimi: kapı personeli ana ekrana ekleyip doğrudan check-in'e açar. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "EventFlow Kapı Girişi",
-    short_name: "EventFlow",
+    name: "EventFlow PRO Kapı Girişi",
+    short_name: "EventFlow PRO",
     description: "Etkinlik kapı girişi (QR check-in), çevrimdışı kuyruklu",
     lang: "tr",
     start_url: "/check-in",
