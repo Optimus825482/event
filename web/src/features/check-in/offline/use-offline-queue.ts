@@ -91,15 +91,17 @@ export function useOfflineQueue(userId: string, onEvents?: (events: SettledEvent
   useEffect(() => {
     const runtime = getQueueRuntime();
     const flush = () => void runtime.flush();
+    // Bağlantı geri gelince geri çekilme beklenmez (çevrimdışıyken yapılan denemeler süreyi uzatmıştır).
+    const flushNowOnReconnect = () => void runtime.flush({ ignoreBackoff: true });
     const onVisible = () => {
       if (document.visibilityState === "visible") flush();
     };
     flush();
-    window.addEventListener("online", flush);
+    window.addEventListener("online", flushNowOnReconnect);
     document.addEventListener("visibilitychange", onVisible);
     const timer = window.setInterval(onVisible, FLUSH_INTERVAL_MS);
     return () => {
-      window.removeEventListener("online", flush);
+      window.removeEventListener("online", flushNowOnReconnect);
       document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(timer);
     };
@@ -116,7 +118,7 @@ export function useOfflineQueue(userId: string, onEvents?: (events: SettledEvent
   );
 
   const flushNow = useCallback(async () => {
-    await getQueueRuntime().flush();
+    await getQueueRuntime().flush({ ignoreBackoff: true });
   }, []);
 
   const isPausedNow = useCallback(() => getQueueRuntime().isPaused(), []);
@@ -124,7 +126,7 @@ export function useOfflineQueue(userId: string, onEvents?: (events: SettledEvent
   const resume = useCallback(async () => {
     const rt = getQueueRuntime();
     rt.resume();
-    await rt.flush();
+    await rt.flush({ ignoreBackoff: true });
   }, []);
 
   const retry = useCallback(

@@ -40,6 +40,18 @@ export function fingerprint(eventId: string, ref: ReservationRef): string {
   return createHash("sha256").update(`${eventId}\n${ref.kind}\n${ref.value}`).digest("hex");
 }
 
+/** Walk-in isteğinin özeti: aynı anahtar başka masa/ad/kişi sayısıyla gelirse tekrar sayılmaz. */
+export function walkInFingerprint(input: {
+  eventId: string;
+  tableId: string;
+  guestName: string;
+  guestCount: number;
+  guestPhone?: string | undefined;
+}): string {
+  const parts = [input.eventId, input.tableId, input.guestName.trim(), String(input.guestCount), input.guestPhone?.trim() ?? ""];
+  return createHash("sha256").update(["walk-in", ...parts].join("\n")).digest("hex");
+}
+
 /** Check-in yalnızca yayında, devam eden ya da tamamlanmış etkinlikte yapılır (geç gelen misafir). */
 export function assertCheckInOpen(event: EventRow): void {
   if (event.status === "draft") throw new DomainError("conflict", "Etkinlik taslak durumunda; check-in yapılamaz");

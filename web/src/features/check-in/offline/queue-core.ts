@@ -15,7 +15,17 @@ import type { CheckInSuccess } from "../internal";
  *   bekletilir ve ancak sahibi yeniden oturum açınca gönderilir.
  */
 
-export type QueueTarget = { token: string } | { legacyHash: string } | { reservationId: string };
+export type WalkInTarget = { tableId: string; guestName: string; guestCount: number; guestPhone?: string };
+
+/** `walkIn`: kapıda kayıt + giriş (ayrı öğe türü, aynı kuyruk, aynı anahtar/sahip kuralları). */
+export type QueueTarget = { token: string } | { legacyHash: string } | { reservationId: string } | { walkIn: WalkInTarget };
+
+export type ItemKind = "check_in" | "walk_in";
+
+/** Öğe türü hedeften türetilir (eski kayıtlarda ayrı alan yok, hepsi check-in). */
+export function itemKind(item: Pick<QueueItem, "target">): ItemKind {
+  return "walkIn" in item.target ? "walk_in" : "check_in";
+}
 
 export type ItemFailure =
   | { kind: "business"; code: "conflict" | "not_found" | "invalid"; message: string }

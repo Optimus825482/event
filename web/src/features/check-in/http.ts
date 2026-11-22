@@ -70,11 +70,15 @@ function keyOf(item: unknown): string | null {
   return parsed.success ? parsed.data : null;
 }
 
+function isWalkIn(item: unknown): boolean {
+  return typeof item === "object" && item !== null && "kind" in item && item.kind === "walk_in";
+}
+
 /**
  * `POST /api/check-in` — çevrimdışı kuyruğun eşitleme ucu. Tek öğe gövdesi `checkInAction` ile aynı
  * `ActionResult`'ı döndürür; `{ items: [...] }` (en çok 50) her öğeyi bağımsız işler ve sırayla
  * `{ results: [{ idempotencyKey, result }] }` döndürür. İş kuralı sonuçları (conflict vb.) 200 ile
- * öğe sonucunda taşınır; HTTP hata kodları yalnızca isteğin bütünü içindir:
+ * öğe sonucunda taşınır; `kind: "walk_in"` öğeleri aynı anahtar deposuyla walk-in kaydı yapar; HTTP hata kodları yalnızca isteğin bütünü içindir:
  * 415 JSON değil, 403 başka kaynak, 401 oturum yok, 403 `check_in:create` yok, 400 bozuk gövde.
  */
 export async function handleCheckInPost(request: Request): Promise<Response> {
@@ -108,6 +112,7 @@ export async function handleCheckInPost(request: Request): Promise<Response> {
   // Action ile aynı hat: oturum → izin satırları → authorize → Zod → servis (her öğe için).
   const { defineAction } = createAction({ getActor: async () => actor });
   const run = defineAction(checkInActionDefs.checkIn);
+  const runWalkIn = defineAction(checkInActionDefs.walkInOnce);
 
   if (!("items" in single.data)) return json(200, await run(single.data));
   // Kuyruk öğeleri oluşturan kullanıcının kimliğini taşır; başka bir oturumda gönderilmez.
@@ -120,6 +125,6 @@ export async function handleCheckInPost(request: Request): Promise<Response> {
 
   const results: CheckInItemResult[] = [];
   // Sırayla: her öğe kendi transaction'ında; bağlantı havuzunu tek istek tüketmez.
-  for (const item of batch.data.items) results.push({ idempotencyKey: keyOf(item), result: await run(item) });
+  for (const item of batch.data.items) results.push({ idempotencyKey: keyOf(item), result: await (isWalkIn(item) ? runWalkIn(item) : run(item)) });
   return json(200, { results });
 }

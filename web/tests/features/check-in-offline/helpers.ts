@@ -22,6 +22,17 @@ export function item(overrides: { now?: number; token?: string; key?: string; ow
   });
 }
 
+export function walkInItem(walkIn: { tableId: string; guestName: string; guestCount: number; guestPhone?: string }): QueueItem {
+  return createItem({
+    idempotencyKey: uuid(),
+    ownerId: USER_ID,
+    eventId: EVENT_ID,
+    target: { walkIn },
+    clientTimestamp: new Date(1_000).toISOString(),
+    now: 1_000,
+  });
+}
+
 export function success(reservationId = "r1", outcome: CheckInSuccess["outcome"] = "checked_in"): CheckInSuccess {
   return {
     outcome,

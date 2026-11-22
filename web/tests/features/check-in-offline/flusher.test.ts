@@ -53,6 +53,30 @@ function setup(
   };
 }
 
+describe("flusher: bağlantı gelince geri çekilme beklenmez", () => {
+  it("ağ hatasından sonra olağan flush geri çekilmeyi bekler; ignoreBackoff ile hemen gönderilir", async () => {
+    let online = false;
+    const sent: string[] = [];
+    const { store, flusher, advance } = setup(async (items) => {
+      if (!online) return { kind: "network" };
+      sent.push(...items.map((i) => i.idempotencyKey));
+      return okFor(items);
+    });
+    const a = item({ now: 1 });
+    await store.putMany([a]);
+
+    await flusher.flush(); // çevrimdışı deneme: öğe geri çekilmeye girer
+    online = true;
+    advance(500); // geri çekilme (>= ~1.5 sn) dolmadı
+    await flusher.flush();
+    expect(sent).toEqual([]);
+
+    await flusher.flush({ ignoreBackoff: true }); // "online" olayı / "Şimdi gönder"
+    expect(sent).toEqual([a.idempotencyKey]);
+    expect(await store.getAll()).toEqual([]);
+  });
+});
+
 describe("flusher", () => {
   it("öğeleri sırayla, en çok maxBatch'lik gruplarla gönderir; başarılı öğeler kuyruktan çıkar", async () => {
     const batches: string[][] = [];

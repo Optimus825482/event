@@ -10,6 +10,7 @@ const timeFormat = new Intl.DateTimeFormat("tr-TR", { timeStyle: "medium", timeZ
 function targetLabel(item: QueueItem): string {
   if ("token" in item.target) return "QR kod";
   if ("legacyHash" in item.target) return "Eski QR kod";
+  if ("walkIn" in item.target) return "Walk-in kaydı";
   return "Manuel giriş";
 }
 

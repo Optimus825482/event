@@ -4,6 +4,7 @@ import {
   backoffMs,
   claim,
   heldAside,
+  itemKind,
   ownedBy,
   recoverInterrupted,
   retryFailed,
@@ -12,7 +13,23 @@ import {
   type BatchOutcome,
   type QueueItem,
 } from "@/features/check-in/offline/queue-core";
-import { item, OTHER_USER_ID, success, USER_ID } from "./helpers";
+import { item, OTHER_USER_ID, success, USER_ID, walkInItem } from "./helpers";
+
+describe("walk-in öğesi (ayrı tür)", () => {
+  it("itemKind hedeften türetilir; walk-in da aynı anahtar/sahip/sıra kurallarını taşır", () => {
+    const w = walkInItem({ tableId: "t", guestName: "Kapı", guestCount: 2 });
+    expect(itemKind(w)).toBe("walk_in");
+    expect(itemKind(item())).toBe("check_in");
+    expect(w).toMatchObject({ status: "pending", ownerId: USER_ID, attempts: 0 });
+  });
+
+  it("başka kullanıcının walk-in öğesi bekletilir, sahibine gönderilir", () => {
+    const mine = walkInItem({ tableId: "t", guestName: "A", guestCount: 1 });
+    const foreign = { ...walkInItem({ tableId: "t", guestName: "B", guestCount: 1 }), ownerId: OTHER_USER_ID };
+    expect(ownedBy([mine, foreign], USER_ID)).toEqual([mine]);
+    expect(heldAside([mine, foreign], USER_ID)).toEqual([foreign]);
+  });
+});
 
 function claimed(items: QueueItem[], now = 2_000): QueueItem[] {
   return claim(selectDue(items, now, 50), now);

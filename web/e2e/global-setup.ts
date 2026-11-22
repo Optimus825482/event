@@ -7,7 +7,16 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
-import { ADMIN_USERNAME, AUTH_STATE_FILE, E2E_BASE_URL, E2E_DATABASE_URL, E2E_DB_NAME, PG_BASE_URL } from "./support/constants";
+import {
+  ADMIN_USERNAME,
+  AUTH_STATE_FILE,
+  E2E_BASE_URL,
+  E2E_DATABASE_URL,
+  E2E_DB_NAME,
+  FAKE_CAMERA_FILE,
+  PG_BASE_URL,
+} from "./support/constants";
+import { writeQrY4m } from "./support/qr-video";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -58,6 +67,8 @@ export default async function globalSetup(): Promise<void> {
   const authSecret = process.env.E2E_AUTH_SECRET;
   if (!password || !authSecret) throw new Error("E2E_ADMIN_PASSWORD / E2E_AUTH_SECRET tanımlı değil (playwright.config.ts)");
 
+  // Kamera dosyası tarayıcı başlamadan var olsun; kamera testi gerçek belirteçle üzerine yazar.
+  writeQrY4m(path.join(ROOT, FAKE_CAMERA_FILE), "eventflow-placeholder");
   await ensureDatabase();
   await migrateAndTruncate();
   seedAdmin(password, authSecret);

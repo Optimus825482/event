@@ -55,6 +55,16 @@ export const walkInInput = z.object({
 });
 export type WalkInInput = z.infer<typeof walkInInput>;
 
+/**
+ * Çevrimdışı kuyruğun walk-in öğesi: aynı alanlar + istemcinin ürettiği `idempotencyKey` (tekrarlarda
+ * aynı kalır) ve tarama anı. `kind` yalnızca toplu istekte öğe türünü ayırır; burada yok sayılır.
+ */
+export const walkInOnceInput = walkInInput.extend({
+  idempotencyKey: z.uuid("Geçersiz istek anahtarı"),
+  clientTimestamp: z.iso.datetime({ offset: true, message: "Geçersiz zaman damgası" }).optional(),
+});
+export type WalkInOnceInput = z.input<typeof walkInOnceInput>;
+
 export const updateGuestCountInput = z.object({
   eventId: id,
   reservationId: id,

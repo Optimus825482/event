@@ -1,4 +1,4 @@
-import { createFlusher, createMemoryStore, type Flusher, type QueueStore } from "./flusher";
+import { createFlusher, createMemoryStore, type FlushOptions, type Flusher, type QueueStore } from "./flusher";
 import { createIdbStore, idbAvailable } from "./idb-store";
 import { createItem, retryFailed, type QueueItem, type QueueTarget, type SettledEvent } from "./queue-core";
 import { sendBatch } from "./transport";
@@ -15,7 +15,7 @@ export type QueueRuntime = {
   setUser(userId: string): void;
   list(): Promise<QueueItem[]>;
   enqueue(eventId: string, target: QueueTarget): Promise<QueueItem>;
-  flush(): Promise<void>;
+  flush(options?: FlushOptions): Promise<void>;
   isPaused(): boolean;
   resume(): void;
   retry(item: QueueItem): Promise<void>;
@@ -83,8 +83,8 @@ export function getQueueRuntime(): QueueRuntime {
       notifyAll();
       return item;
     },
-    async flush() {
-      await flusher.flush();
+    async flush(options) {
+      await flusher.flush(options);
       notifyAll();
     },
     isPaused: () => flusher.isPaused(),

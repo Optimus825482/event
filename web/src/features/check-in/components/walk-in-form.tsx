@@ -1,20 +1,31 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, SELECT_CLASS } from "@/features/users/components/field";
 import { realtimeKeys } from "@/features/realtime/keys";
-import { freeTablesAction, registerWalkInAction } from "../actions";
-import { unwrap, useRefreshEvent, type CheckInFeedback } from "./use-check-in";
+import { freeTablesAction } from "../actions";
+import { walkInInput } from "../schemas";
+import { unwrap } from "./use-check-in";
+import type { WalkInTarget } from "../offline/queue-core";
 
-/** Kapıda gelen misafir: boş masa seçilir, kayıt ve giriş tek işlemde yapılır. */
-export function WalkInForm({ eventId, onDone }: { eventId: string; onDone: (feedback: CheckInFeedback) => void }) {
-  const [pending, startTransition] = useTransition();
+/**
+ * Kapıda gelen misafir: boş masa seçilir, kayıt ve giriş tek işlemde yapılır. Girdi aynı Zod şemasıyla
+ * doğrulanır ve çevrimdışı kuyruğa (check-in ile aynı yol) verilir; sonuç ana ekrandaki bantta görünür.
+ */
+export function WalkInForm({
+  eventId,
+  pending,
+  onSubmit,
+}: {
+  eventId: string;
+  pending: boolean;
+  onSubmit: (walkIn: WalkInTarget) => void;
+}) {
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [formKey, setFormKey] = useState(0);
-  const refresh = useRefreshEvent(eventId);
   const tables = useQuery({
     queryKey: [...realtimeKeys.tables(eventId), "walk-in"],
     queryFn: async () => unwrap(await freeTablesAction({ eventId })),
@@ -23,24 +34,21 @@ export function WalkInForm({ eventId, onDone }: { eventId: string; onDone: (feed
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    startTransition(async () => {
-      const result = await registerWalkInAction({
-        eventId,
-        tableId: form.get("tableId"),
-        guestName: form.get("guestName"),
-        guestCount: form.get("guestCount"),
-        guestPhone: form.get("guestPhone"),
-      });
-      if (result.ok) {
-        setErrors({});
-        setFormKey((k) => k + 1);
-        onDone({ kind: "success", result: result.data });
-        refresh();
-      } else {
-        setErrors(result.fieldErrors ?? {});
-        onDone({ kind: "error", code: result.code, message: result.message });
-      }
+    const parsed = walkInInput.safeParse({
+      eventId,
+      tableId: form.get("tableId"),
+      guestName: form.get("guestName"),
+      guestCount: form.get("guestCount"),
+      guestPhone: form.get("guestPhone"),
     });
+    if (!parsed.success) {
+      setErrors(parsed.error.flatten().fieldErrors);
+      return;
+    }
+    const { tableId, guestName, guestCount, guestPhone } = parsed.data;
+    setErrors({});
+    setFormKey((k) => k + 1);
+    onSubmit({ tableId, guestName, guestCount, ...(guestPhone ? { guestPhone } : {}) });
   }
 
   const free = tables.data ?? [];

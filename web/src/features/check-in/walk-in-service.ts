@@ -16,11 +16,24 @@ import { updateGuestCountInput, walkInInput, type UpdateGuestCountInput, type Wa
  * kapasite, kara liste, masayı kısmi tekil index belirler). Herhangi bir adım reddedilirse hiçbir şey
  * yazılmaz (müşteri kaydı dahil) ve hiçbir olay yayılmaz.
  */
-export async function registerWalkIn(db: Executor, actor: Actor, raw: WalkInInput): Promise<CheckInSuccess> {
+export type WalkInOptions = {
+  /** Çağıran transaction içindeyse izinler önceden okunmuş olmalıdır (havuz kilitlenmesi, M6). */
+  mayReadCustomers?: boolean;
+  /** `false`: `walk-in:<id>` günlük satırı yazılmaz (çağıran anahtar satırını kendisi yönetir). */
+  log?: boolean;
+  clientTimestamp?: Date | null;
+};
+
+export async function registerWalkIn(
+  db: Executor,
+  actor: Actor,
+  raw: WalkInInput,
+  options: WalkInOptions = {},
+): Promise<CheckInSuccess> {
   const input = walkInInput.parse(raw);
   // İzinler transaction AÇILMADAN okunur: açıkken havuzdan ikinci bağlantı almak, eşzamanlı
   // walk-in'lerde havuzu tüketip kilitlenmeye yol açar.
-  const mayReadCustomers = can(await withPermissions(actor), "customers", "view");
+  const mayReadCustomers = options.mayReadCustomers ?? can(await withPermissions(actor), "customers", "view");
   return db.transaction(async (tx) => {
     const reservation = await createReservation(
       tx,
@@ -40,18 +53,20 @@ export async function registerWalkIn(db: Executor, actor: Actor, raw: WalkInInpu
       reservationId: reservation.id,
       event,
       actorId: actor.id,
-      clientTimestamp: null,
+      clientTimestamp: options.clientTimestamp ?? null,
     });
     const { response } = await readCheckIn(tx, reservation.id, "checked_in");
     if (!changed || !response) throw new Error("walk-in girişi yapılamadı");
 
-    await tx.insert(checkInEvents).values({
-      reservationId: reservation.id,
-      idempotencyKey: `walk-in:${reservation.id}`,
-      actorId: actor.id,
-      outcome: "checked_in",
-      response: { ok: true, data: response },
-    });
+    if (options.log !== false) {
+      await tx.insert(checkInEvents).values({
+        reservationId: reservation.id,
+        idempotencyKey: `walk-in:${reservation.id}`,
+        actorId: actor.id,
+        outcome: "checked_in",
+        response: { ok: true, data: response },
+      });
+    }
     await publish(tx, {
       type: "reservation.changed",
       eventId: event.id,

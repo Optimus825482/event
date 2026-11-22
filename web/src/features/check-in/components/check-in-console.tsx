@@ -135,7 +135,9 @@ function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: 
           onCheckIn={(reservationId) => submit({ reservationId })}
         />
         <div className="space-y-6">
-          {canWrite ? <WalkInForm eventId={eventId} onDone={setFeedback} /> : null}
+          {canWrite ? (
+            <WalkInForm eventId={eventId} pending={pending} onSubmit={(walkIn) => submit({ walkIn })} />
+          ) : null}
           <section aria-label="Son girişler" className="space-y-2">
             <h2 className="text-lg font-semibold">Son girişler</h2>
             <RecentCheckIns eventId={eventId} />

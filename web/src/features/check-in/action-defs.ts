@@ -1,8 +1,23 @@
 import type { z } from "zod";
 import { availableTables } from "@/features/reservations/read-service";
 import type { ActionOptions } from "@/lib/action";
-import { checkInInput, eventIdInput, searchGuestsInput, updateGuestCountInput, walkInInput } from "./schemas";
-import { checkIn, eventStats, recentCheckIns, registerWalkIn, searchGuests, updateGuestCount } from "./service";
+import {
+  checkInInput,
+  eventIdInput,
+  searchGuestsInput,
+  updateGuestCountInput,
+  walkInInput,
+  walkInOnceInput,
+} from "./schemas";
+import {
+  checkIn,
+  eventStats,
+  recentCheckIns,
+  registerWalkIn,
+  registerWalkInOnce,
+  searchGuests,
+  updateGuestCount,
+} from "./service";
 
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
   return options;
@@ -26,6 +41,12 @@ export const checkInActionDefs = {
     verb: "create",
     input: walkInInput,
     handler: async ({ actor, input, db }) => registerWalkIn(db, actor, input),
+  }),
+  walkInOnce: def({
+    module: "check_in",
+    verb: "create",
+    input: walkInOnceInput,
+    handler: async ({ actor, input, db }) => registerWalkInOnce(db, actor, input),
   }),
   updateGuestCount: def({
     module: "check_in",

@@ -35,9 +35,15 @@ export type FlusherDeps = {
   onEvents?: (events: SettledEvent[]) => void;
 };
 
+export type FlushOptions = { ignoreBackoff?: boolean };
+
 export type Flusher = {
   /** Aynı anda tek boşaltma: çalışırken yapılan çağrılar mevcut boşaltmayı bekler. */
-  flush(): Promise<void>;
+  /**
+   * `ignoreBackoff`: bağlantı geri geldi / operatör "Şimdi gönder" dedi; geri çekilme süresi beklenmez.
+   * Zamanlayıcı ve görünürlük tetikleyicileri olağan (geri çekilmeli) çağrıyı kullanır.
+   */
+  flush(options?: FlushOptions): Promise<void>;
   isPaused(): boolean;
   /** Oturum yenilendikten sonra kuyruğu yeniden başlatır. */
   resume(): void;
@@ -68,7 +74,7 @@ export function createFlusher(deps: FlusherDeps): Flusher {
   let paused = false;
   let running: Promise<void> | null = null;
 
-  async function drain(): Promise<void> {
+  async function drain(ignoreBackoff: boolean): Promise<void> {
     const userId = deps.currentUserId();
     if (userId === null) return;
     const recovered = recoverInterrupted(ownedBy(await store.getAll(), userId));
@@ -77,7 +83,11 @@ export function createFlusher(deps: FlusherDeps): Flusher {
     for (let round = 0; round < MAX_ROUNDS && !paused; round += 1) {
       // Oturum bu arada değiştiyse (başka sekmede çıkış/giriş) eski kullanıcının öğeleri gönderilmez.
       if (deps.currentUserId() !== userId) return;
-      const due = selectDue(ownedBy(await store.getAll(), userId), now(), maxBatch);
+      const due = selectDue(
+        ownedBy(await store.getAll(), userId),
+        ignoreBackoff ? Number.POSITIVE_INFINITY : now(),
+        maxBatch,
+      );
       if (due.length === 0) return;
       const sent = claim(due, now());
       await store.putMany(sent);
@@ -100,10 +110,10 @@ export function createFlusher(deps: FlusherDeps): Flusher {
   }
 
   return {
-    flush() {
+    flush(options = {}) {
       if (running) return running;
       if (paused) return Promise.resolve();
-      const current = tryLock(drain).then(
+      const current = tryLock(() => drain(options.ignoreBackoff === true)).then(
         () => undefined,
         () => undefined,
       );

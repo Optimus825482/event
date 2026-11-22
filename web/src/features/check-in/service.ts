@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { Tx } from "@/db/client";
 import { checkInEvents } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
+import { withPermissions } from "@/features/auth/permissions";
+import { can } from "@/features/auth/policy";
 import { pgCodeOf, pgConstraintOf } from "@/features/customers/pg-error";
 import { lockEvent, MSG, type Executor } from "@/features/reservations/internal";
 import { DomainError } from "@/lib/action";
@@ -14,10 +16,12 @@ import {
   publishCheckIn,
   readCheckIn,
   resolveReservation,
+  walkInFingerprint,
   type CheckInSuccess,
   type ReservationRef,
 } from "./internal";
-import { checkInInput, type CheckInInput } from "./schemas";
+import { checkInInput, walkInOnceInput, type CheckInInput, type WalkInOnceInput } from "./schemas";
+import { registerWalkIn } from "./walk-in-service";
 
 export type { CheckInOutcome, CheckInSuccess } from "./internal";
 export { registerWalkIn, updateGuestCount } from "./walk-in-service";
@@ -165,6 +169,56 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
       .update(checkInEvents)
       .set({
         reservationId: found.reservationId,
+        outcome: logOutcome(stored),
+        response: stored,
+      })
+      .where(eq(checkInEvents.id, claimed.id));
+    return stored;
+  });
+
+  if (!result.ok) throw new DomainError(result.code, result.message);
+  return result.data;
+}
+
+/**
+ * Çevrimdışı kuyruktan gelen walk-in: `checkIn` ile aynı anahtar deposu. Anahtar `check_in_events`'e
+ * `ON CONFLICT DO NOTHING` ile yazılır; zaten varsa saklanan sonuç (başarı ya da iş kuralı reddi) döner,
+ * yeni rezervasyon açılmaz. Kayıt savepoint içinde yapılır: reddedilirse hiçbir şey yazılmaz ve ret saklanır.
+ */
+export async function registerWalkInOnce(db: Executor, actor: Actor, raw: WalkInOnceInput): Promise<CheckInSuccess> {
+  const input = walkInOnceInput.parse(raw);
+  const print = walkInFingerprint(input);
+  const clientTimestamp = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
+  // İzinler transaction açılmadan okunur (havuz kilitlenmesini önler, bkz. registerWalkIn).
+  const mayReadCustomers = can(await withPermissions(actor), "customers", "view");
+
+  const result = await db.transaction(async (tx): Promise<StoredResult> => {
+    const [claimed] = await tx
+      .insert(checkInEvents)
+      .values({
+        idempotencyKey: input.idempotencyKey,
+        actorId: actor.id,
+        clientTimestamp,
+        outcome: "not_found",
+        requestFingerprint: print,
+      })
+      .onConflictDoNothing({ target: checkInEvents.idempotencyKey })
+      .returning({ id: checkInEvents.id });
+    if (!claimed) return replay(tx, actor, input, print);
+
+    let stored: StoredResult;
+    try {
+      const data = await registerWalkIn(tx, actor, input, { mayReadCustomers, log: false, clientTimestamp });
+      stored = { ok: true, data };
+    } catch (error) {
+      const domain = asDomainError(error);
+      if (!domain) throw error;
+      stored = { ok: false, code: domain.code, message: domain.message };
+    }
+    await tx
+      .update(checkInEvents)
+      .set({
+        reservationId: stored.ok ? stored.data.reservationId : null,
         outcome: logOutcome(stored),
         response: stored,
       })

@@ -24,6 +24,11 @@ const batchBodySchema = z.object({
 
 const errorBodySchema = z.object({ message: z.string() });
 
+function wireItem(i: QueueItem) {
+  const common = { eventId: i.eventId, idempotencyKey: i.idempotencyKey, clientTimestamp: i.clientTimestamp };
+  return "walkIn" in i.target ? { kind: "walk_in", ...common, ...i.target.walkIn } : { ...common, ...i.target };
+}
+
 export const CHECK_IN_ENDPOINT = "/api/check-in";
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -46,12 +51,7 @@ export async function sendBatch(items: readonly QueueItem[], fetchImpl: typeof f
   const body = {
     // Sunucu, oturumdaki kullanıcı bu kimlikle uyuşmuyorsa isteği reddeder (başka oturumda gönderim olmaz).
     ownerId: items[0]?.ownerId ?? null,
-    items: items.map((i) => ({
-      eventId: i.eventId,
-      idempotencyKey: i.idempotencyKey,
-      clientTimestamp: i.clientTimestamp,
-      ...i.target,
-    })),
+    items: items.map(wireItem),
   };
   let response: Response;
   try {

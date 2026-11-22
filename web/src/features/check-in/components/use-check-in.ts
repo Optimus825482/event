@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from "react";
 import { realtimeKeys } from "@/features/realtime/keys";
 import type { ActionResult } from "@/lib/action";
 import type { CheckInSuccess } from "../internal";
-import type { SettledEvent } from "../offline/queue-core";
+import type { SettledEvent, WalkInTarget } from "../offline/queue-core";
 import type { OfflineQueue } from "../offline/use-offline-queue";
 import type { ScannedCode } from "../scan-code";
 
@@ -17,7 +17,7 @@ export type CheckInFeedback =
   | { kind: "queued"; reason: QueuedReason }
   | { kind: "error"; code: string; message: string };
 
-export type CheckInTarget = ScannedCode | { reservationId: string };
+export type CheckInTarget = ScannedCode | { reservationId: string } | { walkIn: WalkInTarget };
 
 /** Sorgu işlevleri için: başarısız action sonucunu TanStack Query hatasına çevirir. */
 export function unwrap<T>(result: ActionResult<T>): T {

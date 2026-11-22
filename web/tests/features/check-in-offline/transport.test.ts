@@ -1,6 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { sendBatch } from "@/features/check-in/offline/transport";
-import { EVENT_ID, item, success, USER_ID } from "./helpers";
+import { EVENT_ID, item, success, USER_ID, walkInItem } from "./helpers";
+
+describe("sendBatch: walk-in öğesi", () => {
+  it("walk-in hedefi kind=walk_in olarak, alanlarıyla ve aynı anahtar/zaman damgasıyla gönderilir", async () => {
+    const tableId = "22222222-2222-4222-8222-222222222222";
+    const w = walkInItem({ guestName: "Kapı", guestCount: 2, tableId });
+    let body = "";
+    const fake: typeof fetch = async (_input, init) => {
+      body = String(init?.body);
+      return Response.json({ results: [{ idempotencyKey: w.idempotencyKey, result: { ok: true, data: success() } }] });
+    };
+    await sendBatch([w], fake);
+    expect(JSON.parse(body)).toEqual({
+      ownerId: USER_ID,
+      items: [
+        {
+          kind: "walk_in",
+          eventId: EVENT_ID,
+          idempotencyKey: w.idempotencyKey,
+          clientTimestamp: w.clientTimestamp,
+          tableId,
+          guestName: "Kapı",
+          guestCount: 2,
+        },
+      ],
+    });
+  });
+});
 
 function fetchReturning(response: Response | Error): typeof fetch {
   return async () => {
