@@ -1,9 +1,10 @@
 "use client";
 
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut, Menu, User, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { findActiveGroup, isItemActive } from "./active-module";
 import { ACCENT_CLASSES } from "./module-accent";
@@ -13,13 +14,15 @@ import { useSignOut } from "./use-sign-out";
 
 type MobileMenuProps = {
   username: string;
+  /** Doğrulanmış `data:` URL (bkz. features/users/avatar.ts); yoksa simge gösterilir. */
+  avatarUrl?: string | null;
   roleLabel: string;
   modules: readonly ShellGroup[];
   general: readonly ShellItem[];
 };
 
 /** Dar ekran paneli: etkin modül menüsü, genel bağlantılar, modül değiştirme ve çıkış. */
-export function MobileMenu({ username, roleLabel, modules, general }: MobileMenuProps) {
+export function MobileMenu({ username, avatarUrl = null, roleLabel, modules, general }: MobileMenuProps) {
   const pathname = usePathname();
   const { pending, signOut } = useSignOut();
   const [openedAt, setOpenedAt] = useState<string | null>(null);
@@ -53,9 +56,17 @@ export function MobileMenu({ username, roleLabel, modules, general }: MobileMenu
           id="mobil-menu-paneli"
           className="absolute inset-x-0 top-14 z-50 max-h-[calc(100dvh-3.5rem)] space-y-4 overflow-y-auto border-b border-slate-800 bg-slate-900 px-4 py-4 shadow-xl"
         >
-          <p className="text-sm text-slate-400">
-            <span className="font-medium text-white">{username}</span> · {roleLabel}
-          </p>
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10">
+              {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+              <AvatarFallback className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700">
+                <User aria-hidden="true" className="h-5 w-5 text-white" />
+              </AvatarFallback>
+            </Avatar>
+            <p className="text-sm text-slate-400">
+              <span className="font-medium text-white">{username}</span> · {roleLabel}
+            </p>
+          </div>
           {active && (
             <nav aria-label="Mobil gezinme" className="space-y-1">
               {active.items.map((item) => {

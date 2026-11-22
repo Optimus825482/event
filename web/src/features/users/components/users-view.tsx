@@ -16,10 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { ROLES } from "@/features/auth/roles";
-import { deleteUserAction, setUserActiveAction } from "../actions";
+import { setUserActiveAction } from "../actions";
 import { countUsers, filterUsers, isDeletedAccount, type RoleFilter, type StatusFilter } from "../filter";
 import type { UserSummary } from "../types";
 import { CreateUserForm } from "./create-user-form";
+import { DeleteUserDialog } from "./delete-user-dialog";
 import { EditUserForm } from "./edit-user-form";
 import { SELECT_CLASS } from "./field";
 import { ResetPasswordForm } from "./reset-password-form";
@@ -58,24 +59,6 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
       setDialog(null);
       if (result.ok) {
         const message = active ? "Kullanıcı etkinleştirildi" : "Kullanıcı pasifleştirildi";
-        toast.success(message);
-        setAnnouncement(message);
-        router.refresh();
-      } else {
-        toast.error(result.message);
-      }
-    });
-  }
-
-  function remove(user: UserSummary) {
-    startTransition(async () => {
-      const result = await deleteUserAction({ id: user.id });
-      setDialog(null);
-      if (result.ok) {
-        const message =
-          result.data.mode === "deleted"
-            ? "Kullanıcı silindi"
-            : "Kullanıcı geçmiş kayıtlarda anıldığı için anonimleştirildi ve kapatıldı";
         toast.success(message);
         setAnnouncement(message);
         router.refresh();
@@ -278,19 +261,13 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
         onConfirm={() => dialog?.kind === "toggle" && setActive(dialog.user, false)}
       />
 
-      <ConfirmDialog
-        open={dialog?.kind === "delete"}
-        onOpenChange={(open) => !open && setDialog(null)}
-        title="Kullanıcı silinsin mi?"
-        description={
-          dialog?.kind === "delete"
-            ? `${dialog.user.username} hesabı silinecek ve tüm oturumları kapatılacak. Etkinlik sahibi ya da değerlendiren olarak anılıyorsa kayıt bozulmasın diye hesap anonimleştirilip kalıcı olarak kapatılır. Bu işlem geri alınamaz.`
-            : ""
-        }
-        confirmText="Sil"
-        variant="destructive"
-        loading={pending}
-        onConfirm={() => dialog?.kind === "delete" && remove(dialog.user)}
+      <DeleteUserDialog
+        user={dialog?.kind === "delete" ? dialog.user : null}
+        onClose={() => setDialog(null)}
+        onDeleted={(message) => {
+          setAnnouncement(message);
+          router.refresh();
+        }}
       />
     </div>
   );

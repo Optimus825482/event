@@ -7,9 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db/client";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
+import { isDeletedAccount } from "@/features/users/filter";
 import { AccountPanel } from "@/features/users/components/account-panel";
 import { EditUserForm } from "@/features/users/components/edit-user-form";
 import { PermissionsForm } from "@/features/users/components/permissions-form";
+import { UserDeleteButton } from "@/features/users/components/user-delete-button";
 import { getUserDetail } from "@/features/users/queries";
 
 export const metadata: Metadata = { title: "Kullanıcı | EventFlow" };
@@ -22,6 +24,8 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
   const user = await getUserDetail(db, actor, id);
   if (!user) notFound();
   const canEdit = can(actor, "users", "edit");
+  // Liste ile aynı kural: yalnızca yönetici ve izin, kendi hesabı ve silinmiş hesap değil.
+  const canDelete = actor.role === "admin" && can(actor, "users", "delete") && user.id !== actor.id && !isDeletedAccount(user);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -62,6 +66,16 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
             </CardContent>
           </Card>
         </>
+      ) : null}
+      {canDelete ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Hesabı sil</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <UserDeleteButton user={user} />
+          </CardContent>
+        </Card>
       ) : null}
     </div>
   );

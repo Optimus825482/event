@@ -71,7 +71,13 @@ export function Navbar({ username, avatarUrl = null, roleLabel, isAdmin, nav, un
                 accent={accent}
               />
             </div>
-            <MobileMenu username={username} roleLabel={roleLabel} modules={nav.modules} general={nav.general} />
+            <MobileMenu
+              username={username}
+              avatarUrl={avatarUrl}
+              roleLabel={roleLabel}
+              modules={nav.modules}
+              general={nav.general}
+            />
           </div>
         </div>
       </div>
