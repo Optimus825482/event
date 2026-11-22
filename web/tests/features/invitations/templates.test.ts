@@ -10,10 +10,12 @@ import {
   createTemplate,
   deleteTemplate,
   ensureDefaultTemplate,
+  getTemplate,
   listTemplates,
   setDefaultTemplate,
   updateTemplate,
 } from "@/features/invitations/templates";
+import { saveEventInvitation } from "@/features/invitations/event-invitation";
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
@@ -90,6 +92,63 @@ describe("şablonlar", () => {
       code: "conflict",
       message: expect.stringContaining("devre dışı"),
     });
+  });
+});
+
+describe("şablon sahipliği", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function setup() {
+    const a = await makeActor("organizer");
+    const b = await makeActor("organizer");
+    const admin = await makeActor("admin");
+    const mine = await createTemplate(db, a, { ...base, name: "A'nın", elements: [] });
+    await ensureDefaultTemplate(db);
+    const [system] = await db.select().from(invitationTemplates).where(eq(invitationTemplates.isSystemTemplate, true));
+    if (!system) throw new Error("sistem şablonu yok");
+    return { a, b, admin, mine, system };
+  }
+
+  it("başka organizatör güncelleyemez/silemez/göremez (not_found); yönetici ve sahibi yapabilir", async () => {
+    const { a, b, admin, mine } = await setup();
+    const input = { ...base, id: mine.id, name: "Ele geçirildi", elements: [] };
+    await expect(updateTemplate(db, b, input)).rejects.toMatchObject({ code: "not_found" });
+    await expect(deleteTemplate(db, b, { id: mine.id })).rejects.toMatchObject({ code: "not_found" });
+    await expect(getTemplate(db, b, mine.id)).rejects.toMatchObject({ code: "not_found" });
+    expect((await listTemplates(db, b)).map((t) => t.id)).not.toContain(mine.id);
+    expect((await listTemplates(db, a)).map((t) => t.id)).toContain(mine.id);
+    expect((await updateTemplate(db, a, { ...input, name: "Yeni" })).name).toBe("Yeni");
+    expect((await updateTemplate(db, admin, { ...input, name: "Yönetici" })).name).toBe("Yönetici");
+    await deleteTemplate(db, admin, { id: mine.id });
+  });
+
+  it("organizatör sistem şablonunu görür ama değiştiremez; yönetici değiştirebilir", async () => {
+    const { b, admin, system } = await setup();
+    expect((await listTemplates(db, b)).map((t) => t.id)).toContain(system.id);
+    await expect(updateTemplate(db, b, { ...base, id: system.id, name: "X", elements: [] })).rejects.toMatchObject({ code: "conflict" });
+    await expect(deleteTemplate(db, b, { id: system.id })).rejects.toMatchObject({ code: "conflict" });
+    expect((await updateTemplate(db, admin, { ...base, id: system.id, name: "Sistem 2", elements: [] })).name).toBe("Sistem 2");
+  });
+
+  it("varsayılanı yalnızca yönetici değiştirir", async () => {
+    const { a, admin, mine } = await setup();
+    await expect(setDefaultTemplate(db, a, { id: mine.id })).rejects.toMatchObject({ code: "conflict" });
+    const [def] = await db.select().from(invitationTemplates).where(eq(invitationTemplates.isDefault, true));
+    expect(def?.id).not.toBe(mine.id);
+    await setDefaultTemplate(db, admin, { id: mine.id });
+    const [now] = await db.select().from(invitationTemplates).where(eq(invitationTemplates.isDefault, true));
+    expect(now?.id).toBe(mine.id);
+  });
+
+  it("etkinliğe yalnızca görebildiği şablon bağlanır", async () => {
+    const { a, b, system } = await setup();
+    const foreign = await createTemplate(db, b, { ...base, name: "B'nin", elements: [] });
+    const event = await f.createEvent(db, { organizerId: a.id });
+    const payload = { eventId: event.id, ...base, backgroundColor: "#FFFFFF", customElements: null, companyLogo: null };
+    await expect(saveEventInvitation(db, a, { ...payload, templateId: foreign.id })).rejects.toMatchObject({ code: "not_found" });
+    await expect(saveEventInvitation(db, a, { ...payload, templateId: system.id })).resolves.toHaveProperty("id");
   });
 });
 

@@ -16,16 +16,17 @@ export type TemplateListItem = {
   size: string;
   isDefault: boolean;
   isSystemTemplate: boolean;
+  canManage: boolean;
 };
 
-type Props = { templates: TemplateListItem[]; canCreate: boolean; canEdit: boolean; canDelete: boolean };
+type Props = { templates: TemplateListItem[]; canCreate: boolean; canEdit: boolean; canDelete: boolean; isAdmin: boolean };
 type Outcome = { ok: true } | { ok: false; message: string };
 
 function isSizeKey(value: string): value is InvitationSizeKey {
   return (SIZE_KEYS as readonly string[]).includes(value);
 }
 
-export function TemplateList({ templates, canCreate, canEdit, canDelete }: Props) {
+export function TemplateList({ templates, canCreate, canEdit, canDelete, isAdmin }: Props) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [size, setSize] = useState<InvitationSizeKey>("A5");
@@ -113,12 +114,12 @@ export function TemplateList({ templates, canCreate, canEdit, canDelete }: Props
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {canEdit ? (
+              {canEdit && t.canManage ? (
                 <Button asChild size="sm" variant="outline">
                   <Link href={`/templates/${t.id}`}>Düzenle</Link>
                 </Button>
               ) : null}
-              {canEdit && !t.isDefault ? (
+              {canEdit && isAdmin && !t.isDefault ? (
                 <Button
                   type="button"
                   size="sm"
@@ -129,7 +130,7 @@ export function TemplateList({ templates, canCreate, canEdit, canDelete }: Props
                   Varsayılan yap
                 </Button>
               ) : null}
-              {canDelete && !t.isSystemTemplate ? (
+              {canDelete && t.canManage && !t.isSystemTemplate ? (
                 <Button
                   type="button"
                   size="sm"

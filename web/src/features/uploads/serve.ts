@@ -30,7 +30,7 @@ export async function serveUpload(root: string, segments: readonly string[]): Pr
   const file = resolveUploadPath(root, segments);
   if (!file) return notFound();
   try {
-    const data = await readFile(file);
+    const data = await readFile(/* turbopackIgnore: true */ file);
     return new Response(new Uint8Array(data), {
       status: 200,
       headers: {

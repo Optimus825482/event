@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, organizationTemplates, servicePoints, staff, workShifts } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
@@ -14,6 +14,18 @@ import { applyTeams } from "./teams-service";
 import { templateSnapshotSchema, type TableRef, type TemplateSnapshot } from "./template-snapshot";
 
 const NOT_FOUND = "Şablon bulunamadı";
+
+type OwnedTemplate = Pick<typeof organizationTemplates.$inferSelect, "createdById" | "isDefault">;
+
+/** Yönetici hepsini; diğerleri kendi şablonlarını ve varsayılan işaretli olanları görür. */
+export function canSeeOrganizationTemplate(actor: Actor, template: OwnedTemplate): boolean {
+  return actor.role === "admin" || template.isDefault || template.createdById === actor.id;
+}
+
+/** Yalnızca yönetici ve sahibi siler (sahipsiz şablonu yalnızca yönetici). */
+export function canManageOrganizationTemplate(actor: Actor, template: Pick<OwnedTemplate, "createdById">): boolean {
+  return actor.role === "admin" || template.createdById === actor.id;
+}
 
 export type TemplateApplyReport = {
   teams: number;
@@ -97,22 +109,36 @@ export async function createOrganizationTemplate(
 
 export async function listOrganizationTemplates(db: Db | Tx, actor: Actor) {
   ensureStaffingAccess(actor, "view");
-  return db
+  const visible: SQL | undefined =
+    actor.role === "admin"
+      ? undefined
+      : or(eq(organizationTemplates.isDefault, true), eq(organizationTemplates.createdById, actor.id));
+  const rows = await db
     .select({
       id: organizationTemplates.id,
       name: organizationTemplates.name,
       description: organizationTemplates.description,
       isDefault: organizationTemplates.isDefault,
+      createdById: organizationTemplates.createdById,
       createdAt: organizationTemplates.createdAt,
     })
     .from(organizationTemplates)
-    .where(eq(organizationTemplates.isActive, true))
+    .where(and(eq(organizationTemplates.isActive, true), visible))
     .orderBy(desc(organizationTemplates.isDefault), desc(organizationTemplates.createdAt));
+  return rows.map(({ createdById, ...row }) => ({ ...row, canManage: canManageOrganizationTemplate(actor, { createdById }) }));
 }
 
 /** Eski davranış gibi yumuşak silme (`is_active = false`). */
 export async function deleteOrganizationTemplate(db: Db | Tx, actor: Actor, input: DeleteTemplateInput): Promise<{ id: string }> {
   ensureStaffingAccess(actor, "delete");
+  const [template] = await db
+    .select()
+    .from(organizationTemplates)
+    .where(and(eq(organizationTemplates.id, input.id), eq(organizationTemplates.isActive, true)));
+  if (!template || !canSeeOrganizationTemplate(actor, template)) throw new DomainError("not_found", NOT_FOUND);
+  if (!canManageOrganizationTemplate(actor, template)) {
+    throw new DomainError("conflict", "Yalnızca kendi şablonlarınızı silebilirsiniz");
+  }
   const [row] = await db
     .update(organizationTemplates)
     .set({ isActive: false, updatedAt: new Date() })
@@ -122,12 +148,12 @@ export async function deleteOrganizationTemplate(db: Db | Tx, actor: Actor, inpu
   return row;
 }
 
-async function loadSnapshot(tx: Tx, templateId: string): Promise<TemplateSnapshot> {
+async function loadSnapshot(tx: Tx, actor: Actor, templateId: string): Promise<TemplateSnapshot> {
   const [template] = await tx
     .select()
     .from(organizationTemplates)
     .where(and(eq(organizationTemplates.id, templateId), eq(organizationTemplates.isActive, true)));
-  if (!template) throw new DomainError("not_found", NOT_FOUND);
+  if (!template || !canSeeOrganizationTemplate(actor, template)) throw new DomainError("not_found", NOT_FOUND);
   const parsed = templateSnapshotSchema.safeParse({
     teams: template.teamAssignments,
     groups: template.tableGroups,
@@ -148,7 +174,7 @@ export async function applyOrganizationTemplate(
   input: ApplyTemplateInput,
 ): Promise<TemplateApplyReport> {
   return withEventWrite(db, actor, input.eventId, async (tx) => {
-    const snapshot = await loadSnapshot(tx, input.templateId);
+    const snapshot = await loadSnapshot(tx, actor, input.templateId);
     const eventId = input.eventId;
 
     const tables = await tx

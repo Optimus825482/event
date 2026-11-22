@@ -9,7 +9,7 @@ import { applyTemplateAction, createTemplateAction, deleteTemplateAction } from 
 import { EmptyState, Section } from "./bits";
 import { useOrganization } from "./store";
 
-export type TemplateItem = { id: string; name: string; description: string | null; isDefault: boolean };
+export type TemplateItem = { id: string; name: string; description: string | null; isDefault: boolean; canManage: boolean };
 
 type Props = {
   eventId: string;
@@ -97,7 +97,7 @@ export function TemplatePanel({ eventId, templates, canApply, canCreate, canDele
                     Uygula
                   </Button>
                 ) : null}
-                {canDelete ? (
+                {canDelete && t.canManage ? (
                   <Button size="sm" variant="ghost" disabled={pending} onClick={() => setConfirming({ kind: "delete", id: t.id })}>
                     Sil
                   </Button>

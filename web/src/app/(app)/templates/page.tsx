@@ -3,6 +3,7 @@ import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { TemplateList } from "@/features/invitations/components/template-list";
 import { loadTemplates } from "@/features/invitations/queries";
+import { canManageTemplate } from "@/features/invitations/templates";
 
 export const metadata: Metadata = { title: "Davetiye şablonları | EventFlow" };
 
@@ -22,7 +23,9 @@ export default async function TemplatesPage() {
           size: t.size,
           isDefault: t.isDefault,
           isSystemTemplate: t.isSystemTemplate,
+          canManage: canManageTemplate(actor, t),
         }))}
+        isAdmin={actor.role === "admin"}
         canCreate={can(actor, "invitations", "create")}
         canEdit={can(actor, "invitations", "edit")}
         canDelete={can(actor, "invitations", "delete")}

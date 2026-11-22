@@ -6,13 +6,14 @@ import { designFrom } from "@/features/invitations/components/editor/editor-stat
 import { TemplateEditor } from "@/features/invitations/components/template-editor";
 import { INVITATION_SIZES, parseStoredElements } from "@/features/invitations/elements";
 import { loadTemplate } from "@/features/invitations/queries";
+import { canManageTemplate } from "@/features/invitations/templates";
 
 export const metadata: Metadata = { title: "Şablon düzenle | EventFlow" };
 
 export default async function TemplateEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [actor, template] = await Promise.all([requirePolicyActor(), loadTemplate(id)]);
-  const canEdit = can(actor, "invitations", "edit");
+  const canEdit = can(actor, "invitations", "edit") && canManageTemplate(actor, template);
   const design = designFrom({
     width: template.width,
     height: template.height,

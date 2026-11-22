@@ -20,7 +20,7 @@ export async function loadTeamOrganization(id: string) {
     ]);
     return {
       organization,
-      templates: templates.map((t) => ({ id: t.id, name: t.name, description: t.description, isDefault: t.isDefault })),
+      templates: templates.map((t) => ({ id: t.id, name: t.name, description: t.description, isDefault: t.isDefault, canManage: t.canManage })),
       permissions: {
         edit: can(actor, "events", "edit") && organization.editable,
         createTemplate: can(actor, "events", "create"),

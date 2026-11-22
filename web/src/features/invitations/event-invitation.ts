@@ -9,6 +9,7 @@ import { assertInvitationSystemEnabled, getAccessibleEvent } from "./access";
 import { smartFixElements, type InvitationElement } from "./elements";
 import { resolveEventLayout, type ResolvedLayout } from "./layout";
 import type { EventIdInput, RemoveImageInput, SaveEventInvitationInput } from "./schemas";
+import { canSeeTemplate } from "./templates";
 
 type Executor = Db | Tx;
 
@@ -40,10 +41,10 @@ export async function saveEventInvitation(db: Db, actor: Actor, input: SaveEvent
     const existing = await lockedInvitation(tx, actor, input.eventId);
     if (input.templateId) {
       const [template] = await tx
-        .select({ id: invitationTemplates.id })
+        .select()
         .from(invitationTemplates)
         .where(and(eq(invitationTemplates.id, input.templateId), eq(invitationTemplates.isActive, true)));
-      if (!template) throw new DomainError("not_found", "Şablon bulunamadı");
+      if (!template || !canSeeTemplate(actor, template)) throw new DomainError("not_found", "Şablon bulunamadı");
     }
     const values = {
       templateId: input.templateId,

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { invitationTemplates } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
@@ -12,6 +12,31 @@ type Executor = Db | Tx;
 export type TemplateRow = typeof invitationTemplates.$inferSelect;
 
 const NOT_FOUND = "Şablon bulunamadı";
+
+/** Yönetici hepsini; diğerleri kendi şablonlarını, sistem ve varsayılan şablonları görür. */
+export function canSeeTemplate(
+  actor: Actor,
+  template: Pick<TemplateRow, "createdById" | "isSystemTemplate" | "isDefault">,
+): boolean {
+  return actor.role === "admin" || template.isSystemTemplate || template.isDefault || template.createdById === actor.id;
+}
+
+/** Yalnızca yönetici ve sahibi değiştirebilir/silebilir; sistem şablonları yalnızca yöneticiye aittir. */
+export function canManageTemplate(actor: Actor, template: Pick<TemplateRow, "createdById" | "isSystemTemplate">): boolean {
+  if (actor.role === "admin") return true;
+  return !template.isSystemTemplate && template.createdById === actor.id;
+}
+
+function assertVisible(actor: Actor, template: TemplateRow): void {
+  if (!canSeeTemplate(actor, template)) throw new DomainError("not_found", NOT_FOUND);
+}
+
+function assertManageable(actor: Actor, template: TemplateRow): void {
+  assertVisible(actor, template);
+  if (!canManageTemplate(actor, template)) {
+    throw new DomainError("conflict", "Yalnızca kendi şablonlarınızı değiştirebilirsiniz");
+  }
+}
 
 async function findActive(db: Executor, id: string): Promise<TemplateRow> {
   const [row] = await db
@@ -55,13 +80,26 @@ export async function listTemplates(db: Db, actor: Actor): Promise<TemplateRow[]
   return db
     .select()
     .from(invitationTemplates)
-    .where(eq(invitationTemplates.isActive, true))
+    .where(
+      and(
+        eq(invitationTemplates.isActive, true),
+        actor.role === "admin"
+          ? undefined
+          : or(
+              eq(invitationTemplates.isSystemTemplate, true),
+              eq(invitationTemplates.isDefault, true),
+              eq(invitationTemplates.createdById, actor.id),
+            ),
+      ),
+    )
     .orderBy(desc(invitationTemplates.isDefault), desc(invitationTemplates.createdAt), asc(invitationTemplates.id));
 }
 
 export async function getTemplate(db: Executor, actor: Actor, id: string): Promise<TemplateRow> {
   authorize(actor, "invitations", "view");
-  return findActive(db, id);
+  const row = await findActive(db, id);
+  assertVisible(actor, row);
+  return row;
 }
 
 export async function createTemplate(db: Executor, actor: Actor, input: CreateTemplateInput): Promise<TemplateRow> {
@@ -92,7 +130,7 @@ export async function createTemplate(db: Executor, actor: Actor, input: CreateTe
 export async function updateTemplate(db: Executor, actor: Actor, input: UpdateTemplateInput): Promise<TemplateRow> {
   authorize(actor, "invitations", "edit");
   await assertInvitationSystemEnabled(db);
-  await findActive(db, input.id);
+  assertManageable(actor, await findActive(db, input.id));
   const [row] = await db
     .update(invitationTemplates)
     .set({
@@ -124,6 +162,7 @@ export async function deleteTemplate(db: Db, actor: Actor, input: TemplateIdInpu
       .where(and(eq(invitationTemplates.id, input.id), eq(invitationTemplates.isActive, true)))
       .for("update");
     if (!locked) throw new DomainError("not_found", NOT_FOUND);
+    assertManageable(actor, locked);
     if (locked.isSystemTemplate) throw new DomainError("conflict", "Sistem şablonları silinemez");
     await tx
       .update(invitationTemplates)
@@ -141,6 +180,7 @@ export async function deleteTemplate(db: Db, actor: Actor, input: TemplateIdInpu
 
 export async function setDefaultTemplate(db: Db, actor: Actor, input: TemplateIdInput): Promise<{ id: string }> {
   authorize(actor, "invitations", "edit");
+  if (actor.role !== "admin") throw new DomainError("conflict", "Varsayılan şablonu yalnızca yönetici değiştirebilir");
   await assertInvitationSystemEnabled(db);
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('invitation_default_template'))`);

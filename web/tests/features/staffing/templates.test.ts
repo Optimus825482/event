@@ -39,6 +39,38 @@ async function sourceTemplate() {
   return { src, template, p1: p1!, p2: p2!, p3: p3! };
 }
 
+describe("organizasyon şablonu sahipliği", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("başka organizatör listeleyemez, uygulayamaz (not_found) ve silemez; yönetici ve sahibi yapabilir", async () => {
+    const { src, template } = await sourceTemplate();
+    const other = await setupEvent({ tableCount: 1, staffCount: 0 });
+    const admin = await makeActor("admin");
+
+    expect(await listOrganizationTemplates(db, other.actor)).toEqual([]);
+    await expectDomain(applyOrganizationTemplate(db, other.actor, { eventId: other.event.id, templateId: template.id }), "not_found");
+    await expectDomain(deleteOrganizationTemplate(db, other.actor, { id: template.id }), "not_found");
+    expect(await listOrganizationTemplates(db, src.actor)).toHaveLength(1);
+
+    expect((await listOrganizationTemplates(db, admin)).map((t) => t.id)).toEqual([template.id]);
+    const target = await f.createEvent(db, { organizerId: admin.id });
+    await applyOrganizationTemplate(db, admin, { eventId: target.id, templateId: template.id });
+    await deleteOrganizationTemplate(db, admin, { id: template.id });
+    expect(await listOrganizationTemplates(db, src.actor)).toHaveLength(0);
+  });
+
+  it("görünür ama sahibi olunmayan (varsayılan) şablon silinemez", async () => {
+    const { template } = await sourceTemplate();
+    await db.update(organizationTemplates).set({ isDefault: true }).where(eq(organizationTemplates.id, template.id));
+    const other = await makeActor("organizer");
+    const [listed] = await listOrganizationTemplates(db, other);
+    expect(listed).toMatchObject({ id: template.id, canManage: false });
+    await expectDomain(deleteOrganizationTemplate(db, other, { id: template.id }), "conflict");
+  });
+});
+
 describe("organizasyon şablonları (spec §13.11)", () => {
   beforeEach(async () => {
     await truncateAll();
@@ -121,7 +153,7 @@ describe("organizasyon şablonları (spec §13.11)", () => {
     };
     const [broken] = await db
       .insert(organizationTemplates)
-      .values({ name: "Bozuk", staffAssignments: [assignment, assignment] })
+      .values({ name: "Bozuk", createdById: target.actor.id, staffAssignments: [assignment, assignment] })
       .returning();
 
     await expectDomain(
@@ -135,7 +167,7 @@ describe("organizasyon şablonları (spec §13.11)", () => {
     const { actor, event } = await setupEvent();
     const [bad] = await db
       .insert(organizationTemplates)
-      .values({ name: "Eski", staffAssignments: [{ staffName: "Ali", tableIds: "x" }] })
+      .values({ name: "Eski", createdById: actor.id, staffAssignments: [{ staffName: "Ali", tableIds: "x" }] })
       .returning();
     await expectDomain(applyOrganizationTemplate(db, actor, { eventId: event.id, templateId: bad!.id }), "conflict");
   });
