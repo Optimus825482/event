@@ -37,12 +37,17 @@ services:
       dockerfile: Dockerfile
     image: eventflow-web:local
     restart: "no"
-    command: ["node", "/opt/migrator/migrate.mjs"]
+    # Şemayı kurar; ADMIN_PASSWORD verilmişse ilk yöneticiyi de oluşturur (kullanıcı adı ADMIN_USERNAME, varsayılan
+    # `admin`). Etkin bir yönetici zaten varsa dokunmaz (çıkış kodu 2 başarı sayılır). Parola en az 12 karakter
+    # değilse bu adım hata verir ve web başlamaz; nedeni bu kapsayıcının günlüğünde yazar.
+    command: ["node", "-e", "const { spawnSync } = require('node:child_process'); const run = (args) => spawnSync('node', args, { stdio: 'inherit' }).status; let code = run(['/opt/migrator/migrate.mjs']); if (code !== 0) process.exit(code || 1); if (process.env.ADMIN_PASSWORD) { code = run(['/opt/migrator/create-admin.mjs', process.env.ADMIN_USERNAME || 'admin']); if (code !== 0 && code !== 2) process.exit(code || 1); }"]
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: *db-url
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     networks:
       - eventflow-network
 
