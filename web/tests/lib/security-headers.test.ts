@@ -12,7 +12,8 @@ describe("securityHeaders", () => {
     expect(map.get("X-Content-Type-Options")).toBe("nosniff");
     expect(map.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(map.get("X-Frame-Options")).toBe("DENY");
-    expect(map.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+    // CSP istek başına nonce ile proxy'de üretilir; statik başlıklarda yinelenmez.
+    expect(map.has("Content-Security-Policy")).toBe(false);
     const permissions = map.get("Permissions-Policy") ?? "";
     expect(permissions).toContain("camera=(self)");
     expect(permissions).toContain("microphone=()");

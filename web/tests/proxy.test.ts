@@ -81,6 +81,34 @@ describe("proxy", () => {
     });
   });
 
+  describe("CSP ve nonce", () => {
+    function nonceOf(csp: string | null): string {
+      return /'nonce-([^']+)'/.exec(csp ?? "")?.[1] ?? "";
+    }
+
+    it.each([
+      ["/login", undefined],
+      ["/i/abc123", undefined],
+      ["/events", "better-auth.session_token=abc"],
+    ])("%s yanıtı nonce'lu CSP taşır ve nonce istek başlığıyla aynıdır", (path, cookie) => {
+      const res = proxy(request(path, cookie));
+      const csp = res.headers.get("content-security-policy");
+      expect(csp).toContain("frame-ancestors 'none'");
+      expect(csp).toContain("'strict-dynamic'");
+      const nonce = nonceOf(csp);
+      expect(nonce.length).toBeGreaterThanOrEqual(22);
+      // Next, nonce'u İSTEK başlıklarından okur: proxy bunları geçirmelidir.
+      expect(res.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
+      expect(res.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+    });
+
+    it("her istekte farklı nonce üretir", () => {
+      const a = nonceOf(proxy(request("/login")).headers.get("content-security-policy"));
+      const b = nonceOf(proxy(request("/login")).headers.get("content-security-policy"));
+      expect(a).not.toBe(b);
+    });
+  });
+
   describe("PWA dosyaları", () => {
     // Next, matcher dizgesini yol için tam eşleşen bir düzenli ifade olarak değerlendirir.
     const matcher = new RegExp("^" + config.matcher[0] + "$");

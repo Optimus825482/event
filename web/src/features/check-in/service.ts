@@ -5,7 +5,7 @@ import { checkInEvents } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { withPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
-import { pgCodeOf, pgConstraintOf } from "@/features/customers/pg-error";
+import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import { lockEvent, MSG, type Executor } from "@/features/reservations/internal";
 import { DomainError } from "@/lib/action";
 import {

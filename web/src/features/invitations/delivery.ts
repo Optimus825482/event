@@ -6,6 +6,7 @@ import { customers, eventTables, events, reservations, systemSettings } from "@/
 import { env } from "@/env";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
+import { canAccessEvent } from "@/features/events/access";
 import { normalizeEmail, normalizePhone } from "@/features/customers/normalize";
 import { getSmtpConfig, type SmtpConfig } from "@/features/settings/smtp";
 import { DomainError } from "@/lib/action";
@@ -77,7 +78,7 @@ async function loadTarget(db: Db, actor: Actor, reservationId: string): Promise<
     .innerJoin(eventTables, eq(eventTables.id, reservations.tableId))
     .where(eq(reservations.id, reservationId));
   // Organizatör yalnızca kendi etkinliğinin rezervasyonunu görür; diğerleri "yok" gibi davranır.
-  if (!row || (actor.role === "organizer" && row.organizerId !== actor.id)) {
+  if (!row || !canAccessEvent(actor, row)) {
     throw new DomainError("not_found", "Rezervasyon bulunamadı");
   }
   if (row.status === "cancelled" || row.status === "no_show") {

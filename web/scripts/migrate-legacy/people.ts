@@ -10,7 +10,7 @@ import { asUuid, byCreatedThenId, type Row, stableId } from "./values";
  * Kullanıcılar (+ Better Auth `accounts` kimlik bilgisi satırı), personel ve izinler.
  *
  * Parola: eski bcrypt özeti `accounts.password` alanına olduğu gibi yazılır; satır biçimi
- * `scripts/create-admin.ts` ile aynıdır (`providerId = "credential"`, `accountId = userId`).
+ * `scripts/create-admin-dev.ts` ile aynıdır (`providerId = "credential"`, `accountId = userId`).
  * Uygulama `bcrypt.compare` ile doğruladığı için eski parolalar çalışmaya devam eder.
  *
  * Kullanıcı ↔ personel: eski şemada bağlantı sütunu yoktur. Eşleme sırası normalize e-posta,
@@ -18,7 +18,7 @@ import { asUuid, byCreatedThenId, type Row, stableId } from "./values";
  * (değerlendirme, eski atama, ekip üyeliği…) ama eşleşmeyen kullanıcılar için personel kaydı oluşturulur.
  */
 
-/** create-admin.ts ile aynı yer tutucu e-posta alanı (o modül auth/db yüklediği için içe aktarılmaz). */
+/** create-admin-dev.ts ile aynı yer tutucu e-posta alanı (o modül auth/db yüklediği için içe aktarılmaz). */
 export const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
 const BCRYPT_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 const PERMISSION_MODULES = new Set<string>(schema.permissionModule.enumValues);

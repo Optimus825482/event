@@ -1,10 +1,10 @@
 import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import { env } from "@/env";
+import { isUuid } from "@/lib/identifiers";
 
 // Şemada davetiye bağlantısı için ayrı bir belirteç sütunu yok (`reservations.qr_token` giriş QR'ının
 // kimlik bilgisidir ve URL'ye konmaz). Bağlantı, sunucu anahtarıyla imzalanan durumsuz bir belirteçtir.
 const LABEL = "invitation-link-v1";
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAC_BYTES = 32;
 
 function deriveKey(secret: string): Buffer {
@@ -31,7 +31,7 @@ export function parseInvitationToken(token: string): ParsedInvitationToken | nul
   if (!idPart || !macPart) return null;
   const reservationId = Buffer.from(idPart, "base64url").toString("utf8");
   const mac = Buffer.from(macPart, "base64url");
-  if (!UUID.test(reservationId) || mac.length !== MAC_BYTES) return null;
+  if (!isUuid(reservationId) || mac.length !== MAC_BYTES) return null;
   return { reservationId, mac };
 }
 

@@ -69,7 +69,7 @@ printf %s "$PAROLA" | node --env-file=.env.local scripts/create-admin.mjs --pass
 - Rol `admin`, hesap etkin ve e-posta doğrulanmış olarak oluşur; diğer kullanıcıları yönetici arayüzünden
   (`/admin/users`) ekleyin.
 - Docker'da: `docker compose run --rm create-admin ...` (bkz. [`DEPLOYMENT.md`](DEPLOYMENT.md) "İlk yönetici").
-  `scripts/create-admin.ts` testlerin kullandığı geliştirme yardımcısıdır (aynı kurallar, Better Auth bağlamı üzerinden).
+  `scripts/create-admin-dev.ts` testlerin kullandığı geliştirme yardımcısıdır (aynı kurallar, Better Auth bağlamı üzerinden).
 
 ## Komutlar (`web/` içinde)
 
@@ -102,7 +102,7 @@ web/src/
   env.ts          Ortam değişkeni doğrulaması (Zod)
 web/drizzle/      SQL migration'ları (git'te tutulur; yazar kuralları için `web/drizzle/README.md`)
 web/scripts/      create-admin.mjs (ilk yönetici; üretim imajında da var), migrate.mjs (üretim migrator'ı), pg (yerel küme),
-                  migrate-legacy/, create-admin.ts (test yardımcısı)
+                  migrate-legacy/, create-admin-dev.ts (test yardımcısı)
 ```
 
 - **`defineAction`** (`src/lib/action.ts`): her sunucu eylemi `module` + `verb` + Zod `input` + `handler` ile tanımlanır.
@@ -143,11 +143,18 @@ tutulur. Canlıya almadan önce gerçek kullanımla karşılaştırın.
 - Herkese açık davet uçları (`/i/[token]`, görsel) IP başına dakikada 120 istekle sınırlıdır; sayaç PostgreSQL'dedir
   (`public_rate_limits`), kopyalar arasında paylaşılır. Veritabanı hatasında fail-open'dır (hata günlüğe yazılır).
   `TRUSTED_IP_HEADER` tanımsızsa tüm istemciler tek kovaya düşer (üretimde zorunludur).
-- Güvenlik başlıkları (nosniff, X-Frame-Options, `frame-ancestors 'none'`, HSTS, Referrer/Permissions-Policy) vardır;
-  betik/stil kısıtlayan tam bir CSP (nonce) yoktur.
-- Çevrimdışı check-in kuyruğu kullanıcıya aittir ve çıkışta servis çalışanı önbelleği temizlenir. Yürüyerek gelen
-  misafir kaydının çevrimdışı kuyruğa alınması ile IndexedDB/servis çalışanının gerçek tarayıcıda denenmesi ayrı bir
-  düzeltme dalgasında ele alınıyor (`fixwave-F-report.md`); tamamlanana kadar bunlara güvenmeyin.
+- Güvenlik başlıkları (nosniff, X-Frame-Options, HSTS, Referrer/Permissions-Policy) ve istek başına nonce'lu tam bir
+  İçerik Güvenlik Politikası (CSP) vardır (`web/src/proxy.ts`, `web/src/lib/csp.ts`): `script-src 'self' 'nonce-…'
+  'strict-dynamic'`, `object-src 'none'`, `frame-ancestors 'none'`, `connect-src 'self'` vb.; üretimde `unsafe-eval` yok.
+  Bilinen gevşetmeler: React `style=` öznitelikleri için `style-src-attr 'unsafe-inline'` (betik çalıştırmaz);
+  yalnızca geliştirmede `unsafe-eval` ve nonce'suz `style-src 'unsafe-inline'`. Nonce nedeniyle sayfalar istek başına
+  dinamik üretilir (statik önbellek yok). e2e koşuları tarayıcı konsolunda CSP ihlali çıkarsa başarısız olur.
+- Çevrimdışı check-in kuyruğu (yürüyerek gelen misafir kaydı dahil) kullanıcıya aittir; çıkışta servis çalışanı kabuğu
+  silinir. Çevrimdışıyken çıkış yapılırsa sunucu oturumu kapanamaz: cihaz "çıkış bekliyor" diye kilitlenir ve bağlantı
+  gelince çıkış otomatik tamamlanır. Çevrimdışı akış (servis çalışanı, IndexedDB kuyruğu, kamera/QR, kaybolan yanıtta
+  idempotent yeniden deneme) başsız Chromium'da, üretim derlemesine karşı gerçek tarayıcıyla denendi
+  (`web/e2e/offline-*.spec.ts`). **Doğrulanmadı**: fiziksel cihaz kamerası, yerel `BarcodeDetector`, iki sekmeli Web
+  Locks davranışı, PWA kurulumu. Çevrimdışı walk-in için sayfa önce bir kez çevrimiçi yüklenmiş olmalıdır.
 - `npm audit`: 6 "moderate" bulgu açıktır; uyumlu bir sürüm yok (`drizzle-kit` → eski `esbuild`: yalnızca geliştirme aracı,
   imajda yoktur; `exceljs` → `uuid`: zayıf kod yolu (v3/v5/v6 + `buf`) `exceljs` tarafından çağrılmaz). Gerekçe `fixwave-H-report.md`'de.
 - Eski veri taşıma politikası kararları (olay sahibi olmayan etkinlikler, müşterisiz rezervasyonlar, benzersizlik
@@ -167,5 +174,5 @@ Aşağıdakiler yazıldı ya da okunarak gözden geçirildi, **ama gerçekten ç
   Coolify/Traefik davranışı (ve Coolify'ın `profiles` desteği).
 - **GitHub Actions'ta CI** (`web-ci.yml` ve `build-and-push.yml` içindeki `workflow_call`) bir kez bile çalışmadı.
 - **Gerçek veri taşıma**: ETL betiği yalnızca sentetik veriyle test edildi; gerçek eski veritabanıyla hiç çalıştırılmadı.
-- **Cihaz kamerası**: QR okuyucu gerçek bir telefon/tablet kamerasıyla denenmedi.
+- **Cihaz kamerası**: QR okuyucu yalnızca sahte video akışıyla (headless Chromium, html5-qrcode yedek yolu) denendi; gerçek telefon/tablet kamerasıyla ve yerel `BarcodeDetector` ile denenmedi.
 - Arayüz, geliştirme sırasında tarayıcıda yalnızca kısmen elle denendi; canlıya almadan önce elle duman testi yapın.

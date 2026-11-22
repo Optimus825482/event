@@ -2,7 +2,7 @@
  * Yönetici kullanıcı oluşturur.
  *
  * Kullanım:
- *   ADMIN_PASSWORD=... npx tsx --env-file=.env.local scripts/create-admin.ts <username> [email]
+ *   ADMIN_PASSWORD=... npx tsx --env-file=.env.local scripts/create-admin-dev.ts <username> [email]
  *
  * Parola yalnızca ADMIN_PASSWORD ortam değişkeninden okunur (komut satırı
  * geçmişine ve süreç listesine düşmesin diye argüman olarak alınmaz).
@@ -71,7 +71,7 @@ async function main(): Promise<void> {
   const [username, email] = process.argv.slice(2);
   const password = process.env.ADMIN_PASSWORD;
   if (!username) {
-    console.error("Kullanım: tsx scripts/create-admin.ts <username> [email]");
+    console.error("Kullanım: tsx scripts/create-admin-dev.ts <username> [email]");
     process.exit(1);
   }
   if (!password) {

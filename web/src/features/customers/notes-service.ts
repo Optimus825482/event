@@ -4,7 +4,7 @@ import type { Db, Tx } from "@/db/client";
 import { customers, customerTags, events, guestNotes, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
-import { pgCodeOf } from "./pg-error";
+import { pgCodeOf } from "@/lib/pg-error";
 import type { AddNoteInput } from "./schemas";
 
 type Executor = Db | Tx;

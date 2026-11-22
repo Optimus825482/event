@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import { accounts, users } from "@/db/schema";
 import { createAuth } from "@/features/auth/auth";
 import { getActorFromHeaders } from "@/features/auth/session";
-import { createAdmin } from "../../../scripts/create-admin";
+import { createAdmin } from "../../../scripts/create-admin-dev";
 import { truncateAll } from "../../helpers/db";
 import {
   call,

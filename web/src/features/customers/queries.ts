@@ -3,10 +3,9 @@ import type { Db, Tx } from "@/db/client";
 import { customers, customerTags, events, guestNotes, reservations, users } from "@/db/schema";
 import { authorize, type PolicyActor } from "@/features/auth/policy";
 import { searchCustomersInput, type SearchCustomersInput } from "./schemas";
+import { escapeLike } from "@/lib/identifiers";
 
 type Executor = Db | Tx;
-
-const escapeLike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 function searchCondition(q: string): SQL | undefined {
   const pattern = `%${escapeLike(q)}%`;

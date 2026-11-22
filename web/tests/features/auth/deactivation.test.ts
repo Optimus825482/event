@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { sessions, users } from "@/db/schema";
 import { deactivateUser, reactivateUser } from "@/features/auth/admin";
 import { getActorFromHeaders } from "@/features/auth/session";
-import { createAdmin } from "../../../scripts/create-admin";
+import { createAdmin } from "../../../scripts/create-admin-dev";
 import { truncateAll } from "../../helpers/db";
 import { call, PASSWORD, signedInCookie, signIn, WRONG_PASSWORD } from "./helpers";
 

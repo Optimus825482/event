@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { SIGN_OUT_PENDING_EVENT, requestServerSignOut, runSignOut } from "@/features/auth/sign-out";
 import { purgeAuthenticatedShell } from "@/features/check-in/offline/purge-shell";
 
 export function UserMenu({ username, roleLabel }: { username: string; roleLabel: string }) {
@@ -12,17 +13,21 @@ export function UserMenu({ username, roleLabel }: { username: string; roleLabel:
   async function signOut() {
     setPending(true);
     try {
-      await fetch("/api/auth/sign-out", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: "{}",
+      // Sunucu çıkışı + (ortak cihaz) kabuk önbelleğini silme. Sunucuya ulaşılamazsa çıkış ertelenir:
+      // cihaz "çıkış bekliyor" diye işaretlenir ve `PendingSignOut` arayüzü kilitleyip yeniden dener.
+      const outcome = await runSignOut({
+        request: requestServerSignOut,
+        purge: purgeAuthenticatedShell,
+        store: window.localStorage,
       });
+      if (outcome === "complete") {
+        router.replace("/login");
+        router.refresh();
+      } else {
+        window.dispatchEvent(new Event(SIGN_OUT_PENDING_EVENT));
+      }
     } finally {
-      // Ortak cihaz: yönlendirmeden önce çevrimdışı kabuk önbelleği silinir (hata olursa çıkış sürer).
-      await purgeAuthenticatedShell();
-      router.replace("/login");
-      router.refresh();
+      setPending(false);
     }
   }
 

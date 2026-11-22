@@ -4,8 +4,7 @@ import { requirePolicyActor } from "@/features/auth/permissions";
 import { authorize, can } from "@/features/auth/policy";
 import { DomainError } from "@/lib/action";
 import { eventStats, getCheckInEvent, listCheckInEvents } from "./read-service";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from "@/lib/identifiers";
 
 /** `/check-in`: devam eden ve bugünkü etkinlikler önde. */
 export async function loadCheckInEvents() {
@@ -18,7 +17,7 @@ export async function loadCheckInEvents() {
 export async function loadCheckInConsole(eventId: string) {
   const actor = await requirePolicyActor();
   authorize(actor, "check_in", "view");
-  if (!UUID_RE.test(eventId)) notFound();
+  if (!isUuid(eventId)) notFound();
   try {
     const [event, stats] = await Promise.all([getCheckInEvent(db, actor, eventId), eventStats(db, actor, eventId)]);
     return { userId: actor.id, event, stats, canWrite: can(actor, "check_in", "create") };

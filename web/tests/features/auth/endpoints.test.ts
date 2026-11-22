@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
-import { createAdmin } from "../../../scripts/create-admin";
+import { createAdmin } from "../../../scripts/create-admin-dev";
 import { truncateAll } from "../../helpers/db";
 import { call, PASSWORD, signedInCookie } from "./helpers";
 

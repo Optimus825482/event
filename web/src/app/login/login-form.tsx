@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { GENERIC_LOGIN_ERROR, loginErrorMessage } from "@/features/auth/login-error";
+import { clearSignOutPending } from "@/features/auth/sign-out";
 import { safeNextPath } from "@/features/auth/next-path";
 import { useState, type FormEvent } from "react";
 
-const GENERIC_ERROR = "Kullanıcı adı veya parola hatalı";
 
 const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -31,13 +32,15 @@ export function LoginForm({ next }: { next: string | null }) {
         }),
       });
       if (!res.ok) {
-        setError(GENERIC_ERROR);
+        setError(loginErrorMessage(res.status, res.headers.get("retry-after") ?? res.headers.get("x-retry-after")));
         return;
       }
+      // Yeni oturum açıldı: eski, ertelenmiş çıkış isteği bu oturumu kapatmasın.
+      clearSignOutPending(window.localStorage);
       router.replace(safeNextPath(next));
       router.refresh();
     } catch {
-      setError(GENERIC_ERROR);
+      setError(GENERIC_LOGIN_ERROR);
     } finally {
       setPending(false);
     }

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+import { watchCspViolations } from "./csp";
 import { adminPassword, adminUsername, EMPTY_STATE, loginAs } from "./fixtures";
 import { addTablesAndSave, createEvent, fillReservation, publishEvent } from "./ui";
 
@@ -57,6 +58,7 @@ export async function openDevice(
   const context = await browser.newContext({ storageState: options.session ?? EMPTY_STATE });
   const page = await context.newPage();
   page.on("pageerror", (e) => options.errors.push(`${page.url()} :: ${e.message}`));
+  watchCspViolations(page, options.errors);
   return { context, page };
 }
 

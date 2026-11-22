@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { loginAttempts, rateLimits } from "@/db/schema";
 import { auth } from "@/features/auth/auth";
 import { ALL_IPS_KEY } from "@/features/auth/login-attempts";
-import { createAdmin } from "../../../scripts/create-admin";
+import { createAdmin } from "../../../scripts/create-admin-dev";
 import { truncateAll } from "../../helpers/db";
 import { nextIp, PASSWORD, signIn, WRONG_PASSWORD } from "./helpers";
 

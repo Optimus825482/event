@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { GET } from "@/app/api/uploads/[...path]/route";
 import { saveImage } from "@/features/uploads/images";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
-import { createAdmin } from "../../../scripts/create-admin";
+import { createAdmin } from "../../../scripts/create-admin-dev";
 import { truncateAll } from "../../helpers/db";
 import { PASSWORD, signedInCookie } from "../auth/helpers";
 

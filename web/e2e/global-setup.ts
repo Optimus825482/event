@@ -48,7 +48,7 @@ async function migrateAndTruncate(): Promise<void> {
 
 function seedAdmin(password: string, authSecret: string): void {
   const tsx = path.join(ROOT, "node_modules", "tsx", "dist", "cli.mjs");
-  const res = spawnSync(process.execPath, [tsx, "scripts/create-admin.ts", ADMIN_USERNAME], {
+  const res = spawnSync(process.execPath, [tsx, "scripts/create-admin-dev.ts", ADMIN_USERNAME], {
     cwd: ROOT,
     encoding: "utf8",
     env: {

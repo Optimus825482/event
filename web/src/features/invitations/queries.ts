@@ -5,8 +5,7 @@ import { authorize } from "@/features/auth/policy";
 import { DomainError } from "@/lib/action";
 import { getEventInvitationDetail, listRecipients } from "./event-invitation";
 import { getTemplate, listTemplates } from "./templates";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from "@/lib/identifiers";
 
 async function orNotFound<T>(run: () => Promise<T>): Promise<T> {
   try {
@@ -26,7 +25,7 @@ export async function loadTemplates() {
 export async function loadTemplate(id: string) {
   const actor = await requirePolicyActor();
   authorize(actor, "invitations", "view");
-  if (!UUID.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   return orNotFound(() => getTemplate(db, actor, id));
 }
 
@@ -34,7 +33,7 @@ export async function loadTemplate(id: string) {
 export async function loadEventInvitationPage(eventId: string) {
   const actor = await requirePolicyActor();
   authorize(actor, "invitations", "view");
-  if (!UUID.test(eventId)) notFound();
+  if (!isUuid(eventId)) notFound();
   return orNotFound(async () => {
     const [detail, templates, recipients] = await Promise.all([
       getEventInvitationDetail(db, actor, { eventId }),

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { isValidUsername } from "@/features/auth/username";
-import { createAdmin } from "../../../scripts/create-admin";
+import { createAdmin } from "../../../scripts/create-admin-dev";
 import { truncateAll } from "../../helpers/db";
 import { PASSWORD, signIn } from "./helpers";
 

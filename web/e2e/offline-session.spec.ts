@@ -1,4 +1,5 @@
 import { adminPassword, adminUsername, expect, test } from "./support/fixtures";
+import { invitationLink } from "./support/invitation";
 import { checkInKeys, qrTokenFor, reservationsByGuest } from "./support/db";
 import {
   cachedApiUrls,
@@ -118,4 +119,65 @@ test("çıkış, önbellekteki kimlik doğrulamalı kabuğu siler: çıkıştan 
     await context.close();
   }
   expect(errors, "yakalanmamış tarayıcı hataları").toEqual([]);
+});
+
+test("çevrimdışı çıkış: kabuk silinir, arayüz kilitlenir, bağlantı gelince sunucu çıkışı tamamlanır", async ({ browser }) => {
+  const errors: string[] = [];
+  const { context, page } = await openDevice(browser, { errors });
+  const consolePath = `/check-in/${fixture.eventId}`;
+  try {
+    await signIn(page, adminUsername, adminPassword());
+    await openConsoleAndWarm(page, fixture.eventId, EVENT_NAME);
+
+    await context.setOffline(true);
+    await page.getByRole("button", { name: "Çıkış yap" }).click();
+    const blocker = page.getByRole("alertdialog", { name: "Çıkış tamamlanamadı" });
+    await expect(blocker).toBeVisible();
+    await expect(blocker).toContainText("Bağlantı gelince çıkış otomatik olarak tamamlanacak");
+    // Altındaki sayfa etkileşime kapalıdır ve kimlikli kabuk önbelleği silinmiştir.
+    await expect(page.locator("#app-root")).toHaveAttribute("inert", "");
+    expect(await shellKeys(page)).toEqual([]);
+
+    // Yeniden yükleme (hâlâ çevrimdışı): önbellekteki kabuk açılmaz.
+    await page.goto(consolePath);
+    await expect(page.getByRole("heading", { name: EVENT_NAME })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Çevrimdışısınız" })).toBeVisible();
+
+    // Bağlantı gelir: bekleyen çıkış tamamlanır, oturum sunucuda kapanır.
+    await context.setOffline(false);
+    await page.goto(consolePath);
+    await expect(page).toHaveURL(/\/login/);
+    await page.goto("/events");
+    await expect(page).toHaveURL(/\/login/);
+    expect(await page.evaluate(() => window.localStorage.getItem("eventflow-signout-pending"))).toBeNull();
+  } finally {
+    await context.close();
+  }
+  expect(errors, "yakalanmamış tarayıcı hataları ve CSP ihlalleri").toEqual([]);
+});
+
+test("üretim CSP'si: unsafe-eval yok, upgrade-insecure-requests var, sayfa yanıtında başlık mevcut", async ({ browser }) => {
+  const errors: string[] = [];
+  const { context, page } = await openDevice(browser, { session: fixture.admin, errors });
+  try {
+    // 404 ve geçersiz davet bağlantısı da CSP ihlali üretmemeli (statik ön üretilmiş sayfa olmamalı).
+    await page.goto("/yok-boyle-bir-sayfa");
+    await expect(page.getByRole("heading", { name: "Sayfa bulunamadı" })).toBeVisible();
+    await page.goto("/i/gecersiz-belirtec");
+    await page.waitForLoadState("networkidle");
+    // Gerçek davetiye (kullanıcı tasarımlı satır içi stiller, veri URL'li QR görseli, /i/.../image): CSP'yi gevşetmeden açılır.
+    const [owner] = await reservationsByGuest(OWNER_GUEST);
+    await page.goto(invitationLink(owner?.id ?? "", fixture.eventId));
+    await expect(page.getByRole("img", { name: "Giriş QR kodu" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Davetiye" })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    const response = await page.goto("/login");
+    const csp = response?.headers()["content-security-policy"] ?? "";
+    expect(csp).toContain("upgrade-insecure-requests");
+    expect(csp).not.toContain("unsafe-eval");
+    expect(csp).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+  } finally {
+    await context.close();
+  }
+  expect(errors, "yakalanmamış tarayıcı hataları ve CSP ihlalleri").toEqual([]);
 });

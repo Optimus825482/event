@@ -4,7 +4,7 @@ import { customers, customerTags } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { normalizeEmail, normalizePhone } from "./normalize";
-import { pgCodeOf, pgConstraintOf } from "./pg-error";
+import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import type { CreateCustomerInput, UpdateCustomerInput } from "./schemas";
 
 type Executor = Db | Tx;

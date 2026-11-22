@@ -1,7 +1,7 @@
 /**
  * Kullanıcı adı kuralları. Eski sistemle uyum için büyük/küçük harf duyarlı ve
  * 1–100 karakter; baş/son boşluk ve her türlü kontrol/biçim karakteri (`\p{C}`)
- * reddedilir. Hem Better Auth eklentisi hem `scripts/create-admin.ts` kullanır.
+ * reddedilir. Hem Better Auth eklentisi hem `scripts/create-admin-dev.ts` kullanır.
  */
 export const MIN_USERNAME_LENGTH = 1;
 export const MAX_USERNAME_LENGTH = 100;

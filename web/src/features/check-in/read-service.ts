@@ -6,12 +6,11 @@ import { canAccessEvent, MSG, type Executor } from "@/features/reservations/inte
 import { DomainError } from "@/lib/action";
 import type { SearchGuestsInput } from "./schemas";
 import { toEventStats, type EventStats } from "./stats";
+import { escapeLike } from "@/lib/identifiers";
 
 export type { EventStats } from "./stats";
 
 const SEARCH_LIMIT = 50;
-const escapeLike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
-
 async function assertEventAccess(db: Executor, actor: Actor, eventId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
   if (!event || !canAccessEvent(actor, event)) throw new DomainError("not_found", MSG.eventNotFound);
