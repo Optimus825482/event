@@ -11,3 +11,8 @@ coverage
 *.log
 npm-debug.log*
 *.tsbuildinfo
+vitest.config.ts
+playwright.config.ts
+e2e
+.next-e2e
+.rehearsal
