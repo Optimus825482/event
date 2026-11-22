@@ -14,9 +14,13 @@ const MESSAGES = {
   sameAsCurrent: "Yeni parola mevcut parolayla aynı olamaz",
 } as const;
 
-/** Giriş kilidiyle aynı sayaç tablosu; kullanıcı adı alanında bu önekli kullanıcı kimliği tutulur. */
-function limiterKey(actorId: string): string {
-  return `pwchange:${actorId}`;
+/**
+ * Giriş kilidiyle aynı sayaç tablosu; kullanıcı adı alanında bu önekli kullanıcı kimliği tutulur.
+ * Baştaki boşluk bilerek vardır: `isValidUsername` baş/son boşluklu adları reddettiği için giriş ucu
+ * bu anahtarı hiçbir zaman üretemez (oturumsuz biri bu sayacı doldurup parola değişimini kilitleyemez).
+ */
+export function limiterKey(actorId: string): string {
+  return ` pwchange:${actorId}`;
 }
 
 /**

@@ -4,7 +4,8 @@ import { db } from "@/db/client";
 import { loginAttempts, sessions, users } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { selfActionDefs } from "@/features/users/action-defs";
-import { changeOwnPassword } from "@/features/users/own-password";
+import { isValidUsername } from "@/features/auth/username";
+import { changeOwnPassword, limiterKey } from "@/features/users/own-password";
 import { createSelfAction } from "@/features/users/self-action";
 import { createUser } from "@/features/users/service";
 import { truncateAll } from "../../helpers/db";
@@ -34,6 +35,10 @@ async function signInSession(actor: Actor): Promise<string> {
 }
 
 describe("kendi parolasını değiştirme", () => {
+  it("deneme sayacı anahtarı geçerli bir kullanıcı adı olamaz (giriş ucu aynı sayacı dolduramaz)", () => {
+    expect(isValidUsername(limiterKey("00000000-0000-4000-8000-000000000000"))).toBe(false);
+  });
+
   beforeEach(async () => {
     await truncateAll();
   });
