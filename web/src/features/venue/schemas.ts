@@ -1,0 +1,173 @@
+import { z } from "zod";
+
+/** Bir etkinlikte en çok kaç masa olabilir (eski düzenleyici 200 ile sınırlıyordu). */
+export const MAX_TABLES = 500;
+export const MAX_DECOR_ELEMENTS = 200;
+export const MAX_TABLE_CAPACITY = 100;
+export const LABEL_MAX = 20;
+
+export const DECOR_KINDS = ["stage", "area", "wall", "label"] as const;
+export type DecorKind = (typeof DECOR_KINDS)[number];
+
+export const TABLE_SHAPES = ["round", "rectangle", "square"] as const;
+export type TableShape = (typeof TABLE_SHAPES)[number];
+
+const coordinate = z.number({ error: "Konum sayı olmalı" }).min(-100_000).max(100_000);
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Renk #RRGGBB biçiminde olmalı");
+
+/** Etiket karşılaştırması: baştaki/sondaki boşluk ve büyük/küçük harf yok sayılır. */
+export function normalizeLabel(label: string): string {
+  return label.trim().toLocaleLowerCase("tr");
+}
+
+export const tableInputSchema = z.object({
+  id: z.uuid().optional(),
+  label: z
+    .string({ error: "Etiket gerekli" })
+    .trim()
+    .min(1, "Etiket gerekli")
+    .max(LABEL_MAX, `Etiket en fazla ${LABEL_MAX} karakter olabilir`),
+  capacity: z
+    .number({ error: "Kapasite gerekli" })
+    .int("Kapasite tam sayı olmalı")
+    .min(1, "Kapasite en az 1 olmalı")
+    .max(MAX_TABLE_CAPACITY, `Kapasite en fazla ${MAX_TABLE_CAPACITY} olabilir`),
+  tableTypeId: z.uuid().nullable().default(null),
+  x: coordinate,
+  y: coordinate,
+  rotation: z.number().min(-3600).max(3600).default(0),
+  isLoca: z.boolean().default(false),
+});
+export type TableInput = z.input<typeof tableInputSchema>;
+export type ParsedTableInput = z.output<typeof tableInputSchema>;
+
+export const decorElementSchema = z.object({
+  id: z.string().min(1).max(64),
+  kind: z.enum(DECOR_KINDS),
+  x: coordinate,
+  y: coordinate,
+  width: z.number().positive().max(20_000),
+  height: z.number().positive().max(20_000),
+  rotation: z.number().min(-3600).max(3600).default(0),
+  label: z.string().trim().max(60, "Metin en fazla 60 karakter olabilir").default(""),
+  color: hexColor.optional(),
+});
+export type DecorElement = z.output<typeof decorElementSchema>;
+
+export const DEFAULT_CANVAS = { width: 1200, height: 800 } as const;
+
+/** Masa olmayan yerleşim öğeleri (`events.layout_decor`, şablonda `layoutData.decor`). */
+export const decorSchema = z.object({
+  width: z.number().int().min(200).max(20_000).default(DEFAULT_CANVAS.width),
+  height: z.number().int().min(200).max(20_000).default(DEFAULT_CANVAS.height),
+  elements: z.array(decorElementSchema).max(MAX_DECOR_ELEMENTS).default([]),
+});
+export type Decor = z.output<typeof decorSchema>;
+export type DecorInput = z.input<typeof decorSchema>;
+
+export function emptyDecor(): Decor {
+  return { width: DEFAULT_CANVAS.width, height: DEFAULT_CANVAS.height, elements: [] };
+}
+
+/** Kayıtlı JSON bozuksa ya da yoksa boş dekor döner (eski veriler için tolerans). */
+export function parseDecor(raw: unknown): Decor {
+  const parsed = decorSchema.safeParse(raw ?? {});
+  return parsed.success ? parsed.data : emptyDecor();
+}
+
+export const saveLayoutSchema = z
+  .object({
+    eventId: z.uuid(),
+    tables: z.array(tableInputSchema).max(MAX_TABLES, `En fazla ${MAX_TABLES} masa olabilir`),
+    decor: decorSchema,
+  })
+  .superRefine((value, ctx) => {
+    const labels = new Map<string, number>();
+    const ids = new Set<string>();
+    value.tables.forEach((table, index) => {
+      const key = normalizeLabel(table.label);
+      if (labels.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tables", index, "label"],
+          message: `"${table.label}" etiketi birden fazla masada kullanılıyor`,
+        });
+      }
+      labels.set(key, index);
+      if (table.id) {
+        if (ids.has(table.id)) {
+          ctx.addIssue({ code: "custom", path: ["tables", index, "id"], message: "Masa iki kez gönderildi" });
+        }
+        ids.add(table.id);
+      }
+    });
+  });
+export type SaveLayoutInput = z.input<typeof saveLayoutSchema>;
+
+export const applyTemplateSchema = z.object({ eventId: z.uuid(), templateId: z.uuid() });
+export type ApplyTemplateInput = z.infer<typeof applyTemplateSchema>;
+
+const templateName = z
+  .string({ error: "Şablon adı gerekli" })
+  .trim()
+  .min(1, "Şablon adı gerekli")
+  .max(120, "Şablon adı en fazla 120 karakter olabilir");
+const templateDescription = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().trim().max(1000, "Açıklama en fazla 1000 karakter olabilir").optional(),
+);
+
+export const saveAsTemplateSchema = z.object({
+  eventId: z.uuid(),
+  name: templateName,
+  description: templateDescription,
+  isPublic: z.boolean().default(false),
+});
+export type SaveAsTemplateInput = Omit<z.output<typeof saveAsTemplateSchema>, "isPublic"> & { isPublic?: boolean };
+
+export const updateTemplateSchema = z.object({
+  id: z.uuid(),
+  name: templateName,
+  description: templateDescription,
+  isPublic: z.boolean().default(false),
+});
+export type UpdateTemplateInput = Omit<z.output<typeof updateTemplateSchema>, "isPublic"> & { isPublic?: boolean };
+
+export const templateIdSchema = z.object({ id: z.uuid() });
+export type TemplateIdInput = z.infer<typeof templateIdSchema>;
+
+/** Şablondaki masa: kimliksiz (uygulanınca etkinliğe yeni satır olarak eklenir). */
+export const templateTableSchema = tableInputSchema.omit({ id: true });
+export type TemplateTable = z.output<typeof templateTableSchema>;
+
+export const templateLayoutSchema = z.object({
+  version: z.literal(1),
+  tables: z.array(templateTableSchema).max(MAX_TABLES),
+  decor: decorSchema,
+});
+export type TemplateLayout = z.output<typeof templateLayoutSchema>;
+
+const tableTypeShape = {
+  name: z.string({ error: "Ad gerekli" }).trim().min(1, "Ad gerekli").max(60, "Ad en fazla 60 karakter olabilir"),
+  color: hexColor,
+  shape: z.enum(TABLE_SHAPES, { error: "Geçerli bir şekil seçin" }),
+  capacity: z.coerce
+    .number({ error: "Kapasite gerekli" })
+    .int("Kapasite tam sayı olmalı")
+    .min(1, "Kapasite en az 1 olmalı")
+    .max(MAX_TABLE_CAPACITY, `Kapasite en fazla ${MAX_TABLE_CAPACITY} olabilir`),
+  basePrice: z.coerce
+    .number({ error: "Fiyat sayı olmalı" })
+    .min(0, "Fiyat negatif olamaz")
+    .max(9_999_999_999, "Fiyat çok büyük"),
+  minSpacing: z.coerce.number().int().min(0, "Aralık negatif olamaz").max(1000).default(50),
+  isActive: z.boolean().default(true),
+};
+
+export const createTableTypeSchema = z.object(tableTypeShape);
+export type CreateTableTypeInput = z.output<typeof createTableTypeSchema>;
+
+export const updateTableTypeSchema = z.object({ id: z.uuid(), ...tableTypeShape });
+export type UpdateTableTypeInput = z.output<typeof updateTableTypeSchema>;
+
+export const tableTypeIdSchema = z.object({ id: z.uuid() });
