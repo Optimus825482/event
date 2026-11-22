@@ -133,6 +133,40 @@ function valuesRow(t: NormalizedTable & { id: string }) {
   return sql`(${t.id}::uuid, ${t.label}::text, ${t.capacity}::int, ${t.tableTypeId}::uuid, ${t.x}::float8, ${t.y}::float8, ${t.rotation}::float8, ${t.isLoca}::boolean)`;
 }
 
+/**
+ * Aktif (bekleyen/onaylı/girişli) rezervasyonun kişi sayısının altına kapasite indirilemez.
+ * Etkinlik satırı çağıran tarafından `FOR UPDATE` kilitli olduğundan eşzamanlı rezervasyon yazılamaz.
+ */
+async function assertCapacityCoversReservations(
+  tx: Tx,
+  eventId: string,
+  updates: Array<NormalizedTable & { id: string }>,
+): Promise<void> {
+  if (updates.length === 0) return;
+  const active = await tx
+    .select({ tableId: reservations.tableId, guests: sql<number>`max(${reservations.guestCount})::int` })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.eventId, eventId),
+        inArray(reservations.status, ["pending", "confirmed", "checked_in"]),
+        inArray(
+          reservations.tableId,
+          updates.map((t) => t.id),
+        ),
+      ),
+    )
+    .groupBy(reservations.tableId);
+  const needed = new Map(active.map((row) => [row.tableId, row.guests]));
+  const tooSmall = updates.filter((t) => t.capacity < (needed.get(t.id) ?? 0)).map((t) => t.label).sort();
+  if (tooSmall.length > 0) {
+    throw new DomainError(
+      "conflict",
+      `Aktif rezervasyonu olan masaların kapasitesi rezervasyondaki kişi sayısının altına düşürülemez: ${quoteList(tooSmall)}. Hiçbir değişiklik kaydedilmedi.`,
+    );
+  }
+}
+
 export type WriteLayoutResult = {
   tables: EventTableRow[];
   totalCapacity: number;
@@ -156,7 +190,7 @@ export async function writeLayout(
   const decor = normalizeDecor(rawDecor);
 
   const existing = await tx
-    .select({ id: eventTables.id, label: eventTables.label })
+    .select({ id: eventTables.id, label: eventTables.label, capacity: eventTables.capacity })
     .from(eventTables)
     .where(eq(eventTables.eventId, eventId));
   const existingById = new Map(existing.map((row) => [row.id, row]));
@@ -180,6 +214,7 @@ export async function writeLayout(
       `Rezervasyonu veya personel ataması olan masalar silinemez: ${quoteList(labels)}. Hiçbir değişiklik kaydedilmedi.`,
     );
   }
+  await assertCapacityCoversReservations(tx, eventId, updates);
   await assertTableTypesExist(tx, tables);
 
   if (removed.length > 0) {

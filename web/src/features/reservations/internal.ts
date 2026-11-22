@@ -3,6 +3,7 @@ import type { Db, Tx } from "@/db/client";
 import { customers, eventTables, events, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { pgCodeOf, pgConstraintOf } from "@/features/customers/pg-error";
+import { publish } from "@/features/realtime/publish";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import type { EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
@@ -22,6 +23,12 @@ export const MSG = {
   guestCountRange: "Kişi sayısı 1 ile 50 arasında olmalıdır",
   missingParent: "Masa veya müşteri artık mevcut değil",
 } as const;
+
+/** Rezervasyon değişimini (liste/masa/istatistik) aynı transaction içinde yayar; rollback'te teslim edilmez. */
+export async function publishReservationChange(tx: Tx, eventId: string, id?: string): Promise<void> {
+  await publish(tx, { type: "reservation.changed", eventId, ...(id ? { id } : {}) });
+  await publish(tx, { type: "stats.updated", eventId, ...(id ? { id } : {}) });
+}
 
 export const ACTIVE_STATUSES = ["pending", "confirmed", "checked_in"] as const;
 

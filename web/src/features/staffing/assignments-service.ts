@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { assignmentTables, eventStaffAssignments, eventTables, staff, workShifts } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
+import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
 import { withEventWrite } from "./access";
 import { planAutoAssign, type AutoAssignPlan } from "./auto-assign";
@@ -153,6 +154,7 @@ export async function applyAssignments(
     saved.push({ id, staffId: item.staffId, shiftId: item.shiftId ?? null, assignmentType: item.assignmentType });
   }
   await syncAssignmentTables(tx, eventId, desired);
+  await publish(tx, { type: "table.updated", eventId });
   return saved;
 }
 
@@ -224,6 +226,7 @@ export async function autoAssign(
       saved.push({ id, staffId: entry.staffId, shiftId, assignmentType: "table" });
     }
     await syncAssignmentTables(tx, input.eventId, desired);
+    await publish(tx, { type: "table.updated", eventId: input.eventId });
     return { plan, assignments: saved };
   });
 }

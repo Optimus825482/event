@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { ROLE_LABELS } from "@/components/layout/role-labels";
+import { QueryProvider } from "@/components/providers/query-provider";
 import { UnauthenticatedError } from "@/features/auth/errors";
 import { visibleNavItems } from "@/features/auth/nav";
 import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
@@ -21,8 +22,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const navItems = visibleNavItems(actor).map(({ href, label }) => ({ href, label }));
 
   return (
-    <AppShell username={actor.username} roleLabel={ROLE_LABELS[actor.role]} navItems={navItems}>
-      {children}
-    </AppShell>
+    <QueryProvider>
+      <AppShell username={actor.username} roleLabel={ROLE_LABELS[actor.role]} navItems={navItems}>
+        {children}
+      </AppShell>
+    </QueryProvider>
   );
 }

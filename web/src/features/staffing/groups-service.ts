@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { assignmentTables, eventStaffAssignments, tableGroupTables, tableGroups, teams } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
+import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
 import { withEventWrite } from "./access";
 import { STAFFING_MESSAGES } from "./db-errors";
@@ -92,6 +93,7 @@ export async function applyGroups(tx: Tx, eventId: string, input: GroupInput[]):
       .insert(tableGroupTables)
       .values(inserts.map((l) => ({ eventId, tableGroupId: l.owner, tableId: l.value })));
   }
+  await publish(tx, { type: "table.updated", eventId });
   return saved;
 }
 
@@ -124,6 +126,7 @@ export async function assignTeamToGroup(
     const teamId = input.teamId ?? null;
     if (teamId === null) {
       await tx.update(tableGroups).set({ teamId: null, updatedAt: new Date() }).where(eq(tableGroups.id, group.id));
+      await publish(tx, { type: "table.updated", eventId: input.eventId });
       return { groupId: group.id, teamId };
     }
 
@@ -150,6 +153,7 @@ export async function assignTeamToGroup(
       .update(eventStaffAssignments)
       .set({ teamId, updatedAt: new Date() })
       .where(and(eq(eventStaffAssignments.eventId, input.eventId), inArray(eventStaffAssignments.id, affected)));
+    await publish(tx, { type: "table.updated", eventId: input.eventId });
     return { groupId: group.id, teamId };
   });
 }

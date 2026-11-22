@@ -3,6 +3,7 @@ import type { Db } from "@/db/client";
 import { eventTables, events, tableTypes, venueTemplates } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow, listEventTables, totalCapacity } from "@/features/events/service";
+import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
 import {
   assertEventAccess,
@@ -41,7 +42,9 @@ export async function saveLayout(db: Db, actor: Actor, input: SaveLayoutServiceI
   try {
     return await db.transaction(async (tx) => {
       await lockEditableEvent(tx, actor, input.eventId);
-      return writeLayout(tx, input.eventId, input.tables, input.decor);
+      const result = await writeLayout(tx, input.eventId, input.tables, input.decor);
+      await publish(tx, { type: "table.updated", eventId: input.eventId });
+      return result;
     });
   } catch (error) {
     if (error instanceof DomainError) throw error;
@@ -137,6 +140,7 @@ export async function applyVenueTemplate(db: Db, actor: Actor, input: ApplyTempl
         .update(venueTemplates)
         .set({ usageCount: sql`${venueTemplates.usageCount} + 1` })
         .where(eq(venueTemplates.id, template.id));
+      await publish(tx, { type: "table.updated", eventId: input.eventId });
       return { ...result, keptLabels: kept.map((t) => t.label), skippedLabels };
     });
   } catch (error) {

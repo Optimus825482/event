@@ -13,6 +13,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/customers", label: "Müşteriler", module: "customers" },
   { href: "/staff", label: "Personel", module: "staff" },
   { href: "/venues", label: "Mekân Şablonları", module: "venues" },
+  // Sayfa `settings` görüntüleme yetkisi ister (yalnızca yönetici); menü de aynı modüle bağlı.
+  { href: "/settings/table-types", label: "Masa Tipleri", module: "settings" },
   { href: "/templates", label: "Davetiye Şablonları", module: "invitations" },
   { href: "/leader/reviews", label: "Değerlendirmeler", module: "reviews" },
   { href: "/notifications", label: "Bildirimler", module: "notifications" },

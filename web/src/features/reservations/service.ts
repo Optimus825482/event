@@ -16,6 +16,7 @@ import {
   lockReservation,
   lockTable,
   MSG,
+  publishReservationChange,
   type Executor,
   type ReservationRow,
 } from "./internal";
@@ -75,6 +76,7 @@ export async function createReservation(
       .returning();
     if (!row) throw new Error("rezervasyon eklenemedi");
     await bumpTotalReservations(tx, found.id, 1);
+    await publishReservationChange(tx, event.id, row.id);
     return row;
   });
 }
@@ -114,6 +116,7 @@ export async function updateReservation(
       .where(eq(reservations.id, reservation.id))
       .returning();
     if (!row) throw new DomainError("not_found", MSG.reservationNotFound);
+    await publishReservationChange(tx, event.id, row.id);
     return row;
   });
 }

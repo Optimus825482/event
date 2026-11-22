@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
-import { createEditorStore, type InitialLayout } from "../editor/store";
+import { createEditorStore, isLayoutEmpty, type InitialLayout } from "../editor/store";
 import type { WriteLayoutResult } from "../layout-core";
 import { saveLayoutAction } from "../actions";
 import { EditorStoreContext, useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
@@ -70,6 +70,7 @@ export function VenueEditor(props: VenueEditorProps) {
 function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate }: VenueEditorProps) {
   const store = useEditorStore();
   const dirty = useEditor((s) => s.dirty);
+  const layoutEmpty = useEditor(isLayoutEmpty);
   const [saving, setSaving] = useState(false);
   const [show3d, setShow3d] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -123,6 +124,11 @@ function EditorShell({ eventId, tableTypes, templates, canEdit, canSaveTemplate 
         onOpenTemplates={() => setTemplatesOpen(true)}
         onBlocked={onBlocked}
       />
+      {canEdit && layoutEmpty ? (
+        <p className="border-b border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+          Henüz masa yok. Araç çubuğundan masa ekleyin ya da bir şablon uygulayın.
+        </p>
+      ) : null}
       {message ? (
         <p
           role={message.kind === "error" ? "alert" : "status"}

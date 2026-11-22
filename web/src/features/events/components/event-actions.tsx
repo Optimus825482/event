@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EVENT_STATUSES, canTransitionEvent, type EventStatus } from "@/domain/event-status";
 import { changeEventStatusAction, deleteEventAction } from "../actions";
-import { EVENT_STATUS_LABELS } from "../labels";
+import { EVENT_TRANSITION_ACTIONS, transitionConfirmation } from "../labels";
 
 type Props = {
   id: string;
@@ -22,6 +22,7 @@ export function EventActions({ id, status, canEdit, canDelete, deletable }: Prop
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmStatus, setConfirmStatus] = useState<EventStatus | null>(null);
   const targets = EVENT_STATUSES.filter((to) => canTransitionEvent(status, to));
 
   async function run(task: () => Promise<{ ok: boolean; message?: string }>, after?: () => void) {
@@ -40,6 +41,7 @@ export function EventActions({ id, status, canEdit, canDelete, deletable }: Prop
     } finally {
       setPending(false);
       setConfirmDelete(false);
+      setConfirmStatus(null);
     }
   }
 
@@ -53,9 +55,11 @@ export function EventActions({ id, status, canEdit, canDelete, deletable }: Prop
                 variant={to === "cancelled" ? "destructive" : "outline"}
                 size="sm"
                 disabled={pending}
-                onClick={() => run(() => changeEventStatusAction({ id, status: to }))}
+                onClick={() =>
+                  transitionConfirmation(to) ? setConfirmStatus(to) : void run(() => changeEventStatusAction({ id, status: to }))
+                }
               >
-                {EVENT_STATUS_LABELS[to]} yap
+                {EVENT_TRANSITION_ACTIONS[to].label}
               </Button>
             ))
           : null}
@@ -69,6 +73,20 @@ export function EventActions({ id, status, canEdit, canDelete, deletable }: Prop
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
+      ) : null}
+      {confirmStatus ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirmStatus(null);
+          }}
+          title={transitionConfirmation(confirmStatus)?.title ?? ""}
+          description={transitionConfirmation(confirmStatus)?.description ?? ""}
+          confirmText={EVENT_TRANSITION_ACTIONS[confirmStatus].label}
+          variant={confirmStatus === "cancelled" ? "destructive" : "warning"}
+          loading={pending}
+          onConfirm={() => void run(() => changeEventStatusAction({ id, status: confirmStatus }))}
+        />
       ) : null}
       <ConfirmDialog
         open={confirmDelete}

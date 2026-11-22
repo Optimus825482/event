@@ -29,11 +29,6 @@ export default async function EventVenuePage({ params }: { params: Promise<{ id:
           Tamamlanmış veya iptal edilmiş etkinliğin yerleşimi değiştirilemez; yalnızca görüntüleyebilirsiniz.
         </p>
       ) : null}
-      {layout.tables.length === 0 && layout.decor.elements.length === 0 && data.canEdit ? (
-        <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-          Henüz masa yok. Araç çubuğundan masa ekleyin ya da bir şablon uygulayın.
-        </p>
-      ) : null}
       <VenueEditor
         eventId={layout.event.id}
         initial={{

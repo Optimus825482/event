@@ -14,6 +14,7 @@ import {
   lockReservation,
   lockTable,
   MSG,
+  publishReservationChange,
   type Executor,
   type ReservationRow,
 } from "./internal";
@@ -75,6 +76,7 @@ export async function changeReservationStatus(
       .where(eq(reservations.id, reservation.id))
       .returning();
     if (!row) throw new DomainError("not_found", MSG.reservationNotFound);
+    await publishReservationChange(tx, event.id, row.id);
     return row;
   });
 }
@@ -112,6 +114,8 @@ export async function markNoShows(db: Executor, actor: Actor, input: EventIdInpu
       )
       select (select count(*) from flipped)::int as updated, (select count(*) from bumped)::int as customers
     `);
-    return { updated: result.rows[0]?.updated ?? 0 };
+    const updated = result.rows[0]?.updated ?? 0;
+    if (updated > 0) await publishReservationChange(tx, event.id);
+    return { updated };
   });
 }

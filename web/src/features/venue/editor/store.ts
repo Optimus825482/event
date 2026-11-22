@@ -1,6 +1,6 @@
 import { createStore } from "zustand/vanilla";
 import type { Decor, DecorElement, DecorKind, TableInput } from "../schemas";
-import { normalizeAngle, nextLabel, snap, snapPoint, GRID_SIZE, type Point } from "./geometry";
+import { findFreeSpot, normalizeAngle, nextLabel, snap, snapPoint, GRID_SIZE, type Point } from "./geometry";
 import { emptyHistory, record, redo, undo, type History } from "./history";
 
 export type EditorTable = {
@@ -63,6 +63,14 @@ export type EditorStore = ReturnType<typeof createEditorStore>;
 
 export const DECOR_KEY_PREFIX = "d:";
 export const decorKey = (id: string) => `${DECOR_KEY_PREFIX}${id}`;
+/** Araç çubuğundan eklenen masalar arasındaki en küçük aralık (ızgara hücresi cinsinden). */
+const NEW_TABLE_SPACING_CELLS = 4;
+
+/** Düzenleyicide ne masa ne dekor varsa (sunucu verisinden bağımsız, anlık durum) true. */
+export function isLayoutEmpty(state: Pick<EditorState, "tables" | "elements">): boolean {
+  return state.tables.length === 0 && state.elements.length === 0;
+}
+
 export const isDecorKey = (key: string) => key.startsWith(DECOR_KEY_PREFIX);
 
 let counter = 0;
@@ -133,7 +141,10 @@ export function createEditorStore(initial: InitialLayout) {
 
       addTable: (opts = {}) => {
         const s = get();
-        const at = snapPoint(opts.at ?? center(), s.gridSize, s.snapEnabled);
+        // Konum verilmediyse (araç çubuğu) mevcut masaların üstüne binmeyen ilk boş nokta seçilir.
+        const at = opts.at
+          ? snapPoint(opts.at, s.gridSize, s.snapEnabled)
+          : findFreeSpot(center(), s.tables, s.gridSize * NEW_TABLE_SPACING_CELLS, s.canvas);
         const key = uid("t:new-");
         const table: EditorTable = {
           key,

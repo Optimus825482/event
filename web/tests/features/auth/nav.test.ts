@@ -11,7 +11,7 @@ function hrefs(role: Role, staffId: string | null = null): string[] {
 }
 
 describe("NAV_ITEMS", () => {
-  it("belirtilen sırayla 11 öğe içerir", () => {
+  it("belirtilen sırayla 12 öğe içerir", () => {
     expect(NAV_ITEMS.map((i) => [i.href, i.label, i.module])).toEqual([
       ["/events", "Etkinlikler", "events"],
       ["/reservations", "Rezervasyonlar", "reservations"],
@@ -19,6 +19,7 @@ describe("NAV_ITEMS", () => {
       ["/customers", "Müşteriler", "customers"],
       ["/staff", "Personel", "staff"],
       ["/venues", "Mekân Şablonları", "venues"],
+      ["/settings/table-types", "Masa Tipleri", "settings"],
       ["/templates", "Davetiye Şablonları", "invitations"],
       ["/leader/reviews", "Değerlendirmeler", "reviews"],
       ["/notifications", "Bildirimler", "notifications"],
@@ -33,10 +34,17 @@ describe("visibleNavItems", () => {
     expect(hrefs("admin")).toEqual(NAV_ITEMS.map((i) => i.href));
   });
 
-  it("organizer yönetim modülleri hariç hepsini görür", () => {
+  it("organizer yönetim ve ayar modülleri (settings, users) hariç hepsini görür", () => {
     expect(hrefs("organizer")).toEqual(
-      NAV_ITEMS.map((i) => i.href).filter((h) => !h.startsWith("/admin/")),
+      NAV_ITEMS.filter((i) => i.module !== "settings" && i.module !== "users").map((i) => i.href),
     );
+  });
+
+  it("Masa Tipleri yalnızca sayfanın istediği settings yetkisine sahip yöneticide görünür", () => {
+    expect(hrefs("admin")).toContain("/settings/table-types");
+    for (const role of ROLES.filter((r) => r !== "admin")) {
+      expect(hrefs(role, "s1")).not.toContain("/settings/table-types");
+    }
   });
 
   it("staff yalnızca rezervasyon, check-in ve müşterileri görür", () => {

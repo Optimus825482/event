@@ -78,3 +78,30 @@ export function nextLabel(labels: readonly string[], prefix?: string): string {
   while (taken.has(`${base}${n}`.toLocaleLowerCase("tr"))) n += 1;
   return `${base}${n}`;
 }
+
+/**
+ * İstenen noktadan başlayıp halka halka dışarı doğru, `step` aralıklı ilk boş noktayı bulur
+ * (bir noktanın her iki eksende de `step`'ten yakın başka masası varsa "dolu" sayılır).
+ * `bounds` verilirse aday noktalar tuvalin içinde kalır. Yer yoksa istenen nokta döner.
+ */
+export function findFreeSpot(
+  preferred: Point,
+  occupied: readonly Point[],
+  step: number,
+  bounds?: { width: number; height: number },
+): Point {
+  const isFree = (p: Point) => !occupied.some((o) => Math.abs(o.x - p.x) < step && Math.abs(o.y - p.y) < step);
+  const inside = (p: Point) => !bounds || (p.x >= 0 && p.y >= 0 && p.x <= bounds.width && p.y <= bounds.height);
+  if (step <= 0 || isFree(preferred)) return preferred;
+  const maxRing = bounds ? Math.ceil(Math.max(bounds.width, bounds.height) / step) : 50;
+  for (let ring = 1; ring <= maxRing; ring += 1) {
+    for (let dy = -ring; dy <= ring; dy += 1) {
+      for (let dx = -ring; dx <= ring; dx += 1) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        const candidate = { x: preferred.x + dx * step, y: preferred.y + dy * step };
+        if (inside(candidate) && isFree(candidate)) return candidate;
+      }
+    }
+  }
+  return preferred;
+}
