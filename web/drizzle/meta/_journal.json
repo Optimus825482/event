@@ -22,6 +22,13 @@
       "when": 1795303134485,
       "tag": "0002_puzzling_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795342919458,
+      "tag": "0003_fixed_iron_lad",
+      "breakpoints": true
     }
   ]
 }

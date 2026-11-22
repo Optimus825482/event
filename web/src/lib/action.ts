@@ -25,11 +25,13 @@ export type ActionResult<T> =
       fieldErrors?: Record<string, string[]>;
     };
 
+export type DomainErrorCode = "conflict" | "not_found" | "invalid";
+
 /** Kullanıcıya gösterilmesi güvenli, iş kuralı kaynaklı hata (mesaj Türkçe ve ayrıntısızdır). */
 export class DomainError extends Error {
-  readonly code: "conflict" | "not_found";
+  readonly code: DomainErrorCode;
 
-  constructor(code: "conflict" | "not_found", message: string) {
+  constructor(code: DomainErrorCode, message: string) {
     super(message);
     this.name = "DomainError";
     this.code = code;

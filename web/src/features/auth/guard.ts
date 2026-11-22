@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
+import { APIError, createAuthMiddleware, getIP, isAPIError } from "better-auth/api";
 import { deleteSessionCookie } from "better-auth/cookies";
-import { clearLoginAttempts, isLockedOut, registerLoginAttempt } from "./login-attempts";
+import { clearLoginAttempts, registerLoginAttempt } from "./login-attempts";
 import { isValidUsername } from "./username";
 
 /**
@@ -45,6 +45,18 @@ function signInUsername(body: unknown): string | null {
   return typeof username === "string" && isValidUsername(username) ? username : null;
 }
 
+type IpSource = {
+  request?: Request;
+  headers?: Headers;
+  context: { options: Parameters<typeof getIP>[1] };
+};
+
+/** Better Auth IP sınırıyla aynı kaynak: yalnızca yapılandırılmış güvenilir başlık. */
+function clientIp(ctx: IpSource): string | null {
+  const source = ctx.request ?? ctx.headers;
+  return source ? getIP(source, ctx.context.options) : null;
+}
+
 function sessionUser(returned: unknown): { id: string; isActive: unknown } | null {
   if (typeof returned !== "object" || returned === null || !("user" in returned)) return null;
   const { user } = returned;
@@ -66,7 +78,7 @@ export function eventflowGuard() {
             const username = signInUsername(ctx.body);
             // Biçimce geçersiz ad sayılmaz; uç onu zaten reddeder (tablo şişirilemez).
             if (username === null) return;
-            if (isLockedOut(await registerLoginAttempt(username))) {
+            if (await registerLoginAttempt(username, clientIp(ctx))) {
               throw APIError.from("TOO_MANY_REQUESTS", TOO_MANY_LOGIN_ATTEMPTS);
             }
           }),
@@ -77,7 +89,9 @@ export function eventflowGuard() {
           matcher: (ctx) => ctx.path === "/sign-in/username",
           handler: createAuthMiddleware(async (ctx) => {
             const username = signInUsername(ctx.body);
-            if (username !== null && !isAPIError(ctx.context.returned)) await clearLoginAttempts(username);
+            if (username !== null && !isAPIError(ctx.context.returned)) {
+              await clearLoginAttempts(username, clientIp(ctx));
+            }
           }),
         },
         {

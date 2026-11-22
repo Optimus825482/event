@@ -1,4 +1,15 @@
-import { bigint, boolean, index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 // drizzle-kit tsconfig yol takma adlarını çözmeyebilir; göreli içe aktarım.
 import { ROLES } from "../../features/auth/roles";
 import { staff } from "./people";
@@ -95,13 +106,20 @@ export const rateLimits = pgTable("rate_limits", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
-/** Kullanıcı adı başına giriş denemesi sayacı (IP'den bağımsız kilit). */
+/**
+ * Giriş denemesi sayaçları: (kullanıcı adı, istemci IP'si) başına bir satır ve
+ * kullanıcı adı başına tüm IP'leri kapsayan bir satır (`ip` = `*`).
+ */
 export const loginAttempts = pgTable(
   "login_attempts",
   {
-    username: text("username").primaryKey(),
+    username: text("username").notNull(),
+    ip: text("ip").notNull(),
     attempts: integer("attempts").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
-  (t) => [index("login_attempts_expires_at_idx").on(t.expiresAt)],
+  (t) => [
+    primaryKey({ columns: [t.username, t.ip] }),
+    index("login_attempts_expires_at_idx").on(t.expiresAt),
+  ],
 );

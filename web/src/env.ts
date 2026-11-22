@@ -9,9 +9,15 @@ const envSchema = z
     // Üretimde zorunlu ve https://; geliştirme/testte varsayılan DEV_AUTH_URL.
     BETTER_AUTH_URL: z.string().min(1).optional(),
     UPLOAD_DIR: z.string().min(1).default("./uploads"),
+    // Ayarlardaki gizli değerleri (SMTP parolası) şifreleyen anahtar: 32 bayt, base64. İsteğe bağlı;
+    // tanımsızsa yalnızca gizli değer kaydetme/okuma başarısız olur.
+    SETTINGS_ENCRYPTION_KEY: z
+      .string()
+      .optional()
+      .refine((value) => !value || Buffer.from(value, "base64").length === 32, "base64 çözüldüğünde 32 bayt olmalıdır"),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    // İstemci IP'sinin okunacağı, ters vekilin (ör. Traefik) yazdığı başlık. Tanımsızsa
-    // istemcinin gönderdiği hiçbir başlığa IP için güvenilmez.
+    // İstemci IP'sinin okunacağı, ters vekilin (ör. Traefik) yazdığı başlık. Üretimde
+    // zorunlu; geliştirme/testte tanımsızsa istemcinin gönderdiği hiçbir başlığa güvenilmez.
     TRUSTED_IP_HEADER: z
       .string()
       .optional()
@@ -25,6 +31,13 @@ const envSchema = z
       ctx.addIssue({ code: "custom", path: ["BETTER_AUTH_URL"], message: "üretimde zorunludur" });
     } else if (!value.BETTER_AUTH_URL.startsWith("https://")) {
       ctx.addIssue({ code: "custom", path: ["BETTER_AUTH_URL"], message: "üretimde https:// ile başlamalıdır" });
+    }
+    if (!value.TRUSTED_IP_HEADER) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["TRUSTED_IP_HEADER"],
+        message: "üretimde zorunludur (Traefik arkasında x-real-ip kullanın)",
+      });
     }
   })
   .transform((value) => ({ ...value, BETTER_AUTH_URL: value.BETTER_AUTH_URL ?? DEV_AUTH_URL }));

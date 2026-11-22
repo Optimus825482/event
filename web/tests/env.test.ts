@@ -35,7 +35,12 @@ describe("parseEnv", () => {
   });
 
   it("üretimde https:// ile başlayan BETTER_AUTH_URL kabul edilir", () => {
-    const parsed = parseEnv({ ...valid, NODE_ENV: "production", BETTER_AUTH_URL: "https://eventflow.example.com" });
+    const parsed = parseEnv({
+      ...valid,
+      NODE_ENV: "production",
+      BETTER_AUTH_URL: "https://eventflow.example.com",
+      TRUSTED_IP_HEADER: "x-real-ip",
+    });
     expect(parsed.BETTER_AUTH_URL).toBe("https://eventflow.example.com");
   });
 
@@ -51,6 +56,30 @@ describe("parseEnv", () => {
     expect(parseEnv({ ...valid, TRUSTED_IP_HEADER: " X-Forwarded-For " }).TRUSTED_IP_HEADER).toBe(
       "x-forwarded-for",
     );
+  });
+
+  describe("üretimde TRUSTED_IP_HEADER", () => {
+    const production = { ...valid, NODE_ENV: "production", BETTER_AUTH_URL: "https://eventflow.example.com" };
+
+    it("yoksa değişken adını ve Traefik değerini içeren hata verir", () => {
+      expect(() => parseEnv(production)).toThrow(/TRUSTED_IP_HEADER.*x-real-ip/);
+    });
+
+    it("tanımlıysa kabul edilir", () => {
+      expect(parseEnv({ ...production, TRUSTED_IP_HEADER: "X-Real-IP" }).TRUSTED_IP_HEADER).toBe("x-real-ip");
+    });
+
+    it("yalnızca boşluktan oluşuyorsa tanımsız sayılır ve reddedilir", () => {
+      expect(() => parseEnv({ ...production, TRUSTED_IP_HEADER: "  " })).toThrow(/TRUSTED_IP_HEADER/);
+    });
+
+    it("geliştirmede zorunlu değildir", () => {
+      expect(parseEnv({ ...valid, NODE_ENV: "development" }).TRUSTED_IP_HEADER).toBeUndefined();
+    });
+
+    it("phase-production-build sırasında zorunlu değildir", () => {
+      expect(parseEnv({ ...production, NEXT_PHASE: "phase-production-build" }).TRUSTED_IP_HEADER).toBeUndefined();
+    });
   });
 
   it("DATABASE_URL eksikse hata mesajı değişken adını içerir", () => {
