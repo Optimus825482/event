@@ -1,12 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useCallback } from "react";
-import { QueryProvider } from "@/components/providers/query-provider";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { SettledEvent } from "../offline/queue-core";
 import { realtimeKeys } from "@/features/realtime/keys";
 import { useEventStream, type EventStreamStatus } from "@/features/realtime/use-event-stream";
 import { eventStatsAction, recentCheckInsAction } from "../actions";
+import { QueuePanel } from "../offline/queue-panel";
+import { useOfflineQueue } from "../offline/use-offline-queue";
+import { ServiceWorkerRegistrar } from "../offline/sw-register";
 import { parseScannedCode } from "../scan-code";
+import { CameraScanner } from "../scanner/camera-scanner";
 import type { EventStats } from "../stats";
 import { CheckInFeedbackBanner } from "./check-in-feedback";
 import { GuestSearch } from "./guest-search";
@@ -60,7 +64,19 @@ function RecentCheckIns({ eventId }: { eventId: string }) {
 
 function ConsoleBody({ eventId, initialStats, canWrite, readOnlyNote }: ConsoleProps) {
   const stream = useEventStream(eventId);
-  const { submit, pending, feedback, setFeedback, clear } = useCheckIn(eventId);
+  const [syncNote, setSyncNote] = useState("");
+  // Kuyruk olayları check-in kancasından gelir; kanca da kuyruğu ister: önce sabit bir yönlendirici.
+  const handlers = useRef<(events: SettledEvent[]) => number>(() => 0);
+  const queue = useOfflineQueue(
+    useCallback((events: SettledEvent[]) => {
+      const synced = handlers.current(events);
+      if (synced > 0) setSyncNote(`${synced} giriş sunucuya eşitlendi`);
+    }, []),
+  );
+  const { submit, pending, feedback, setFeedback, clear, onEvents } = useCheckIn(eventId, queue);
+  useEffect(() => {
+    handlers.current = onEvents;
+  }, [onEvents]);
   const stats = useQuery({
     queryKey: realtimeKeys.stats(eventId),
     queryFn: async () => unwrap(await eventStatsAction({ eventId })),
@@ -93,7 +109,16 @@ function ConsoleBody({ eventId, initialStats, canWrite, readOnlyNote }: ConsoleP
       <div aria-live="assertive">
         <CheckInFeedbackBanner feedback={feedback} onClose={clear} />
       </div>
-      {canWrite ? <ScanPanel onScan={onScan} pending={pending} /> : null}
+      <QueuePanel eventId={eventId} queue={queue} />
+      <p className="sr-only" role="status" aria-live="polite">
+        {syncNote}
+      </p>
+      {canWrite ? (
+        <div className="space-y-4">
+          <ScanPanel onScan={onScan} pending={pending} />
+          <CameraScanner onScan={onScan} disabled={pending} />
+        </div>
+      ) : null}
       {!canWrite && readOnlyNote ? (
         <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
           {readOnlyNote}
@@ -118,14 +143,12 @@ function ConsoleBody({ eventId, initialStats, canWrite, readOnlyNote }: ConsoleP
   );
 }
 
-/**
- * Check-in ekranının istemci kökü. Uygulama düzeninde `QueryProvider` henüz bağlı olmadığı için
- * burada yerel olarak sarılır (düzen bağlandığında bu sarmalayıcı kaldırılabilir).
- */
+/** Check-in ekranının istemci kökü (`QueryProvider` `(app)/layout.tsx` içinde). */
 export function CheckInConsole(props: ConsoleProps) {
   return (
-    <QueryProvider>
+    <>
+      <ServiceWorkerRegistrar />
       <ConsoleBody {...props} />
-    </QueryProvider>
+    </>
   );
 }

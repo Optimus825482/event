@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
-import { proxy } from "@/proxy";
+import { config, proxy } from "@/proxy";
 
 function request(path: string, cookie?: string): NextRequest {
   return new NextRequest(`http://localhost:3000${path}`, {
@@ -78,6 +78,22 @@ describe("proxy", () => {
       const res = proxy(request(path));
       expect(res.status).toBe(200);
       expect(res.headers.get("cache-control")).toBeNull();
+    });
+  });
+
+  describe("PWA dosyaları", () => {
+    // Next, matcher dizgesini yol için tam eşleşen bir düzenli ifade olarak değerlendirir.
+    const matcher = new RegExp("^" + config.matcher[0] + "$");
+
+    it.each(["/sw.js", "/sw-routing.js", "/manifest.webmanifest", "/offline.html", "/icons/icon-192.png", "/icons/icon.svg"])(
+      "%s proxy tarafından hiç işlenmez (oturumsuz erişilebilir)",
+      (path) => {
+        expect(matcher.test(path)).toBe(false);
+      },
+    );
+
+    it.each(["/check-in", "/api/check-in", "/events", "/"])("%s proxy tarafından işlenir (korumalı kalır)", (path) => {
+      expect(matcher.test(path)).toBe(true);
     });
   });
 });

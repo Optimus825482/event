@@ -1,12 +1,18 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { CheckInFeedback } from "./use-check-in";
+import type { CheckInFeedback, QueuedReason } from "./use-check-in";
 
 const timeFormat = new Intl.DateTimeFormat("tr-TR", {
   timeStyle: "short",
   timeZone: "Europe/Istanbul",
 });
+
+const QUEUED_TITLE: Record<QueuedReason, string> = {
+  network: "Çevrimdışı — kuyruğa alındı",
+  server: "Sunucuya ulaşılamadı — kuyruğa alındı",
+  auth: "Oturum süresi doldu — kuyruğa alındı",
+};
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
@@ -32,6 +38,23 @@ export function CheckInFeedbackBanner({
         <div>
           <p className="text-lg font-semibold">Giriş yapılamadı</p>
           <p>{feedback.message}</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Kapat
+        </Button>
+      </div>
+    );
+  }
+
+  if (feedback.kind === "queued") {
+    return (
+      <div
+        role="status"
+        className="flex items-start justify-between gap-4 rounded-lg border-2 border-sky-500 bg-sky-50 p-4 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
+      >
+        <div className="space-y-1">
+          <p className="text-lg font-semibold">{QUEUED_TITLE[feedback.reason]}</p>
+          <p>Bu giriş henüz sunucuda ONAYLANMADI. Bağlantı gelince otomatik gönderilir; bekleyen sayısı aşağıda görünür.</p>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>
           Kapat
