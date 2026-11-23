@@ -1,8 +1,14 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { db } from "@/db/client";
+import { venueTemplates } from "@/db/schema";
 import { itemsCollide, layoutItems } from "@/features/venue/editor/collision";
 import { insideCanvas } from "@/features/venue/editor/geometry";
-import { meritBallroomLayout } from "@/features/venue/presets/merit-ballroom";
+import { MERIT_BALLROOM_NAME, meritBallroomLayout, meritBallroomSeedSql } from "@/features/venue/presets/merit-ballroom";
 import { normalizeLabel } from "@/features/venue/schemas";
+import { parseTemplateLayout } from "@/features/venue/template-layout";
 
 describe("Merit Royal Diamond Ballroom hazır yerleşimi", () => {
   const layout = meritBallroomLayout();
@@ -39,5 +45,19 @@ describe("Merit Royal Diamond Ballroom hazır yerleşimi", () => {
     }
     expect(hits).toEqual([]);
     expect(items.every((i) => insideCanvas(i.box, layout.decor))).toBe(true);
+  });
+
+  it("0010 migration'ı koddaki yerleşimle birebir aynıdır ve yeniden çalıştırılınca çoğaltmaz", async () => {
+    const file = path.resolve(import.meta.dirname, "../../../drizzle/0010_seed_merit_ballroom_template.sql");
+    const seed = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+    expect(seed).toBe(meritBallroomSeedSql());
+
+    await db.delete(venueTemplates).where(eq(venueTemplates.name, MERIT_BALLROOM_NAME));
+    await db.execute(sql.raw(seed));
+    await db.execute(sql.raw(seed));
+    const rows = await db.select().from(venueTemplates).where(eq(venueTemplates.name, MERIT_BALLROOM_NAME));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ isPublic: true, createdById: null });
+    expect(parseTemplateLayout(rows[0]?.layoutData)).toEqual(layout);
   });
 });

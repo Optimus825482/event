@@ -1,15 +1,16 @@
 /**
  * "Merit Royal Diamond Ballroom (2004 Pax)" salon şablonunu ekler ya da günceller (ada göre; yinelenince çoğalmaz).
  * Şablon herkese açıktır ve sahipsizdir; etkinliğin yerleşim ekranında "Şablonlar"dan uygulanır.
+ * Canlıya 0010 migration'ı ile gelir; bu betik geliştirme veritabanında şablonu koddaki son hale getirmek içindir.
  *
  *   npx tsx --env-file=.env.local scripts/seed-merit-ballroom.ts
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { venueTemplates } from "@/db/schema";
-import { MERIT_BALLROOM_NAME, meritBallroomLayout } from "@/features/venue/presets/merit-ballroom";
+import { MERIT_BALLROOM_DESCRIPTION, MERIT_BALLROOM_NAME, meritBallroomLayout } from "@/features/venue/presets/merit-ballroom";
 
-const DESCRIPTION = "Gala krokisi: 161 masa × 12, 12 loca × 6 (2. kat), T catwalk'lı sahne, 3 bar, 2 ekran, sistem kontrol.";
+const DESCRIPTION = MERIT_BALLROOM_DESCRIPTION;
 
 async function main(): Promise<void> {
   const layoutData = meritBallroomLayout();

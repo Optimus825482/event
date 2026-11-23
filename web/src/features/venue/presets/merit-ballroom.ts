@@ -6,6 +6,8 @@ import { templateLayoutSchema, type TemplateLayout } from "../schemas";
  * Salon sınırı duvarla çizilir; iki üst bar ve alt sağ bar sınırın dışındadır, localar 2. kattadır.
  */
 export const MERIT_BALLROOM_NAME = "Merit Royal Diamond Ballroom (2004 Pax)";
+export const MERIT_BALLROOM_DESCRIPTION =
+  "Gala krokisi: 161 masa × 12, 12 loca × 6 (2. kat), T catwalk'lı sahne, 3 bar, 2 ekran, sistem kontrol.";
 
 const SCALE = 2;
 const TABLE_SIZE = 48;
@@ -113,4 +115,21 @@ export function meritBallroomLayout(): TemplateLayout {
     { id: "loca-title", kind: "label" as const, ...box(409, 668, 533, 686), label: "LOCA (2. KAT)", color: "#f472b6" },
   ];
   return templateLayoutSchema.parse({ version: 1, tables: [...tables, ...locas], decor: { width: 1900, height: 1560, elements } });
+}
+
+/**
+ * `drizzle/0010_seed_merit_ballroom_template.sql` içeriği: şablon canlıya dağıtımdaki migration adımıyla gelir.
+ * Aynı adda şablon varsa (elle eklenmiş ya da düzenlenmiş) dokunulmaz. Yerleşim değişirse yeni bir migration yazılır;
+ * uygulanmış migration dosyası değiştirilmez.
+ */
+export function meritBallroomSeedSql(): string {
+  const q = (text: string) => `$seed$${text}$seed$`;
+  return [
+    "-- Elle yazılmış veri migration'ı: Merit Royal Diamond Ballroom salon şablonunu ekler (yoksa).",
+    "-- İçerik src/features/venue/presets/merit-ballroom.ts dosyasından üretilir; eşitliği testle korunur.",
+    'INSERT INTO "venue_templates" ("name", "description", "layout_data", "is_public")',
+    `SELECT ${q(MERIT_BALLROOM_NAME)}, ${q(MERIT_BALLROOM_DESCRIPTION)}, ${q(JSON.stringify(meritBallroomLayout()))}::jsonb, true`,
+    `WHERE NOT EXISTS (SELECT 1 FROM "venue_templates" WHERE "name" = ${q(MERIT_BALLROOM_NAME)});`,
+    "",
+  ].join("\n");
 }
