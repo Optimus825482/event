@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { APP_BUILD, buildLabel } from "@/lib/app-build";
 import { cn } from "@/lib/utils";
 import { findActiveGroup } from "./active-module";
 import { ACCENT_CLASSES } from "./module-accent";
@@ -119,6 +120,9 @@ export function ProfileMenu({ username, avatarUrl = null, roleLabel, isAdmin, mo
           <LogOut aria-hidden="true" className="h-4 w-4" />
           {pending ? "Çıkış yapılıyor…" : "Çıkış yap"}
         </DropdownMenuItem>
+        {APP_BUILD && (
+          <DropdownMenuLabel className="px-3 pt-2 pb-1 text-xs font-normal text-slate-500">Güncelleme {buildLabel(APP_BUILD)}</DropdownMenuLabel>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
