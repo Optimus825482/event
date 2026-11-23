@@ -55,7 +55,8 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
    etiket elle yazılmaz). `eventflow-db`, `migrate` ve `create-admin` için alan adı atamayın (Coolify otomatik ürettiyse silin).
 4. Deploy. Sıra: veritabanı sağlıklı olunca `migrate` çalışır ve çıkar; ardından `web` başlar.
 5. İmaj, GitHub Actions'ın `build-and-push.yml` iş akışıyla `ghcr.io/optimus825482/eventflow-web` olarak yayımlanır;
-   `web-test` işi (lint, typecheck, test, build) geçmeden `build-web` çalışmaz, yani kırmızı commit'ten imaj üretilmez.
+   iş akışı test beklemez (testler PR'da `web-ci.yml` ile koşar), bu yüzden `main`'e yalnızca yeşil PR birleştirilir.
+   Deploy, imaj gönderildikten sonra yapılmalıdır; daha önce yapılırsa bir önceki `latest` imajı çekilir.
 
 Coolify dışı sunucuda: `.env` dosyasını **depoya eklemeden** hazırlayıp `docker compose up -d --build`; önüne HTTPS
 sonlandıran bir ters vekil koyun ve onun yazdığı IP başlığını `TRUSTED_IP_HEADER` ile belirtin.

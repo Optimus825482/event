@@ -1,7 +1,7 @@
 name: web-ci
 
 on:
-  # build-and-push.yml bu iş akışını `needs:` ile çağırır: kırmızı bir commit'ten web imajı üretilmez.
+  # Başka iş akışlarından çağrılabilir. build-and-push.yml artık çağırmaz: testler PR'da koşar, imaj beklemez.
   workflow_call:
   pull_request:
     paths:
