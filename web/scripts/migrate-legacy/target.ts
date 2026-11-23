@@ -5,6 +5,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import type { PgInsertValue, PgTable } from "drizzle-orm/pg-core";
 import pg from "pg";
 import * as schema from "@/db/schema";
+import { MERIT_BALLROOM_NAME } from "@/features/venue/presets/merit-ballroom";
 
 export type TargetDb = NodePgDatabase<typeof schema>;
 
@@ -54,10 +55,22 @@ export async function publicTables(client: pg.Client): Promise<string[]> {
   return res.rows.map((r) => r.table_name);
 }
 
+/**
+ * Migration'ların kendisinin eklediği (taşınan veri olmayan) satırlar: sayımlara ve boşluk denetimine katılmaz.
+ * Yalnızca sahipsiz hazır salon şablonu (0010); aynı tablodaki başka her satır yine sayılır.
+ */
+const SEEDED_ROWS: Readonly<Record<string, { where: string; params: readonly string[] }>> = {
+  venue_templates: { where: "NOT (created_by_id IS NULL AND name = $1)", params: [MERIT_BALLROOM_NAME] },
+};
+
 export async function countRows(client: pg.Client): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for (const table of await publicTables(client)) {
-    const res = await client.query<{ n: string }>(`SELECT count(*)::text AS n FROM public."${table.replace(/"/g, '""')}"`);
+    const seeded = SEEDED_ROWS[table];
+    const res = await client.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM public."${table.replace(/"/g, '""')}"${seeded ? ` WHERE ${seeded.where}` : ""}`,
+      seeded ? [...seeded.params] : [],
+    );
     out[table] = Number(res.rows[0]?.n ?? 0);
   }
   return out;

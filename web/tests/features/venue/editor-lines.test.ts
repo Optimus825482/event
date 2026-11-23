@@ -4,6 +4,7 @@ import {
   constrainAxis,
   copyLines,
   isLineKey,
+  lineFloor,
   lineKey,
   lineStrip,
   linesForSave,
@@ -84,6 +85,22 @@ describe("düzenleyicide çizgiler", () => {
     expect(isLayoutEmpty(store.getState())).toBe(false);
   });
 
+  it("kat değiştirilir, çoğaltma ve kayıt katı korur; aynı kat tekrar geçmişe girmez", () => {
+    const store = createEditorStore(initial([line()]));
+    const key = lineKey("l1");
+    store.getState().updateLines([key], { floor: 1 }); // zaten zemin kat: değişiklik yok
+    expect(store.getState().lines[0]).toEqual(line());
+    store.getState().updateLines([key], { floor: 2 });
+    expect(store.getState().lines[0]).toMatchObject({ floor: 2 });
+    store.getState().selectAll();
+    store.getState().duplicateSelection();
+    expect(store.getState().lines[1]).toMatchObject({ floor: 2 });
+    expect(store.getState().toSaveInput().decor.lines?.map((l) => l.floor)).toEqual([2, 2]);
+    store.getState().undo();
+    store.getState().undo();
+    expect(store.getState().lines[0]).toEqual(line());
+  });
+
   it("uç taşıma, gövde kaydırma, geri al / yinele", () => {
     const store = createEditorStore(initial([line()]));
     const key = lineKey("l1");
@@ -153,6 +170,16 @@ describe("çizgi şeması", () => {
     ["uzun kimlik", { id: "x".repeat(65) }],
   ])("geçersiz çizgi reddedilir: %s", (_name, bad) => {
     expect(decorSchema.safeParse({ ...base, lines: [line(bad)] }).success).toBe(false);
+  });
+
+  it("kat isteğe bağlıdır; yoksa zemin kat sayılır, aralık dışı reddedilir", () => {
+    expect(lineFloor(line())).toBe(1);
+    expect(lineFloor(line({ floor: 3 }))).toBe(3);
+    expect(decorSchema.safeParse({ ...base, lines: [line(), line({ id: "u", floor: 2 })] }).success).toBe(true);
+    for (const floor of [0, 10, 1.5]) {
+      expect(decorSchema.safeParse({ ...base, lines: [line({ floor })] }).success).toBe(false);
+    }
+    expect(decorSchema.parse({ ...base, lines: [line()] }).lines?.[0]).not.toHaveProperty("floor");
   });
 
   it("tolerans içinde taşma ve paletsiz #rrggbb kabul edilir; sınır 200 çizgi", () => {

@@ -23,7 +23,11 @@ export type ItemHandlers = {
   onDragEnd: () => void;
 };
 
+/** Etkin katta olmayan öğe: soluk çizilir, tıklanamaz. */
+const MUTED_OPACITY = 0.22;
+
 type TableNodeProps = ItemHandlers & {
+  muted?: boolean;
   table: EditorTable;
   type: TableTypeOption | undefined;
   selected: boolean;
@@ -31,7 +35,7 @@ type TableNodeProps = ItemHandlers & {
   groupColor?: string | undefined;
 };
 
-export const TableNode = memo(function TableNode({ table, type, selected, groupColor, ...h }: TableNodeProps) {
+export const TableNode = memo(function TableNode({ table, type, selected, groupColor, muted = false, ...h }: TableNodeProps) {
   const shape = tableShapeOf(type);
   const size = effectiveTableSize({ size: table.size, capacity: table.capacity, isLoca: table.isLoca });
   const { width, height } = tableDims(shape, table.isLoca, size);
@@ -57,7 +61,8 @@ export const TableNode = memo(function TableNode({ table, type, selected, groupC
       x={table.x}
       y={table.y}
       rotation={table.rotation}
-      opacity={table.isPinned ? 0.85 : 1}
+      opacity={muted ? MUTED_OPACITY : table.isPinned ? 0.85 : 1}
+      listening={!muted}
       draggable={h.draggable}
       onMouseDown={(e) => h.onSelect(table.key, e)}
       onTap={(e) => h.onSelect(table.key, e)}
@@ -103,7 +108,7 @@ export const TableNode = memo(function TableNode({ table, type, selected, groupC
   );
 });
 
-type DecorNodeProps = ItemHandlers & { element: DecorElement; itemKey: string; selected: boolean };
+type DecorNodeProps = ItemHandlers & { element: DecorElement; itemKey: string; selected: boolean; muted?: boolean };
 
 /** Metin kutusu ve simge yerleşimi; dikey yönde metin 90° döndürülür. */
 function decorLayout(element: DecorElement, hasIcon: boolean, hasText: boolean, vertical: boolean, iconPx: number) {
@@ -119,7 +124,7 @@ function decorLayout(element: DecorElement, hasIcon: boolean, hasText: boolean, 
   return { icon, text: { x: leftInset, y: topInset, width: width - leftInset, height: height - topInset } };
 }
 
-export const DecorNode = memo(function DecorNode({ element, itemKey, selected, ...h }: DecorNodeProps) {
+export const DecorNode = memo(function DecorNode({ element, itemKey, selected, muted = false, ...h }: DecorNodeProps) {
   const style = resolveDecorStyle(element);
   const isText = element.kind === "label";
   const vertical = style.direction !== "horizontal";
@@ -150,6 +155,8 @@ export const DecorNode = memo(function DecorNode({ element, itemKey, selected, .
       x={element.x}
       y={element.y}
       rotation={element.rotation}
+      opacity={muted ? MUTED_OPACITY : 1}
+      listening={!muted}
       draggable={h.draggable}
       onMouseDown={(e) => h.onSelect(itemKey, e)}
       onTap={(e) => h.onSelect(itemKey, e)}

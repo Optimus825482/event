@@ -5,6 +5,7 @@ import {
   Copy,
   Grid3x3,
   Hand,
+  Layers,
   Maximize2,
   Minimize2,
   LayoutTemplate,
@@ -13,6 +14,7 @@ import {
   Plus,
   Presentation,
   RectangleHorizontal,
+  RectangleVertical,
   Redo2,
   Save,
   Slash,
@@ -21,6 +23,7 @@ import {
   Trash2,
   Type,
   Undo2,
+  Wine,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { ArrangeMenu } from "./arrange-menu";
 import type { Notify } from "./editor-commands";
 import { useEditor, useEditorStore } from "./editor-context";
+import { FLOOR_OPTIONS } from "./table-visual";
 
 type Props = {
   readOnly: boolean;
@@ -82,6 +86,7 @@ export function EditorToolbar(props: Props) {
   const tool = useEditor((s) => s.tool);
   const snapEnabled = useEditor((s) => s.snapEnabled);
   const showGrid = useEditor((s) => s.showGrid);
+  const activeFloor = useEditor((s) => s.activeFloor);
   const canUndo = useEditor((s) => s.history.past.length > 0);
   const canRedo = useEditor((s) => s.history.future.length > 0);
   const hasSelection = useEditor((s) => s.selection.length > 0);
@@ -102,6 +107,25 @@ export function EditorToolbar(props: Props) {
       <ToolButton label="Izgarayı göster" active={showGrid} onClick={() => s().setShowGrid(!showGrid)}>
         <Grid3x3 className="size-4" />
       </ToolButton>
+      <label className="flex items-center gap-1 text-xs text-muted-foreground" title="Çalışılan kat: diğer katlar soluk görünür ve seçilemez">
+        <Layers className="size-4" aria-hidden />
+        <select
+          aria-label="Çalışılan kat"
+          className={cn(
+            "h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            activeFloor !== null && "border-sky-500",
+          )}
+          value={activeFloor ?? "all"}
+          onChange={(e) => s().setActiveFloor(e.currentTarget.value === "all" ? null : Number(e.currentTarget.value))}
+        >
+          <option value="all">Tüm katlar</option>
+          {FLOOR_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
       {readOnly ? null : (
         <>
           <Divider />
@@ -116,8 +140,14 @@ export function EditorToolbar(props: Props) {
           <ToolButton label="Sahne ekle" onClick={() => s().addDecor("stage")}>
             <Presentation className="size-4" />
           </ToolButton>
+          <ToolButton label="Catwalk (podyum) ekle" onClick={() => s().addDecor("catwalk")}>
+            <RectangleVertical className="size-4" />
+          </ToolButton>
           <ToolButton label="Alan ekle" onClick={() => s().addDecor("area")}>
             <Square className="size-4" />
+          </ToolButton>
+          <ToolButton label="Bar / hizmet noktası ekle" onClick={() => s().addDecor("bar")}>
+            <Wine className="size-4" />
           </ToolButton>
           <ToolButton label="Duvar ekle" onClick={() => s().addDecor("wall")}>
             <RectangleHorizontal className="size-4" />

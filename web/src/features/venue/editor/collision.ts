@@ -1,4 +1,4 @@
-import type { DecorElement, TableShape } from "../schemas";
+import { MIN_FLOOR, type DecorElement, type TableShape } from "../schemas";
 import { rectsOverlap, rotatedExtent, tableFootprint, type Point, type Rect } from "./geometry";
 
 /** Çakışma hesabı için masa alanları (store'daki `EditorTable`'ın alt kümesi). */
@@ -12,6 +12,7 @@ export type TableLike = {
   isLoca: boolean;
   isPinned: boolean;
   tableTypeId: string | null;
+  floor: number;
 };
 
 export type ShapeOf = (t: Pick<TableLike, "tableTypeId">) => TableShape;
@@ -23,6 +24,10 @@ export type LayoutItem = {
   /** Masaların üstüne binemeyeceği dekor (sahne, alan, duvar); metin etiketleri engel değildir. */
   obstacle: boolean;
   pinned: boolean;
+  /** Kat; yalnızca aynı kattaki öğeler çakışır (loca altına masa konabilir). */
+  floor: number;
+  /** Her katta engel (duvar): katı ne olursa olsun tüm katlardaki masaları engeller. */
+  allFloors: boolean;
 };
 
 export const decorItemKey = (id: string) => `d:${id}`;
@@ -54,6 +59,11 @@ export function decorBox(e: Pick<DecorElement, "x" | "y" | "width" | "height" | 
   return { x: minX, y: minY, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY };
 }
 
+/** Dekorun katı; kat alanı olmayan eski öğeler zemin kattır. */
+export function decorFloor(e: Pick<DecorElement, "floor">): number {
+  return e.floor ?? MIN_FLOOR;
+}
+
 export function isObstacleDecor(e: Pick<DecorElement, "kind">): boolean {
   return e.kind !== "label";
 }
@@ -64,20 +74,27 @@ export function layoutItems(
   shapeOf: ShapeOf,
 ): LayoutItem[] {
   return [
-    ...tables.map((t) => ({ key: t.key, kind: "table" as const, box: tableBox(t, shapeOf), obstacle: true, pinned: t.isPinned })),
+    ...tables.map((t) => ({ key: t.key, kind: "table" as const, box: tableBox(t, shapeOf), obstacle: true, pinned: t.isPinned, floor: t.floor, allFloors: false })),
     ...elements.map((e) => ({
       key: decorItemKey(e.id),
       kind: "decor" as const,
       box: decorBox(e),
       obstacle: isObstacleDecor(e),
       pinned: e.isPinned === true,
+      floor: decorFloor(e),
+      allFloors: e.kind === "wall",
     })),
   ];
 }
 
-/** Masa–masa ve masa–engel dekor çakışır; dekorlar birbirinin üstüne binebilir. */
+/** Öğe verilen katta yer kaplıyor mu (duvar her katta kaplar). */
+export function occupiesFloor(item: Pick<LayoutItem, "floor" | "allFloors">, floor: number): boolean {
+  return item.allFloors || item.floor === floor;
+}
+
+/** Aynı kattaki masa–masa ve masa–engel dekor çakışır (duvar her katta); dekorlar birbirinin üstüne binebilir. */
 export function itemsCollide(a: LayoutItem, b: LayoutItem): boolean {
-  if (a.key === b.key) return false;
+  if (a.key === b.key || !(occupiesFloor(a, b.floor) || occupiesFloor(b, a.floor))) return false;
   if (a.kind === "decor" && b.kind === "decor") return false;
   if ((a.kind === "decor" && !a.obstacle) || (b.kind === "decor" && !b.obstacle)) return false;
   return rectsOverlap(a.box, b.box);

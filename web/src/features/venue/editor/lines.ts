@@ -1,4 +1,4 @@
-import { LINE_COLORS, LINE_WIDTH_MAX, MAX_LINES, type DecorLine } from "../schemas";
+import { LINE_COLORS, LINE_WIDTH_MAX, MAX_LINES, MIN_FLOOR, type DecorLine } from "../schemas";
 import { snap, type Point, type Rect } from "./geometry";
 
 /** Çizgi seçim anahtarı öneki (masalar `t:`, dekor `d:`). */
@@ -34,6 +34,11 @@ export function resolveEndpoint(raw: Point, anchor: Point | null, opts: Endpoint
   let p = opts.snap ? { x: snap(raw.x, opts.gridSize), y: snap(raw.y, opts.gridSize) } : raw;
   if (anchor && opts.constrain) p = constrainAxis(anchor, p);
   return clampToCanvas(p, opts.canvas);
+}
+
+/** Çizginin katı; kat alanı olmayan eski çizgiler zemin kattır. */
+export function lineFloor(l: Pick<DecorLine, "floor">): number {
+  return l.floor ?? MIN_FLOOR;
 }
 
 export function lineLength(l: Pick<DecorLine, "x1" | "y1" | "x2" | "y2">): number {

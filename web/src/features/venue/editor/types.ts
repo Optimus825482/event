@@ -1,4 +1,5 @@
 import type { Decor, DecorElement, DecorKind, DecorLine, TableInput, TableShape } from "../schemas";
+import type { ActiveFloor } from "./floors";
 import type { Point } from "./geometry";
 import type { History } from "./history";
 import type { LineActions } from "./line-actions";
@@ -49,6 +50,8 @@ export type EditorState = Snapshot & {
   showGrid: boolean;
   gridSize: number;
   tool: Tool;
+  /** Üzerinde çalışılan kat (yalnızca görünüm); diğer katlar soluk çizilir ve seçilemez. */
+  activeFloor: ActiveFloor;
   /** Masa tipi kimliği → biçim (çakışma ve yerleşim hesapları için). */
   tableShapes: Readonly<Record<string, TableShape>>;
 };
@@ -93,6 +96,8 @@ export type EditorActions = LineActions & {
   setSnap: (enabled: boolean) => void;
   setShowGrid: (show: boolean) => void;
   setTool: (tool: Tool) => void;
+  /** Etkin katı değiştirir; başka kattaki öğeler seçimden düşer. */
+  setActiveFloor: (floor: ActiveFloor) => void;
   setCanvasSize: (size: { width: number; height: number }) => void;
   toSaveInput: () => { tables: TableInput[]; decor: Decor };
 };

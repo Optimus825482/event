@@ -135,11 +135,13 @@ jobs:
           curl --fail --silent --show-error -D headers.txt -o /dev/null http://127.0.0.1:3000/login
           grep -i "^content-security-policy:" headers.txt
 
-      - name: First admin can be created; a second run refuses
+      # ADMIN_PASSWORD verildiği için ilk yöneticiyi migrate servisi zaten oluşturur (dca5629);
+      # elle çalıştırılan betik bu yüzden "yönetici zaten var" (çıkış kodu 2) ile reddetmelidir.
+      # Kod 0 dönerse dağıtımdaki otomatik yönetici oluşturma çalışmamış demektir.
+      - name: Bootstrap admin exists; a manual run refuses
         run: |
-          docker compose run --rm -T create-admin ci-admin
           set +e
-          docker compose run --rm -T create-admin ci-admin-2
+          docker compose run --rm -T create-admin ci-admin
           code=$?
           set -e
           test "$code" = "2"

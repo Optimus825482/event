@@ -4,6 +4,7 @@ import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
+import { countRows } from "../../../scripts/migrate-legacy/target";
 
 /**
  * Taşıma testleri için geçici veritabanları. Yalnızca `eventflow_legacy_test_*` ve
@@ -89,16 +90,7 @@ export async function checksum(name: string): Promise<Record<string, string>> {
   });
 }
 
+/** Taşınan veri satırları; migration'ın eklediği hazır salon şablonu (0010) sayılmaz, taşıma aracıyla aynı tanım. */
 export async function totalRows(name: string): Promise<number> {
-  return withClient(name, async (c) => {
-    const tables = await c.query<{ t: string }>(
-      "SELECT table_name AS t FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
-    );
-    let n = 0;
-    for (const { t } of tables.rows) {
-      const res = await c.query<{ n: string }>(`SELECT count(*)::text AS n FROM public."${t}"`);
-      n += Number(res.rows[0]?.n ?? 0);
-    }
-    return n;
-  });
+  return withClient(name, async (c) => Object.values(await countRows(c)).reduce((sum, n) => sum + n, 0));
 }

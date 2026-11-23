@@ -20,7 +20,8 @@ const HIGHLIGHT_COLOR = "#facc15";
  * Türkçe karakterleri kapsayan Geist (SIL OFL 1.1) yerelden sunulur.
  */
 const LABEL_FONT = "/fonts/Geist-Regular.ttf";
-const DECOR_HEIGHT: Record<DecorElement["kind"], number> = { stage: 0.6, area: 0.02, wall: 2.6, label: 0 };
+const STAGE_HEIGHT = 0.6;
+const DECOR_HEIGHT: Record<DecorElement["kind"], number> = { stage: STAGE_HEIGHT, area: 0.02, wall: 2.6, label: 0, bar: 1.1, catwalk: STAGE_HEIGHT };
 
 type ToWorld = (x: number, y: number) => [number, number];
 
@@ -142,7 +143,7 @@ function DecorMesh({ element, toWorld }: { element: DecorElement; toWorld: ToWor
         <boxGeometry args={[element.width / PX, height, element.height / PX]} />
         <meshStandardMaterial color={element.color ?? "#64748b"} transparent={element.kind === "area"} opacity={element.kind === "area" ? 0.5 : 1} />
       </mesh>
-      {element.kind === "stage" || element.kind === "area" ? (
+      {element.kind !== "wall" && element.label ? (
         <Label
           text={element.label}
           position={[x, base + height + 0.02, z]}

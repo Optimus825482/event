@@ -5,7 +5,8 @@ import { Minus, Plus, Scan } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
 import { Button } from "@/components/ui/button";
-import { layoutItems } from "../editor/collision";
+import { decorFloor, layoutItems } from "../editor/collision";
+import { floorKeys, onActiveFloor } from "../editor/floors";
 import { clampDelta, containsPoint, normalizeRect, zoomAround, type Point, type Rect as Box } from "../editor/geometry";
 import { cellName } from "../editor/view-chrome";
 import { linesInRect } from "../editor/lines";
@@ -74,6 +75,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
   const canvas = useEditor((s) => s.canvas);
   const selection = useEditor((s) => s.selection);
   const tool = useEditor((s) => s.tool);
+  const activeFloor = useEditor((s) => s.activeFloor);
   const gridSize = useEditor((s) => s.gridSize);
   const showGrid = useEditor((s) => s.showGrid);
   const [pointerCell, setPointerCell] = useState<string | null>(null);
@@ -264,13 +266,14 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
       if (!lasso.additive) s.clearSelection();
       return;
     }
+    const active = floorKeys(s, s.activeFloor);
     const hits = [
       ...s.tables.filter((t) => containsPoint(rect, t)).map((t) => t.key),
       ...s.elements
         .filter((el) => containsPoint(rect, { x: el.x + el.width / 2, y: el.y + el.height / 2 }))
         .map((el) => decorKey(el.id)),
       ...linesInRect(s.lines, rect),
-    ];
+    ].filter((k) => active.has(k));
     s.select(hits, lasso.additive ? "add" : "replace");
   }
 
@@ -335,6 +338,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
                 element={el}
                 itemKey={decorKey(el.id)}
                 selected={selected.has(decorKey(el.id))}
+                muted={!onActiveFloor(decorFloor(el), activeFloor)}
                 {...handlers}
                 draggable={canDrag && el.isPinned !== true}
               />
@@ -346,6 +350,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
                 table={t}
                 type={t.tableTypeId ? typeById.get(t.tableTypeId) : undefined}
                 selected={selected.has(t.key)}
+                muted={!onActiveFloor(t.floor, activeFloor)}
                 groupColor={t.id ? groups?.get(t.id)?.color : undefined}
                 {...handlers}
                 draggable={canDrag && !t.isPinned}

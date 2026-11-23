@@ -108,13 +108,20 @@ export function resolveDecorStyle(e: StyleInput): ResolvedDecorStyle {
     fontCss: (FONT_FAMILY_OPTIONS.find((o) => o.id === e.fontFamily)?.css ?? FONT_FAMILY_OPTIONS[0]?.css ?? "sans-serif"),
     direction: e.textDirection ?? "horizontal",
     icon: e.icon && e.icon !== "none" ? e.icon : null,
-    opacity: e.kind === "area" ? 0.3 : e.kind === "stage" ? 0.75 : 1,
+    opacity: e.kind === "area" ? 0.3 : e.kind === "stage" || e.kind === "catwalk" ? 0.75 : 1,
   };
 }
 
-export const DECOR_KIND_TITLE: Record<DecorKind, string> = { stage: "Sahne", area: "Alan", wall: "Duvar", label: "Metin" };
+export const DECOR_KIND_TITLE: Record<DecorKind, string> = {
+  stage: "Sahne",
+  area: "Alan",
+  wall: "Duvar",
+  label: "Metin",
+  bar: "Bar / Hizmet Noktası",
+  catwalk: "Catwalk (Podyum)",
+};
 
-/** Tam stil bölümü (çerçeve, simge, yazı tipi, yön) yalnızca sahne ve alan için sunulur. */
+/** Tam stil bölümü (çerçeve, simge, yazı tipi, yön) metin ve duvar dışındaki türler için sunulur. */
 export function supportsFullStyle(kind: DecorKind): boolean {
-  return kind === "stage" || kind === "area";
+  return kind !== "label" && kind !== "wall";
 }

@@ -1,6 +1,6 @@
-import { MAX_LINES, type DecorLine } from "../schemas";
+import { MAX_LINES, MIN_FLOOR, type DecorLine } from "../schemas";
 import type { Point } from "./geometry";
-import { DEFAULT_LINE_STYLE, isDrawable, lineKey, setEndpoint, translateLine, type LineEnd } from "./lines";
+import { DEFAULT_LINE_STYLE, isDrawable, lineFloor, lineKey, setEndpoint, translateLine, type LineEnd } from "./lines";
 import type { EditorState, Snapshot } from "./types";
 
 type Change = (next: Partial<Snapshot> & Partial<Pick<EditorState, "selection">>) => void;
@@ -8,7 +8,7 @@ type Change = (next: Partial<Snapshot> & Partial<Pick<EditorState, "selection">>
 export type LineActions = {
   /** İki uçtan çizgi ekler ve seçer; çok kısaysa ya da sınır doluysa `null`. */
   addLine: (a: Point, b: Point) => string | null;
-  updateLines: (keys: readonly string[], patch: Partial<Pick<DecorLine, "color" | "width">>) => void;
+  updateLines: (keys: readonly string[], patch: Partial<Pick<DecorLine, "color" | "width" | "floor">>) => void;
   moveLineEnd: (key: string, end: LineEnd, p: Point) => void;
   translateLineBy: (key: string, dx: number, dy: number) => void;
 };
@@ -37,6 +37,7 @@ export function createLineActions(get: () => EditorState, change: Change, newId:
         // Art arda çizilen çizgiler son çizginin biçimini sürdürür.
         color: previous?.color ?? DEFAULT_LINE_STYLE.color,
         width: previous?.width ?? DEFAULT_LINE_STYLE.width,
+        ...(s.activeFloor !== null && s.activeFloor !== MIN_FLOOR ? { floor: s.activeFloor } : {}),
       };
       change({ lines: [...s.lines, line], selection: [lineKey(line.id)] });
       return lineKey(line.id);
@@ -45,7 +46,10 @@ export function createLineActions(get: () => EditorState, change: Change, newId:
       const wanted = new Set(keys);
       const s = get();
       const lines = s.lines.map((l) =>
-        wanted.has(lineKey(l.id)) && ((patch.color !== undefined && patch.color !== l.color) || (patch.width !== undefined && patch.width !== l.width))
+        wanted.has(lineKey(l.id)) &&
+        ((patch.color !== undefined && patch.color !== l.color) ||
+          (patch.width !== undefined && patch.width !== l.width) ||
+          (patch.floor !== undefined && patch.floor !== lineFloor(l)))
           ? { ...l, ...patch }
           : l,
       );

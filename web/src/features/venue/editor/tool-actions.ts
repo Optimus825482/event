@@ -1,6 +1,6 @@
 import type { DecorElement } from "../schemas";
 import { applySpacing, autoAlign, horizontalCentreDelta, snapToCellCentres, type ArrangeItem, type ArrangeResult } from "./arrange";
-import { decorItemKey, layoutItems, newCollisions, tableBox, type ShapeOf } from "./collision";
+import { decorItemKey, layoutItems, newCollisions, occupiesFloor, tableBox, type ShapeOf } from "./collision";
 import { clampDelta, labelNumber, nextLabel, nextPrefixedLabel, normalizeAngle, snapPoint, tableFootprint, unionRect, type Point } from "./geometry";
 import { BULK_ADD_MAX, placeInRows } from "./placement";
 import type { EditorTable, Placement } from "./types";
@@ -114,7 +114,7 @@ export function bulkAddTables(ctx: ToolCtx, opts: BulkAddOptions, newKey: () => 
   if (count === 0) return [];
   const footprint = tableFootprint({ size: null, capacity: opts.capacity, isLoca: opts.isLoca }, ctx.shapeOf(opts));
   const obstacles = layoutItems(ctx.tables, ctx.elements, ctx.shapeOf)
-    .filter((i) => i.obstacle)
+    .filter((i) => i.obstacle && occupiesFloor(i, opts.floor))
     .map((i) => i.box);
   const points = placeInRows({ count, footprint, obstacles, canvas: ctx.canvas, start: opts.start });
   const all = ctx.tables.map((t) => t.label);
@@ -167,13 +167,23 @@ function arrangeTargets(ctx: ToolCtx, requireSelection: boolean): { targets: Edi
   return { targets: pool.filter((t) => !t.isPinned).sort(compareTables), scoped };
 }
 
-function run(ctx: ToolCtx, targets: readonly EditorTable[], fn: (items: ArrangeItem[], fixed: ReturnType<typeof fixedBoxes>) => ArrangeResult): ArrangeOutcome {
+type FloorRun = { fixed: ReturnType<typeof fixedBoxes>; floorTargets: readonly EditorTable[]; lowest: boolean };
+
+/** Hedefleri kat kat düzenler: her kat yalnızca kendi katındaki engelleri görür, sonuçlar birleştirilir. */
+function run(ctx: ToolCtx, targets: readonly EditorTable[], fn: (items: ArrangeItem[], floor: FloorRun) => ArrangeResult): ArrangeOutcome {
   const keys = new Set(targets.map((t) => t.key));
-  const items = targets.map((t) => {
-    const b = tableBox(t, ctx.shapeOf);
-    return { key: t.key, x: t.x, y: t.y, width: b.width, height: b.height };
-  });
-  const res = fn(items, fixedBoxes(ctx, keys));
+  const floors = [...new Set(targets.map((t) => t.floor))].sort((a, b) => a - b);
+  const res: ArrangeResult = { positions: new Map(), unplaced: [] };
+  for (const floor of floors) {
+    const floorTargets = targets.filter((t) => t.floor === floor);
+    const items = floorTargets.map((t) => {
+      const b = tableBox(t, ctx.shapeOf);
+      return { key: t.key, x: t.x, y: t.y, width: b.width, height: b.height };
+    });
+    const part = fn(items, { fixed: fixedBoxes(ctx, keys, floor), floorTargets, lowest: floor === floors[0] });
+    for (const [k, p] of part.positions) res.positions.set(k, p);
+    res.unplaced.push(...part.unplaced);
+  }
   const tables = ctx.tables.map((t) => {
     const p = res.positions.get(t.key);
     return p && (p.x !== t.x || p.y !== t.y) ? { ...t, x: p.x, y: p.y } : t;
@@ -183,30 +193,32 @@ function run(ctx: ToolCtx, targets: readonly EditorTable[], fn: (items: ArrangeI
   return { tables, moved, unplaced: res.unplaced.map((k) => label.get(k) ?? k) };
 }
 
-function fixedBoxes(ctx: ToolCtx, moving: ReadonlySet<string>) {
+function fixedBoxes(ctx: ToolCtx, moving: ReadonlySet<string>, floor: number) {
   return layoutItems(ctx.tables, ctx.elements, ctx.shapeOf)
-    .filter((i) => i.obstacle && !moving.has(i.key))
+    .filter((i) => i.obstacle && occupiesFloor(i, floor) && !moving.has(i.key))
     .map((i) => i.box);
 }
 
 export function autoAlignTables(ctx: ToolCtx): ArrangeOutcome & { scoped: boolean } {
   const { targets, scoped } = arrangeTargets(ctx, false);
-  const start = scoped ? unionRect(targets.map((t) => tableBox(t, ctx.shapeOf))) : null;
-  const out = run(ctx, targets, (items, fixed) =>
-    autoAlign(items, fixed, ctx.canvas, start ? { start: { x: start.x, y: start.y } } : {}),
-  );
+  // Seçim hizalanırken ve en alt katın üstündeki katlarda dizilim öğelerin bulunduğu bölgeden başlar;
+  // böylece üst kat (localar) tuvalin başına, zemin masaların üstüne taşınmaz.
+  const out = run(ctx, targets, (items, { fixed, floorTargets, lowest }) => {
+    const start = scoped || !lowest ? unionRect(floorTargets.map((t) => tableBox(t, ctx.shapeOf))) : null;
+    return autoAlign(items, fixed, ctx.canvas, start ? { start: { x: start.x, y: start.y } } : {});
+  });
   return { ...out, scoped };
 }
 
 export function snapTablesToCells(ctx: ToolCtx): ArrangeOutcome {
   const { targets } = arrangeTargets(ctx, false);
-  return run(ctx, targets, (items, fixed) => snapToCellCentres(items, fixed, ctx.canvas));
+  return run(ctx, targets, (items, { fixed }) => snapToCellCentres(items, fixed, ctx.canvas));
 }
 
 export function spaceTables(ctx: ToolCtx, gap: number): ArrangeOutcome {
   const { targets } = arrangeTargets(ctx, true);
   if (targets.length < 2) return { tables: [...ctx.tables], moved: 0, unplaced: [] };
-  return run(ctx, targets, (items, fixed) => applySpacing(items, gap, fixed, ctx.canvas));
+  return run(ctx, targets, (items, { fixed }) => applySpacing(items, gap, fixed, ctx.canvas));
 }
 
 /** Seçili (sabitlenmemiş) öğeleri grup olarak yatay ortalar; çakışma doğarsa reddedilir. */

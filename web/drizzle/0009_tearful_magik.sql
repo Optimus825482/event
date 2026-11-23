@@ -1,0 +1,2 @@
+ALTER TABLE "service_points" ADD COLUMN "layout_element_id" text;--> statement-breakpoint
+ALTER TABLE "service_points" ADD CONSTRAINT "service_points_event_layout_element_uq" UNIQUE("event_id","layout_element_id");

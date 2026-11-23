@@ -122,11 +122,14 @@ export const servicePoints = pgTable(
     description: text("description"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
+    // Yerleşim planındaki bar öğesinin kimliği (`layout_decor.elements[].id`); dolu ise nokta plandan yönetilir.
+    layoutElementId: text("layout_element_id"),
     ...timestamps(),
   },
   (t) => [
     check("service_points_required_staff_non_negative", sql`${t.requiredStaffCount} >= 0`),
     unique("service_points_event_id_id_uq").on(t.eventId, t.id),
+    unique("service_points_event_layout_element_uq").on(t.eventId, t.layoutElementId),
   ],
 );
 

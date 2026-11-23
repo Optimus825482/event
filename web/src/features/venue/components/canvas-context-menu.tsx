@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, Box, Circle, Copy, Crown, Lock, Maximize2, Mic2, Settings, Sofa, Trash2, Unlock } from "lucide-react";
+import { ArrowLeftRight, Box, Circle, Copy, Crown, Lock, Maximize2, Mic2, Settings, Sofa, Trash2, RectangleVertical, Unlock, Wine } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   ContextMenu,
@@ -29,7 +29,7 @@ type Props = {
   children: ReactNode;
 };
 
-const DECOR_NAMES: Record<DecorKind, string> = { stage: "Sahne", area: "Alan", wall: "Duvar", label: "Metin" };
+const DECOR_NAMES: Record<DecorKind, string> = { stage: "Sahne", area: "Alan", wall: "Duvar", label: "Metin", bar: "Bar", catwalk: "Catwalk" };
 
 type ItemProps = { icon: ReactNode; onSelect: () => void; children: ReactNode; danger?: boolean; count?: number; testId?: string };
 
@@ -46,7 +46,7 @@ function Item({ icon, onSelect, children, danger, count, testId }: ItemProps) {
 function CanvasItems({ world, notify, onOpenAdd }: { world: Point; notify: Notify; onOpenAdd: Props["onOpenAdd"] }) {
   const store = useEditorStore();
   const cell = cellName(world);
-  const addDecor = (kind: "stage" | "area") => {
+  const addDecor = (kind: "stage" | "area" | "bar" | "catwalk") => {
     store.getState().addDecor(kind, cellCenter(world));
     notify("ok", `${DECOR_NAMES[kind]} eklendi: ${cell}`);
   };
@@ -57,8 +57,14 @@ function CanvasItems({ world, notify, onOpenAdd }: { world: Point; notify: Notif
       <Item icon={<Mic2 className="size-4 text-red-500" />} onSelect={() => addDecor("stage")}>
         Sahne Ekle
       </Item>
+      <Item icon={<RectangleVertical className="size-4 text-violet-500" />} onSelect={() => addDecor("catwalk")}>
+        Catwalk Ekle
+      </Item>
       <Item icon={<Box className="size-4 text-blue-500" />} onSelect={() => addDecor("area")}>
         Alan Ekle
+      </Item>
+      <Item icon={<Wine className="size-4 text-amber-500" />} onSelect={() => addDecor("bar")}>
+        Bar / Hizmet Noktası Ekle
       </Item>
       <Item icon={<Circle className="size-4 text-blue-500" />} onSelect={() => onOpenAdd("table", world)}>
         Masa Ekle
