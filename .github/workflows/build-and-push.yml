@@ -41,6 +41,9 @@ jobs:
           context: ./web
           file: ./web/Dockerfile
           push: true
+          # Arayüzde "Güncelleme #N" olarak görünür; açık sekmeler bu numara değişince "Sistem güncellendi" der.
+          build-args: |
+            APP_BUILD=${{ github.run_number }}
           tags: |
             ${{ env.WEB_IMAGE }}:latest
             ${{ env.WEB_IMAGE }}:${{ github.sha }}

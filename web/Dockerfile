@@ -15,6 +15,10 @@ ENV DATABASE_URL=postgres://build@localhost:5432/build \
     BETTER_AUTH_URL=http://localhost:3000
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Güncelleme sıra numarası (build-and-push.yml: github.run_number). Kaynak kopyasından sonra tanımlanır ki
+# her derlemede değişen değer bağımlılık katmanlarının önbelleğini bozmasın. Boşsa sürüm gösterilmez.
+ARG APP_BUILD=""
+ENV NEXT_PUBLIC_APP_BUILD=$APP_BUILD
 RUN npm run build
 
 # Çalışma zamanı betiklerinin (migrate.mjs, create-admin.mjs) bağımlılıkları: yalnızca drizzle-orm + pg + bcryptjs
