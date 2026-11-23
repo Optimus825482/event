@@ -10,7 +10,8 @@ export const MAX_FLOOR = 9;
 export const TABLE_SIZE_MIN = 8;
 export const TABLE_SIZE_MAX = 400;
 
-export const DECOR_KINDS = ["stage", "area", "wall", "label"] as const;
+/** `bar`: bar / hizmet noktası tezgâhı; `catwalk`: sahneden salona uzanan podyum (sahneyle aynı yükseklikte). */
+export const DECOR_KINDS = ["stage", "area", "wall", "label", "bar", "catwalk"] as const;
 export type DecorKind = (typeof DECOR_KINDS)[number];
 
 export const TABLE_SHAPES = ["round", "rectangle", "square"] as const;
@@ -116,6 +117,8 @@ export const decorLineSchema = z.object({
   y2: coordinate,
   color: hexColor,
   width: z.number().int("Kalınlık tam sayı olmalı").min(1).max(LINE_WIDTH_MAX),
+  /** Kat; eski kayıtlarda yoktur ve zemin kat (1) sayılır. */
+  floor: z.number().int().min(MIN_FLOOR).max(MAX_FLOOR).optional(),
 });
 export type DecorLine = z.output<typeof decorLineSchema>;
 

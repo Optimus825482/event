@@ -1,9 +1,13 @@
 "use client";
 
+import { useId } from "react";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { lineKey, lineLength } from "../editor/lines";
+import { lineFloor, lineKey, lineLength } from "../editor/lines";
 import { LINE_COLORS, LINE_WIDTHS, type DecorLine } from "../schemas";
+import { fieldClass } from "./commit-field";
 import { useEditorStore } from "./editor-context";
+import { FLOOR_OPTIONS } from "./table-visual";
 
 const COLOR_NAMES: Record<(typeof LINE_COLORS)[number], string> = {
   "#ef4444": "Kırmızı",
@@ -17,12 +21,14 @@ const COLOR_NAMES: Record<(typeof LINE_COLORS)[number], string> = {
 /** Seçili çizgi(ler)in rengi ve kalınlığı; sabit palet ve kalınlık listesinden seçilir. */
 export function LineStyleSection({ lines, readOnly }: { lines: readonly DecorLine[]; readOnly: boolean }) {
   const store = useEditorStore();
+  const floorId = useId();
   const first = lines[0];
   if (!first) return null;
   const keys = lines.map((l) => lineKey(l.id));
   const sameColor = lines.every((l) => l.color === first.color);
   const sameWidth = lines.every((l) => l.width === first.width);
-  const update = (patch: Partial<Pick<DecorLine, "color" | "width">>) => store.getState().updateLines(keys, patch);
+  const sameFloor = lines.every((l) => lineFloor(l) === lineFloor(first));
+  const update = (patch: Partial<Pick<DecorLine, "color" | "width" | "floor">>) => store.getState().updateLines(keys, patch);
 
   return (
     <section className="space-y-3" aria-label="Çizgi özellikleri">
@@ -71,6 +77,23 @@ export function LineStyleSection({ lines, readOnly }: { lines: readonly DecorLin
             </button>
           ))}
         </div>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor={floorId}>Kat</Label>
+        <select
+          id={floorId}
+          className={fieldClass}
+          disabled={readOnly}
+          value={sameFloor ? lineFloor(first) : "__mixed"}
+          onChange={(e) => update({ floor: Number(e.currentTarget.value) })}
+        >
+          {sameFloor ? null : <option value="__mixed" disabled>Karışık</option>}
+          {FLOOR_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
       <p className="text-xs text-muted-foreground">Uçları sürükleyerek uzatın; Shift yatay/dikey tutar. Silmek için Delete.</p>
     </section>

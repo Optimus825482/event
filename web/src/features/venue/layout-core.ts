@@ -14,6 +14,7 @@ import { canAccessEvent } from "@/features/events/access";
 import { listEventTables, totalCapacity, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
+import { syncBarServicePoints } from "./service-points-sync";
 import { MAX_FLOOR, MAX_TABLE_CAPACITY, MAX_TABLES, MIN_FLOOR, decorSchema, normalizeLabel, type Decor, type DecorInput, type TableInput } from "./schemas";
 
 export type EventTableRow = typeof eventTables.$inferSelect;
@@ -231,6 +232,7 @@ export async function writeLayout(
   }
   await assertCapacityCoversReservations(tx, eventId, updates);
   await assertTableTypesExist(tx, tables);
+  await syncBarServicePoints(tx, eventId, decor);
 
   if (removed.length > 0) {
     await tx.delete(eventTables).where(

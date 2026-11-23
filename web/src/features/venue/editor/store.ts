@@ -1,6 +1,7 @@
 import { createStore } from "zustand/vanilla";
-import type { DecorElement, DecorKind } from "../schemas";
+import { MIN_FLOOR, type DecorElement, type DecorKind } from "../schemas";
 import { decorItemKey, type ShapeOf } from "./collision";
+import { floorKeys } from "./floors";
 import { findFreeSpot, normalizeAngle, nextLabel, snap, snapPoint, type Point } from "./geometry";
 import { DEFAULT_VIEW_SETTINGS, type ViewSettings } from "./view-chrome";
 import { emptyHistory, record, redo, undo } from "./history";
@@ -63,6 +64,8 @@ const DECOR_DEFAULTS: Record<DecorKind, { width: number; height: number; label: 
   area: { width: 200, height: 140, label: "Alan", color: "#0ea5e9" },
   wall: { width: 300, height: 12, label: "", color: "#64748b" },
   label: { width: 140, height: 36, label: "Metin", color: "#f59e0b" },
+  bar: { width: 120, height: 40, label: "BAR", color: "#b45309" },
+  catwalk: { width: 60, height: 160, label: "", color: "#7c3aed" },
 };
 
 function snapshot(state: Snapshot): Snapshot {
@@ -127,6 +130,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
       showGrid: view.showGrid,
       gridSize: view.gridSize,
       tool: "select",
+      activeFloor: null,
       tableShapes: {},
       ...createLineActions(get, change, () => uid("l-")),
 
@@ -143,10 +147,16 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
 
       addTable: (opts = {}) => {
         const s = get();
+        const floor = s.activeFloor ?? MIN_FLOOR;
         // Konum verilmediyse (araç çubuğu) mevcut masaların üstüne binmeyen ilk boş nokta seçilir.
         const at = opts.at
           ? snapPoint(opts.at, s.gridSize, s.snapEnabled)
-          : findFreeSpot(center(), s.tables, s.gridSize * NEW_TABLE_SPACING_CELLS, s.canvas);
+          : findFreeSpot(
+              center(),
+              s.tables.filter((t) => t.floor === floor),
+              s.gridSize * NEW_TABLE_SPACING_CELLS,
+              s.canvas,
+            );
         const key = uid("t:new-");
         const table: EditorTable = {
           key,
@@ -161,7 +171,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
           isVip: false,
           isPinned: false,
           size: null,
-          floor: 1,
+          floor,
           sortNumber: null,
           locked: false,
         };
@@ -174,6 +184,8 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
         const d = DECOR_DEFAULTS[kind];
         const p = snapPoint(at ?? center(), s.gridSize, s.snapEnabled);
         const id = uid("d-");
+        // Barlar personel atamasında ada göre ayırt edilir: BAR 1, BAR 2…
+        const label = kind === "bar" ? `${d.label} ${s.elements.filter((e) => e.kind === "bar").length + 1}` : d.label;
         const element: DecorElement = {
           id,
           kind,
@@ -182,8 +194,9 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
           width: d.width,
           height: d.height,
           rotation: 0,
-          label: d.label,
+          label,
           color: d.color,
+          ...(s.activeFloor !== null && s.activeFloor !== MIN_FLOOR ? { floor: s.activeFloor } : {}),
         };
         change({ elements: [...s.elements, element], selection: [decorKey(id)] });
         return decorKey(id);
@@ -308,7 +321,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
       },
       selectAll: () => {
         const s = get();
-        set({ selection: [...s.tables.map((t) => t.key), ...s.elements.map((e) => decorKey(e.id)), ...s.lines.map((l) => lineKey(l.id))] });
+        set({ selection: [...floorKeys(s, s.activeFloor)] });
       },
       clearSelection: () => set({ selection: [] }),
 
@@ -328,6 +341,11 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
       setSnap: (enabled) => set({ snapEnabled: enabled }),
       setShowGrid: (show) => set({ showGrid: show }),
       setTool: (tool) => set({ tool }),
+      setActiveFloor: (floor) => {
+        const s = get();
+        const keys = floorKeys(s, floor);
+        set({ activeFloor: floor, selection: s.selection.filter((k) => keys.has(k)) });
+      },
       setCanvasSize: (size) => {
         const s = get();
         if (s.canvas.width === size.width && s.canvas.height === size.height) return;

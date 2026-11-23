@@ -64,6 +64,13 @@
       "when": 1795374704511,
       "tag": "0008_pink_adam_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795446506833,
+      "tag": "0009_tearful_magik",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { lineStrip } from "../editor/lines";
+import { lineFloor, lineStrip } from "../editor/lines";
 import type { DecorLine } from "../schemas";
+import { floorElevation } from "./table-visual";
 
 const STRIP_HEIGHT = 0.02;
 const MIN_STRIP_WIDTH = 0.05;
@@ -20,8 +21,9 @@ export default function Venue3DLines({ lines, px, toWorld }: Props) {
       {lines.map((l) => {
         const strip = lineStrip(l);
         const [x, z] = toWorld(strip.cx, strip.cy);
+        const base = floorElevation(lineFloor(l));
         return (
-          <mesh key={l.id} position={[x, STRIP_HEIGHT / 2 + 0.006, z]} rotation={[0, -strip.angle, 0]}>
+          <mesh key={l.id} position={[x, base + STRIP_HEIGHT / 2 + 0.006, z]} rotation={[0, -strip.angle, 0]}>
             <boxGeometry args={[strip.length / px, STRIP_HEIGHT, Math.max(MIN_STRIP_WIDTH, l.width / px)]} />
             <meshStandardMaterial color={l.color} emissive={l.color} emissiveIntensity={0.25} />
           </mesh>

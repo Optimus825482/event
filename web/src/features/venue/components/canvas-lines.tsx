@@ -5,7 +5,8 @@ import { useState } from "react";
 import { Circle, Group, Line } from "react-konva";
 import { useStore } from "zustand";
 import { snap, type Point } from "../editor/geometry";
-import { lineKey, resolveEndpoint, setEndpoint, type LineEnd } from "../editor/lines";
+import { onActiveFloor } from "../editor/floors";
+import { lineFloor, lineKey, resolveEndpoint, setEndpoint, type LineEnd } from "../editor/lines";
 import type { EditorStore } from "../editor/store";
 import type { DecorLine } from "../schemas";
 import type { LinePreview } from "./use-line-drawing";
@@ -38,6 +39,7 @@ export function CanvasLines({ store, readOnly, preview }: Props) {
   const lines = useStore(store, (s) => s.lines);
   const selection = useStore(store, (s) => s.selection);
   const tool = useStore(store, (s) => s.tool);
+  const activeFloor = useStore(store, (s) => s.activeFloor);
   const [override, setOverride] = useState<Override>(null);
   const editable = !readOnly && tool === "select";
   const selected = new Set(selection);
@@ -88,7 +90,13 @@ export function CanvasLines({ store, readOnly, preview }: Props) {
         const l = override?.key === key ? override.line : stored;
         const isSelected = selected.has(key);
         return (
-          <Group key={stored.id} id={key} name="line-item">
+          <Group
+            key={stored.id}
+            id={key}
+            name="line-item"
+            opacity={onActiveFloor(lineFloor(stored), activeFloor) ? 1 : 0.22}
+            listening={onActiveFloor(lineFloor(stored), activeFloor)}
+          >
             {isSelected ? <Line points={points(l)} stroke={SELECTED_HALO} strokeWidth={l.width + 8} lineCap="round" listening={false} /> : null}
             <Line
               points={points(l)}
