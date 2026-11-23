@@ -8,6 +8,9 @@
 #
 # Zorunlu ortam değişkenleri eksikse `docker compose config` başarısız olur (${VAR:?...}).
 
+# `pull_policy: always`: etiket `latest` olduğu için zorunludur. Onsuz `docker compose up -d` sunucuda zaten duran
+# eski `latest` imajını kullanır ve deploy "başarılı" görünür ama uygulama güncellenmez.
+
 x-web-env: &web-env
   NODE_ENV: production
   DATABASE_URL: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:?DB_PASSWORD zorunlu}@eventflow-db:5432/${DB_NAME:-eventflow}
@@ -50,6 +53,7 @@ services:
   # Tek seferlik veritabanı geçişi; web yalnızca bu başarıyla bittikten sonra başlar.
   migrate:
     image: ${WEB_IMAGE:-ghcr.io/optimus825482/eventflow-web:latest}
+    pull_policy: always
     restart: "no"
     # Şemayı kurar; ADMIN_PASSWORD verilmişse ilk yöneticiyi de oluşturur (kullanıcı adı ADMIN_USERNAME, varsayılan
     # `admin`). Etkin bir yönetici zaten varsa dokunmaz (çıkış kodu 2 başarı sayılır). Parola en az 12 karakter
@@ -69,6 +73,7 @@ services:
   # Coolify dağıtımında başlamaz; sunucuda `docker compose run` ile çalıştırılır (bkz. DEPLOYMENT.md).
   create-admin:
     image: ${WEB_IMAGE:-ghcr.io/optimus825482/eventflow-web:latest}
+    pull_policy: always
     profiles: ["tools"]
     restart: "no"
     entrypoint: ["node", "/opt/migrator/create-admin.mjs"]
@@ -84,6 +89,7 @@ services:
   # Next.js uygulaması (standalone)
   web:
     image: ${WEB_IMAGE:-ghcr.io/optimus825482/eventflow-web:latest}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       eventflow-db:
