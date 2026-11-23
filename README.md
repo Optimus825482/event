@@ -172,7 +172,7 @@ Aşağıdakiler yazıldı ya da okunarak gözden geçirildi, **ama gerçekten ç
   dizinde denendi.
 - **Compose başlatma sırası** (`postgres` → `migrate` → `web`, `create-admin` profili), `/data/uploads` volume sahipliği,
   Coolify/Traefik davranışı (ve Coolify'ın `profiles` desteği).
-- **GitHub Actions'ta CI** (`web-ci.yml` ve `build-and-push.yml` içindeki `workflow_call`) bir kez bile çalışmadı.
+- **CI yok**: GitHub Actions iş akışları kaldırıldı; imajı Coolify sunucuda derler, testler göndermeden önce yerelde çalıştırılır.
 - **Gerçek veri taşıma**: ETL betiği yalnızca sentetik veriyle test edildi; gerçek eski veritabanıyla hiç çalıştırılmadı.
 - **Cihaz kamerası**: QR okuyucu yalnızca sahte video akışıyla (headless Chromium, html5-qrcode yedek yolu) denendi; gerçek telefon/tablet kamerasıyla ve yerel `BarcodeDetector` ile denenmedi.
 - Arayüz, geliştirme sırasında tarayıcıda yalnızca kısmen elle denendi; canlıya almadan önce elle duman testi yapın.
