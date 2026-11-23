@@ -3,16 +3,17 @@ import { templateLayoutSchema, type TemplateLayout } from "../schemas";
 /**
  * Merit Royal Diamond Ballroom gala krokisi (161 masa × 12 + 12 loca × 6 = 2004 kişi).
  * Koordinatlar krokiden okunmuştur (kroki pikseli); tuvale `SCALE` ile büyütülür.
- * Salon sınırı duvarla çizilir; iki üst bar ve alt sağ bar sınırın dışındadır, localar 2. kattadır.
+ * Salon sınırı ince çizgiyle gösterilir (duvar öğesi yok: 3B'de görüntüyü kapatıyordu); alt kenarda üç giriş
+ * kapısı için boşluk vardır. İki üst bar ve alt sağ bar sınırın dışındadır. Localar 2. kattadır ve salonun
+ * içinde, son masa sırasının üstündedir (altlarında masa vardır).
  */
 export const MERIT_BALLROOM_NAME = "Merit Royal Diamond Ballroom (2004 Pax)";
 export const MERIT_BALLROOM_DESCRIPTION =
-  "Gala krokisi: 161 masa × 12, 12 loca × 6 (2. kat), T catwalk'lı sahne, 3 bar, 2 ekran, sistem kontrol.";
+  "Gala krokisi: 161 masa × 12, 12 loca × 6 (2. kat, altında masa), T catwalk'lı sahne, 3 bar, 3 giriş, 2 ekran, sistem kontrol.";
 
 const SCALE = 2;
 const TABLE_SIZE = 48;
 const LOCA_SIZE = 56;
-const WALL = 8;
 const s = (v: number) => v * SCALE;
 
 /** [ilk masa numarası, y, x değerleri]: krokideki satırlar. */
@@ -66,10 +67,23 @@ const LOCAS: ReadonlyArray<readonly [string, number]> = [
   ["L2", 770],
   ["L1", 840],
 ];
-const LOCA_Y = 643;
+/** Son masa sırasının (y = 590) üstünde, salon sınırının içinde. */
+const LOCA_Y = 588;
 
 /** Salon sınırı (kroki pikseli). */
 const HALL = { left: 45, top: 85, right: 897, bottom: 610 } as const;
+/** Salon sınırı, tuval pikseli. */
+export const MERIT_BALLROOM_HALL = {
+  left: HALL.left * SCALE,
+  top: HALL.top * SCALE,
+  right: HALL.right * SCALE,
+  bottom: HALL.bottom * SCALE,
+} as const;
+
+/** Alt kenardaki giriş kapıları: orta noktalar (kroki pikseli) ve genişlik. Yerleri yaklaşıktır (sol, orta, sağ). */
+const DOORS = [200, 471, 742] as const;
+const DOOR_WIDTH = 60;
+const BORDER = { color: "#e2e8f0", width: 4 } as const;
 
 const box = (left: number, top: number, right: number, bottom: number) => ({
   x: s(left),
@@ -86,22 +100,26 @@ export function meritBallroomLayout(): TemplateLayout {
   ].sort((a, b) => a.sortNumber - b.sortNumber);
   const locas = LOCAS.map(([label, x]) => ({ label, capacity: 6, x: s(x), y: s(LOCA_Y), isLoca: true, floor: 2, size: LOCA_SIZE }));
 
-  const hall = { left: s(HALL.left), top: s(HALL.top), width: s(HALL.right - HALL.left), height: s(HALL.bottom - HALL.top) };
-  const wall = (id: string, x: number, y: number, width: number, height: number) => ({
-    id,
-    kind: "wall" as const,
-    x,
-    y,
-    width,
-    height,
-    label: "",
-    color: "#94a3b8",
-  });
+  const line = (id: string, x1: number, y1: number, x2: number, y2: number) => ({ id, x1: s(x1), y1: s(y1), x2: s(x2), y2: s(y2), ...BORDER });
+  // Alt kenar kapı boşluklarıyla bölünür: [sol uç, kapı 1 başı], [kapı 1 sonu, kapı 2 başı], ...
+  const stops = [HALL.left, ...DOORS.flatMap((c) => [c - DOOR_WIDTH / 2, c + DOOR_WIDTH / 2]), HALL.right];
+  const lines = [
+    line("border-top", HALL.left, HALL.top, HALL.right, HALL.top),
+    line("border-left", HALL.left, HALL.top, HALL.left, HALL.bottom),
+    line("border-right", HALL.right, HALL.top, HALL.right, HALL.bottom),
+    ...Array.from({ length: stops.length / 2 }, (_, i) =>
+      line(`border-bottom-${i + 1}`, stops[i * 2] ?? 0, HALL.bottom, stops[i * 2 + 1] ?? 0, HALL.bottom),
+    ),
+  ];
+  const doors = DOORS.map((c, i) => ({
+    id: `door-${i + 1}`,
+    kind: "area" as const,
+    ...box(c - DOOR_WIDTH / 2, HALL.bottom - 6, c + DOOR_WIDTH / 2, HALL.bottom + 8),
+    label: `GİRİŞ ${i + 1}`,
+    color: "#22d3ee",
+    fontSize: "sm" as const,
+  }));
   const elements = [
-    wall("wall-top", hall.left - WALL / 2, hall.top - WALL / 2, hall.width + WALL, WALL),
-    wall("wall-bottom", hall.left - WALL / 2, hall.top + hall.height - WALL / 2, hall.width + WALL, WALL),
-    wall("wall-left", hall.left - WALL / 2, hall.top - WALL / 2, WALL, hall.height + WALL),
-    wall("wall-right", hall.left + hall.width - WALL / 2, hall.top - WALL / 2, WALL, hall.height + WALL),
     { id: "stage", kind: "stage" as const, ...box(345, 113, 584, 213), label: "SAHNE", color: "#eab308" },
     { id: "catwalk-stem", kind: "catwalk" as const, ...box(442, 213, 480, 318), label: "", color: "#65a30d" },
     { id: "catwalk-cross", kind: "catwalk" as const, ...box(391, 316, 536, 352), label: "", color: "#65a30d" },
@@ -112,23 +130,30 @@ export function meritBallroomLayout(): TemplateLayout {
     { id: "bar-1", kind: "bar" as const, ...box(35, 20, 117, 78), label: "BAR 1", color: "#b45309" },
     { id: "bar-2", kind: "bar" as const, ...box(813, 20, 897, 78), label: "BAR 2", color: "#b45309" },
     { id: "bar-3", kind: "bar" as const, ...box(778, 698, 907, 755), label: "BAR 3", color: "#b45309" },
-    { id: "loca-title", kind: "label" as const, ...box(409, 668, 533, 686), label: "LOCA (2. KAT)", color: "#f472b6" },
+    ...doors,
+    { id: "loca-title", kind: "label" as const, ...box(409, 624, 533, 642), label: "LOCA (2. KAT)", color: "#f472b6" },
   ];
-  return templateLayoutSchema.parse({ version: 1, tables: [...tables, ...locas], decor: { width: 1900, height: 1560, elements } });
+  return templateLayoutSchema.parse({ version: 1, tables: [...tables, ...locas], decor: { width: 1900, height: 1560, elements, lines } });
 }
 
 /**
- * `drizzle/0010_seed_merit_ballroom_template.sql` içeriği: şablon canlıya dağıtımdaki migration adımıyla gelir.
- * Aynı adda şablon varsa (elle eklenmiş ya da düzenlenmiş) dokunulmaz. Yerleşim değişirse yeni bir migration yazılır;
- * uygulanmış migration dosyası değiştirilmez.
+ * `drizzle/0011_update_merit_ballroom_template.sql` içeriği: şablon canlıya dağıtımdaki migration adımıyla gelir.
+ * Sahipsiz hazır şablonu (0010'un eklediği satır) bu yerleşimle günceller; satır yoksa ekler. Bir kullanıcının
+ * sahiplendiği aynı adlı şablona dokunulmaz. Yerleşim yeniden değişirse yeni bir migration yazılır; uygulanmış
+ * migration dosyası (0010 dahil) değiştirilmez.
  */
-export function meritBallroomSeedSql(): string {
+export function meritBallroomMigrationSql(): string {
   const q = (text: string) => `$seed$${text}$seed$`;
+  const layout = `${q(JSON.stringify(meritBallroomLayout()))}::jsonb`;
   return [
-    "-- Elle yazılmış veri migration'ı: Merit Royal Diamond Ballroom salon şablonunu ekler (yoksa).",
-    "-- İçerik src/features/venue/presets/merit-ballroom.ts dosyasından üretilir; eşitliği testle korunur.",
+    "-- Elle yazılmış veri migration'ı: Merit Royal Diamond Ballroom hazır şablonunu günceller (duvarsız sınır,",
+    "-- salonun içinde localar, 3 giriş). İçerik src/features/venue/presets/merit-ballroom.ts dosyasından üretilir;",
+    "-- eşitliği testle korunur.",
+    `UPDATE "venue_templates" SET "description" = ${q(MERIT_BALLROOM_DESCRIPTION)}, "layout_data" = ${layout}`,
+    `WHERE "name" = ${q(MERIT_BALLROOM_NAME)} AND "created_by_id" IS NULL;`,
+    "--> statement-breakpoint",
     'INSERT INTO "venue_templates" ("name", "description", "layout_data", "is_public")',
-    `SELECT ${q(MERIT_BALLROOM_NAME)}, ${q(MERIT_BALLROOM_DESCRIPTION)}, ${q(JSON.stringify(meritBallroomLayout()))}::jsonb, true`,
+    `SELECT ${q(MERIT_BALLROOM_NAME)}, ${q(MERIT_BALLROOM_DESCRIPTION)}, ${layout}, true`,
     `WHERE NOT EXISTS (SELECT 1 FROM "venue_templates" WHERE "name" = ${q(MERIT_BALLROOM_NAME)});`,
     "",
   ].join("\n");
