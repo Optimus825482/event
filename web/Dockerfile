@@ -15,11 +15,11 @@ ENV DATABASE_URL=postgres://build@localhost:5432/build \
     BETTER_AUTH_URL=http://localhost:3000
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Güncelleme sıra numarası (build-and-push.yml: github.run_number). Kaynak kopyasından sonra tanımlanır ki
-# her derlemede değişen değer bağımlılık katmanlarının önbelleğini bozmasın. Boşsa sürüm gösterilmez.
+# Güncelleme numarası: derleme anı, Türkiye saatiyle (UTC+3), ör. 2026.11.23-2105. Arayüzde "Güncelleme ..." olarak
+# görünür; açık sekmeler bu değer değişince "Sistem güncellendi" der. Kaynak değişmediyse bu katman önbellekten gelir
+# ve numara aynı kalır (aynı derleme). `--build-arg APP_BUILD=...` ile elle verilebilir.
 ARG APP_BUILD=""
-ENV NEXT_PUBLIC_APP_BUILD=$APP_BUILD
-RUN npm run build
+RUN NEXT_PUBLIC_APP_BUILD="${APP_BUILD:-$(date -u -d "@$(( $(date +%s) + 10800 ))" +%Y.%m.%d-%H%M)}" npm run build
 
 # Çalışma zamanı betiklerinin (migrate.mjs, create-admin.mjs) bağımlılıkları: yalnızca drizzle-orm + pg + bcryptjs
 # ve geçişli bağımlılıkları. Betiklere yeni bir paket eklenirse aşağıdaki listeye de eklenmelidir (tests/scripts/image-deps.test.ts denetler).

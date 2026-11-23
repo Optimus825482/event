@@ -8,8 +8,10 @@
 #
 # Zorunlu ortam değişkenleri eksikse `docker compose config` başarısız olur (${VAR:?...}).
 
-# `pull_policy: always`: etiket `latest` olduğu için zorunludur. Onsuz `docker compose up -d` sunucuda zaten duran
-# eski `latest` imajını kullanır ve deploy "başarılı" görünür ama uygulama güncellenmez.
+# İmaj sunucuda, deploy edilen commit'in kaynağından derlenir (GitHub Actions / kayıt defteri yok): çalışan sürüm her
+# zaman deploy edilen commit'tir. Derleme `migrate` servisinde tanımlıdır; `web` ve `create-admin` aynı imajı kullanır.
+# `pull_policy: build`, Coolify ayrı bir derleme adımı çalıştırmasa bile `up -d` sırasında yeniden derlemeyi zorlar
+# (kaynak değişmediyse katman önbelleğinden saniyeler sürer).
 
 x-web-env: &web-env
   NODE_ENV: production
@@ -52,8 +54,11 @@ services:
 
   # Tek seferlik veritabanı geçişi; web yalnızca bu başarıyla bittikten sonra başlar.
   migrate:
-    image: ${WEB_IMAGE:-ghcr.io/optimus825482/eventflow-web:latest}
-    pull_policy: always
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: eventflow-web:coolify
+    pull_policy: build
     restart: "no"
     # Şemayı kurar; ADMIN_PASSWORD verilmişse ilk yöneticiyi de oluşturur (kullanıcı adı ADMIN_USERNAME, varsayılan
     # `admin`). Etkin bir yönetici zaten varsa dokunmaz (çıkış kodu 2 başarı sayılır). Parola en az 12 karakter
@@ -72,8 +77,8 @@ services:
   # Tek seferlik araç: ilk yöneticiyi oluşturur / parolasını sıfırlar (--reset). Profil `tools` olduğundan
   # Coolify dağıtımında başlamaz; sunucuda `docker compose run` ile çalıştırılır (bkz. DEPLOYMENT.md).
   create-admin:
-    image: ${WEB_IMAGE:-ghcr.io/optimus825482/eventflow-web:latest}
-    pull_policy: always
+    image: eventflow-web:coolify
+    pull_policy: never
     profiles: ["tools"]
     restart: "no"
     entrypoint: ["node", "/opt/migrator/create-admin.mjs"]
@@ -88,8 +93,8 @@ services:
 
   # Next.js uygulaması (standalone)
   web:
-    image: ${WEB_IMAGE:-ghcr.io/optimus825482/eventflow-web:latest}
-    pull_policy: always
+    image: eventflow-web:coolify
+    pull_policy: never
     restart: unless-stopped
     depends_on:
       eventflow-db:

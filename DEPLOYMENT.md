@@ -42,7 +42,6 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 | `QR_SIGNING_KEY` | hayır | QR belirteçleri için HMAC anahtarı (en az 32 karakter). Boşsa `BETTER_AUTH_SECRET`'tan türetilir. **Değişirse dağıtılmış QR'lar geçersiz olur** |
 | `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 12 karakter). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
 | `ADMIN_USERNAME` | hayır | Otomatik oluşturulan yöneticinin kullanıcı adı; varsayılan `admin` (büyük/küçük harf duyarlı) |
-| `WEB_IMAGE` | hayır | Coolify dosyasında imaj adı; varsayılan `ghcr.io/optimus825482/eventflow-web:latest`. Geri alma için `:<commit-sha>` verin |
 
 `UPLOAD_DIR` compose içinde `/data/uploads` olarak sabittir (adlandırılmış volume). Uygulama `NODE_ENV=production` iken
 `BETTER_AUTH_URL` (https) ve `TRUSTED_IP_HEADER` olmadan açılmaz.
@@ -54,9 +53,10 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 3. `web` servisine alan adını `https://<alan-adı>:3000` biçiminde atayın (Coolify Traefik etiketlerini üretir; yeni
    etiket elle yazılmaz). `eventflow-db`, `migrate` ve `create-admin` için alan adı atamayın (Coolify otomatik ürettiyse silin).
 4. Deploy. Sıra: veritabanı sağlıklı olunca `migrate` çalışır ve çıkar; ardından `web` başlar.
-5. İmaj, GitHub Actions'ın `build-and-push.yml` iş akışıyla `ghcr.io/optimus825482/eventflow-web` olarak yayımlanır;
-   iş akışı test beklemez (testler PR'da `web-ci.yml` ile koşar), bu yüzden `main`'e yalnızca yeşil PR birleştirilir.
-   Deploy, imaj gönderildikten sonra yapılmalıdır; daha önce yapılırsa bir önceki `latest` imajı çekilir.
+5. İmaj sunucuda, deploy edilen commit'in kaynağından derlenir (`migrate` servisindeki `build:`); GitHub Actions ve
+   kayıt defteri kullanılmaz. Derleme 4 vCPU / 8 GB sunucuda birkaç dakika sürer ve yaklaşık 2 GB bellek ister.
+   Depoda CI yoktur: `main`'e göndermeden önce `web/` içinde `npx tsc --noEmit`, `npm run lint` ve `npm test` yerelde
+   çalıştırılır.
 
 Coolify dışı sunucuda: `.env` dosyasını **depoya eklemeden** hazırlayıp `docker compose up -d --build`; önüne HTTPS
 sonlandıran bir ters vekil koyun ve onun yazdığı IP başlığını `TRUSTED_IP_HEADER` ile belirtin.
@@ -151,8 +151,8 @@ Geçiş:
 3. Alan adını yeni `web` servisine çevirin (Coolify'da alan adını atayın, eskisinden kaldırın).
 
 Geri alma:
-- **Uygulama sürümü kötüyse (şema uyumlu)**: `WEB_IMAGE=ghcr.io/optimus825482/eventflow-web:<önceki-sha>` verip yeniden
-  dağıtın. Dikkat: `migrate` ileri yönlüdür; yeni migration'lar eski imajla uyumsuz olabilir. Şema değiştiyse
+- **Uygulama sürümü kötüyse (şema uyumlu)**: Coolify'da önceki commit'i yeniden dağıtın (ya da `main`'de kötü commit'i
+  `git revert` ile geri alıp gönderin). Dikkat: `migrate` ileri yönlüdür; yeni migration'lar eski imajla uyumsuz olabilir. Şema değiştiyse
   yeni veritabanını bu dağıtımdan önce alınan yedekten geri yükleyin.
 - **Yeni yığın tümden vazgeçilirse**: alan adını eski yığına çevirin ve eskiyi başlatın:
   Coolify'da `docker-compose.legacy.coolify.yaml` (GHCR'deki son `eventflow-backend`/`eventflow-frontend` imajlarını

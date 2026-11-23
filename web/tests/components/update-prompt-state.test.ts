@@ -57,7 +57,9 @@ describe("update prompt state", () => {
       expect(normalizeBuild("")).toBeNull();
       expect(normalizeBuild(undefined)).toBeNull();
       expect(normalizeBuild("<script>")).toBeNull();
+      expect(normalizeBuild("2026.11.23-2105")).toBe("2026.11.23-2105");
       expect(buildLabel("128")).toBe("#128");
+      expect(buildLabel("2026.11.23-2105")).toBe("2026.11.23-2105");
     });
   });
 });
