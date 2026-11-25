@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { departmentMemberships, userPermissions, users } from "@/db/schema";
+import { accounts, departmentMemberships, userPermissions, users } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
 import { createUserSchema, PERMISSION_MODULES, setMembershipsSchema } from "@/features/users/schemas";
 import { getUserDetail, listUsers } from "@/features/users/queries";
@@ -15,6 +15,7 @@ import {
 } from "@/features/users/service";
 import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
+import { createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD } from "../auth/helpers";
 
 const row = (module: (typeof PERMISSION_MODULES)[number], flags: string) => ({
@@ -266,5 +267,101 @@ describe("son etkin sistem yöneticisi", () => {
     await expect(deleteUser(db, other, { id: lastAdmin.id })).rejects.toMatchObject({ code: "conflict", message: msg });
     const [r] = await db.select().from(users).where(eq(users.id, lastAdmin.id));
     expect(r).toMatchObject({ role: "admin", isActive: true });
+  });
+});
+
+describe("rol değişimi ve tek işlemli yazım", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function legacyUser(role: "staff" | "organizer", rows: ReturnType<typeof row>[] = []) {
+    const u = await insertUser(db, { role });
+    if (rows.length > 0) await db.insert(userPermissions).values(rows.map((r) => ({ ...r, userId: u.id })));
+    return u;
+  }
+
+  async function secondAdmin() {
+    return persistActor(db, adminActor());
+  }
+
+  it("admin→user üyeliksiz reddedilir ve hiçbir şey değişmez", async () => {
+    const admin = await persistActor(db, adminActor());
+    const other = await secondAdmin();
+    await expect(updateUser(db, admin, { id: other.id, role: "user" })).rejects.toMatchObject({
+      code: "invalid",
+      message: "En az bir departman seçin",
+    });
+    const [r] = await db.select().from(users).where(eq(users.id, other.id));
+    expect(r?.role).toBe("admin");
+  });
+
+  it("admin→user üyelik ve izinle tek çağrıda yazılır", async () => {
+    const admin = await persistActor(db, adminActor());
+    const other = await secondAdmin();
+    await updateUser(db, admin, {
+      id: other.id,
+      role: "user",
+      memberships: [{ department: "fnb", level: "member" }],
+      permissions: [row("venues", "vc--")],
+    });
+    const [r] = await db.select().from(users).where(eq(users.id, other.id));
+    expect(r?.role).toBe("user");
+    expect(await db.select().from(departmentMemberships).where(eq(departmentMemberships.userId, other.id))).toHaveLength(1);
+    expect(await db.select().from(userPermissions).where(eq(userPermissions.userId, other.id))).toHaveLength(1);
+  });
+
+  it("eski rol→user: tavan dışı eski satırlar temizlenir, tavan içi kalır", async () => {
+    const admin = await persistActor(db, adminActor());
+    const target = await legacyUser("staff", [row("reservations", "v---"), row("venues", "v---")]);
+    await updateUser(db, admin, {
+      id: target.id,
+      role: "user",
+      memberships: [{ department: "fnb", level: "member" }],
+    });
+    const perms = await db.select().from(userPermissions).where(eq(userPermissions.userId, target.id));
+    expect(perms.map((p) => p.module)).toEqual(["venues"]);
+  });
+
+  it("tavan dışı izinle güncelleme reddedilir; rol ve satırlar değişmez", async () => {
+    const admin = await persistActor(db, adminActor());
+    const target = await legacyUser("staff");
+    await expect(
+      updateUser(db, admin, {
+        id: target.id,
+        role: "user",
+        name: "Yeni Ad",
+        memberships: [{ department: "fnb", level: "member" }],
+        permissions: [row("reservations", "v")],
+      }),
+    ).rejects.toMatchObject({ code: "invalid", message: "Bu izin seçilen departmanların kapsamı dışında" });
+    const [r] = await db.select().from(users).where(eq(users.id, target.id));
+    expect(r?.role).toBe("staff");
+    expect(r?.name).not.toBe("Yeni Ad");
+    expect(await db.select().from(departmentMemberships).where(eq(departmentMemberships.userId, target.id))).toHaveLength(0);
+  });
+
+  it("eski rol hedefte tüm bayrakları kapalı kısıt satırı korunur", async () => {
+    const admin = await persistActor(db, adminActor());
+    const target = await legacyUser("staff");
+    await setUserPermissions(db, admin, { id: target.id, permissions: [row("reservations", "----")] });
+    expect(await db.select().from(userPermissions).where(eq(userPermissions.userId, target.id))).toHaveLength(1);
+  });
+
+  it("oluşturma yarıda düşerse kullanıcı ve hesap satırı kalmaz", async () => {
+    const admin = await persistActor(db, adminActor());
+    // Şema dışı çağrı: yinelenen departman, üyelik yazımında tekillik ihlali verir (kullanıcı ve hesap yazıldıktan sonra).
+    await expect(
+      createUser(db, admin, {
+        ...base,
+        memberships: [
+          { department: "fnb", level: "member" },
+          { department: "fnb", level: "manager" },
+        ],
+        permissions: [],
+      }),
+    ).rejects.toThrow();
+    expect(await db.select().from(users).where(eq(users.username, "ayse"))).toHaveLength(0);
+    expect(await db.select().from(accounts)).toHaveLength(0);
   });
 });

@@ -27,9 +27,17 @@ export function withinCeiling(row: PermissionRow, memberships: readonly Membersh
   return FLAGS.every(([verb, flag]) => !row[flag] || allowed.includes(verb));
 }
 
-/** Kaydedilecek satırlar: boş satırlar atılır. */
-export function effectiveRows(rows: readonly PermissionRow[]): PermissionRow[] {
-  return rows.filter((row) => !isEmptyRow(row));
+/**
+ * Kaydedilecek satırlar. Tüm bayrakları kapalı satır yalnızca `user` ve `admin` hedefte atılır;
+ * eski rollerde bu satır "modülü kapat" kısıtıdır ve atılması taban erişimi geri getirir.
+ */
+export function effectiveRows(rows: readonly PermissionRow[], role: Role): PermissionRow[] {
+  return role === "admin" || role === "user" ? rows.filter((row) => !isEmptyRow(row)) : [...rows];
+}
+
+/** Üyelikler değişince korunabilecek satırlar: tavan içinde, görüntüleme açık, boş değil. */
+export function pruneToCeiling(rows: readonly PermissionRow[], memberships: readonly Membership[]): PermissionRow[] {
+  return rows.filter((row) => !isEmptyRow(row) && row.canView && withinCeiling(row, memberships));
 }
 
 /**
@@ -41,7 +49,7 @@ export function checkAccess(
   memberships: readonly Membership[],
   permissions: readonly PermissionRow[],
 ): string | null {
-  const rows = effectiveRows(permissions);
+  const rows = effectiveRows(permissions, role);
   if (role === "admin") {
     return memberships.length > 0 || rows.length > 0 ? ACCESS_MESSAGES.adminNoAccess : null;
   }

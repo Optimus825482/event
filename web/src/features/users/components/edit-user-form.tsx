@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { ROLE_LABELS } from "@/components/layout/role-labels";
 import type { Role } from "@/features/auth/roles";
 import type { ActionResult } from "@/lib/action";
-import { setPermissionsAction, setUserMembershipsAction, updateUserAction } from "../actions";
+import { updateUserAction } from "../actions";
 import { ACCESS_MESSAGES } from "../access-rules";
 import { ROLE_CHOICES, usesDepartments } from "../form-model";
 import type { UserDetail } from "../queries";
@@ -37,19 +37,16 @@ export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (mes
       return;
     }
     startTransition(async () => {
-      // Önce profil ve rol; kullanıcı rolündeyse ardından üyelikler (tavan dışı izinleri sunucu da atar) ve izinler.
-      let result: ActionResult<unknown> = await updateUserAction({
+      // Rol, üyelikler ve izinler tek eylemde, sunucuda tek işlemle yazılır.
+      const result: ActionResult<unknown> = await updateUserAction({
         id: user.id,
         name: String(data.get("name") ?? ""),
         email: String(data.get("email") ?? ""),
         role,
         phone: String(data.get("phone") ?? ""),
         position: String(data.get("position") ?? ""),
+        ...(withDepartments ? { memberships: access.memberships, permissions: access.grants } : {}),
       });
-      if (result.ok && withDepartments) {
-        const memberships = await setUserMembershipsAction({ id: user.id, memberships: access.memberships });
-        result = memberships.ok ? await setPermissionsAction({ id: user.id, permissions: access.grants }) : memberships;
-      }
       setState(toFormState(result, UPDATED_MESSAGE));
       if (result.ok) {
         toast.success(UPDATED_MESSAGE);

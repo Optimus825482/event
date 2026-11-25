@@ -86,6 +86,8 @@ export const updateUserSchema = z.object({
   name: z.string().trim().min(1, "Ad gerekli").max(255).optional(),
   email: email.optional(),
   role: role.optional(),
+  memberships: membershipsSchema.optional(),
+  permissions: permissionRowsSchema.optional(),
   staffId: id.nullable().optional(),
   color: clearableText(50).optional(),
   phone: clearableText(50).optional(),

@@ -9,9 +9,10 @@ import {
   userPermissions,
   users,
 } from "@/db/schema";
-import { auth, hashPassword } from "@/features/auth/auth";
+import { hashPassword } from "@/features/auth/auth";
 import { deactivateUser, reactivateUser } from "@/features/auth/admin";
 import { ForbiddenError } from "@/features/auth/errors";
+import type { Role } from "@/features/auth/roles";
 import type { Membership } from "@/features/auth/departments";
 import { authorize, type PermissionRow } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
@@ -25,7 +26,7 @@ import type {
   SetUserActiveInput,
   UpdateUserInput,
 } from "./schemas";
-import { checkAccess, effectiveRows, withinCeiling } from "./access-rules";
+import { checkAccess, effectiveRows, pruneToCeiling } from "./access-rules";
 import { DELETED_EMAIL_SUFFIX, isDeletedAccount } from "./filter";
 import { USER_COLUMNS, type UserSummary } from "./types";
 import { isAdmin } from "@/features/auth/scope";
@@ -106,7 +107,7 @@ async function assertUnique(db: Db | Tx, username: string | undefined, email: st
   if (rows.length > 0) throw new DomainError("conflict", MESSAGES.emailTaken);
 }
 
-function assertAccess(role: Parameters<typeof checkAccess>[0], memberships: Membership[], rows: PermissionRow[]) {
+function assertAccess(role: Role, memberships: Membership[], rows: PermissionRow[]) {
   const problem = checkAccess(role, memberships, rows);
   if (problem !== null) throw new DomainError("invalid", problem);
 }
@@ -118,10 +119,19 @@ async function writeMemberships(tx: Db | Tx, userId: string, memberships: readon
   }
 }
 
-async function writePermissions(tx: Db | Tx, userId: string, rows: readonly PermissionRow[]) {
+/** İzin satırlarını değiştirir; yazılan satır sayısını döner. */
+async function writePermissions(tx: Db | Tx, userId: string, rows: readonly PermissionRow[], role: Role): Promise<number> {
   await tx.delete(userPermissions).where(eq(userPermissions.userId, userId));
-  const kept = effectiveRows(rows);
+  const kept = effectiveRows(rows, role);
   if (kept.length > 0) await tx.insert(userPermissions).values(kept.map((p) => ({ ...p, userId })));
+  return kept.length;
+}
+
+async function readMemberships(tx: Db | Tx, userId: string): Promise<Membership[]> {
+  return tx
+    .select({ department: departmentMemberships.department, level: departmentMemberships.level })
+    .from(departmentMemberships)
+    .where(eq(departmentMemberships.userId, userId));
 }
 
 async function readPermissions(tx: Db | Tx, userId: string): Promise<PermissionRow[]> {
@@ -138,54 +148,51 @@ async function readPermissions(tx: Db | Tx, userId: string): Promise<PermissionR
 }
 
 /**
- * Kullanıcı + parola hesabı + üyelikler + izin satırlarını oluşturur (Better Auth iç bağdaştırıcısı;
- * bcrypt aynı maliyetle). Üyelik/izin tutarlılığı kullanıcı yazılmadan önce denetlenir; sonraki
- * yazımlardan biri düşerse kullanıcı geri silinir (cascade ile hiçbir satır kalmaz).
+ * Kullanıcı + parola hesabı + üyelikler + izin satırlarını tek işlemde oluşturur (bcrypt aynı
+ * maliyetle; Better Auth kullanıcı adı eklentisi normalleştirme/displayUsername kullanmadığından
+ * doğrudan satır yazımı bağdaştırıcıyla aynı sonucu verir). Herhangi bir yazım düşerse işlemin
+ * tamamı geri alınır.
  */
 export async function createUser(db: Db | Tx, actor: Actor, input: CreateUserInput): Promise<UserSummary> {
   authorize(actor, "users", "create");
   assertAccess(input.role, input.memberships, input.permissions);
   const email = (input.email || `${input.username}@${PLACEHOLDER_EMAIL_DOMAIN}`).toLowerCase();
   assertNotReserved(input.username, email);
-  await assertUnique(db, input.username, email);
-
-  const ctx = await auth.$context;
   const passwordHash = await hashPassword(input.password);
-  const user = await ctx.internalAdapter.createUser(
-    {
-      name: input.name || input.username,
-      email,
-      emailVerified: true,
-      username: input.username,
-      role: input.role,
-      isActive: true,
-      ...(input.staffId ? { staffId: input.staffId } : {}),
-    },
-    { method: "admin" },
-  );
-  try {
-    await ctx.internalAdapter.linkAccount({
-      userId: user.id,
-      accountId: user.id,
-      providerId: "credential",
-      password: passwordHash,
-    });
-    await db.transaction(async (tx) => {
-      await writeMemberships(tx, user.id, input.memberships);
-      await writePermissions(tx, user.id, input.permissions);
-    });
-  } catch (error) {
-    // Yarım kalmış (parolasız ya da üyeliksiz) yetim kullanıcı bırakma.
-    await ctx.internalAdapter.deleteUser(user.id);
-    throw error;
-  }
-  return readSummary(db, user.id);
+
+  return db.transaction(async (tx) => {
+    await assertUnique(tx, input.username, email);
+    const [user] = await tx
+      .insert(users)
+      .values({
+        name: input.name || input.username,
+        email,
+        emailVerified: true,
+        username: input.username,
+        role: input.role,
+        isActive: true,
+        ...(input.staffId ? { staffId: input.staffId } : {}),
+      })
+      .returning({ id: users.id });
+    if (!user) throw new Error("kullanıcı eklenemedi");
+    await tx
+      .insert(accounts)
+      .values({ userId: user.id, accountId: user.id, providerId: "credential", password: passwordHash });
+    await writeMemberships(tx, user.id, input.memberships);
+    await writePermissions(tx, user.id, input.permissions, input.role);
+    return readSummary(tx, user.id);
+  });
 }
 
-/** Profil ve rol günceller. Son aktif adminin rolü düşürülemez. */
+/**
+ * Profil, rol, üyelik ve izinleri tek işlemde günceller. Sonuçta rol `user` ise yeni durum
+ * (üyelikler + izin satırları) `checkAccess` ile doğrulanır: verilen satırlar tavan dışıysa reddedilir,
+ * var olan satırlardan tavan dışında kalanlar silinir. Sonuçta `admin` ise üyelik ve izinler temizlenir.
+ * Son aktif adminin rolü düşürülemez.
+ */
 export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInput): Promise<UserSummary> {
   authorize(actor, "users", "edit");
-  const { id, email, ...rest } = input;
+  const { id, email, memberships, permissions, ...rest } = input;
   const values: Partial<typeof users.$inferInsert> = { ...rest };
   if (email !== undefined) values.email = email.toLowerCase();
   assertNotReserved(undefined, values.email);
@@ -193,18 +200,35 @@ export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInp
   return withAdminLock(db, async (tx) => {
     const target = await getTarget(tx, id);
     assertNotDeleted(target);
-    const demoting = input.role !== undefined && input.role !== "admin" && isAdmin(target);
+    const role = input.role ?? target.role;
+    const demoting = role !== "admin" && isAdmin(target);
     if (demoting && target.isActive && (await otherActiveAdmins(tx, id)) === 0) {
       throw new DomainError("conflict", MESSAGES.lastAdmin);
     }
     await assertUnique(tx, undefined, values.email, id);
 
+    // Yazılacak yeni durum: verilmeyen kısım mevcut olandır (user için tavana göre budanır).
+    let nextMemberships: Membership[] = [];
+    let nextRows: PermissionRow[] = [];
+    if (role === "admin") {
+      // Sistem yöneticisine departman ya da izin atanmaz: verilirse reddedilir, yoksa eskiler temizlenir.
+      assertAccess(role, memberships ?? [], permissions ?? []);
+    } else {
+      nextMemberships = memberships ?? (await readMemberships(tx, id));
+      nextRows = permissions ?? (await readPermissions(tx, id));
+      if (role === "user" && permissions === undefined) nextRows = pruneToCeiling(nextRows, nextMemberships);
+      assertAccess(role, nextMemberships, nextRows);
+    }
+
     const defined = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined));
     if (Object.keys(defined).length > 0) await tx.update(users).set(defined).where(eq(users.id, id));
-    if (input.role === "admin" && !isAdmin(target)) {
-      // Sistem yöneticisine departman ya da izin atanmaz: yükseltmede eski satırlar temizlenir.
+
+    if (role === "admin") {
       await writeMemberships(tx, id, []);
-      await writePermissions(tx, id, []);
+      await writePermissions(tx, id, [], role);
+    } else {
+      if (memberships !== undefined) await writeMemberships(tx, id, memberships);
+      if (permissions !== undefined || role === "user") await writePermissions(tx, id, nextRows, role);
     }
     return readSummary(tx, id);
   });
@@ -267,17 +291,15 @@ export async function setUserPermissions(
   input: SetPermissionsInput,
 ): Promise<{ id: string; count: number }> {
   authorize(actor, "users", "edit");
+  let written = 0;
   await withAdminLock(db, async (tx) => {
     const target = await getTarget(tx, input.id);
     assertNotDeleted(target);
-    const memberships = await tx
-      .select({ department: departmentMemberships.department, level: departmentMemberships.level })
-      .from(departmentMemberships)
-      .where(eq(departmentMemberships.userId, input.id));
+    const memberships = await readMemberships(tx, input.id);
     assertAccess(target.role, memberships, input.permissions);
-    await writePermissions(tx, input.id, input.permissions);
+    written = await writePermissions(tx, input.id, input.permissions, target.role);
   });
-  return { id: input.id, count: effectiveRows(input.permissions).length };
+  return { id: input.id, count: written };
 }
 
 /**
@@ -294,10 +316,10 @@ export async function setUserMemberships(
     const target = await getTarget(tx, input.id);
     assertNotDeleted(target);
     const current = await readPermissions(tx, input.id);
-    const kept = target.role === "user" ? current.filter((row) => withinCeiling(row, input.memberships)) : current;
+    const kept = target.role === "user" ? pruneToCeiling(current, input.memberships) : current;
     assertAccess(target.role, input.memberships, kept);
     await writeMemberships(tx, input.id, input.memberships);
-    if (kept.length !== current.length) await writePermissions(tx, input.id, kept);
+    if (kept.length !== current.length) await writePermissions(tx, input.id, kept, target.role);
   });
   return { id: input.id, count: input.memberships.length };
 }
