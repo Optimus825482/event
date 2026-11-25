@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCrumbs, findActiveGroup, isItemActive } from "@/components/layout/active-module";
+import { NAV_ITEMS } from "@/features/auth/nav";
 import type { ShellGroup, ShellItem } from "@/components/layout/shell-nav";
 
 const groups: ShellGroup[] = [
@@ -21,7 +22,7 @@ describe("findActiveGroup", () => {
 describe("isItemActive", () => {
   const root: ShellItem = { href: "/fnb/team", label: "Pano", icon: "star" };
   const events: ShellItem = { href: "/fnb/team/events", label: "Etkinlikler", icon: "calendar" };
-  const items: ShellItem[] = [root, events, { href: "/fnb/team/team", label: "Ekip", icon: "users" }];
+  const items: ShellItem[] = [root, events, { href: "/fnb/team/members", label: "Ekibim", icon: "users" }];
 
   it("kök öğe yalnızca tam eşleşmede ya da daha uzun kardeş uymadığında etkindir", () => {
     expect(isItemActive("/fnb/team", root, items)).toBe(true);
@@ -44,6 +45,33 @@ describe("isItemActive", () => {
   it("kardeşsiz öğe önek eşleşmesini korur", () => {
     expect(isItemActive("/events/1", { href: "/events", label: "E", icon: "calendar" })).toBe(true);
     expect(isItemActive("/eventsx", { href: "/events", label: "E", icon: "calendar" })).toBe(false);
+  });
+});
+
+describe("buildCrumbs F&B ekip yolları", () => {
+  const navLinks = new Set(NAV_ITEMS.map((i) => i.href));
+  const id = "3f2c1a9e-1111-4222-8333-444455556666";
+  const navLabel = (href: string) => NAV_ITEMS.find((i) => i.href === href)?.label;
+
+  it("ekip üyesi sayfası kırıntıları Türkçe ve menü etiketleriyle aynıdır", () => {
+    expect(buildCrumbs(`/fnb/team/members/${id}`, navLinks)).toEqual([
+      { label: "Etkinlikler", href: "/fnb" },
+      { label: "Ekip Panosu", href: "/fnb/team" },
+      { label: "Ekibim", href: "/fnb/team/members" },
+      { label: "Detay", href: null },
+    ]);
+    expect(navLabel("/fnb/team")).toBe("Ekip Panosu");
+    expect(navLabel("/fnb/team/members")).toBe("Ekibim");
+  });
+
+  it("değerlendirme kurulu kırıntıları Türkçe ve menü etiketiyle aynıdır", () => {
+    expect(buildCrumbs(`/fnb/team/reviews/${id}`, navLinks)).toEqual([
+      { label: "Etkinlikler", href: "/fnb" },
+      { label: "Ekip Panosu", href: "/fnb/team" },
+      { label: "Değerlendirmeler", href: "/fnb/team/reviews" },
+      { label: "Detay", href: null },
+    ]);
+    expect(navLabel("/fnb/team/reviews")).toBe("Değerlendirmeler");
   });
 });
 

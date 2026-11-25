@@ -20,7 +20,7 @@ export function findActiveGroup(groups: readonly ShellGroup[], pathname: string)
 
 /**
  * Bir öğe, yola tam uyduğunda ya da yolun öncülü olduğu hâlde daha uzun bir kardeş öğe
- * (ör. /leader ve /leader/events) yola uymuyorsa etkindir.
+ * (ör. /fnb/team ve /fnb/team/events) yola uymuyorsa etkindir.
  */
 export function isItemActive(pathname: string, item: ShellItem, siblings: readonly ShellItem[] = []): boolean {
   if (!pathMatches(pathname, item.href)) return false;
@@ -44,7 +44,8 @@ const ROUTE_LABELS: Record<string, string> = {
   staff: "Ekipler",
   venues: "Şablonlar",
   templates: "Davetiye Şablonları",
-  leader: "Lider",
+  team: "Ekip Panosu",
+  members: "Ekibim",
   reviews: "Değerlendirmeler",
   notifications: "Bildirimler",
   admin: "Yönetim",
