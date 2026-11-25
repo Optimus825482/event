@@ -9,9 +9,10 @@ import { can } from "@/features/auth/policy";
 import { CreateNotificationForm } from "@/features/notifications/components/create-form";
 import { MarkAllReadButton, MarkReadButton } from "@/features/notifications/components/read-buttons";
 import { PRIORITY_STYLES, READ_CARD } from "@/features/notifications/components/priority-style";
-import { PRIORITY_LABELS, TARGET_ROLE_LABELS } from "@/features/notifications/labels";
+import { PRIORITY_LABELS, AUDIENCE_LABELS } from "@/features/notifications/labels";
 import { listNotificationsSchema } from "@/features/notifications/schemas";
 import { listNotifications } from "@/features/notifications/service";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = { title: "Bildirimler | EventFlow" };
 
@@ -24,7 +25,7 @@ function first(value: string | string[] | undefined): string | undefined {
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 function href(page: number, unreadOnly: boolean): string {
@@ -109,7 +110,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                     </div>
                     <p className="whitespace-pre-wrap text-sm text-slate-400">{item.message}</p>
                     <p className="text-xs text-slate-500">
-                      {dateFormat.format(item.createdAt)} · {TARGET_ROLE_LABELS[item.targetRole]}
+                      {dateFormat.format(item.createdAt)} · {AUDIENCE_LABELS[item.audience]}
                       {item.eventName ? ` · ${item.eventName}` : ""}
                     </p>
                     {item.actionUrl ? (

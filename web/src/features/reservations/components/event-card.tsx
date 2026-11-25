@@ -2,6 +2,7 @@ import { ArrowRight, Calendar, Ticket } from "lucide-react";
 import Link from "next/link";
 import type { EventStatus } from "@/domain/event-status";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export type EventCardData = {
   id: string;
@@ -14,7 +15,7 @@ export type EventCardData = {
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 /** Etkinlik kartı (eski `EventCard`): ad, tarih, rezervasyon sayısı ve durum rozeti. */

@@ -9,6 +9,7 @@ import { verifyQrToken } from "@/features/reservations/qr-token";
 import { createReservation, lookupReservationByQr } from "@/features/reservations/service";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { managerActor, memberActor } from "../../helpers/actors";
 import { actorOf, bookableEvent, expectDomain, xlsx, type Cell } from "./helpers";
 
 const HEADER: Cell[] = ["Masa etiketi", "Misafir adı", "Telefon", "E-posta", "Kişi sayısı", "Not"];
@@ -210,14 +211,13 @@ describe("rezervasyon içe aktarma", () => {
     expect(await reservationsOf(event.id)).toHaveLength(0);
   });
 
-  it("yetki ve sahiplik: controller yasak (staff reservations.create ile yapabilir), başka organizatörün etkinliği not_found, taslak etkinlik conflict", async () => {
+  it("yetki: rezervasyon oluşturma izni olmayan yasak (reservations.create ile yapılır), başkasının oluşturduğu etkinliğe aktarılır, taslak etkinlik conflict", async () => {
     const { owner, event } = await bookableEvent({ A1: 4 });
     const bytes = await xlsx([HEADER, ["A1", "Ali", null, null, 2, null]]);
-    await expect(importReservations(db, await actorOf("venue_owner"), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(importReservations(db, await actorOf("controller"), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
-    await expectDomain(importReservations(db, await actorOf("organizer"), { eventId: event.id, bytes }), "not_found");
-    await expectDomain(previewReservationImport(db, await actorOf("organizer"), { eventId: event.id, bytes }), "not_found");
-    const staffer = await actorOf("staff");
+    await expect(importReservations(db, await actorOf(memberActor("fnb", { venues: "vced" })), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(importReservations(db, await actorOf(memberActor("casino", { check_in: "vc--" })), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
+    expect((await previewReservationImport(db, await actorOf(managerActor("casino")), { eventId: event.id, bytes })).okCount).toBe(1);
+    const staffer = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     expect((await importReservations(db, staffer, { eventId: event.id, bytes })).createdCount).toBe(1);
     const admin = await actorOf("admin");
     expect((await previewReservationImport(db, admin, { eventId: event.id, bytes })).errorCount).toBe(1);

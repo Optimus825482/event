@@ -1,4 +1,5 @@
 import { logError } from "@/lib/log";
+import { visibleAudiences } from "@/features/notifications/service";
 import { authorizeStream } from "./access";
 import { subscribe, type StreamMessage } from "./hub";
 import { ensureListening } from "./listener";
@@ -116,7 +117,7 @@ export async function openEventStream(request: Request, eventId: string): Promis
 
       write(`retry: ${RETRY_MS}\n: baglandi\n\n`);
       if (closed) return;
-      unsubscribe = subscribe(eventId, (message) => write(frameOf(message)), { role: actor.role });
+      unsubscribe = subscribe(eventId, (message) => write(frameOf(message)), { audiences: visibleAudiences(actor) });
       timers.heartbeat = setInterval(() => write(": ping\n\n"), HEARTBEAT_MS);
       timers.heartbeat.unref?.();
       request.signal.addEventListener("abort", onAbort, { once: true });

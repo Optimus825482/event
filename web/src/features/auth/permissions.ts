@@ -1,11 +1,23 @@
 import { eq } from "drizzle-orm";
 import { cache } from "react";
 import { db } from "@/db/client";
-import { userPermissions } from "@/db/schema";
-import { requireActor, type Actor } from "./session";
+import { departmentMemberships, userPermissions } from "@/db/schema";
+import type { Membership } from "./departments";
 import type { PermissionRow } from "./policy";
+import { requireActor, type Actor } from "./session";
 
-/** Kullanıcıya özel izin satırlarını okur (`can`/`authorize` bunları baseline'a ekler). */
+/** Kullanıcının departman üyeliklerini (departman + düzey) okur. */
+export async function loadMemberships(userId: string): Promise<Membership[]> {
+  return db
+    .select({
+      department: departmentMemberships.department,
+      level: departmentMemberships.level,
+    })
+    .from(departmentMemberships)
+    .where(eq(departmentMemberships.userId, userId));
+}
+
+/** Kullanıcıya özel izin satırlarını okur (`can`/`authorize` bunları değerlendirir). */
 export async function loadPermissions(userId: string): Promise<PermissionRow[]> {
   const rows = await db
     .select({
@@ -20,17 +32,9 @@ export async function loadPermissions(userId: string): Promise<PermissionRow[]> 
   return rows;
 }
 
-export type ActorWithPermissions = Actor & { permissions: PermissionRow[] };
-
-export async function withPermissions(actor: Actor): Promise<ActorWithPermissions> {
-  return { ...actor, permissions: await loadPermissions(actor.id) };
-}
-
 /**
- * Sayfa ve düzenler için: oturumdaki kullanıcı + izin satırları. İstek başına bir kez
+ * Sayfa ve düzenler için: oturumdaki kullanıcı (üyelik + izin satırlarıyla). İstek başına bir kez
  * çözülür (`cache`), böylece düzen ve sayfa aynı sorguyu tekrarlamaz.
  * Oturum yoksa `UnauthenticatedError` fırlatır.
  */
-export const requirePolicyActor = cache(async (): Promise<ActorWithPermissions> => {
-  return withPermissions(await requireActor());
-});
+export const requirePolicyActor = cache(async (): Promise<Actor> => requireActor());

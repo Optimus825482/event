@@ -7,12 +7,13 @@ import { importAssignments, previewAssignmentImport } from "@/features/import/as
 import { saveAssignments } from "@/features/staffing/assignments-service";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { managerActor, memberActor } from "../../helpers/actors";
 import { actorOf, expectDomain, xlsx, type Cell } from "./helpers";
 
 const HEADER: Cell[] = ["Sicil no", "Personel adı", "Masa etiketleri", "Grup", "Vardiya", "Görev"];
 
 async function setup() {
-  const owner = await actorOf("organizer");
+  const owner = await actorOf(managerActor("fnb"));
   const event = await f.createEvent(db, { organizerId: owner.id });
   const tables: Record<string, Awaited<ReturnType<typeof f.createTable>>> = {};
   for (const label of ["T1", "T2", "T3", "T4"]) tables[label] = await f.createTable(db, event.id, { label });
@@ -183,7 +184,7 @@ describe("personel atama içe aktarma", () => {
     expect(await snapshot(event.id)).toEqual(before);
   });
 
-  it("zorunlu başlık eksikse invalid; yetki, sahiplik ve tamamlanmış etkinlik", async () => {
+  it("zorunlu başlık eksikse invalid; yetki ve tamamlanmış etkinlik", async () => {
     const { owner, event } = await setup();
     const bytes = await xlsx([HEADER, ["S-001", null, "T1", null, null, null]]);
     await expectDomain(
@@ -191,8 +192,8 @@ describe("personel atama içe aktarma", () => {
       "invalid",
       /Masa etiketleri veya Grup/,
     );
-    await expect(importAssignments(db, await actorOf("staff"), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
-    await expectDomain(importAssignments(db, await actorOf("organizer"), { eventId: event.id, bytes }), "not_found");
+    await expect(importAssignments(db, await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" })), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
+    expect((await previewAssignmentImport(db, await actorOf(managerActor("fnb")), { eventId: event.id, bytes })).okCount).toBe(1);
     await db.update(events).set({ status: "completed" }).where(eq(events.id, event.id));
     await expectDomain(importAssignments(db, owner, { eventId: event.id, bytes }), "conflict");
     await expectDomain(previewAssignmentImport(db, owner, { eventId: event.id, bytes }), "conflict");

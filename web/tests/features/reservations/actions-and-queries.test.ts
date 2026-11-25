@@ -1,8 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { reservations, userPermissions } from "@/db/schema";
-import { withPermissions } from "@/features/auth/permissions";
+import { reservations } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
 import type { Actor } from "@/features/auth/session";
 import { reservationActionDefs } from "@/features/reservations/action-defs";
@@ -11,6 +10,7 @@ import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
 import { actorOf, bookable, createTable, rejection, TABLE_TAKEN } from "./fixtures";
+import { adminActor, managerActor, memberActor } from "../../helpers/actors";
 
 function actionsFor(actor: Actor | null) {
   const { defineAction } = createAction({ getActor: async () => actor });
@@ -28,7 +28,7 @@ describe("rezervasyon action'ları", () => {
   });
 
   it("staff form verisiyle oluşturur; dolu masada Türkçe conflict döner", async () => {
-    const staff = await actorOf("staff");
+    const staff = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const { event, table } = await bookable();
     const form = { eventId: event.id, tableId: table.id, guestCount: "2", guestName: "Ali Veli", guestPhone: "05321234567" };
     const first = await actionsFor(staff).create(form);
@@ -38,7 +38,7 @@ describe("rezervasyon action'ları", () => {
   });
 
   it("geçersiz girdi alan hatalarıyla invalid döner", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const { event, table } = await bookable();
     const res = await actionsFor(admin).create({ eventId: event.id, tableId: table.id, guestCount: "0" });
     expect(res).toMatchObject({ ok: false, code: "invalid" });
@@ -47,8 +47,8 @@ describe("rezervasyon action'ları", () => {
     expect(res.fieldErrors?.guestName).toBeDefined();
   });
 
-  it("controller oluşturamaz (forbidden), oturumsuz unauthenticated; satır yazılmaz", async () => {
-    const controller = await actorOf("controller");
+  it("yalnızca check-in izni olan oluşturamaz (forbidden), oturumsuz unauthenticated; satır yazılmaz", async () => {
+    const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const { event, table, customer } = await bookable();
     const input = { eventId: event.id, tableId: table.id, guestCount: 2, customerId: customer.id };
     expect(await actionsFor(controller).create(input)).toMatchObject({ ok: false, code: "forbidden" });
@@ -57,7 +57,7 @@ describe("rezervasyon action'ları", () => {
   });
 
   it("iptal ve masa değişikliği action üzerinden çalışır", async () => {
-    const staff = await actorOf("staff");
+    const staff = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
     const t2 = await createTable(db, event.id, { capacity: 4 });
@@ -74,20 +74,18 @@ describe("rezervasyon sorguları", () => {
     await truncateAll();
   });
 
-  it("controller listeleyemez; izin satırı canView=false olan staff listeleyemez", async () => {
+  it("yalnızca check-in izni olan listeleyemez; rezervasyon görme izni olmayan Casino kullanıcısı listeleyemez", async () => {
     const { event } = await bookable();
-    const controller = await withPermissions(await actorOf("controller"));
+    const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const error = await rejection(listReservations(db, controller, { eventId: event.id }));
     expect(error).toBeInstanceOf(ForbiddenError);
 
-    const staffActor = await actorOf("staff");
-    await db.insert(userPermissions).values({ userId: staffActor.id, module: "reservations", canView: false });
-    const staff = await withPermissions(staffActor);
+    const staff = await actorOf(memberActor("casino", { reservations: "----", customers: "v---", check_in: "vc--" }));
     expect(await rejection(listReservations(db, staff, { eventId: event.id }))).toBeInstanceOf(ForbiddenError);
   });
 
   it("arama (ad, telefon, masa), durum süzgeci, masa etiketi event_tables'tan, durum sayıları", async () => {
-    const admin = await withPermissions(await actorOf("admin"));
+    const admin = await actorOf(adminActor());
     const { event, table, customer } = await bookable();
     const t2 = await createTable(db, event.id, { label: "VIP-1" });
     const other = await createCustomer(db, { fullName: "Zeynep Kaya", phoneNormalized: "+905551112233" });
@@ -115,15 +113,23 @@ describe("rezervasyon sorguları", () => {
     expect((await listReservations(db, admin, { eventId: event.id, status: "cancelled" })).total).toBe(1);
   });
 
-  it("organizatör başkasının etkinliğini not_found görür; detay null", async () => {
-    const organizer = await withPermissions(await actorOf("organizer"));
+  it("Casino yöneticisi tüm etkinliklerin rezervasyonlarını listeler", async () => {
+    const manager = await actorOf(managerActor("casino"));
+    const creatorA = await actorOf(managerActor("entertainment"));
+    const creatorB = await actorOf(adminActor());
+    const a = await bookable(creatorA.id);
+    const b = await bookable(creatorB.id);
+    const rowA = await seedReservation(db, { eventId: a.event.id, tableId: a.table.id, customerId: a.customer.id });
+    await seedReservation(db, { eventId: b.event.id, tableId: b.table.id, customerId: b.customer.id });
+    expect((await listReservations(db, manager, { eventId: a.event.id })).total).toBe(1);
+    expect((await listReservations(db, manager, { eventId: b.event.id })).total).toBe(1);
+    expect(await getReservationDetail(db, manager, rowA.id)).toMatchObject({ customer: { id: a.customer.id } });
+  });
+
+  it("detay: admin görür; geçersiz ya da silinmiş kimlik null", async () => {
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
-    const error = await rejection(listReservations(db, organizer, { eventId: event.id }));
-    expect(error).toMatchObject({ code: "not_found" });
-    expect(await getReservationDetail(db, organizer, row.id)).toBeNull();
-
-    const admin = await withPermissions(await actorOf("admin"));
+    const admin = await actorOf(adminActor());
     const detail = await getReservationDetail(db, admin, row.id);
     expect(detail).toMatchObject({ tableLabel: "A1", customer: { id: customer.id } });
     expect(await getReservationDetail(db, admin, "not-a-uuid")).toBeNull();

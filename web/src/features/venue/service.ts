@@ -1,12 +1,12 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { eventTables, events, tableTypes, venueTemplates } from "@/db/schema";
+import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow, listEventTables, totalCapacity } from "@/features/events/service";
 import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
 import {
-  assertEventAccess,
   isLayoutEditable,
   lockEditableEvent,
   mapLayoutDbError,
@@ -62,9 +62,10 @@ export type VenueLayout = {
   totalCapacity: number;
 };
 
+/** Yerleşim venues modülüne aittir: okumak için `venues:view` gerekir (etkinlik okuma denetimine ek olarak). */
 export async function getVenueLayout(db: Db, actor: Actor, eventId: string): Promise<VenueLayout> {
+  authorize(actor, "venues", "view");
   const event = await getEventOrThrow(db, eventId);
-  assertEventAccess(actor, event);
   const tables = await listEventTables(db, eventId);
   const used = await tablesInUse(
     db,
@@ -167,7 +168,6 @@ async function existingTableTypeIds(tx: Pick<Db, "select">, layout: TemplateLayo
 /** Etkinliğin mevcut masalarını ve dekorunu yeni bir şablon olarak kaydeder (sahibi işlemi yapan). */
 export async function saveAsTemplate(db: Db, actor: Actor, input: SaveAsTemplateInput) {
   const event = await getEventOrThrow(db, input.eventId);
-  assertEventAccess(actor, event);
   const tables = await db
     .select()
     .from(eventTables)

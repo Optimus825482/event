@@ -7,7 +7,8 @@ export const systemSettings = pgTable("system_settings", {
   id: pk(),
   companyName: text("company_name").notNull().default("EventFlow"),
   logo: text("logo"),
-  timezone: text("timezone").notNull().default("Europe/Istanbul"),
+  // Kullanılmıyor: uygulama yalnızca APP_TIME_ZONE kullanır; sütun sonraki bir temizliğe kadar duruyor.
+  timezone: text("timezone").notNull().default("Asia/Famagusta"),
   language: text("language").notNull().default("tr"),
   defaultGridSize: integer("default_grid_size").notNull().default(20),
   snapToGrid: boolean("snap_to_grid").notNull().default(true),
@@ -54,7 +55,7 @@ export const notificationType = pgEnum("notification_type", [
   "system_announcement",
 ]);
 export const notificationPriority = pgEnum("notification_priority", ["low", "medium", "high", "urgent"]);
-export const notificationTargetRole = pgEnum("notification_target_role", ["all", "admin", "leader", "staff"]);
+export const notificationAudience = pgEnum("notification_audience", ["all", "admin", "entertainment", "fnb", "casino"]);
 
 export const notifications = pgTable(
   "notifications",
@@ -64,7 +65,7 @@ export const notifications = pgTable(
     title: text("title").notNull(),
     message: text("message").notNull(),
     priority: notificationPriority("priority").notNull().default("medium"),
-    targetRole: notificationTargetRole("target_role").notNull().default("all"),
+    audience: notificationAudience("audience").notNull().default("all"),
     eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
     createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
     metadata: jsonb("metadata"),
@@ -73,7 +74,7 @@ export const notifications = pgTable(
     ...timestamps(),
   },
   (t) => [
-    index("notifications_target_role_created_at_idx").on(t.targetRole, t.createdAt),
+    index("notifications_audience_created_at_idx").on(t.audience, t.createdAt),
     index("notifications_type_created_at_idx").on(t.type, t.createdAt),
     index("notifications_event_id_idx").on(t.eventId),
     index("notifications_created_by_id_idx").on(t.createdById),

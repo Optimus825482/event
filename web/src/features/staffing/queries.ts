@@ -11,6 +11,7 @@ import { listOrganizationTemplates } from "./templates-service";
 /** Ekip organizasyonu sayfası verisi. Kimlik geçersizse ya da etkinlik görünmüyorsa 404. */
 export async function loadTeamOrganization(id: string) {
   const actor = await requirePolicyActor();
+  authorize(actor, "staff", "view");
   authorize(actor, "events", "view");
   if (!isUuid(id)) notFound();
   try {
@@ -23,11 +24,11 @@ export async function loadTeamOrganization(id: string) {
       organization,
       plan: { canvas: plan.canvas, tables: plan.tables, decor: plan.decor },
       templates: templates.map((t) => ({ id: t.id, name: t.name, description: t.description, isDefault: t.isDefault, canManage: t.canManage })),
-      canImport: can(actor, "events", "edit"),
+      canImport: can(actor, "staff", "edit"),
       permissions: {
-        edit: can(actor, "events", "edit") && organization.editable,
-        createTemplate: can(actor, "events", "create"),
-        deleteTemplate: can(actor, "events", "delete"),
+        edit: can(actor, "staff", "edit") && organization.editable,
+        createTemplate: can(actor, "staff", "create"),
+        deleteTemplate: can(actor, "staff", "delete"),
       },
     };
   } catch (error) {

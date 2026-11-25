@@ -2,16 +2,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eq } from "drizzle-orm";
 import { eventTables, tableTypes, venueTemplates } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { venueActionDefs } from "@/features/venue/action-defs";
 import { createAction } from "@/lib/action";
+import { adminActor, managerActor, memberActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 function actionsFor(actor: Actor | null) {
@@ -32,8 +31,8 @@ describe("venue actions", () => {
     await truncateAll();
   });
 
-  it("organizatör yerleşimi kaydeder", async () => {
-    const actor = await makeActor("organizer");
+  it("F&B yöneticisi yerleşimi kaydeder", async () => {
+    const actor = await makeActor(managerActor("fnb"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -44,8 +43,8 @@ describe("venue actions", () => {
     if (res.ok) expect(res.data.totalCapacity).toBe(8);
   });
 
-  it("staff rolü yerleşim kaydedemez; satır yazılmaz", async () => {
-    const actor = await makeActor("staff");
+  it("mekân izni olmayan yerleşim kaydedemez; satır yazılmaz", async () => {
+    const actor = await makeActor(noAccessActor());
     const event = await f.createEvent(db);
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -57,7 +56,7 @@ describe("venue actions", () => {
   });
 
   it("kapasite 0 ve yinelenen etiket alan hatası olarak döner", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("fnb"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -75,7 +74,7 @@ describe("venue actions", () => {
   });
 
   it("rezervasyonlu masa silme conflict ve etiketi mesajda", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("fnb"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const table = await f.createTable(db, event.id, { label: "VIP-7" });
     const customer = await f.createCustomer(db);
@@ -85,8 +84,8 @@ describe("venue actions", () => {
     if (!res.ok) expect(res.message).toContain("VIP-7");
   });
 
-  it("mekân sahibi etkinlikten şablon alamaz", async () => {
-    const owner = await makeActor("venue_owner");
+  it("etkinlik görme izni olmayan kullanıcı etkinlikten şablon alamaz", async () => {
+    const owner = await makeActor(memberActor("fnb", { venues: "vced" }));
     const event = await f.createEvent(db);
     const res = await actionsFor(owner).saveAsTemplate({ eventId: event.id, name: "X" });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
@@ -95,14 +94,14 @@ describe("venue actions", () => {
 
   it("masa tipini yalnızca ayar yetkisi olan oluşturur", async () => {
     const input = { name: "VIP", color: "#ffaa00", shape: "round", capacity: "12", basePrice: "0" };
-    const organizer = await makeActor("organizer");
+    const organizer = await makeActor(managerActor("fnb"));
     expect(await actionsFor(organizer).createTableType(input)).toMatchObject({ ok: false, code: "forbidden" });
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     expect((await actionsFor(admin).createTableType(input)).ok).toBe(true);
     expect(await db.select().from(tableTypes)).toHaveLength(1);
   });
 
-  describe("mekân sahibi şablonları", () => {
+  describe("kullanıcının kendi şablonları", () => {
     async function template(createdById: string) {
       const [row] = await db
         .insert(venueTemplates)
@@ -113,7 +112,7 @@ describe("venue actions", () => {
     }
 
     it("kendi şablonunu günceller ve siler", async () => {
-      const owner = await makeActor("venue_owner");
+      const owner = await makeActor(managerActor("fnb"));
       const mine = await template(owner.id);
       const actions = actionsFor(owner);
       expect((await actions.updateTemplate({ id: mine.id, name: "Yeni" })).ok).toBe(true);
@@ -122,20 +121,20 @@ describe("venue actions", () => {
     });
 
     it("başkasının (herkese açık) şablonunu değiştiremez ve silemez", async () => {
-      const owner = await makeActor("venue_owner");
-      const other = await makeActor("venue_owner");
+      const owner = await makeActor(managerActor("fnb"));
+      const other = await makeActor(managerActor("fnb"));
       const theirs = await template(other.id);
       const actions = actionsFor(owner);
-      expect(await actions.updateTemplate({ id: theirs.id, name: "Ele geçir" })).toMatchObject({ ok: false, code: "forbidden" });
-      expect(await actions.deleteTemplate({ id: theirs.id })).toMatchObject({ ok: false, code: "forbidden" });
+      expect(await actions.updateTemplate({ id: theirs.id, name: "Ele geçir" })).toMatchObject({ ok: false, code: "conflict" });
+      expect(await actions.deleteTemplate({ id: theirs.id })).toMatchObject({ ok: false, code: "conflict" });
       expect(await db.select().from(venueTemplates).where(eq(venueTemplates.id, theirs.id))).toHaveLength(1);
     });
 
-    it("olmayan şablon, başkasınınkiyle aynı yanıtı verir (varlık sızmaz)", async () => {
-      const owner = await makeActor("venue_owner");
+    it("olmayan şablon not_found", async () => {
+      const owner = await makeActor(managerActor("fnb"));
       const res = await actionsFor(owner).deleteTemplate({ id: crypto.randomUUID() });
-      expect(res).toMatchObject({ ok: false, code: "forbidden" });
-      const admin = await makeActor("admin");
+      expect(res).toMatchObject({ ok: false, code: "not_found" });
+      const admin = await makeActor(adminActor());
       expect(await actionsFor(admin).deleteTemplate({ id: crypto.randomUUID() })).toMatchObject({ ok: false, code: "not_found" });
     });
   });

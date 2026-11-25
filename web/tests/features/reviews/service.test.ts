@@ -4,9 +4,10 @@ import { db } from "@/db/client";
 import { events, notifications, staffPerformanceReviews, teamMembers } from "@/db/schema";
 import { completeAllReviews, completeReview, saveReviewDraft } from "@/features/reviews/service";
 import { computeScore, type Ratings } from "@/features/reviews/score";
+import { memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld } from "./helpers";
+import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
 
 async function reviewRows(eventId: string) {
   return db.select().from(staffPerformanceReviews).where(eq(staffPerformanceReviews.eventId, eventId));
@@ -134,7 +135,7 @@ describe("saveReviewDraft", () => {
 
   it("personelin başka etkinlikteki ekibi bu etkinlik için geçerli değil", async () => {
     const w = await setupReviewWorld();
-    const otherEvent = await f.createEvent(db, { organizerId: w.organizer.id, reviewEnabled: true });
+    const otherEvent = await f.createEvent(db, { organizerId: w.fnbManager.id, reviewEnabled: true });
     await expectDomain(
       saveReviewDraft(db, w.leader, {
         eventId: otherEvent.id,
@@ -163,7 +164,7 @@ describe("saveReviewDraft", () => {
     );
   });
 
-  it("staff ve controller rolleri değerlendiremez; admin ve kendi etkinliğinin organizatörü değerlendirir", async () => {
+  it("değerlendirme izni olmayanlar değerlendiremez; admin ve F&B yöneticisi değerlendirir", async () => {
     const w = await setupReviewWorld();
     const input = {
       eventId: w.event.id,
@@ -173,27 +174,11 @@ describe("saveReviewDraft", () => {
       improvements: [],
       recommendedTrainings: [],
     };
-    await expectForbidden(saveReviewDraft(db, await makeActor("staff"), input));
-    await expectForbidden(saveReviewDraft(db, await makeActor("controller"), input));
+    await expectForbidden(saveReviewDraft(db, await makeActor(noAccessActor()), input));
+    await expectForbidden(saveReviewDraft(db, await makeActor(memberActor("casino", { check_in: "vc--" })), input));
     await saveReviewDraft(db, w.admin, input);
-    await saveReviewDraft(db, w.organizer, input);
+    await saveReviewDraft(db, w.fnbManager, input);
     expect(await reviewRows(w.event.id)).toHaveLength(2);
-  });
-
-  it("başka organizatörün etkinliği not_found", async () => {
-    const w = await setupReviewWorld();
-    const stranger = await makeActor("organizer");
-    await expectDomain(
-      saveReviewDraft(db, stranger, {
-        eventId: w.event.id,
-        staffId: w.member1.id,
-        ratings: FULL_RATINGS,
-        strengths: [],
-        improvements: [],
-        recommendedTrainings: [],
-      }),
-      "not_found",
-    );
   });
 
   it("aynı anda 8 kayıt tek satır bırakır ve hata vermez", async () => {
@@ -230,7 +215,7 @@ describe("completeReview", () => {
     await draft(w, w.member1.id);
     const done = await completeReview(db, w.leader, { eventId: w.event.id, staffId: w.member1.id });
     expect(done.review.isCompleted).toBe(true);
-    expect(done.notification).toMatchObject({ type: "staff_review_completed", targetRole: "admin", eventId: w.event.id });
+    expect(done.notification).toMatchObject({ type: "staff_review_completed", audience: "admin", eventId: w.event.id });
     const rows = await db.select().from(notifications);
     expect(rows).toHaveLength(1);
   });
@@ -313,7 +298,7 @@ describe("completeAllReviews", () => {
 
     const res = await completeAllReviews(db, w.leader, { eventId: w.event.id });
     expect(res).toMatchObject({ completed: 1, incomplete: 1 });
-    expect(res.notification).toMatchObject({ type: "staff_review_completed", targetRole: "admin" });
+    expect(res.notification).toMatchObject({ type: "staff_review_completed", audience: "admin" });
 
     const rows = await reviewRows(w.event.id);
     const byStaff = new Map(rows.map((r) => [r.staffId, r.isCompleted]));
@@ -332,7 +317,7 @@ describe("completeAllReviews", () => {
   it("ekibi olmayan lider forbidden", async () => {
     const w = await setupReviewWorld();
     const lonelyStaff = await f.createStaff(db);
-    const lonely = await makeActor("leader", lonelyStaff.id);
+    const lonely = await makeLeader(lonelyStaff.id);
     await expectForbidden(completeAllReviews(db, lonely, { eventId: w.event.id }));
   });
 });

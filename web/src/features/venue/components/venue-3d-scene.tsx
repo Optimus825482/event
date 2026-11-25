@@ -9,6 +9,7 @@ import { floorElevation, floorLabel, tableDims } from "./table-visual";
 import type { SceneTable } from "./venue-3d-scene-data";
 import Venue3DLines from "./venue-3d-lines";
 import Venue3DWalls from "./venue-3d-walls";
+import { dateToZonedWallClock } from "@/lib/time-zone";
 
 /** Tuvalde 50 piksel = 3B sahnede 1 birim (~1 metre). */
 const PX = 50;
@@ -175,7 +176,7 @@ export default function Venue3DScene({ tables, elements, lines, canvas, ariaLabe
     if (!url) return;
     const link = document.createElement("a");
     link.href = url;
-    link.download = `3d-yerlesim-${new Date().toISOString().slice(0, 10)}.png`;
+    link.download = `3d-yerlesim-${dateToZonedWallClock(new Date()).slice(0, 10)}.png`;
     link.click();
   };
 

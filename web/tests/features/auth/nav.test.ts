@@ -1,31 +1,29 @@
 import { describe, expect, it } from "vitest";
+import { DEPARTMENTS, LEVEL_LABELS, type Department, type DepartmentLevel } from "@/features/auth/departments";
 import { NAV_GROUPS, NAV_ITEMS, visibleNavGroups, visibleNavItems } from "@/features/auth/nav";
-import { ROLES, type Role } from "@/features/auth/roles";
+import { can, type PolicyActor } from "@/features/auth/policy";
+import { adminActor, assistantActor, managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 
-function actor(role: Role, staffId: string | null = null) {
-  return { id: "u1", role, staffId };
-}
-
-function hrefs(role: Role, staffId: string | null = null): string[] {
-  return visibleNavItems(actor(role, staffId)).map((item) => item.href);
-}
+const hrefs = (actor: PolicyActor) => visibleNavItems(actor).map((item) => item.href);
+const groupKeys = (actor: PolicyActor) => visibleNavGroups(actor).map((group) => group.key);
 
 describe("NAV_ITEMS", () => {
-  it("modül gruplarıyla belirtilen sırada 19 öğe içerir", () => {
+  it("gruplar ve öğeler tablodaki sıradadır", () => {
     expect(NAV_ITEMS.map((i) => [i.href, i.label, i.module, i.group])).toEqual([
-      ["/dashboard", "Pano", "events", "events"],
-      ["/events", "Etkinlikler", "events", "events"],
-      ["/staff", "Ekipler", "staff", "events"],
-      ["/venues", "Şablonlar", "venues", "events"],
-      ["/templates", "Davetiye Şablonları", "invitations", "events"],
-      ["/leader", "Pano", "reviews", "leader"],
-      ["/leader/events", "Etkinlikler", "reviews", "leader"],
-      ["/leader/team", "Ekip", "reviews", "leader"],
-      ["/leader/reviews", "Değerlendirmeler", "reviews", "leader"],
-      ["/leader/reports", "Raporlar", "reviews", "leader"],
-      ["/reservations", "Rezervasyonlar", "reservations", "reservations"],
-      ["/customers", "Müşteriler", "customers", "reservations"],
-      ["/guests", "Misafirler", "customers", "reservations"],
+      ["/dashboard", "Pano", "events", "entertainment"],
+      ["/events", "Etkinlikler", "events", "entertainment"],
+      ["/templates", "Davetiye Şablonları", "invitations", "entertainment"],
+      ["/fnb", "Etkinlikler", "venues", "fnb"],
+      ["/venues", "Yerleşim Şablonları", "venues", "fnb"],
+      ["/staff", "Ekipler", "staff", "fnb"],
+      ["/leader", "Ekip Panosu", "reviews", "fnb"],
+      ["/leader/events", "Ekip Etkinlikleri", "reviews", "fnb"],
+      ["/leader/team", "Ekibim", "reviews", "fnb"],
+      ["/leader/reviews", "Değerlendirmeler", "reviews", "fnb"],
+      ["/leader/reports", "Raporlar", "reviews", "fnb"],
+      ["/reservations", "Rezervasyonlar", "reservations", "casino"],
+      ["/customers", "Müşteriler", "customers", "casino"],
+      ["/guests", "Misafirler", "customers", "casino"],
       ["/check-in", "Check-in", "check_in", "check_in"],
       ["/admin", "Yönetim Paneli", "users", "admin"],
       ["/admin/users", "Kullanıcılar", "users", "admin"],
@@ -33,6 +31,21 @@ describe("NAV_ITEMS", () => {
       ["/admin/settings", "Sistem Ayarları", "settings", "admin"],
       ["/notifications", "Bildirimler", "notifications", "general"],
     ]);
+    expect(NAV_ITEMS).toHaveLength(20);
+  });
+
+  it("gruplar etiket, departman kapsamı ve ek önekleriyle tanımlıdır", () => {
+    expect(NAV_GROUPS.map((g) => [g.key, g.label, g.departments])).toEqual([
+      ["entertainment", "Entertainment", ["entertainment"]],
+      ["fnb", "Food & Beverage", ["fnb"]],
+      ["casino", "Casino", ["casino"]],
+      ["check_in", "Check-in", null],
+      ["admin", "Sistem Yönetimi", null],
+      ["general", "Genel", null],
+    ]);
+    const prefixes = Object.fromEntries(NAV_GROUPS.map((g) => [g.key, g.extraPrefixes]));
+    expect(prefixes.fnb).toEqual(["/import/assignments", "/import/template"]);
+    expect(prefixes.casino).toEqual(["/import/reservations"]);
   });
 
   it("her öğenin simgesi ve her grubun vurgu rengi tanımlıdır", () => {
@@ -41,30 +54,34 @@ describe("NAV_ITEMS", () => {
   });
 });
 
-describe("visibleNavItems", () => {
-  it("admin tüm öğeleri görür", () => {
-    expect(hrefs("admin")).toEqual(NAV_ITEMS.map((i) => i.href));
+describe("departman grupları", () => {
+  it("F&B yöneticisi Entertainment grubunu görmez", () => {
+    expect(groupKeys(managerActor("fnb"))).toEqual(["fnb", "check_in", "general"]);
   });
 
-  it("organizer yönetim ve ayar modülleri (settings, users) hariç hepsini görür", () => {
-    expect(hrefs("organizer")).toEqual(
-      NAV_ITEMS.filter((i) => i.module !== "settings" && i.module !== "users").map((i) => i.href),
-    );
+  it("Entertainment yöneticisi", () => {
+    expect(groupKeys(managerActor("entertainment"))).toEqual(["entertainment", "check_in", "general"]);
   });
 
-  it("Masa Tipleri yalnızca sayfanın istediği settings yetkisine sahip yöneticide görünür", () => {
-    expect(hrefs("admin")).toContain("/settings/table-types");
-    for (const role of ROLES.filter((r) => r !== "admin")) {
-      expect(hrefs(role, "s1")).not.toContain("/settings/table-types");
-    }
+  it("Casino yöneticisi", () => {
+    expect(groupKeys(managerActor("casino"))).toEqual(["casino", "check_in", "general"]);
   });
 
-  it("staff yalnızca rezervasyon, müşteri, misafir ve check-in öğelerini görür", () => {
-    expect(hrefs("staff")).toEqual(["/reservations", "/customers", "/guests", "/check-in"]);
+  it("başka departmanın grubundaki öğe, modül izni olsa bile görünmez (venues: Entertainment ve Casino görüntüler)", () => {
+    expect(hrefs(managerActor("entertainment"))).not.toContain("/fnb");
+    expect(hrefs(managerActor("casino"))).not.toContain("/venues");
   });
 
-  it("leader check-in, değerlendirme ve bildirimleri görür", () => {
-    expect(hrefs("leader", "s1")).toEqual([
+  it("Casino kullanıcısı yalnızca izinli öğeleri görür", () => {
+    const a = memberActor("casino", { reservations: "v---" });
+    expect(hrefs(a)).toEqual(["/reservations"]);
+  });
+
+  it("F&B yöneticisi menüdeki tüm F&B öğelerini görür", () => {
+    expect(hrefs(managerActor("fnb"))).toEqual([
+      "/fnb",
+      "/venues",
+      "/staff",
       "/leader",
       "/leader/events",
       "/leader/team",
@@ -75,41 +92,99 @@ describe("visibleNavItems", () => {
     ]);
   });
 
-  it("controller yalnızca check-in görür", () => {
-    expect(hrefs("controller")).toEqual(["/check-in"]);
+  it("staffId'li F&B kullanıcısı ekip öğelerini görür", () => {
+    const a = memberActor("fnb", { reviews: "vce-" }, { staffId: "s1" });
+    expect(hrefs(a)).toEqual(["/leader", "/leader/events", "/leader/team", "/leader/reviews", "/leader/reports"]);
   });
 
-  it("venue_owner yalnızca mekân şablonlarını görür", () => {
-    expect(hrefs("venue_owner")).toEqual(["/venues"]);
+  it("staffId'siz F&B kullanıcısı ekip öğelerini görmez", () => {
+    expect(hrefs(memberActor("fnb", { reviews: "vce-" }))).toEqual([]);
   });
 
-  it("kullanıcıya özel görüntüleme yetkisi kaldırılan modül gizlenir", () => {
-    const items = visibleNavItems({
-      ...actor("staff"),
-      permissions: [
-        { module: "customers", canView: false, canCreate: false, canEdit: false, canDelete: false },
+  it("kendi ekibiyle sınırlı kullanıcı, izin verilen F&B öğeleriyle ekip öğelerini birlikte görür", () => {
+    const a = memberActor("fnb", { reviews: "v---", venues: "v---", staff: "v---" }, { staffId: "s1" });
+    expect(hrefs(a)).toEqual(["/venues", "/staff", "/leader", "/leader/events", "/leader/team", "/leader/reviews", "/leader/reports"]);
+  });
+
+  it("events:view olmayan F&B kullanıcısı /fnb görmez, /venues görür", () => {
+    const a = memberActor("fnb", { venues: "v---" });
+    expect(hrefs(a)).toEqual(["/venues"]);
+    expect(hrefs(memberActor("fnb", { venues: "v---", events: "v---" }))).toEqual(["/fnb", "/venues"]);
+  });
+
+  it("admin altı grubun hepsini görür", () => {
+    expect(groupKeys(adminActor())).toEqual(["entertainment", "fnb", "casino", "check_in", "admin", "general"]);
+    expect(hrefs(adminActor())).toEqual(NAV_ITEMS.map((i) => i.href));
+  });
+
+  it("üyeliksiz kullanıcı hiçbir grup görmez", () => {
+    expect(visibleNavGroups(noAccessActor())).toEqual([]);
+    expect(hrefs(noAccessActor())).toEqual([]);
+  });
+
+  it("çok departmanlı kullanıcı her iki grubu görür; üye olmadığı departmanı görmez", () => {
+    const a: PolicyActor = {
+      ...managerActor("casino"),
+      memberships: [
+        { department: "casino", level: "manager" },
+        { department: "entertainment", level: "assistant" },
       ],
-    });
-    expect(items.map((i) => i.href)).toEqual(["/reservations", "/check-in"]);
+    };
+    expect(groupKeys(a)).toEqual(["entertainment", "casino", "check_in", "general"]);
   });
 
-  it("her rol için tanımlıdır", () => {
-    for (const role of ROLES) expect(Array.isArray(visibleNavItems(actor(role)))).toBe(true);
+  it("Masa Tipleri ve yönetim öğeleri yalnızca admine görünür", () => {
+    for (const department of DEPARTMENTS) {
+      expect(hrefs(managerActor(department))).not.toContain("/settings/table-types");
+      expect(hrefs(managerActor(department))).not.toContain("/admin");
+    }
   });
 });
 
-describe("visibleNavGroups", () => {
-  it("admin tüm modülleri ve genel grubu görür", () => {
-    expect(visibleNavGroups(actor("admin")).map((g) => g.key)).toEqual(["events", "leader", "reservations", "check_in", "admin", "general"]);
+describe("kullanıcı düzeyi izinleri", () => {
+  it("görüntüleme izni verilmeyen modül gizlenir", () => {
+    const a = memberActor("casino", { reservations: "v---", check_in: "vc--" });
+    expect(hrefs(a)).toEqual(["/reservations", "/check-in"]);
   });
 
-  it("yetkisiz modül atılır; öğesi olmayan grup listelenmez", () => {
-    expect(visibleNavGroups(actor("controller")).map((g) => g.key)).toEqual(["check_in"]);
-    expect(visibleNavGroups(actor("organizer")).map((g) => g.key)).not.toContain("admin");
+  it("üyeliksiz kullanıcı hiçbir öğe görmez; izin satırı tek başına öğe açmaz", () => {
+    expect(hrefs(noAccessActor())).toEqual([]);
+    expect(hrefs(noAccessActor({ permissions: [{ module: "events", canView: true, canCreate: true, canEdit: true, canDelete: true }] }))).toEqual([]);
   });
+});
 
-  it("/guests rezervasyon modülünde, müşteri yetkisiyle görünür", () => {
-    const reservations = visibleNavGroups(actor("staff")).find((g) => g.key === "reservations");
-    expect(reservations?.items.map((i) => i.href)).toContain("/guests");
-  });
+describe("görünen her öğe erişilebilir bir sayfaya gider", () => {
+  const levels: readonly DepartmentLevel[] = ["manager", "assistant", "member"];
+  const actors: { name: string; actor: PolicyActor }[] = [
+    { name: "admin", actor: adminActor() },
+    { name: "üyeliksiz", actor: noAccessActor() },
+    ...DEPARTMENTS.flatMap((department: Department) =>
+      levels.map((level) => ({
+        name: `${department} / ${LEVEL_LABELS[level]}`,
+        actor:
+          level === "manager"
+            ? managerActor(department, { staffId: "s1" })
+            : level === "assistant"
+              ? assistantActor(department, { staffId: "s1" })
+              : memberActor(department, { events: "v---", venues: "v---", reviews: "v---", reservations: "v---", check_in: "vc--" }, { staffId: "s1" }),
+      })),
+    ),
+    { name: "çok departman", actor: { ...managerActor("fnb"), memberships: [{ department: "fnb", level: "member" }, { department: "casino", level: "manager" }], permissions: [{ module: "venues", canView: true, canCreate: false, canEdit: false, canDelete: false }] } },
+  ];
+
+  for (const { name, actor } of actors) {
+    it(`${name}: her görünür öğe için görüntüleme izni vardır ve grup kapsamı uyar`, () => {
+      for (const group of visibleNavGroups(actor)) {
+        for (const item of group.items) {
+          const resource = item.module === "reviews" && actor.staffId ? { teamLeaderStaffId: actor.staffId } : undefined;
+          expect(can(actor, item.module, "view", resource), `${item.href}`).toBe(true);
+          if (item.alsoRequires) expect(can(actor, item.alsoRequires, "view"), `${item.href} ek izin`).toBe(true);
+          if (group.departments !== null && actor.role === "user") {
+            const member = (actor.memberships ?? []).some((m) => group.departments?.includes(m.department));
+            expect(member, `${item.href} grup kapsamı`).toBe(true);
+          }
+        }
+      }
+    });
+  }
 });

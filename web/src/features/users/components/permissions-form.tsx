@@ -1,142 +1,86 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
-import type { PermissionRow } from "@/features/auth/policy";
-import { setPermissionsAction } from "../actions";
-import { PERMISSION_MODULES } from "../schemas";
-import { FormStatus, toFormState, type FormState } from "./field";
+import type { Membership } from "@/features/auth/departments";
+import type { PermissionRow, Verb } from "@/features/auth/policy";
+import { permissionGrid, VERB_FLAGS } from "../form-model";
 
-const MODULE_LABELS: Record<(typeof PERMISSION_MODULES)[number], string> = {
-  events: "Etkinlikler",
-  reservations: "Rezervasyonlar",
-  check_in: "Check-in",
-  staff: "Personel",
-  customers: "Müşteriler",
-  venues: "Mekânlar",
-  settings: "Ayarlar",
-  users: "Kullanıcılar",
-  invitations: "Davetiyeler",
-  notifications: "Bildirimler",
-};
+type Flag = (typeof VERB_FLAGS)[number][1];
 
-const VERBS = [
-  ["canView", "Görüntüle"],
-  ["canCreate", "Oluştur"],
-  ["canEdit", "Düzenle"],
-  ["canDelete", "Sil"],
-] as const;
-
-type Flags = Record<(typeof VERBS)[number][0], boolean>;
-type Grid = Partial<Record<(typeof PERMISSION_MODULES)[number], Flags>>;
-
-function toGrid(rows: PermissionRow[]): Grid {
-  const grid: Grid = {};
-  for (const row of rows) {
-    if (row.module in MODULE_LABELS) {
-      grid[row.module as (typeof PERMISSION_MODULES)[number]] = {
-        canView: row.canView,
-        canCreate: row.canCreate,
-        canEdit: row.canEdit,
-        canDelete: row.canDelete,
-      };
-    }
-  }
-  return grid;
-}
+const EMPTY = { canView: false, canCreate: false, canEdit: false, canDelete: false } as const;
 
 /**
- * Modül bazlı kısıtlamalar. İşaretsiz modül = rolün varsayılan yetkisi geçerli;
- * işaretli modülde yalnızca seçilen eylemlere izin verilir (rol yetkisini genişletmez).
+ * Kullanıcıya verilen modül izinleri (denetimli bileşen). Tablo yalnızca `Kullanıcı` düzeyindeki
+ * üyeliklerin tavanını gösterir; yönetici/asistan düzeyi için salt-okunur açıklama yazılır.
+ * İşaretli kutu verilen yetkidir; tavan dışındaki fiilin kutusu gösterilmez.
  */
-export function PermissionsForm({ userId, initial }: { userId: string; initial: PermissionRow[] }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [grid, setGrid] = useState<Grid>(() => toGrid(initial));
-  const [state, setState] = useState<FormState>(null);
+export function PermissionsForm({
+  memberships,
+  value,
+  onChange,
+}: {
+  memberships: Membership[];
+  value: PermissionRow[];
+  onChange: (next: PermissionRow[]) => void;
+}) {
+  const grid = permissionGrid(memberships);
+  const hasElevated = memberships.some((m) => m.level !== "member");
 
-  function toggleModule(module: keyof typeof MODULE_LABELS, enabled: boolean) {
-    setGrid((prev) => {
-      const next = { ...prev };
-      if (enabled) next[module] = { canView: true, canCreate: false, canEdit: false, canDelete: false };
-      else delete next[module];
-      return next;
-    });
-  }
-
-  function toggleVerb(module: keyof typeof MODULE_LABELS, verb: keyof Flags, value: boolean) {
-    setGrid((prev) => {
-      const current = prev[module];
-      return current ? { ...prev, [module]: { ...current, [verb]: value } } : prev;
-    });
-  }
-
-  function save() {
-    setState(null);
-    const permissions = PERMISSION_MODULES.flatMap((module) => {
-      const flags = grid[module];
-      return flags ? [{ module, ...flags }] : [];
-    });
-    startTransition(async () => {
-      const result = await setPermissionsAction({ id: userId, permissions });
-      setState(toFormState(result, "İzinler kaydedildi"));
-      if (result.ok) router.refresh();
-    });
+  function setFlag(module: PermissionRow["module"], flag: Flag, checked: boolean) {
+    const current = value.find((row) => row.module === module) ?? { module, ...EMPTY };
+    let next: PermissionRow = { ...current, [flag]: checked };
+    // Görüntüleme kapanınca satırın tamamı kapanır; başka bir kutu açılınca görüntüleme açılır.
+    if (flag === "canView" && !checked) next = { module, ...EMPTY };
+    else if (checked) next = { ...next, canView: true };
+    const rest = value.filter((row) => row.module !== module);
+    onChange(next.canView ? [...rest, next] : rest);
   }
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-muted-foreground">
-              <th className="py-2 pr-4 font-medium">Modül</th>
-              <th className="py-2 pr-4 font-medium">Kısıtla</th>
-              {VERBS.map(([, label]) => (
-                <th key={label} className="py-2 pr-4 font-medium">
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {PERMISSION_MODULES.map((module) => {
-              const flags = grid[module];
-              return (
-                <tr key={module} className="border-b last:border-0">
-                  <td className="py-2 pr-4">{MODULE_LABELS[module]}</td>
-                  <td className="py-2 pr-4">
-                    <input
-                      type="checkbox"
-                      aria-label={`${MODULE_LABELS[module]} için kısıtlama`}
-                      checked={flags !== undefined}
-                      onChange={(e) => toggleModule(module, e.target.checked)}
-                    />
-                  </td>
-                  {VERBS.map(([verb, label]) => (
-                    <td key={verb} className="py-2 pr-4">
-                      <input
-                        type="checkbox"
-                        aria-label={`${MODULE_LABELS[module]}: ${label}`}
-                        disabled={flags === undefined}
-                        checked={flags?.[verb] ?? false}
-                        onChange={(e) => toggleVerb(module, verb, e.target.checked)}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex items-center gap-3">
-        <Button type="button" onClick={save} disabled={pending}>
-          {pending ? "Kaydediliyor…" : "İzinleri kaydet"}
-        </Button>
-        <FormStatus state={state} />
-      </div>
+    <div className="min-w-0 space-y-3">
+      {hasElevated ? (
+        <p className="text-sm text-muted-foreground">Departmanın tüm modülleri (asistan: silme hariç)</p>
+      ) : null}
+      {grid.length > 0 ? (
+        <div className="overflow-x-auto">
+          <p className="mb-1 text-sm font-medium">İzin ver</p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">Modül</th>
+                {VERB_FLAGS.map(([, , label]) => (
+                  <th key={label} className="py-2 pr-4 font-medium">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {grid.map(({ module, label, verbs }) => {
+                const row = value.find((r) => r.module === module);
+                return (
+                  <tr key={module} className="border-b last:border-0">
+                    <td className="py-2 pr-4">{label}</td>
+                    {VERB_FLAGS.map(([verb, flag, verbLabel]) => (
+                      <td key={verb} className="py-0 pr-4">
+                        {(verbs as Verb[]).includes(verb) ? (
+                          <span className="flex h-11 w-11 items-center justify-center">
+                            <input
+                              type="checkbox"
+                              aria-label={`${label}: ${verbLabel}`}
+                              checked={row?.[flag] ?? false}
+                              onChange={(e) => setFlag(module, flag, e.target.checked)}
+                            />
+                          </span>
+                        ) : null}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }

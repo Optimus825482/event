@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckInConsole } from "@/features/check-in/components/check-in-console";
 import { loadCheckInConsole } from "@/features/check-in/queries";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = { title: "Kapı girişi | EventFlow" };
 
@@ -13,7 +14,7 @@ type Params = Promise<{ eventId: string }>;
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "long",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 export default async function CheckInEventPage({ params }: { params: Params }) {

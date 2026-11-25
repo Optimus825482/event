@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET } from "@/app/api/events/[eventId]/stream/route";
 import { db } from "@/db/client";
-import { userPermissions } from "@/db/schema";
 import { listenerCount } from "@/features/realtime/hub";
 import { closeRealtime } from "@/features/realtime/listener";
 import { publish } from "@/features/realtime/publish";
 import { MAX_STREAMS_PER_USER } from "@/features/realtime/stream";
+import { memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createEvent } from "../../helpers/factories";
 import { loginAs, sseReader, waitFor } from "./helpers";
@@ -46,34 +46,28 @@ describe("GET /api/events/[eventId]/stream", () => {
 
   it("check_in:view ve reservations:view izni olmayan kullanıcı 403 alır", async () => {
     const event = await createEvent(db);
-    const owner = await loginAs("venue_owner");
-    expect((await connect(event.id, owner.cookie).response).status).toBe(403);
+    const outsider = await loginAs(memberActor("fnb", { venues: "vced" }));
+    expect((await connect(event.id, outsider.cookie).response).status).toBe(403);
 
-    // Personel rolünde iki modülün görüntüleme izni kaldırılırsa da 403.
-    const staff = await loginAs("staff");
-    await db.insert(userPermissions).values([
-      { userId: staff.id, module: "check_in", canView: false },
-      { userId: staff.id, module: "reservations", canView: false },
-    ]);
+    // Kullanıcıda iki modülün görüntüleme izni kapalıysa 403.
+    const staff = await loginAs(memberActor("casino", { check_in: "----", reservations: "----" }));
     expect((await connect(event.id, staff.cookie).response).status).toBe(403);
     expect(listenerCount()).toBe(0);
   });
 
-  it("başka organizatörün etkinliği, olmayan etkinlik ve geçersiz kimlik 404 olur", async () => {
-    const organizer = await loginAs("organizer");
-    const foreign = await createEvent(db);
-    expect((await connect(foreign.id, organizer.cookie).response).status).toBe(404);
-    expect((await connect(randomUUID(), organizer.cookie).response).status).toBe(404);
-    expect((await connect("uuid-degil", organizer.cookie).response).status).toBe(404);
+  it("olmayan etkinlik ve geçersiz kimlik 404 olur", async () => {
+    const door = await loginAs(memberActor("casino", { check_in: "v---" }));
+    expect((await connect(randomUUID(), door.cookie).response).status).toBe(404);
+    expect((await connect("uuid-degil", door.cookie).response).status).toBe(404);
     expect(listenerCount()).toBe(0);
   });
 
-  it("yetkili akış SSE başlıklarıyla açılır, kendi etkinliğinin olaylarını alır, başkasınınkini almaz", async () => {
-    const organizer = await loginAs("organizer");
-    const mine = await createEvent(db, { organizerId: organizer.id });
-    const other = await createEvent(db, { organizerId: organizer.id });
+  it("yetkili akış SSE başlıklarıyla açılır, bağlandığı etkinliğin olaylarını alır, diğerininkini almaz", async () => {
+    const door = await loginAs(memberActor("casino", { check_in: "v---" }));
+    const mine = await createEvent(db);
+    const other = await createEvent(db);
 
-    const res = await connect(mine.id, organizer.cookie).response;
+    const res = await connect(mine.id, door.cookie).response;
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
     expect(res.headers.get("cache-control")).toBe("no-store, no-transform");
@@ -91,8 +85,29 @@ describe("GET /api/events/[eventId]/stream", () => {
     expect(JSON.parse(frames[0]?.data ?? "{}")).toMatchObject({ type: "guest.checked_in", eventId: mine.id, id: "benim" });
   });
 
+  it("akış bildirimi yalnızca kitlesi aktörün üyeliğiyle eşleşen bağlantıya iletir", async () => {
+    const event = await createEvent(db);
+    const casino = await loginAs(memberActor("casino", { check_in: "v---", notifications: "v---" }));
+    const fnb = await loginAs(memberActor("fnb", { check_in: "v---", notifications: "v---" }));
+    const casinoStream = await connect(event.id, casino.cookie).response;
+    const fnbStream = await connect(event.id, fnb.cookie).response;
+    if (!casinoStream.body || !fnbStream.body) throw new Error("gövde yok");
+    const casinoSse = sseReader(casinoStream.body);
+    const fnbSse = sseReader(fnbStream.body);
+    await casinoSse.first();
+    await fnbSse.first();
+
+    await publish(db, { type: "notification.created", audience: "casino", id: "yalniz-casino" });
+    await publish(db, { type: "notification.created", audience: "all", id: "herkese" });
+
+    const casinoFrames = await casinoSse.until((f) => f.data.includes("herkese"));
+    const fnbFrames = await fnbSse.until((f) => f.data.includes("herkese"));
+    expect(casinoFrames.map((f) => JSON.parse(f.data).id)).toEqual(["yalniz-casino", "herkese"]);
+    expect(fnbFrames.map((f) => JSON.parse(f.data).id)).toEqual(["herkese"]);
+  });
+
   it("istek iptal edilince dinleyici kaldırılır; okuyucu iptali de kaldırır", async () => {
-    const staff = await loginAs("staff");
+    const staff = await loginAs(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const event = await createEvent(db);
 
     const first = connect(event.id, staff.cookie);
@@ -110,7 +125,7 @@ describe("GET /api/events/[eventId]/stream", () => {
   });
 
   it(`kullanıcı başına en çok ${MAX_STREAMS_PER_USER} eşzamanlı akış; fazlası 429`, async () => {
-    const staff = await loginAs("staff");
+    const staff = await loginAs(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const event = await createEvent(db);
 
     const streams = [];

@@ -6,8 +6,8 @@
  *     npx tsx scripts/migrate-legacy/index.ts [--dry-run] [--report <yol>] \
  *       [--force-empty-check=off] [--default-organizer <kullanıcı-uuid>]
  *
- * Ortam: LEGACY_DATABASE_URL (salt-okunur açılır), DATABASE_URL (hedef), LEGACY_TZ (varsayılan
- * Europe/Istanbul), BETTER_AUTH_SECRET / QR_SIGNING_KEY (uygulamayla aynı; QR belirteçleri için).
+ * Ortam: LEGACY_DATABASE_URL (salt-okunur açılır), DATABASE_URL (hedef), LEGACY_TZ (zorunlu, varsayılanı yok:
+ * Asia/Famagusta ya da Europe/Istanbul), BETTER_AUTH_SECRET / QR_SIGNING_KEY (uygulamayla aynı; QR belirteçleri için).
  * Çıkış kodu: 0 başarılı (dry-run dahil), 1 hata ya da doğrulama başarısızlığı, 2 kullanım hatası.
  * Konsola yalnızca sayılar yazılır; ayrıntı `--report` dosyalarındadır (.json ve .txt).
  */
@@ -78,11 +78,19 @@ async function main(): Promise<number> {
     console.error("LEGACY_DATABASE_URL ile DATABASE_URL aynı olamaz");
     return 2;
   }
+  const legacyTz = process.env.LEGACY_TZ?.trim();
+  if (!legacyTz) {
+    console.error(
+      "LEGACY_TZ ortam değişkeni gerekli: eski veritabanındaki `timestamp without time zone` değerlerinin yazıldığı saat dilimi. " +
+        "Olası değerler: Asia/Famagusta (Kıbrıs saati) ya da Europe/Istanbul (sabit UTC+3). Hiçbir şey değiştirilmedi.",
+    );
+    return 2;
+  }
   const report = await runMigration({
     legacyUrl,
     targetUrl,
     dryRun: args.dryRun,
-    legacyTz: process.env.LEGACY_TZ?.trim() || "Europe/Istanbul",
+    legacyTz,
     emptyCheck: args.emptyCheck,
     defaultOrganizerId: args.defaultOrganizerId,
   });

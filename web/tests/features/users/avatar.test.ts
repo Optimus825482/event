@@ -26,9 +26,9 @@ function dataUrl(mime: string, signature: number[], size = 64): string {
   return `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
 }
 
-async function actorOf(role: Actor["role"] = "staff", isActive = true): Promise<Actor> {
+async function actorOf(role: Actor["role"] = "user", isActive = true): Promise<Actor> {
   const u = await insertUser(db, { role, isActive });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
 describe("avatar biçim denetimi", () => {
@@ -109,7 +109,7 @@ describe("kendi profil fotoğrafı", () => {
   });
 
   it("kendi satırına yazar ve kaldırır; başkasının satırına dokunmaz", async () => {
-    const me = await actorOf("staff");
+    const me = await actorOf("user");
     const other = await actorOf("admin");
     const image = dataUrl("image/jpeg", JPEG, 2048);
 
@@ -130,9 +130,9 @@ describe("kendi profil fotoğrafı", () => {
   });
 
   it("pasif ya da olmayan hesap yazamaz", async () => {
-    const inactive = await actorOf("staff", false);
+    const inactive = await actorOf("user", false);
     await expect(setOwnAvatar(db, inactive, { image: null })).rejects.toMatchObject({ code: "not_found" });
-    const ghost: Actor = { id: "00000000-0000-4000-8000-0000000000bb", username: "x", role: "admin", staffId: null };
+    const ghost: Actor = { id: "00000000-0000-4000-8000-0000000000bb", username: "x", role: "admin", staffId: null, memberships: [], permissions: [] };
     await expect(setOwnAvatar(db, ghost, { image: null })).rejects.toMatchObject({ code: "not_found" });
   });
 
@@ -142,8 +142,8 @@ describe("kendi profil fotoğrafı", () => {
     expect(await getOwnAvatar(db, me)).toBeNull();
   });
 
-  it("action: her rol kendi fotoğrafını değiştirir; oturumsuz ve bozuk girdi reddedilir", async () => {
-    for (const role of ["admin", "organizer", "staff", "leader", "controller", "venue_owner"] as const) {
+  it("action: admin ve kullanıcı kendi fotoğrafını değiştirir; oturumsuz ve bozuk girdi reddedilir", async () => {
+    for (const role of ["admin", "user"] as const) {
       const actor = await actorOf(role);
       const run = createSelfAction({ getActor: async () => actor })(selfActionDefs.setOwnAvatar);
       expect(await run({ image: dataUrl("image/png", PNG) })).toEqual({ ok: true, data: { hasAvatar: true } });

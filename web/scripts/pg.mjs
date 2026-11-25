@@ -56,7 +56,7 @@ function ensureDatabases() {
 function start() {
   init();
   if (!isRunning()) {
-    run("pg_ctl", ["-D", dataDir, "-l", join(dataDir, "server.log"), "-o", `-p ${PORT} -c listen_addresses=localhost`, "-w", "start"], {
+    run("pg_ctl", ["-D", dataDir, "-l", join(dataDir, "server.log"), "-o", `-p ${PORT} -c listen_addresses=localhost`, "-w", "-t", "180", "start"], {
       detached: true,
     });
   }
@@ -76,7 +76,34 @@ function reset() {
   console.log("veritabanları sıfırlandı");
 }
 
-const commands = { init, start, stop, reset };
+/**
+ * `npm run dev` öncesi (predev) çalışır: DATABASE_URL bu projenin yerel kümesini
+ * gösteriyorsa kümeyi başlatır; uzak/başka bir veritabanıysa dokunmaz.
+ * Başlatılamazsa yalnızca uyarır; dev sunucusunun açılmasını engellemez.
+ */
+function ensure() {
+  const raw = process.env.DATABASE_URL ?? `postgres://postgres@localhost:${PORT}/eventflow_dev`;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    console.warn("DATABASE_URL çözümlenemedi; yerel PostgreSQL otomatik başlatılmadı");
+    return;
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const isLocalCluster = ["localhost", "127.0.0.1", "::1"].includes(host) && url.port === PORT;
+  if (!isLocalCluster) {
+    console.log(`DATABASE_URL yerel kümeyi göstermiyor (${url.host}); PostgreSQL otomatik başlatılmadı`);
+    return;
+  }
+  try {
+    start();
+  } catch (err) {
+    console.warn("Yerel PostgreSQL otomatik başlatılamadı:\n" + (err instanceof Error ? err.message : err));
+  }
+}
+
+const commands = { init, start, stop, reset, ensure };
 const cmd = process.argv[2] ?? "";
 const handler = commands[cmd];
 if (!handler) {

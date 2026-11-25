@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import type { EventStatus } from "@/domain/event-status";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import type { TeamCard } from "@/features/staffing/team-cards";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: APP_TIME_ZONE });
 
 /** "Ekipler" sekmesi: ekip kartları, lider, üye sayısı ve bağlı etkinlik bilgisi. */
 export function TeamCardsGrid({ teams, canOrganize }: { teams: TeamCard[]; canOrganize: boolean }) {

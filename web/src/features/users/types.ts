@@ -1,4 +1,5 @@
 import { users } from "@/db/schema";
+import type { Membership } from "@/features/auth/departments";
 
 /** Kullanıcı listesi/ayrıntısında dönen sütunlar: parola ve hesap tabloları hiçbir zaman seçilmez. */
 export const USER_COLUMNS = {
@@ -28,3 +29,6 @@ export type UserSummary = {
   position: string | null;
   createdAt: Date;
 };
+
+/** Liste ve ayrıntıda dönen kullanıcı: departman üyelikleriyle birlikte. */
+export type UserWithMemberships = UserSummary & { memberships: Membership[] };

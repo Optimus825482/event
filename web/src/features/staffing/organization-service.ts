@@ -55,7 +55,7 @@ function groupBy<T, K extends string>(rows: T[], key: (row: T) => K): Map<K, T[]
   return map;
 }
 
-/** Sihirbazın ihtiyaç duyduğu tüm okuma (yetki + organizatör sahipliği ilk satırda). */
+/** Sihirbazın ihtiyaç duyduğu tüm okuma (yetki ve etkinlik varlığı ilk satırda). */
 export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string) {
   const event = await getReadableEvent(db, actor, eventId);
 

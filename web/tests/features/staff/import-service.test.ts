@@ -3,19 +3,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { departments, positions, staff, workLocations } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
-import type { Role } from "@/features/auth/roles";
-import type { Actor } from "@/features/auth/session";
 import { STAFF_IMPORT_MAX_BYTES } from "@/features/staff/csv-import";
 import { staffImportActionDefs } from "@/features/staff/import-action-defs";
 import { decodeCsv, importStaffCsv, previewStaffImport } from "@/features/staff/import-service";
 import { createAction } from "@/lib/action";
+import { adminActor, managerActor, memberActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { createStaff, createUser } from "../../helpers/factories";
+import { createStaff } from "../../helpers/factories";
 
-function actorOf(role: Role): Actor {
-  return { id: "00000000-0000-4000-8000-000000000001", username: "t", role, staffId: null };
-}
-const admin = actorOf("admin");
+const admin = adminActor({ id: "00000000-0000-4000-8000-000000000001" });
 
 function bytes(text: string): { bytes: Uint8Array } {
   return { bytes: new TextEncoder().encode(text) };
@@ -118,16 +114,24 @@ describe("personel CSV içe aktarma", () => {
   });
 
   it("pasif/ayrıldı durumu düzenleme yetkisi ister; yetkisiz roller içe aktaramaz", async () => {
-    for (const role of ["staff", "leader", "controller", "venue_owner"] as const) {
-      await expect(previewStaffImport(db, actorOf(role), bytes(`${HEADER}\n1;Ali;;;;;;;;`))).rejects.toBeInstanceOf(ForbiddenError);
-      await expect(importStaffCsv(db, actorOf(role), bytes(`${HEADER}\n1;Ali;;;;;;;;`))).rejects.toBeInstanceOf(ForbiddenError);
+    // Personel yönetimi F&B departmanının işi: diğer departman ve düzeyler reddedilir.
+    const denied = [
+      memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }),
+      memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }),
+      memberActor("casino", { check_in: "vc--" }),
+      noAccessActor(),
+    ];
+    for (const actor of denied) {
+      await expect(previewStaffImport(db, actor, bytes(`${HEADER}
+1;Ali;;;;;;;;`))).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(importStaffCsv(db, actor, bytes(`${HEADER}
+1;Ali;;;;;;;;`))).rejects.toBeInstanceOf(ForbiddenError);
     }
     expect(await db.select().from(staff)).toHaveLength(0);
   });
 
   it("action: FormData ile önizler ve içe aktarır; dosya yok/büyük/yetkisiz/oturumsuz durumları", async () => {
-    const user = await createUser(db, { role: "organizer" });
-    const organizer: Actor = { id: user.id, username: user.username, role: "organizer", staffId: null };
+    const organizer = await persistActor(db, managerActor("fnb"));
     const { defineAction } = createAction({ getActor: async () => organizer });
     const preview = defineAction(staffImportActionDefs.preview);
     const run = defineAction(staffImportActionDefs.run);
@@ -150,10 +154,8 @@ describe("personel CSV içe aktarma", () => {
       message: expect.stringContaining("MB") as string,
     });
 
-    const staffUser = await createUser(db, { role: "staff" });
-    const denied = createAction({
-      getActor: async () => ({ id: staffUser.id, username: staffUser.username, role: "staff", staffId: null }),
-    }).defineAction(staffImportActionDefs.run);
+    const staffUser = await persistActor(db, memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
+    const denied = createAction({ getActor: async () => staffUser }).defineAction(staffImportActionDefs.run);
     expect(await denied(form(`${HEADER}\n2;Veli;;;;;;;;`))).toMatchObject({ ok: false, code: "forbidden" });
 
     const anon = createAction({ getActor: async () => null }).defineAction(staffImportActionDefs.preview);

@@ -1,56 +1,105 @@
 import { describe, expect, it } from "vitest";
+import { DEPARTMENTS } from "@/features/auth/departments";
 import { visibleNavGroups } from "@/features/auth/nav";
 import type { PolicyActor } from "@/features/auth/policy";
-import { launcherModules, roleLanding } from "@/features/dashboard/modules";
+import { landingFor, launcherModules } from "@/features/dashboard/modules";
 import { countdownParts } from "@/components/dashboard/countdown";
+import { adminActor, assistantActor, managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 
-const actor = (role: PolicyActor["role"]): PolicyActor => ({ id: "u1", role, staffId: null, permissions: [] });
-const keys = (role: PolicyActor["role"]) => {
-  const a = actor(role);
-  return launcherModules(a, visibleNavGroups(a)).map((m) => m.key);
-};
+const cards = (a: PolicyActor) => launcherModules(a, visibleNavGroups(a));
+const keys = (a: PolicyActor) => cards(a).map((m) => m.key);
 
 describe("launcherModules", () => {
-  it("yönetici tüm modülleri görür", () => {
-    expect(keys("admin")).toEqual(["events", "leader", "reservations", "check_in", "admin"]);
+  it("yönetici beş modül kartını görür", () => {
+    expect(keys(adminActor())).toEqual(["entertainment", "fnb", "casino", "check_in", "admin"]);
   });
 
-  it("lider Ekip Lideri kartını görür ve /leader panosuna gider", () => {
-    const a = { ...actor("leader"), staffId: "s1" };
-    const cards = launcherModules(a, visibleNavGroups(a));
-    expect(cards.find((m) => m.key === "leader")).toMatchObject({ name: "Ekip Lideri", accent: "cyan", href: "/leader" });
+  it("F&B yöneticisi Food & Beverage ve Check-in kartlarını görür", () => {
+    const a = managerActor("fnb");
+    expect(keys(a)).toEqual(["fnb", "check_in"]);
+    expect(cards(a)[0]).toMatchObject({ name: "Food & Beverage", href: "/fnb" });
   });
 
-  it("organizatör sistem yönetimini görmez", () => {
-    expect(keys("organizer")).toEqual(["events", "leader", "reservations", "check_in"]);
-  });
-
-  it("personel yalnızca rezervasyon ve check-in görür", () => {
-    expect(keys("staff")).toEqual(["reservations", "check_in"]);
+  it("Entertainment yöneticisi panoya, Casino yöneticisi rezervasyonlara gider", () => {
+    expect(cards(managerActor("entertainment"))[0]).toMatchObject({ key: "entertainment", href: "/dashboard" });
+    expect(cards(managerActor("casino"))[0]).toMatchObject({ key: "casino", href: "/reservations" });
   });
 
   it("panel adreslerine yönlendirir", () => {
-    const a = actor("admin");
-    const hrefs = Object.fromEntries(launcherModules(a, visibleNavGroups(a)).map((m) => [m.key, m.href]));
-    expect(hrefs).toMatchObject({ events: "/dashboard", admin: "/admin", reservations: "/reservations" });
+    const hrefs = Object.fromEntries(cards(adminActor()).map((m) => [m.key, m.href]));
+    expect(hrefs).toMatchObject({ entertainment: "/dashboard", fnb: "/fnb", casino: "/reservations", admin: "/admin", check_in: "/check-in" });
   });
 
-  it("olay izni kaldırılmış organizatör için etkinlik panelini atlar", () => {
-    const a: PolicyActor = {
-      ...actor("organizer"),
-      permissions: [{ module: "events", canView: false, canCreate: false, canEdit: false, canDelete: false }],
-    };
-    const events = launcherModules(a, visibleNavGroups(a)).find((m) => m.key === "events");
-    expect(events?.href).not.toBe("/dashboard");
+  it("etkinlik izni olmayan Entertainment kullanıcısı için panoyu atlar", () => {
+    const a = memberActor("entertainment", { invitations: "v---" });
+    expect(cards(a)).toEqual([expect.objectContaining({ key: "entertainment", href: "/templates" })]);
+  });
+
+  it("üyeliksiz kullanıcı hiç kart görmez", () => {
+    expect(cards(noAccessActor())).toEqual([]);
+  });
+
+  it("kendi ekibiyle sınırlı F&B kullanıcısı yalnızca erişebildiği ekip panosuna gider", () => {
+    const a = memberActor("fnb", { reviews: "v---" }, { staffId: "s1" });
+    expect(cards(a)).toEqual([expect.objectContaining({ key: "fnb", href: "/leader" })]);
+  });
+
+  it("her kartın adresi, o grubun görünür öğelerinden biridir", () => {
+    const actors: PolicyActor[] = [
+      adminActor(),
+      noAccessActor(),
+      ...DEPARTMENTS.flatMap((d) => [managerActor(d, { staffId: "s1" }), assistantActor(d, { staffId: "s1" }), memberActor(d, { events: "v---", reviews: "v---", reservations: "v---" }, { staffId: "s1" })]),
+      memberActor("casino", { check_in: "vc--" }),
+    ];
+    for (const a of actors) {
+      const groups = visibleNavGroups(a);
+      for (const card of launcherModules(a, groups)) {
+        const group = groups.find((g) => g.key === card.key);
+        expect(group?.items.map((i) => i.href), card.key).toContain(card.href);
+      }
+    }
   });
 });
 
-describe("roleLanding", () => {
-  it("rollere göre çalışma alanı adresi verir", () => {
-    expect(roleLanding("leader")).toBe("/leader");
-    expect(roleLanding("controller")).toBe("/check-in");
-    expect(roleLanding("venue_owner")).toBe("/venues");
-    expect(roleLanding("admin")).toBeNull();
+describe("landingFor", () => {
+  it("tek modül grubu varsa onun ilk öğesi", () => {
+    expect(landingFor(memberActor("casino", { reservations: "v---" }))).toBe("/reservations");
+    expect(landingFor(memberActor("fnb", { reviews: "v---" }, { staffId: "s1" }))).toBe("/leader");
+  });
+
+  it("events:view olmayan F&B kullanıcısı /venues sayfasına iner; kart da oraya gider", () => {
+    const a = memberActor("fnb", { venues: "v---" });
+    expect(landingFor(a)).toBe("/venues");
+    expect(cards(a)).toEqual([expect.objectContaining({ key: "fnb", href: "/venues" })]);
+  });
+
+  it("bildirim grubu modül sayılmaz", () => {
+    expect(landingFor(memberActor("casino", { reservations: "v---", notifications: "v---" }))).toBe("/reservations");
+  });
+
+  it("çok grup ya da hiç grup varsa ana sayfa", () => {
+    expect(landingFor(adminActor())).toBe("/");
+    expect(landingFor(managerActor("fnb"))).toBe("/");
+    expect(landingFor(noAccessActor())).toBe("/");
+  });
+
+  it("çok departmanlı kullanıcı ana sayfaya gider", () => {
+    const a: PolicyActor = {
+      ...managerActor("casino"),
+      memberships: [
+        { department: "casino", level: "member" },
+        { department: "entertainment", level: "member" },
+      ],
+      permissions: [
+        { module: "reservations", canView: true, canCreate: false, canEdit: false, canDelete: false },
+        { module: "events", canView: true, canCreate: false, canEdit: false, canDelete: false },
+      ],
+    };
+    expect(landingFor(a)).toBe("/");
+  });
+
+  it("yalnızca check-in yetkili kullanıcı check-in sayfasına iner", () => {
+    expect(landingFor(memberActor("casino", { check_in: "vc--" }))).toBe("/check-in");
   });
 });
 

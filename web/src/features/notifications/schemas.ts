@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { notificationPriority, notificationTargetRole, notificationType } from "@/db/schema";
+import { notificationAudience, notificationPriority, notificationType } from "@/db/schema";
 
 export const PRIORITIES = notificationPriority.enumValues;
-export const TARGET_ROLES = notificationTargetRole.enumValues;
+export const AUDIENCES = notificationAudience.enumValues;
+export type Audience = (typeof AUDIENCES)[number];
 export const NOTIFICATION_TYPES = notificationType.enumValues;
 
 const URL_BASE = "https://app.invalid";
@@ -54,7 +55,7 @@ export const createNotificationSchema = z.object({
     .min(1, "Mesaj gerekli")
     .max(2000, "Mesaj en fazla 2000 karakter olabilir"),
   priority: z.enum(PRIORITIES, { error: "Geçersiz öncelik" }),
-  targetRole: z.enum(TARGET_ROLES, { error: "Geçersiz hedef rol" }),
+  audience: z.enum(AUDIENCES, { error: "Geçersiz hedef kitle" }),
   eventId: optionalUuid,
   actionUrl: internalPath,
 });

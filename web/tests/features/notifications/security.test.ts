@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { createNotification } from "@/features/notifications/service";
 import { createNotificationSchema } from "@/features/notifications/schemas";
+import { managerActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { expectDomain, makeActor } from "../reviews/helpers";
 
-const base = { title: "Duyuru", message: "Metin", priority: "medium", targetRole: "all" } as const;
+const base = { title: "Duyuru", message: "Metin", priority: "medium", audience: "all" } as const;
 const parse = (actionUrl: string) => createNotificationSchema.safeParse({ ...base, actionUrl });
 
 describe("actionUrl doğrulaması (açık yönlendirme)", () => {
@@ -47,20 +48,20 @@ describe("actionUrl doğrulaması (açık yönlendirme)", () => {
   });
 });
 
-describe("createNotification etkinlik sahipliği", () => {
+describe("createNotification etkinlik bağlantısı", () => {
   beforeEach(async () => {
     await truncateAll();
   });
 
-  it("organizatör başkasının etkinliğine bağlayamaz; kendisininkine ve admin her etkinliğe bağlar", async () => {
-    const owner = await makeActor("organizer");
-    const other = await makeActor("organizer");
+  it("Entertainment yöneticisi başkasının oluşturduğu etkinliğe bağlar; olmayan etkinlik not_found; admin her etkinliğe bağlar", async () => {
+    const owner = await makeActor(managerActor("entertainment"));
+    const other = await makeActor(managerActor("entertainment"));
     const admin = await makeActor("admin");
     const event = await f.createEvent(db, { organizerId: owner.id });
     const input = { ...base, eventId: event.id };
 
-    await expectDomain(createNotification(db, other, input), "not_found");
-    expect((await createNotification(db, owner, input)).eventId).toBe(event.id);
+    await expectDomain(createNotification(db, other, { ...base, eventId: crypto.randomUUID() }), "not_found");
+    expect((await createNotification(db, other, input)).eventId).toBe(event.id);
     expect((await createNotification(db, admin, input)).eventId).toBe(event.id);
   });
 });

@@ -6,6 +6,7 @@ import { forbidden } from "next/navigation";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { ForbiddenError } from "@/features/auth/errors";
+import type { Actor } from "@/features/auth/session";
 import { createAction } from "@/lib/action";
 
 describe("ForbiddenError ve Next 403 sayfası", () => {
@@ -27,7 +28,7 @@ describe("ForbiddenError ve Next 403 sayfası", () => {
   it("sunucu eylemleri ForbiddenError'ı yine forbidden sonucuna çevirir, günlüğe yazmaz", async () => {
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     try {
-      const actor = { id: "00000000-0000-4000-8000-000000000001", username: "x", role: "admin", staffId: null } as const;
+      const actor: Actor = { id: "00000000-0000-4000-8000-000000000001", username: "x", role: "admin", staffId: null, memberships: [], permissions: [] };
       const run = createAction({ getActor: async () => actor }).defineAction({
         module: "events",
         verb: "view",

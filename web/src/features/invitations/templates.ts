@@ -7,6 +7,7 @@ import { DomainError } from "@/lib/action";
 import { assertInvitationSystemEnabled } from "./access";
 import { DEFAULT_TEMPLATE_ELEMENTS, DEFAULT_TEMPLATE_NAME, INVITATION_SIZES, smartFixElements } from "./elements";
 import type { CreateTemplateInput, TemplateIdInput, UpdateTemplateInput } from "./schemas";
+import { isAdmin } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 export type TemplateRow = typeof invitationTemplates.$inferSelect;
@@ -18,12 +19,12 @@ export function canSeeTemplate(
   actor: Actor,
   template: Pick<TemplateRow, "createdById" | "isSystemTemplate" | "isDefault">,
 ): boolean {
-  return actor.role === "admin" || template.isSystemTemplate || template.isDefault || template.createdById === actor.id;
+  return isAdmin(actor) || template.isSystemTemplate || template.isDefault || template.createdById === actor.id;
 }
 
 /** Yalnızca yönetici ve sahibi değiştirebilir/silebilir; sistem şablonları yalnızca yöneticiye aittir. */
 export function canManageTemplate(actor: Actor, template: Pick<TemplateRow, "createdById" | "isSystemTemplate">): boolean {
-  if (actor.role === "admin") return true;
+  if (isAdmin(actor)) return true;
   return !template.isSystemTemplate && template.createdById === actor.id;
 }
 
@@ -83,7 +84,7 @@ export async function listTemplates(db: Db, actor: Actor): Promise<TemplateRow[]
     .where(
       and(
         eq(invitationTemplates.isActive, true),
-        actor.role === "admin"
+        isAdmin(actor)
           ? undefined
           : or(
               eq(invitationTemplates.isSystemTemplate, true),
@@ -180,7 +181,7 @@ export async function deleteTemplate(db: Db, actor: Actor, input: TemplateIdInpu
 
 export async function setDefaultTemplate(db: Db, actor: Actor, input: TemplateIdInput): Promise<{ id: string }> {
   authorize(actor, "invitations", "edit");
-  if (actor.role !== "admin") throw new DomainError("conflict", "Varsayılan şablonu yalnızca yönetici değiştirebilir");
+  if (!isAdmin(actor)) throw new DomainError("conflict", "Varsayılan şablonu yalnızca yönetici değiştirebilir");
   await assertInvitationSystemEnabled(db);
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('invitation_default_template'))`);

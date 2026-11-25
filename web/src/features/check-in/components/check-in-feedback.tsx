@@ -3,10 +3,11 @@
 import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-react";
 import Link from "next/link";
 import type { CheckInFeedback, QueuedReason } from "./use-check-in";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 const timeFormat = new Intl.DateTimeFormat("tr-TR", {
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 const QUEUED_TITLE: Record<QueuedReason, string> = {

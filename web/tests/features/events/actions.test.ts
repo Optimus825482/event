@@ -1,17 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { events } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { eventActionDefs } from "@/features/events/action-defs";
 import { createEventSchema, updateEventSchema } from "@/features/events/schemas";
 import { createAction } from "@/lib/action";
+import { managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+async function makeActor(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 function actionsFor(actor: Actor | null) {
@@ -33,22 +32,22 @@ describe("events actions", () => {
     await truncateAll();
   });
 
-  it("staff rolü etkinlik oluşturamaz", async () => {
-    const actor = await makeActor("staff");
+  it("üyeliksiz kullanıcı etkinlik oluşturamaz", async () => {
+    const actor = await makeActor(noAccessActor());
     const res = await actionsFor(actor).create({ name: "X", startsAt: inDays(3) });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
     expect(await db.select().from(events)).toHaveLength(0);
   });
 
-  it("organizatör oluşturur", async () => {
-    const actor = await makeActor("organizer");
+  it("Entertainment yöneticisi oluşturur", async () => {
+    const actor = await makeActor(managerActor("entertainment"));
     const res = await actionsFor(actor).create({ name: "X", startsAt: inDays(3).toISOString() });
     expect(res.ok).toBe(true);
     expect(await db.select().from(events)).toHaveLength(1);
   });
 
   it("bitiş <= başlangıç invalid ve endsAt alanında hata verir", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const start = inDays(3);
     for (const end of [start, new Date(start.getTime() - 3_600_000)]) {
       const res = await actionsFor(actor).create({
@@ -63,14 +62,14 @@ describe("events actions", () => {
   });
 
   it("geçmişte başlangıç oluşturmada invalid", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const res = await actionsFor(actor).create({ name: "X", startsAt: inDays(-1).toISOString() });
     expect(res).toMatchObject({ ok: false, code: "invalid" });
     if (!res.ok) expect(res.fieldErrors?.startsAt?.length).toBeGreaterThan(0);
   });
 
   it("güncellemede geçmiş başlangıca izin verilir, bitiş <= başlangıç yine invalid", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const ev = await f.createEvent(db, { organizerId: actor.id });
     const past = inDays(-2);
     const ok = await actionsFor(actor).update({ id: ev.id, name: "Y", startsAt: past.toISOString() });
@@ -85,14 +84,14 @@ describe("events actions", () => {
   });
 
   it("geçersiz geçiş conflict olarak döner", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const ev = await f.createEvent(db, { organizerId: actor.id, status: "completed" });
     const res = await actionsFor(actor).changeStatus({ id: ev.id, status: "draft" });
     expect(res).toMatchObject({ ok: false, code: "conflict" });
   });
 
   it("rezervasyonlu etkinlik silme conflict döner", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const ev = await f.createEvent(db, { organizerId: actor.id });
     const table = await f.createTable(db, ev.id);
     const customer = await f.createCustomer(db);

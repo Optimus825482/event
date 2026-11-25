@@ -2,19 +2,28 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { accounts, events, sessions, staffPerformanceReviews, userPermissions, users } from "@/db/schema";
+import { DEPARTMENTS } from "@/features/auth/departments";
 import { ForbiddenError } from "@/features/auth/errors";
 import { getActorFromHeaders, type Actor } from "@/features/auth/session";
 import { createAction } from "@/lib/action";
 import { userActionDefs } from "@/features/users/action-defs";
 import { isDeletedAccount } from "@/features/users/filter";
 import { createUser, deleteUser, resetUserPassword, setUserActive, setUserPermissions, updateUser } from "@/features/users/service";
+import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createEvent, createStaff, createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD, signedInCookie, signIn } from "../auth/helpers";
 
+/** Yeni kullanıcı için geçerli en küçük erişim: `user` rolü + tek departman üyeliği, izinsiz. */
+const USER_ACCESS = {
+  role: "user" as const,
+  memberships: [{ department: "fnb" as const, level: "member" as const }],
+  permissions: [],
+};
+
 async function actorOf(role: Actor["role"]): Promise<Actor> {
   const u = await insertUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
 async function rowOf(id: string) {
@@ -29,10 +38,10 @@ describe("kullanıcı silme", () => {
 
   it("başvurusu olmayan kullanıcı kalıcı silinir; oturum, parola hesabı ve izinler gider", async () => {
     const admin = await actorOf("admin");
-    const target = await createUser(db, admin, { username: "silinecek", password: PASSWORD, role: "staff" });
+    const target = await createUser(db, admin, { username: "silinecek", password: PASSWORD, ...USER_ACCESS });
     await setUserPermissions(db, admin, {
       id: target.id,
-      permissions: [{ module: "reservations", canView: true, canCreate: false, canEdit: false, canDelete: false }],
+      permissions: [{ module: "venues", canView: true, canCreate: false, canEdit: false, canDelete: false }],
     });
     const cookie = await signedInCookie("silinecek");
 
@@ -52,7 +61,7 @@ describe("kullanıcı silme", () => {
     const target = await createUser(db, admin, {
       username: "organizator",
       password: PASSWORD,
-      role: "organizer",
+      ...USER_ACCESS,
       email: "org@example.com",
       name: "Org Kişi",
       staffId: staffRow.id,
@@ -67,7 +76,7 @@ describe("kullanıcı silme", () => {
     expect(row).toMatchObject({
       name: "Silinmiş kullanıcı",
       username: `silinmis-${target.id}`,
-      role: "staff",
+      role: "user",
       isActive: false,
       staffId: null,
       phone: null,
@@ -86,13 +95,13 @@ describe("kullanıcı silme", () => {
     expect((await rowOf(target.id))?.isActive).toBe(false);
     // Kullanıcı adı serbest kalır; aynı adla yeni hesap açılabilir.
     await expect(
-      createUser(db, admin, { username: "organizator", password: PASSWORD, role: "staff", email: "org@example.com" }),
+      createUser(db, admin, { username: "organizator", password: PASSWORD, ...USER_ACCESS, email: "org@example.com" }),
     ).resolves.toMatchObject({ username: "organizator" });
   });
 
   it("değerlendiren olarak anılan kullanıcı anonimleştirilir", async () => {
     const admin = await actorOf("admin");
-    const reviewer = await actorOf("leader");
+    const reviewer = await actorOf("user");
     const event = await createEvent(db);
     const staffRow = await createStaff(db);
     await db
@@ -112,11 +121,11 @@ describe("kullanıcı silme", () => {
   it("son yönetici silinemez; ikinci aktif yönetici varken silinebilir", async () => {
     const lastAdmin = await actorOf("admin");
     // Eski oturum: rolü düşürülmüş ama önbellekte admin görünen aktör.
-    const stale = await actorOf("staff");
+    const stale = await actorOf("user");
     const staleAdmin: Actor = { ...stale, role: "admin" };
     await expect(deleteUser(db, staleAdmin, { id: lastAdmin.id })).rejects.toMatchObject({
       code: "conflict",
-      message: expect.stringContaining("son") as string,
+      message: expect.stringContaining("Son sistem") as string,
     });
     expect(await rowOf(lastAdmin.id)).toBeDefined();
 
@@ -131,10 +140,10 @@ describe("kullanıcı silme", () => {
     await expect(deleteUser(db, admin, { id: inactiveAdmin.id })).resolves.toMatchObject({ mode: "deleted" });
   });
 
-  it("yönetici olmayan roller silemez", async () => {
-    const target = await actorOf("staff");
-    for (const role of ["organizer", "staff", "leader", "controller", "venue_owner"] as const) {
-      const actor = await actorOf(role);
+  it("yönetici olmayanlar (departman yöneticileri dahil) silemez", async () => {
+    const target = await actorOf("user");
+    const others = [await actorOf("user"), ...(await Promise.all(DEPARTMENTS.map((d) => persistActor(db, managerActor(d)))))];
+    for (const actor of others) {
       await expect(deleteUser(db, actor, { id: target.id })).rejects.toBeInstanceOf(ForbiddenError);
     }
     expect(await rowOf(target.id)).toBeDefined();
@@ -149,8 +158,8 @@ describe("kullanıcı silme", () => {
 
   it("action: oturumsuz unauthenticated, yetkisiz forbidden, geçersiz kimlik invalid", async () => {
     const admin = await actorOf("admin");
-    const target = await actorOf("staff");
-    const organizer = await actorOf("organizer");
+    const target = await actorOf("user");
+    const organizer = await persistActor(db, managerActor("entertainment"));
 
     const anon = createAction({ getActor: async () => null }).defineAction(userActionDefs.deleteUser);
     expect(await anon({ id: target.id })).toMatchObject({ ok: false, code: "unauthenticated" });
@@ -169,7 +178,7 @@ describe("kullanıcı silme", () => {
       const target = await createUser(db, admin, {
         username: "organizator",
         password: PASSWORD,
-        role: "organizer",
+        ...USER_ACCESS,
         staffId: staffRow.id,
       });
       await createEvent(db, { organizerId: target.id });
@@ -201,19 +210,19 @@ describe("kullanıcı silme", () => {
 
     it("silinmiş hesap işaretini taklit eden e-posta ve kullanıcı adı reddedilir", async () => {
       const admin = await actorOf("admin");
-      const normal = await createUser(db, admin, { username: "normal", password: PASSWORD, role: "staff" });
+      const normal = await createUser(db, admin, { username: "normal", password: PASSWORD, ...USER_ACCESS });
 
       await expect(
         updateUser(db, admin, { id: normal.id, email: "Sahte@Silinmis.EventFlow.Invalid" }),
       ).rejects.toMatchObject({ code: "invalid" });
       await expect(
-        createUser(db, admin, { username: "yeni", password: PASSWORD, role: "staff", email: "x@silinmis.eventflow.invalid" }),
+        createUser(db, admin, { username: "yeni", password: PASSWORD, ...USER_ACCESS, email: "x@silinmis.eventflow.invalid" }),
       ).rejects.toMatchObject({ code: "invalid" });
       await expect(
-        createUser(db, admin, { username: "silinmis-123", password: PASSWORD, role: "staff" }),
+        createUser(db, admin, { username: "silinmis-123", password: PASSWORD, ...USER_ACCESS }),
       ).rejects.toMatchObject({ code: "invalid" });
       await expect(
-        createUser(db, admin, { username: "Silinmis-123", password: PASSWORD, role: "staff" }),
+        createUser(db, admin, { username: "Silinmis-123", password: PASSWORD, ...USER_ACCESS }),
       ).rejects.toMatchObject({ code: "invalid" });
 
       expect((await rowOf(normal.id))?.email).toBe("normal@eventflow.invalid");

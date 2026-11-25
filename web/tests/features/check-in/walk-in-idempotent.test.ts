@@ -4,6 +4,7 @@ import { POST } from "@/app/api/check-in/route";
 import { db } from "@/db/client";
 import { checkInEvents, reservations } from "@/db/schema";
 import { registerWalkInOnce } from "@/features/check-in/service";
+import { memberActor } from "../../helpers/actors";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createTable } from "../../helpers/factories";
 import { loginAs } from "../realtime/helpers";
@@ -32,7 +33,7 @@ describe("registerWalkInOnce: anahtarla tek sefer (çevrimdışı kuyruk)", () =
 
   it("aynı anahtarla tekrar yeni rezervasyon açmaz, aynı yanıtı döndürür; anahtar tek satırda saklanır", async () => {
     const { event, table } = await setup();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const k = key();
     const input = { eventId: event.id, tableId: table.id, guestName: "Kapı", guestCount: 3, idempotencyKey: k };
 
@@ -50,7 +51,7 @@ describe("registerWalkInOnce: anahtarla tek sefer (çevrimdışı kuyruk)", () =
 
   it("istemci zaman damgası giriş zamanı olur (24 saat içindeyse)", async () => {
     const { event, table } = await setup();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const at = new Date(Date.now() - 3_600_000);
     const res = await registerWalkInOnce(db, door, {
       eventId: event.id,
@@ -66,7 +67,7 @@ describe("registerWalkInOnce: anahtarla tek sefer (çevrimdışı kuyruk)", () =
   it("aynı anahtar farklı bir istekle ya da başka kullanıcıyla gelirse çatışma; yeni rezervasyon açılmaz", async () => {
     const { event, table } = await setup();
     const other = await createTable(db, event.id, { capacity: 4, label: "K8" });
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const k = key();
     const base = { eventId: event.id, guestName: "Kapı", guestCount: 2, idempotencyKey: k };
     await registerWalkInOnce(db, door, { ...base, tableId: table.id });
@@ -76,7 +77,7 @@ describe("registerWalkInOnce: anahtarla tek sefer (çevrimdışı kuyruk)", () =
       "conflict",
       "Bu istek anahtarı başka bir istek için kullanılmış",
     );
-    const stranger = await actorOf("controller");
+    const stranger = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await expectDomain(
       registerWalkInOnce(db, stranger, { ...base, tableId: table.id }),
       "conflict",
@@ -87,7 +88,7 @@ describe("registerWalkInOnce: anahtarla tek sefer (çevrimdışı kuyruk)", () =
 
   it("iş kuralı reddi de saklanır: masa sonradan boşalsa bile tekrar aynı ret döner, rezervasyon açılmaz", async () => {
     const { event, table } = await setup();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await registerWalkInOnce(db, door, {
       eventId: event.id,
       tableId: table.id,
@@ -106,7 +107,7 @@ describe("registerWalkInOnce: anahtarla tek sefer (çevrimdışı kuyruk)", () =
 
   it("POST /api/check-in toplu istekte kind=walk_in öğesi anahtarla tek sefer işlenir", async () => {
     const { event, table } = await setup();
-    const door = await loginAs("controller");
+    const door = await loginAs(memberActor("casino", { check_in: "vc--" }));
     const k = key();
     const item = {
       kind: "walk_in",

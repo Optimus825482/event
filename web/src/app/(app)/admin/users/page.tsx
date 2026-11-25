@@ -5,6 +5,7 @@ import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { UsersView } from "@/features/users/components/users-view";
 import { listUsers } from "@/features/users/queries";
+import { isAdmin } from "@/features/auth/scope";
 
 export const metadata: Metadata = { title: "Kullanıcılar | EventFlow" };
 
@@ -19,7 +20,7 @@ export default async function UsersPage() {
       selfId={actor.id}
       canCreate={can(actor, "users", "create")}
       canEdit={can(actor, "users", "edit")}
-      canDelete={actor.role === "admin" && can(actor, "users", "delete")}
+      canDelete={isAdmin(actor) && can(actor, "users", "delete")}
     />
   );
 }

@@ -18,6 +18,17 @@ const CATEGORY_FIELDS = [
 
 type ReviewCategory = (typeof CATEGORY_FIELDS)[number][1];
 
+type Audience = (typeof schema.notificationAudience.enumValues)[number];
+
+/**
+ * Eski bildirim hedefi (`targetRole`) → yeni kitle. `all` ve `admin` aynen kalır; eski rol hedefleri
+ * (`leader`, `staff`) ve tanınmayan değerler bütün bir departmana açılmasın diye yalnızca yöneticiye gider
+ * (drizzle/0013 ile aynı kural).
+ */
+export function legacyAudience(targetRole: string): Audience {
+  return targetRole === "all" ? "all" : "admin";
+}
+
 export async function migrateContent(ctx: Ctx): Promise<void> {
   const L = ctx.legacy;
   const templateIds = new Set(L.invitation_templates.map((r) => r.id));
@@ -80,7 +91,7 @@ export async function migrateContent(ctx: Ctx): Promise<void> {
       title: r.text("title"),
       message: r.text("message"),
       priority: r.text("priority", "medium") as (typeof schema.notificationPriority.enumValues)[number],
-      targetRole: r.text("targetRole", "all") as (typeof schema.notificationTargetRole.enumValues)[number],
+      audience: legacyAudience(r.text("targetRole", "all")),
       eventId: ctx.resolveEvent(r.str("eventId")),
       createdById: ctx.resolveUser(r.str("createdById")),
       metadata: r.json("metadata"),

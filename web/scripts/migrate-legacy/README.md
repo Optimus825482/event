@@ -7,12 +7,12 @@ Tasarım, eşleme kararları ve şema boşlukları: `.superpowers/sdd/2026-11-22
 LEGACY_DATABASE_URL=postgres://okuyucu@eski-host/eventflow \
 DATABASE_URL=postgres://.../eventflow_yeni \
 BETTER_AUTH_SECRET=<uygulamanınkiyle aynı> [QR_SIGNING_KEY=<uygulamanınkiyle aynı>] \
-LEGACY_TZ=Europe/Istanbul \
+LEGACY_TZ=Asia/Famagusta \
 npx tsx scripts/migrate-legacy/index.ts [--dry-run] [--report raporlar/taşıma] \
   [--force-empty-check=off] [--default-organizer <kullanıcı-uuid>]
 ```
 
-- `LEGACY_TZ`: eski `timestamp without time zone` değerlerinin yazıldığı dilim (açık soru 3). Değer
+- `LEGACY_TZ` (zorunlu, varsayılanı yok; eksikse betik hiçbir şeye dokunmadan 2 koduyla çıkar; olası değerler `Asia/Famagusta`, `Europe/Istanbul`): eski `timestamp without time zone` değerlerinin yazıldığı dilim (açık soru 3). Değer
   PostgreSQL'in `pg_timezone_names` listesinde olmalı.
 - `BETTER_AUTH_SECRET` / `QR_SIGNING_KEY` uygulamanın üretim değerleriyle **aynı** olmalı: `qr_token`
   bu anahtarla imzalanır. Farklıysa taşınan rezervasyonların QR'ları uygulamada doğrulanmaz.

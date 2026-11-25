@@ -19,6 +19,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { loadEventsDashboard } from "@/features/dashboard/queries";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = { title: "Etkinlik Planlama | EventFlow" };
 
@@ -27,7 +28,7 @@ const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   month: "long",
   hour: "2-digit",
   minute: "2-digit",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 function LinkCard({

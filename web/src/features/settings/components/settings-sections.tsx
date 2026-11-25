@@ -119,7 +119,6 @@ export function GeneralSection({ settings }: { settings: PublicSettings }) {
     save(() =>
       updateSettingsAction({
         companyName: text(data, "companyName"),
-        timezone: text(data, "timezone"),
         language: text(data, "language"),
         defaultGridSize: Number(text(data, "defaultGridSize")),
         defaultGuestCount: Number(text(data, "defaultGuestCount")),
@@ -132,9 +131,6 @@ export function GeneralSection({ settings }: { settings: PublicSettings }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="companyName" label="Firma adı" errors={errors?.companyName}>
           <Input id="companyName" name="companyName" defaultValue={settings.companyName} required />
-        </Field>
-        <Field id="timezone" label="Saat dilimi" errors={errors?.timezone}>
-          <Input id="timezone" name="timezone" defaultValue={settings.timezone} required />
         </Field>
         <Field id="language" label="Dil" errors={errors?.language}>
           <Input id="language" name="language" defaultValue={settings.language} required />

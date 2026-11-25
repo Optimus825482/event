@@ -1,9 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { venueTemplates } from "@/db/schema";
-import type { Actor } from "@/features/auth/session";
 import { closeRealtime } from "@/features/realtime/listener";
 import { applyVenueTemplate, saveLayout } from "@/features/venue/service";
+import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { watchEvents } from "../realtime/emitted";
@@ -11,8 +11,7 @@ import { watchEvents } from "../realtime/emitted";
 const decor = { width: 1200, height: 800, elements: [] };
 
 async function setup() {
-  const u = await f.createUser(db, { role: "organizer" });
-  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  const actor = await persistActor(db, managerActor("fnb"));
   const event = await f.createEvent(db, { organizerId: actor.id });
   return { actor, event };
 }

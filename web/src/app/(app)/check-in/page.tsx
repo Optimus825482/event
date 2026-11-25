@@ -5,13 +5,14 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { loadCheckInEvents } from "@/features/check-in/queries";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = { title: "Check-in | EventFlow" };
 
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 export default async function CheckInEventsPage() {

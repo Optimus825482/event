@@ -6,10 +6,11 @@ import Link from "next/link";
 import { realtimeKeys } from "@/features/realtime/keys";
 import { recentCheckInsAction } from "../actions";
 import { unwrap } from "./use-check-in";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 const timeFormat = new Intl.DateTimeFormat("tr-TR", {
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 /** Geçmiş sekmesi: son girişler (en yeni önce); canlı olaylarla yenilenir. */

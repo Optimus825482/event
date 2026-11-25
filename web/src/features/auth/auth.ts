@@ -74,7 +74,7 @@ export function createAuth(options: CreateAuthOptions) {
     rateLimit: { enabled: true, storage: "database" },
     user: {
       additionalFields: {
-        role: { ...serverOnly, type: [...ROLES], defaultValue: "staff" },
+        role: { ...serverOnly, type: [...ROLES], defaultValue: "user" },
         isActive: { ...serverOnly, type: "boolean", defaultValue: true },
         staffId: { ...serverOnly, type: "string" },
         color: { ...serverOnly, type: "string" },

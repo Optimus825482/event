@@ -18,7 +18,6 @@ const count = z.number().int().min(1).max(100);
  */
 export const updateSettingsSchema = z.object({
   companyName: z.string().trim().min(1, "Firma adı gerekli").max(255).optional(),
-  timezone: z.string().trim().min(1).max(100).optional(),
   language: z.string().trim().min(1).max(10).optional(),
   defaultGridSize: count.optional(),
   snapToGrid: z.boolean().optional(),

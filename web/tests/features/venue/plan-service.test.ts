@@ -4,12 +4,12 @@ import { db } from "@/db/client";
 import { events } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { getFloorPlan } from "@/features/venue/plan-service";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { createEvent, createTable, createUser } from "../../helpers/factories";
+import { createEvent, createTable } from "../../helpers/factories";
 
-async function actorOf(role: "admin" | "organizer"): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null };
+async function actorOf(role: "admin" | "fnbManager"): Promise<Actor> {
+  return persistActor(db, role === "admin" ? adminActor() : managerActor("fnb"));
 }
 
 describe("getFloorPlan", () => {
@@ -33,12 +33,11 @@ describe("getFloorPlan", () => {
     expect(plan.tables).toMatchObject([{ label: "A1", capacity: 6, x: 100, y: 200, isLoca: true, shape: "round", color: null }]);
   });
 
-  it("organizatör başkasının etkinliğini göremez; kendisininkini görür", async () => {
-    const owner = await actorOf("organizer");
-    const other = await actorOf("organizer");
+  it("F&B yöneticisi başkasının oluşturduğu etkinliğin planını görür", async () => {
+    const owner = await actorOf("fnbManager");
+    const other = await actorOf("fnbManager");
     const event = await createEvent(db, { organizerId: owner.id });
-    await expect(getFloorPlan(db, other, event.id)).rejects.toMatchObject({ code: "not_found" });
-    await expect(getFloorPlan(db, owner, event.id)).resolves.toMatchObject({ tables: [] });
+    await expect(getFloorPlan(db, other, event.id)).resolves.toMatchObject({ tables: [] });
   });
 
   it("olmayan etkinlik not_found", async () => {

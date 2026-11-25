@@ -9,14 +9,13 @@ import {
   teamMembers,
   teams,
 } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
+import { managerActor, persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
-export async function makeActor(role: Role = "organizer"): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+export async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 export async function expectDomain(promise: Promise<unknown>, code: "conflict" | "not_found"): Promise<DomainError> {
@@ -29,9 +28,9 @@ export async function expectDomain(promise: Promise<unknown>, code: "conflict" |
   return err as DomainError;
 }
 
-/** Organizatör + etkinlik + `tableCount` masa (M1, M2, ...) + `staffCount` personel. */
-export async function setupEvent(opts: { tableCount?: number; staffCount?: number; role?: Role } = {}) {
-  const actor = await makeActor(opts.role ?? "organizer");
+/** F&B yöneticisi + etkinlik + `tableCount` masa (M1, M2, ...) + `staffCount` personel. */
+export async function setupEvent(opts: { tableCount?: number; staffCount?: number; actor?: Actor } = {}) {
+  const actor = await makeActor(opts.actor);
   const event = await f.createEvent(db, { organizerId: actor.id });
   const tables = [];
   for (let i = 1; i <= (opts.tableCount ?? 4); i += 1) {

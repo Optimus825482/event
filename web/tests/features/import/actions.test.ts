@@ -5,6 +5,7 @@ import { importActionDefs } from "@/features/import/action-defs";
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { managerActor, memberActor } from "../../helpers/actors";
 import { actorOf, bookableEvent, xlsx, type Cell } from "./helpers";
 
 const HEADER: Cell[] = ["Masa etiketi", "Misafir adı", "Telefon", "E-posta", "Kişi sayısı", "Not"];
@@ -53,18 +54,41 @@ describe("içe aktarma action'ları", () => {
   it("yetkisiz rol forbidden, oturumsuz unauthenticated; atama içe aktarma events.edit ister", async () => {
     const { owner, event } = await bookableEvent({ A1: 4 });
     const bytes = await xlsx([HEADER, ["A1", "Ali", null, null, 2, null]]);
-    const controller = createAction({ getActor: async () => actorOf("controller") });
+    const controller = createAction({ getActor: async () => actorOf(memberActor("casino", { check_in: "vc--" })) });
     expect(await controller.defineAction(importActionDefs.importReservations)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
 
     const anon = createAction({ getActor: async () => null });
     expect(await anon.defineAction(importActionDefs.previewReservations)(form(event.id, bytes))).toMatchObject({ ok: false, code: "unauthenticated" });
 
-    const staffer = createAction({ getActor: async () => actorOf("staff") });
+    const staffer = createAction({ getActor: async () => actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" })) });
     expect(await staffer.defineAction(importActionDefs.importAssignments)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
 
     const own = createAction({ getActor: async () => owner });
     await f.createStaff(db, { sicilNo: "S-1" });
     const assignBytes = await xlsx([["Sicil no", "Masa etiketleri"], ["S-1", "A1"]]);
     expect(await own.defineAction(importActionDefs.importAssignments)(form(event.id, assignBytes))).toMatchObject({ ok: true, data: { written: true, appliedCount: 1 } });
+  });
+});
+
+describe("atama içe aktarma action'ları: staff modülü", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("F&B yöneticisi önizler ve içe aktarır; Entertainment yöneticisi forbidden alır", async () => {
+    const fnb = await actorOf(managerActor("fnb"));
+    const ent = await actorOf(managerActor("entertainment"));
+    const event = await f.createEvent(db, { organizerId: fnb.id });
+    await f.createTable(db, event.id, { label: "A1" });
+    await f.createStaff(db, { sicilNo: "S-9" });
+    const bytes = await xlsx([["Sicil no", "Masa etiketleri"], ["S-9", "A1"]]);
+
+    const asFnb = createAction({ getActor: async () => fnb });
+    expect(await asFnb.defineAction(importActionDefs.previewAssignments)(form(event.id, bytes))).toMatchObject({ ok: true });
+    expect(await asFnb.defineAction(importActionDefs.importAssignments)(form(event.id, bytes))).toMatchObject({ ok: true });
+
+    const asEnt = createAction({ getActor: async () => ent });
+    expect(await asEnt.defineAction(importActionDefs.previewAssignments)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await asEnt.defineAction(importActionDefs.importAssignments)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
   });
 });

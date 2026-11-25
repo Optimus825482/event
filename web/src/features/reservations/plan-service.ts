@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { customers, reservations } from "@/db/schema";
 import type { ReservationStatus } from "@/domain/reservation-status";
-import type { ActorWithPermissions } from "@/features/auth/permissions";
+import type { Actor } from "@/features/auth/session";
 import { authorize, can } from "@/features/auth/policy";
 import { getFloorPlan } from "@/features/venue/plan-service";
 import { statusByTable, type PlanStatus } from "@/features/venue/plan-status";
@@ -28,9 +28,9 @@ export type ReservationPlan = {
 
 /**
  * Etkinliğin yerleşimi + rezervasyonları (harita ve plandan masa seçimi için). `reservations:view`
- * gerekir; organizatör yalnızca kendi etkinliğini görür (yoksa `not_found`).
+ * gerekir; etkinlik yoksa `not_found`.
  */
-export async function getReservationPlan(db: Executor, actor: ActorWithPermissions, eventId: string): Promise<ReservationPlan> {
+export async function getReservationPlan(db: Executor, actor: Actor, eventId: string): Promise<ReservationPlan> {
   authorize(actor, "reservations", "view");
   const { eventName, ...plan } = await getFloorPlan(db, actor, eventId);
   const seeCustomers = can(actor, "customers", "view");

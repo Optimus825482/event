@@ -1,9 +1,9 @@
 import ExcelJS from "exceljs";
 import { expect } from "vitest";
 import { db } from "@/db/client";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
 export type Cell = string | number | null | { formula: string; result: string | number };
@@ -20,9 +20,20 @@ export async function xlsx(rows: Cell[][], extraSheetRows?: Cell[][]): Promise<U
   return new Uint8Array(await workbook.xlsx.writeBuffer());
 }
 
-export async function actorOf(role: Role = "organizer"): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+/** Hem rezervasyon (Casino) hem atama (F&B) içe aktarabilen departman kullanıcısı. */
+export function importerActor(): Actor {
+  return {
+    ...managerActor("casino"),
+    memberships: [
+      { department: "casino", level: "manager" },
+      { department: "fnb", level: "manager" },
+    ],
+  };
+}
+
+/** Test aktörünü veritabanına yazar: departman aktörü ya da `"admin"`. Varsayılan `importerActor()`. */
+export async function actorOf(who: Actor | "admin" = importerActor()): Promise<Actor> {
+  return persistActor(db, who === "admin" ? adminActor() : who);
 }
 
 export async function expectDomain(promise: Promise<unknown>, code: "conflict" | "not_found" | "invalid", message?: RegExp | string) {
@@ -37,9 +48,9 @@ export async function expectDomain(promise: Promise<unknown>, code: "conflict" |
   return err as DomainError;
 }
 
-/** Yayında etkinlik (organizatör = actor) + verilen kapasitelerle masalar. */
+/** Yayında etkinlik (oluşturan = actor) + verilen kapasitelerle masalar. */
 export async function bookableEvent(capacities: Record<string, number>, actor?: Actor) {
-  const owner = actor ?? (await actorOf("organizer"));
+  const owner = actor ?? (await actorOf());
   const event = await f.createEvent(db, { status: "published", organizerId: owner.id });
   const tables: Record<string, Awaited<ReturnType<typeof f.createTable>>> = {};
   for (const [label, capacity] of Object.entries(capacities)) {

@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { customerTags } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
-import type { PolicyActor } from "@/features/auth/policy";
 import { getCustomerStats } from "@/features/customers/queries";
 import { tagStyle, vipTier, VIP_SCORE_THRESHOLD } from "@/features/customers/vip";
+import { adminActor, memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer } from "../../helpers/factories";
 
-const ADMIN: PolicyActor = { id: "00000000-0000-4000-8000-000000000001", role: "admin", staffId: null };
+const ADMIN = adminActor({ id: "00000000-0000-4000-8000-000000000001" });
 
 describe("müşteri istatistikleri ve VIP paleti", () => {
   beforeEach(async () => {
@@ -31,7 +31,7 @@ describe("müşteri istatistikleri ve VIP paleti", () => {
 
   it("boş veritabanında sıfır döner; yetkisiz rol reddedilir", async () => {
     expect(await getCustomerStats(db, ADMIN)).toEqual({ total: 0, vip: 0, blacklisted: 0, attended: 0 });
-    await expect(getCustomerStats(db, { ...ADMIN, role: "controller" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(getCustomerStats(db, memberActor("casino", { check_in: "vc--" }))).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("etiket paleti eski anahtarları ve Türkçe yazımları tanır; bilinmeyen etiket nötr kalır", () => {

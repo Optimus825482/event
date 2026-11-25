@@ -6,9 +6,10 @@ import { reviewActionDefs } from "@/features/reviews/action-defs";
 import { getReviewBoard, listReviewableEvents } from "@/features/reviews/queries";
 import { saveReviewDraft } from "@/features/reviews/service";
 import { createAction } from "@/lib/action";
+import { managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { FULL_RATINGS, expectForbidden, makeActor, setupReviewWorld } from "./helpers";
+import { FULL_RATINGS, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
 import { eq } from "drizzle-orm";
 
 function actionsFor(actor: Actor | null) {
@@ -25,12 +26,12 @@ describe("review actions", () => {
     await truncateAll();
   });
 
-  it("oturumsuz unauthenticated; staff ve controller forbidden", async () => {
+  it("oturumsuz unauthenticated; değerlendirme izni olmayanlar forbidden", async () => {
     const w = await setupReviewWorld();
     const input = { eventId: w.event.id, staffId: w.member1.id, ratings: FULL_RATINGS };
     expect(await actionsFor(null).save(input)).toMatchObject({ ok: false, code: "unauthenticated" });
-    expect(await actionsFor(await makeActor("staff")).save(input)).toMatchObject({ ok: false, code: "forbidden" });
-    expect(await actionsFor(await makeActor("controller")).save(input)).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await actionsFor(await makeActor(noAccessActor())).save(input)).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await actionsFor(await makeActor(memberActor("casino", { check_in: "vc--" }))).save(input)).toMatchObject({ ok: false, code: "forbidden" });
   });
 
   it("lider eylemle kaydeder, tamamlar; tamamlanan kilitli", async () => {
@@ -117,24 +118,24 @@ describe("review queries", () => {
     expect(board.event.reviewEnabled).toBe(true);
   });
 
-  it("admin tüm ekipleri görür; başka organizatör etkinliği göremez", async () => {
+  it("admin ve F&B yöneticileri tüm ekipleri görür", async () => {
     const w = await setupReviewWorld();
     expect((await getReviewBoard(db, w.admin, w.event.id)).teams).toHaveLength(2);
-    expect((await getReviewBoard(db, w.organizer, w.event.id)).teams).toHaveLength(2);
-    await expect(getReviewBoard(db, await makeActor("organizer"), w.event.id)).rejects.toMatchObject({ code: "not_found" });
+    expect((await getReviewBoard(db, w.fnbManager, w.event.id)).teams).toHaveLength(2);
+    expect((await getReviewBoard(db, await makeActor(managerActor("fnb")), w.event.id)).teams).toHaveLength(2);
   });
 
-  it("ekibi olmayan lider etkinlik panosunu göremez; staff yetkisiz", async () => {
+  it("ekibi olmayan lider etkinlik panosunu göremez; değerlendirme izni olmayan yetkisiz", async () => {
     const w = await setupReviewWorld();
-    const lonely = await makeActor("leader", (await f.createStaff(db)).id);
+    const lonely = await makeLeader((await f.createStaff(db)).id);
     await expectForbidden(getReviewBoard(db, lonely, w.event.id));
-    await expectForbidden(getReviewBoard(db, await makeActor("staff"), w.event.id));
-    await expectForbidden(listReviewableEvents(db, await makeActor("controller")));
+    await expectForbidden(getReviewBoard(db, await makeActor(noAccessActor()), w.event.id));
+    await expectForbidden(listReviewableEvents(db, await makeActor(memberActor("casino", { check_in: "vc--" }))));
   });
 
   it("etkinlik listesi: lider yalnızca ekip yönettiği etkinlikleri görür, sayılar doğru", async () => {
     const w = await setupReviewWorld();
-    const other = await f.createEvent(db, { organizerId: w.organizer.id });
+    const other = await f.createEvent(db, { organizerId: w.fnbManager.id });
     await db.insert(teams).values({ eventId: other.id, name: "Z", leaderStaffId: w.otherLeader.staffId });
     const input = { eventId: w.event.id, strengths: [], improvements: [], recommendedTrainings: [] };
     await saveReviewDraft(db, w.leader, { ...input, staffId: w.member1.id, ratings: FULL_RATINGS });
@@ -145,7 +146,7 @@ describe("review queries", () => {
     expect(list[0]).toMatchObject({ id: w.event.id, teamCount: 1, memberCount: 2, completedCount: 1, reviewEnabled: true });
 
     expect(await listReviewableEvents(db, w.admin)).toHaveLength(2);
-    expect(await listReviewableEvents(db, await makeActor("organizer"))).toHaveLength(0);
+    expect(await listReviewableEvents(db, await makeActor(managerActor("fnb")))).toHaveLength(2);
   });
 
   it("eylem sonucu board'a yansır: tamamlanan görünüm kilitli işaretlidir", async () => {

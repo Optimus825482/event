@@ -3,17 +3,17 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { userPermissions, users } from "@/db/schema";
+import { users } from "@/db/schema";
 import { ForbiddenError, UnauthenticatedError } from "@/features/auth/errors";
-import type { Role } from "@/features/auth/roles";
+import { loadPermissions } from "@/features/auth/permissions";
 import type { Actor } from "@/features/auth/session";
 import { createAction, DomainError } from "@/lib/action";
+import { adminActor, managerActor, memberActor, persistActor } from "../helpers/actors";
 import { truncateAll } from "../helpers/db";
 import { createUser } from "../helpers/factories";
 
-async function makeActor(role: Role): Promise<Actor> {
-  const user = await createUser(db, { role });
-  return { id: user.id, username: user.username, role: user.role, staffId: user.staffId };
+async function makeActor(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 function actionFor(actor: Actor | null) {
@@ -46,8 +46,8 @@ describe("defineAction", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("controller events/create için forbidden alır ve handler çalışmaz", async () => {
-    const actor = await makeActor("controller");
+  it("yalnızca check-in izni olan events/create için forbidden alır ve handler çalışmaz", async () => {
+    const actor = await makeActor(memberActor("casino", { check_in: "vc--" }));
     const handler = vi.fn(async () => "x");
     const run = actionFor(actor)({ module: "events", verb: "create", input: z.object({}), handler });
 
@@ -60,7 +60,7 @@ describe("defineAction", () => {
   });
 
   it("yetki girdi doğrulamasından önce denetlenir", async () => {
-    const actor = await makeActor("controller");
+    const actor = await makeActor(memberActor("casino", { check_in: "vc--" }));
     const run = actionFor(actor)({
       module: "events",
       verb: "create",
@@ -74,7 +74,7 @@ describe("defineAction", () => {
   });
 
   it("geçerli girdiyle handler'ı bağlamla çağırır ve veriyi döner", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const id = crypto.randomUUID();
     const run = actionFor(actor)({
       module: "events",
@@ -89,14 +89,11 @@ describe("defineAction", () => {
     });
   });
 
-  it("kullanıcıya özel izin satırı yetkiyi daraltır", async () => {
-    const actor = await makeActor("organizer");
-    await db.insert(userPermissions).values({
-      userId: actor.id,
-      module: "events",
-      canView: true,
-      canCreate: false,
-    });
+  it("kullanıcı düzeyinde izin satırı verilen yetkiyi belirler", async () => {
+    // Yalnızca görüntüleme verilmiş; oluşturma verilmemiş.
+    const base = await makeActor(memberActor("entertainment", { events: "v---" }));
+    // İzin satırları aktörle (oturumdan) gelir; eylem ayrıca veritabanından okumaz.
+    const actor: Actor = { ...base, permissions: await loadPermissions(base.id) };
     const handler = vi.fn(async () => "x");
     const create = actionFor(actor)({ module: "events", verb: "create", input: z.object({}), handler });
     const view = actionFor(actor)({ module: "events", verb: "view", input: z.object({}), handler });
@@ -106,7 +103,7 @@ describe("defineAction", () => {
   });
 
   it("admin için izin satırı olmadan da çalışır", async () => {
-    const actor = await makeActor("admin");
+    const actor = await makeActor(adminActor());
     const run = actionFor(actor)({
       module: "settings",
       verb: "edit",
@@ -117,7 +114,7 @@ describe("defineAction", () => {
   });
 
   it("geçersiz girdi invalid ve noktalı yolla fieldErrors döner; veritabanı metni yoktur", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const handler = vi.fn(async () => "x");
     const run = actionFor(actor)({
       module: "events",
@@ -139,7 +136,7 @@ describe("defineAction", () => {
   });
 
   it("beklenmeyen hata genel mesajla döner, ayrıntı sunucuda kaydedilir", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const run = actionFor(actor)({
       module: "events",
       verb: "create",
@@ -158,7 +155,7 @@ describe("defineAction", () => {
   });
 
   it("DomainError kodu ve mesajıyla döner", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const conflict = actionFor(actor)({
       module: "events",
       verb: "create",
@@ -185,7 +182,7 @@ describe("defineAction", () => {
   });
 
   it("handler içindeki ForbiddenError ve UnauthenticatedError eşlenir", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const forbidden = actionFor(actor)({
       module: "events",
       verb: "edit",
@@ -208,7 +205,7 @@ describe("defineAction", () => {
   });
 
   it("PostgreSQL 23505 (gerçek tekil kısıt ihlali) conflict döner", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const other = await createUser(db, { username: "tekrar_kullanici" });
     const run = actionFor(actor)({
       module: "events",
@@ -223,7 +220,7 @@ describe("defineAction", () => {
   });
 
   it("PostgreSQL 23503 conflict döner (kod cause üzerinde olsa da)", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const run = actionFor(actor)({
       module: "events",
       verb: "create",
@@ -241,7 +238,7 @@ describe("defineAction", () => {
   });
 
   it("23505 doğrudan hata üzerinde de tanınır", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const run = actionFor(actor)({
       module: "events",
       verb: "create",
@@ -254,7 +251,7 @@ describe("defineAction", () => {
   });
 
   it("Next yönlendirmesi yutulmaz, yeniden fırlatılır", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const run = actionFor(actor)({
       module: "events",
       verb: "create",

@@ -1,3 +1,4 @@
+import { DEPARTMENT_LABELS } from "@/features/auth/departments";
 import type { NotificationRow } from "./service";
 
 export const PRIORITY_LABELS: Record<NotificationRow["priority"], string> = {
@@ -7,9 +8,10 @@ export const PRIORITY_LABELS: Record<NotificationRow["priority"], string> = {
   urgent: "Acil",
 };
 
-export const TARGET_ROLE_LABELS: Record<NotificationRow["targetRole"], string> = {
+export const AUDIENCE_LABELS: Record<NotificationRow["audience"], string> = {
   all: "Herkes",
-  admin: "Yöneticiler",
-  leader: "Ekip liderleri",
-  staff: "Personel",
+  admin: "Sistem Yöneticileri",
+  entertainment: DEPARTMENT_LABELS.entertainment,
+  fnb: DEPARTMENT_LABELS.fnb,
+  casino: DEPARTMENT_LABELS.casino,
 };

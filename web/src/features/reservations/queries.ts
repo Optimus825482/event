@@ -3,21 +3,23 @@ import { notFound } from "next/navigation";
 import { db as defaultDb } from "@/db/client";
 import { customers, eventTables, events, reservations } from "@/db/schema";
 import { RESERVATION_STATUSES, type ReservationStatus } from "@/domain/reservation-status";
-import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
+import { requirePolicyActor } from "@/features/auth/permissions";
+import type { Actor } from "@/features/auth/session";
 import { authorize, can } from "@/features/auth/policy";
 import { listRecipients } from "@/features/invitations/event-invitation";
 import { searchCustomers } from "@/features/customers/queries";
 import { DomainError } from "@/lib/action";
 import { escapeLike, isUuid } from "@/lib/identifiers";
-import { canAccessEvent, MSG, type Executor } from "./internal";
+import { zonedDayStart, zonedNextDayStart } from "@/lib/time-zone";
+import { MSG, type Executor } from "./internal";
 import { getReservationPlan } from "./plan-service";
 import { availableTables } from "./read-service";
 import { listReservationsInput, type ListReservationsInput } from "./schemas";
 
 
-async function accessibleEvent(db: Executor, actor: ActorWithPermissions, eventId: string) {
+async function accessibleEvent(db: Executor, actor: Actor, eventId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
-  if (!event || !canAccessEvent(actor, event)) throw new DomainError("not_found", MSG.eventNotFound);
+  if (!event) throw new DomainError("not_found", MSG.eventNotFound);
   return event;
 }
 
@@ -39,7 +41,7 @@ function searchCondition(q: string, withCustomer: boolean): SQL | undefined {
 }
 
 /** Etkinliğin rezervasyonları: ada/telefona/masaya göre arama, durum süzgeci, sayfalama, durum sayıları. */
-export async function listReservations(db: Executor, actor: ActorWithPermissions, raw: ListReservationsInput) {
+export async function listReservations(db: Executor, actor: Actor, raw: ListReservationsInput) {
   authorize(actor, "reservations", "view");
   const input = listReservationsInput.parse(raw);
   const event = await accessibleEvent(db, actor, input.eventId);
@@ -104,7 +106,7 @@ export async function listReservations(db: Executor, actor: ActorWithPermissions
  * (ad, iletişim, sayaçlar) yalnızca `customers:view` olanlara döner; `isBlacklisted` durum
  * işlemleri için herkese döner.
  */
-export async function getReservationDetail(db: Executor, actor: ActorWithPermissions, id: string) {
+export async function getReservationDetail(db: Executor, actor: Actor, id: string) {
   authorize(actor, "reservations", "view");
   if (!isUuid(id)) return null;
   const [row] = await db
@@ -128,7 +130,7 @@ export async function getReservationDetail(db: Executor, actor: ActorWithPermiss
     .innerJoin(customers, eq(customers.id, reservations.customerId))
     .innerJoin(events, eq(events.id, reservations.eventId))
     .where(eq(reservations.id, id));
-  if (!row || !canAccessEvent(actor, row.event)) return null;
+  if (!row) return null;
   const { customer, ...rest } = row;
   return { ...rest, isBlacklisted: customer.isBlacklisted, customer: can(actor, "customers", "view") ? customer : null };
 }
@@ -189,24 +191,17 @@ export async function loadReservationMap(eventId: string) {
   }
 }
 
-/** Türkiye saatiyle bugünün başlangıcı (Türkiye yıl boyu UTC+3). */
-function istanbulDayStart(now: Date): Date {
-  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(now);
-  return new Date(`${day}T00:00:00+03:00`);
-}
-
 /**
  * Rezervasyon ana ekranı: bugünden itibaren (iptal edilmemiş) yaklaşan etkinlikler, en yakın önce.
- * Organizatör yalnızca kendi etkinliklerini görür; ilk etkinlik hero kartında gösterilir.
+ * İlk etkinlik hero kartında gösterilir.
  */
 export async function loadReservationDashboard(raw: { search?: string }) {
   const actor = await requirePolicyActor();
   authorize(actor, "reservations", "view");
   const search = raw.search?.trim() || undefined;
-  const dayStart = istanbulDayStart(new Date());
+  const dayStart = zonedDayStart(new Date());
 
   const conditions: SQL[] = [gte(events.startsAt, dayStart), ne(events.status, "cancelled")];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
   if (search) conditions.push(ilike(events.name, `%${escapeLike(search)}%`));
 
   const items = await defaultDb
@@ -225,13 +220,13 @@ export async function loadReservationDashboard(raw: { search?: string }) {
     .orderBy(asc(events.startsAt), asc(events.id))
     .limit(48);
 
-  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  const dayEnd = zonedNextDayStart(dayStart);
   const todayCount = items.filter((e) => e.startsAt < dayEnd).length;
   return { actor, search, items, todayCount };
 }
 
 /** E-davetiye penceresi için alıcılar; yalnızca `invitations:view` olanlara döner, yoksa `null`. */
-export async function loadInvitationRecipients(actor: ActorWithPermissions, eventId: string) {
+export async function loadInvitationRecipients(actor: Actor, eventId: string) {
   if (!can(actor, "invitations", "view")) return null;
   return listRecipients(defaultDb, actor, { eventId });
 }

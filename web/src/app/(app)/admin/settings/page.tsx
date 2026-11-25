@@ -9,6 +9,7 @@ import { SettingsForm } from "@/features/settings/components/settings-form";
 import { getSecurityOverview } from "@/features/settings/security-queries";
 import { getSettings } from "@/features/settings/service";
 import { currentSessionId } from "@/features/users/current-session";
+import { isAdmin } from "@/features/auth/scope";
 
 export const metadata: Metadata = { title: "Ayarlar | EventFlow" };
 
@@ -16,7 +17,7 @@ export default async function SettingsPage() {
   const actor = await requirePolicyActor();
   if (!can(actor, "settings", "view")) notFound();
   const settings = await getSettings(db, actor);
-  const security = actor.role === "admin" ? await getSecurityOverview(db, actor, await currentSessionId()) : null;
+  const security = isAdmin(actor) ? await getSecurityOverview(db, actor, await currentSessionId()) : null;
 
   return (
     <div className="mx-auto max-w-4xl">

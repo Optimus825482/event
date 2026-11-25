@@ -1,7 +1,7 @@
 import { EMPTY_STATE, adminPassword, adminUsername, expect, test } from "./support/fixtures";
 import { signIn, signOut } from "./support/offline";
 
-const EXPECTED_MODULES = ["Etkinlik Planlama", "Rezervasyon", "Check-in", "Sistem Yönetimi"];
+const EXPECTED_MODULES = ["Entertainment", "Food & Beverage", "Casino", "Check-in", "Sistem Yönetimi"];
 
 test.describe("Uygulama kabuğu", () => {
   test.use({ storageState: EMPTY_STATE });

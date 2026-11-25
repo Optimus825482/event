@@ -1,3 +1,4 @@
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { verifyQrToken } from "@/features/reservations/qr-token";
@@ -23,7 +24,7 @@ const opts = (dryRun: boolean) => ({
   legacyUrl: dbUrl(LEGACY),
   targetUrl: dbUrl(TARGET),
   dryRun,
-  legacyTz: "Europe/Istanbul",
+  legacyTz: APP_TIME_ZONE,
   emptyCheck: true,
 });
 
@@ -157,6 +158,22 @@ describe("rapor kategorileri", () => {
     expect(c.catalogEntriesCreated.map((f) => f.name)).toEqual(expect.arrayContaining(["Servis", "Komi"]));
   });
 
+  it("eski rol eşlemesi bilgi olarak, taşınmayan eski izin satırları atlanan olarak raporlanır", () => {
+    const c = real.categories;
+    expect(c.invalidValues.filter((f) => f.field === "role")).toEqual([]);
+    expect(c.information).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ table: "users", id: IDS.users.organizer, field: "role", from: "organizer", to: "user" }),
+        expect.objectContaining({ table: "users", id: IDS.users.blank, field: "role", from: "controller", to: "user" }),
+      ]),
+    );
+    expect(c.information.some((f) => f.table === "users" && f.id === IDS.users.admin)).toBe(false);
+    expect(c.skippedRows.some((f) => f.table === "system_settings" && f.field === "timezone")).toBe(true);
+    const skippedPerms = c.skippedRows.filter((f) => f.table === "user_permissions");
+    expect(skippedPerms).toHaveLength(2);
+    expect(skippedPerms.every((f) => f.userId === IDS.users.organizer)).toBe(true);
+  });
+
   it("şema boşlukları dolu satırlarla listelenir", () => {
     const gap = (legacy: string) => real.schemaGaps.find((g) => g.legacy === legacy)?.rows;
     expect(gap("staff.age")).toBe(1);
@@ -190,11 +207,22 @@ describe("hedef durum", () => {
       expect(row).toMatchObject({ provider_id: "credential", account_id: IDS.users.admin, username: "admin", email: "admin@example.test" });
       expect(await bcrypt.compare(LEGACY_PASSWORD, row?.password ?? "")).toBe(true);
       const blank = await c.query<{ username: string; email: string; role: string }>("SELECT username, email, role FROM users WHERE id = $1", [IDS.users.blank]);
-      expect(blank.rows[0]).toEqual({ username: "kullanici-00000000", email: `eski-${IDS.users.blank}@eventflow.invalid`, role: "controller" });
+      expect(blank.rows[0]).toEqual({ username: "kullanici-00000000", email: `eski-${IDS.users.blank}@eventflow.invalid`, role: "user" });
+      // Eski roller üyeliksiz `user` olur (yönetici departman atayana dek hiçbir modüle erişemez); admin admin kalır.
+      const roles = await c.query<{ id: string; role: string }>("SELECT id, role FROM users WHERE id = ANY($1)", [
+        [IDS.users.admin, IDS.users.organizer, IDS.users.linked],
+      ]);
+      expect(Object.fromEntries(roles.rows.map((r) => [r.id, r.role]))).toEqual({
+        [IDS.users.admin]: "admin",
+        [IDS.users.organizer]: "user",
+        [IDS.users.linked]: "user",
+      });
+      const memberships = await c.query("SELECT 1 FROM department_memberships");
+      expect(memberships.rowCount).toBe(0);
     });
   });
 
-  it("eski yerel saat (Europe/Istanbul) timestamptz'ye doğru çevrilir", async () => {
+  it("eski yerel saat (Kıbrıs, haziranda UTC+3) timestamptz'ye doğru çevrilir", async () => {
     await withClient(TARGET, async (c) => {
       const ev = await c.query<{ starts_at: Date; ends_at: Date | null }>("SELECT starts_at, ends_at FROM events WHERE id = $1", [E.e1]);
       expect(ev.rows[0]?.starts_at.toISOString()).toBe("2025-06-01T18:00:00.000Z");
@@ -374,10 +402,14 @@ describe("hedef durum", () => {
         [IDS.review],
       );
       expect(review.rows[0]).toEqual({ staff_id: createdStaff, communication: 5, strengths: ["güler yüzlü"] });
-      const perms = await c.query<{ can_create: boolean; can_edit: boolean }>("SELECT can_create, can_edit FROM user_permissions");
-      expect(perms.rows).toEqual([{ can_create: true, can_edit: true }]);
+      // Eski izin satırı kısıt anlamındaydı; yeni modelde verilen yetki olacağından taşınmaz.
+      const perms = await c.query("SELECT 1 FROM user_permissions");
+      expect(perms.rowCount).toBe(0);
       const settings = await c.query<{ smtp_password_encrypted: string | null }>("SELECT smtp_password_encrypted FROM system_settings");
       expect(settings.rows).toEqual([{ smtp_password_encrypted: null }]);
+      // Eski saat dilimi kopyalanmaz: sütun varsayılanında (Asia/Famagusta) kalır.
+      const zone = await c.query<{ timezone: string }>("SELECT timezone FROM system_settings");
+      expect(zone.rows).toEqual([{ timezone: "Asia/Famagusta" }]);
     });
   });
 });

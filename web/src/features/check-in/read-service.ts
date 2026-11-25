@@ -2,8 +2,9 @@ import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-o
 import { customers, eventTables, events, reservations } from "@/db/schema";
 import type { ReservationStatus } from "@/domain/reservation-status";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent, MSG, type Executor } from "@/features/reservations/internal";
+import { MSG, type Executor } from "@/features/reservations/internal";
 import { DomainError } from "@/lib/action";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 import type { SearchGuestsInput } from "./schemas";
 import { toEventStats, type EventStats } from "./stats";
 import { escapeLike } from "@/lib/identifiers";
@@ -13,7 +14,7 @@ export type { EventStats } from "./stats";
 const SEARCH_LIMIT = 50;
 async function assertEventAccess(db: Executor, actor: Actor, eventId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
-  if (!event || !canAccessEvent(actor, event)) throw new DomainError("not_found", MSG.eventNotFound);
+  if (!event) throw new DomainError("not_found", MSG.eventNotFound);
   return event;
 }
 
@@ -50,7 +51,7 @@ export async function eventStats(db: Executor, actor: Actor, eventId: string): P
     .leftJoin(reservations, eq(reservations.eventId, events.id))
     .where(eq(events.id, eventId))
     .groupBy(events.id);
-  if (!row || !canAccessEvent(actor, row)) throw new DomainError("not_found", MSG.eventNotFound);
+  if (!row) throw new DomainError("not_found", MSG.eventNotFound);
   return toEventStats({
     pending: row.pending,
     confirmed: row.confirmed,
@@ -184,17 +185,16 @@ export type CheckInEvent = {
 
 /**
  * Check-in için etkinlik seçici: yayında/devam eden ve son 3 günde tamamlanmış etkinlikler.
- * Sıra: devam eden → bugün (Europe/Istanbul) başlayan → başlangıcı şimdiye en yakın.
+ * Sıra: devam eden → bugün (Kıbrıs saati) başlayan → başlangıcı şimdiye en yakın.
  */
-export async function listCheckInEvents(db: Executor, actor: Actor): Promise<CheckInEvent[]> {
-  const isToday = sql<boolean>`(${events.startsAt} at time zone 'Europe/Istanbul')::date = (now() at time zone 'Europe/Istanbul')::date`;
+export async function listCheckInEvents(db: Executor): Promise<CheckInEvent[]> {
+  const isToday = sql<boolean>`(${events.startsAt} at time zone ${APP_TIME_ZONE}::text)::date = (now() at time zone ${APP_TIME_ZONE}::text)::date`;
   const conditions: SQL[] = [
     or(
       inArray(events.status, ["published", "active"]),
       and(eq(events.status, "completed"), sql`${events.startsAt} >= now() - interval '3 days'`),
     ) ?? sql`false`,
   ];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
   const rows = await db
     .select({
       id: events.id,

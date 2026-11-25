@@ -26,6 +26,8 @@ type Props = {
   canApplyVenue: boolean;
   canApplyTeam: boolean;
   canInvite: boolean;
+  /** Ekip organizasyonu sayfası için staff ve events görüntüleme izni var mı? */
+  canOrganizeTeam: boolean;
 };
 
 function Stepper({ current }: { current: number }) {
@@ -66,7 +68,7 @@ function Stepper({ current }: { current: number }) {
 }
 
 /** Eski "yeni etkinlik" sihirbazı: temel bilgiler -> alan şablonu -> ekip ataması -> e-davetiye. */
-export function NewEventWizard({ venueTemplates, teamTemplates, canApplyVenue, canApplyTeam, canInvite }: Props) {
+export function NewEventWizard({ venueTemplates, teamTemplates, canApplyVenue, canApplyTeam, canInvite, canOrganizeTeam }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [eventId, setEventId] = useState<string | null>(null);
@@ -137,7 +139,7 @@ export function NewEventWizard({ venueTemplates, teamTemplates, canApplyVenue, c
             onNext={() => setStep(4)}
             emptyTitle="Uygulanabilir ekip şablonu yok"
             emptyDescription="Ekibi etkinlik oluşturulduktan sonra ekip organizasyonu sayfasından kurabilirsiniz."
-            manualHref={`/events/${eventId}/team-organization`}
+            manualHref={canOrganizeTeam ? `/events/${eventId}/team-organization` : null}
             manualLabel="Ekibi elle düzenle"
           />
         ) : null}

@@ -3,7 +3,7 @@ import { eventTables, events, reservations } from "@/db/schema";
 import type { ReservationStatus } from "@/domain/reservation-status";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
-import { ACTIVE_STATUSES, canAccessEvent, MSG, type Executor } from "./internal";
+import { ACTIVE_STATUSES, MSG, type Executor } from "./internal";
 import { verifyQrToken } from "./qr-token";
 
 export type AvailableTable = {
@@ -33,7 +33,7 @@ export async function availableTables(
     .select({ organizerId: events.organizerId })
     .from(events)
     .where(eq(events.id, input.eventId));
-  if (!event || !canAccessEvent(actor, event)) throw new DomainError("not_found", MSG.eventNotFound);
+  if (!event) throw new DomainError("not_found", MSG.eventNotFound);
 
   const joinOn: SQL[] = [
     eq(reservations.eventId, eventTables.eventId),

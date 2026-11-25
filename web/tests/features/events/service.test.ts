@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { events } from "@/db/schema";
 import { EVENT_STATUSES, canTransitionEvent, type EventStatus } from "@/domain/event-status";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import {
@@ -17,12 +16,12 @@ import {
   totalCapacity,
   updateEvent,
 } from "@/features/events/service";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role = "organizer"): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 function inDays(days: number): Date {
@@ -44,7 +43,7 @@ describe("events service", () => {
   });
 
   describe("createEvent", () => {
-    it("taslak durumda, organizatör olarak oluşturur", async () => {
+    it("taslak durumda, oluşturan kullanıcı adına oluşturur", async () => {
       const actor = await makeActor();
       const ev = await createEvent(db, actor, { name: "Gala", startsAt: inDays(5), endsAt: inDays(6) });
       expect(ev.status).toBe("draft");
@@ -176,22 +175,25 @@ describe("events service", () => {
     });
   });
 
-  describe("sahiplik", () => {
-    it("organizatör başkasının etkinliğini göremez, değiştiremez, listede görmez", async () => {
-      const owner = await makeActor();
+  describe("oluşturan kişi yetki kararına girmez", () => {
+    it("Entertainment yöneticisi başkasının oluşturduğu etkinliği görür ve düzenler", async () => {
+      const creator = await makeActor();
       const other = await makeActor();
-      const ev = await f.createEvent(db, { organizerId: owner.id });
-      await expectDomain(getEvent(db, other, ev.id), "not_found");
-      await expectDomain(changeEventStatus(db, other, { id: ev.id, status: "published" }), "not_found");
-      await expectDomain(deleteEvent(db, other, { id: ev.id }), "not_found");
-      expect((await listEvents(db, other, {})).total).toBe(0);
-      expect((await listEvents(db, owner, {})).total).toBe(1);
+      const ev = await f.createEvent(db, { organizerId: creator.id, name: "Başkasının" });
+      expect((await getEvent(db, other, ev.id)).name).toBe("Başkasının");
+      expect((await listEvents(db, other, {})).total).toBe(1);
+      const updated = await updateEvent(db, other, { id: ev.id, name: "Düzenlendi", startsAt: inDays(5) });
+      expect(updated.name).toBe("Düzenlendi");
+      expect(updated.organizerId).toBe(creator.id);
+      await expect(changeEventStatus(db, other, { id: ev.id, status: "published" })).resolves.toMatchObject({
+        status: "published",
+      });
     });
 
     it("admin tüm etkinlikleri görür", async () => {
-      const owner = await makeActor();
-      const admin = await makeActor("admin");
-      await f.createEvent(db, { organizerId: owner.id });
+      const creator = await makeActor();
+      const admin = await makeActor(adminActor());
+      await f.createEvent(db, { organizerId: creator.id });
       expect((await listEvents(db, admin, {})).total).toBe(1);
     });
   });

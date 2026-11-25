@@ -29,7 +29,7 @@ describe("realtimeKeys / keysToInvalidate", () => {
     ]);
     expect(keysToInvalidate({ type: "table.updated", eventId, at }, eventId)).toEqual([realtimeKeys.tables(eventId)]);
     expect(keysToInvalidate({ type: "stats.updated", eventId, at }, eventId)).toEqual([realtimeKeys.stats(eventId)]);
-    expect(keysToInvalidate({ type: "notification.created", targetRole: "all", at }, eventId)).toEqual([
+    expect(keysToInvalidate({ type: "notification.created", audience: "all", at }, eventId)).toEqual([
       realtimeKeys.notifications(),
     ]);
     expect(keysToInvalidate("resync", eventId)).toEqual([realtimeKeys.event(eventId), realtimeKeys.notifications()]);

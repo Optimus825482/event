@@ -2,11 +2,12 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { accounts, users } from "@/db/schema";
+import { accounts, departmentMemberships, userPermissions, users } from "@/db/schema";
 import { createAuth } from "@/features/auth/auth";
 import { getActorFromHeaders } from "@/features/auth/session";
 import { createAdmin } from "../../../scripts/create-admin-dev";
 import { truncateAll } from "../../helpers/db";
+import { createMembership } from "../../helpers/factories";
 import {
   call,
   hasSessionCookie,
@@ -115,11 +116,44 @@ describe("kimlik doğrulama", () => {
       username: "yonetici",
       role: "admin",
       staffId: null,
+      memberships: [],
+      permissions: [],
     });
 
     await db.update(users).set({ isActive: false }).where(eq(users.id, created.id));
 
     expect(await getActorFromHeaders(headers)).toBeNull();
+  });
+
+  it("getActor departman üyeliklerini ve izin satırlarını taşır; üyelik değişikliği sonraki çağrıda görünür", async () => {
+    const created = await createAdmin({ username: "fnb_kullanici", password: PASSWORD });
+    await db.update(users).set({ role: "user" }).where(eq(users.id, created.id));
+    await createMembership(db, { userId: created.id, department: "fnb", level: "manager" });
+    await db.insert(userPermissions).values({
+      userId: created.id,
+      module: "venues",
+      canView: true,
+      canCreate: true,
+      canEdit: false,
+      canDelete: false,
+    });
+    const headers = new Headers({ cookie: sessionCookie(await signIn("fnb_kullanici", PASSWORD)) });
+
+    expect(await getActorFromHeaders(headers)).toEqual({
+      id: created.id,
+      username: "fnb_kullanici",
+      role: "user",
+      staffId: null,
+      memberships: [{ department: "fnb", level: "manager" }],
+      permissions: [{ module: "venues", canView: true, canCreate: true, canEdit: false, canDelete: false }],
+    });
+
+    await db
+      .update(departmentMemberships)
+      .set({ level: "member" })
+      .where(eq(departmentMemberships.userId, created.id));
+
+    expect((await getActorFromHeaders(headers))?.memberships).toEqual([{ department: "fnb", level: "member" }]);
   });
 
   it("oturum çerezi olmadan getActor null döner", async () => {

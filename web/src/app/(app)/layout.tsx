@@ -2,20 +2,22 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppOverlays } from "@/components/layout/app-overlays";
 import { AppShell } from "@/components/layout/app-shell";
-import { ROLE_LABELS } from "@/components/layout/role-labels";
+import { actorLabel } from "@/components/layout/role-labels";
 import { buildShellNav } from "@/components/layout/shell-nav";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { db } from "@/db/client";
 import { UnauthenticatedError } from "@/features/auth/errors";
 import { visibleNavGroups } from "@/features/auth/nav";
-import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
+import { requirePolicyActor } from "@/features/auth/permissions";
+import type { Actor } from "@/features/auth/session";
 import { can } from "@/features/auth/policy";
 import { countUnread } from "@/features/notifications/service";
 import { currentSessionExpiry } from "@/features/users/current-session";
 import { getOwnAvatar } from "@/features/users/profile";
+import { isAdmin } from "@/features/auth/scope";
 
-async function currentActorOrLogin(): Promise<ActorWithPermissions> {
+async function currentActorOrLogin(): Promise<Actor> {
   try {
     return await requirePolicyActor();
   } catch (error) {
@@ -27,7 +29,7 @@ async function currentActorOrLogin(): Promise<ActorWithPermissions> {
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const actor = await currentActorOrLogin();
-  const nav = buildShellNav(actor.role, visibleNavGroups(actor));
+  const nav = buildShellNav(visibleNavGroups(actor));
   const showBell = can(actor, "notifications", "view");
   const [unreadCount, avatarUrl, sessionExpiresAt] = await Promise.all([
     showBell ? countUnread(db, actor) : Promise.resolve(0),
@@ -41,8 +43,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         <AppShell
           username={actor.username}
           avatarUrl={avatarUrl}
-          roleLabel={ROLE_LABELS[actor.role]}
-          isAdmin={actor.role === "admin"}
+          roleLabel={actorLabel(actor)}
+          isAdmin={isAdmin(actor)}
           nav={nav}
           unreadCount={unreadCount}
           showBell={showBell}

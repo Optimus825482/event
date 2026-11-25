@@ -2,9 +2,9 @@ import { asc, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eventStaffAssignments, servicePoints } from "@/db/schema";
-import type { Actor } from "@/features/auth/session";
 import { saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
+import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -22,8 +22,7 @@ const stage = { id: "stage-1", kind: "stage" as const, x: 500, y: 10, width: 300
 const decorOf = (...elements: Array<ReturnType<typeof bar> | typeof stage>) => ({ width: 1600, height: 900, elements });
 
 async function setup() {
-  const u = await f.createUser(db, { role: "organizer" });
-  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  const actor = await persistActor(db, managerActor("fnb"));
   const event = await f.createEvent(db, { organizerId: actor.id });
   const save = (decor: ReturnType<typeof decorOf>) => saveLayout(db, actor, { eventId: event.id, tables: [], decor });
   const points = () => db.select().from(servicePoints).where(eq(servicePoints.eventId, event.id)).orderBy(asc(servicePoints.name));

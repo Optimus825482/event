@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, notInArray, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, notInArray, or, sql, type SQLWrapper } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import {
   eventStaffAssignments,
@@ -14,11 +14,12 @@ import {
 } from "@/db/schema";
 import { authorize, can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
+import { isAdmin } from "@/features/auth/scope";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 type Executor = Db | Tx;
 
 const UPCOMING_LIMIT = 5;
-const TZ = "Europe/Istanbul";
 
 export type UpcomingReadyEvent = {
   id: string;
@@ -48,17 +49,11 @@ export type AdminDashboard = {
   settings: { smtpConfigured: boolean; emailNotifications: boolean };
 };
 
-/** Organizatör yalnızca kendi etkinliklerini görür; diğer roller kısıtsızdır (`canAccessEvent` ile aynı kural). */
-function eventScope(actor: Pick<Actor, "id" | "role">): SQL | undefined {
-  return actor.role === "organizer" ? eq(events.organizerId, actor.id) : undefined;
-}
-
 // Tamamlanan: durumu "completed" ya da başlangıcı geçmiş (iptaller hariç). Yaklaşan: başlangıcı gelecekte ve bitmemiş.
 const OPEN_STATUSES = ["draft", "published", "active"] as const;
 
 export async function getEventsDashboard(db: Executor, actor: Actor): Promise<EventsDashboard> {
   authorize(actor, "events", "view");
-  const scope = eventScope(actor);
 
   const [stats] = await db
     .select({
@@ -67,22 +62,21 @@ export async function getEventsDashboard(db: Executor, actor: Actor): Promise<Ev
       upcoming: sql<number>`count(*) filter (where ${events.startsAt} >= now() and ${events.status} in ('draft','published','active'))::int`,
       draft: sql<number>`count(*) filter (where ${events.status} = 'draft')::int`,
     })
-    .from(events)
-    .where(scope);
+    .from(events);
 
   const hasTables = sql<boolean>`exists (select 1 from ${eventTables} where ${eventTables.eventId} = ${events.id})`;
   const hasTeam = sql<boolean>`exists (select 1 from ${eventStaffAssignments} where ${eventStaffAssignments.eventId} = ${events.id})`;
   const upcoming = await db
     .select({ id: events.id, name: events.name, startsAt: events.startsAt, hasVenueLayout: hasTables, hasTeamAssignment: hasTeam })
     .from(events)
-    .where(and(scope, gte(events.startsAt, sql`now()`), inArray(events.status, [...OPEN_STATUSES]), hasTables, hasTeam))
+    .where(and(gte(events.startsAt, sql`now()`), inArray(events.status, [...OPEN_STATUSES]), hasTables, hasTeam))
     .orderBy(asc(events.startsAt))
     .limit(UPCOMING_LIMIT);
 
   // Sayılar yalnızca ilgili modülü görebilenlere verilir; şablonlarda görünürlük kuralı (herkese açık ya da kendi) uygulanır.
   const seeStaff = can(actor, "staff", "view");
   const seeVenues = can(actor, "venues", "view");
-  const templateScope = actor.role === "admin" ? undefined : or(eq(venueTemplates.isPublic, true), eq(venueTemplates.createdById, actor.id));
+  const templateScope = isAdmin(actor) ? undefined : or(eq(venueTemplates.isPublic, true), eq(venueTemplates.createdById, actor.id));
   const none = [{ n: 0 }];
   const [staffRow] = seeStaff ? await db.select({ n: count() }).from(staff).where(eq(staff.status, "active")) : none;
   const [teamRow] = seeStaff ? await db.select({ n: count() }).from(teams).where(eq(teams.isActive, true)) : none;
@@ -109,9 +103,9 @@ export async function getAdminDashboard(db: Executor, actor: Actor): Promise<Adm
   authorize(actor, "users", "view");
   authorize(actor, "settings", "view");
 
-  const monthStart = sql`date_trunc('month', now() at time zone ${TZ})`;
-  const dayStart = sql`date_trunc('day', now() at time zone ${TZ})`;
-  const local = (column: SQLWrapper) => sql`(${column} at time zone ${TZ})`;
+  const monthStart = sql`date_trunc('month', now() at time zone ${APP_TIME_ZONE}::text)`;
+  const dayStart = sql`date_trunc('day', now() at time zone ${APP_TIME_ZONE}::text)`;
+  const local = (column: SQLWrapper) => sql`(${column} at time zone ${APP_TIME_ZONE}::text)`;
 
   const [userRow] = await db
     .select({

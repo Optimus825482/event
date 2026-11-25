@@ -1,4 +1,4 @@
-import type { NavAccent, NavGroupKey, NavGroupView } from "@/features/auth/nav";
+import { visibleNavGroups, type NavAccent, type NavGroupKey, type NavGroupView } from "@/features/auth/nav";
 import { can, type PolicyActor } from "@/features/auth/policy";
 
 export type LauncherIcon = "calendar" | "ticket" | "qr-code" | "shield" | "star";
@@ -14,26 +14,26 @@ export type LauncherModule = {
 
 type LauncherDefinition = Omit<LauncherModule, "href">;
 
-/** Eski `select-module` sayfasındaki modül kartları (ad, açıklama, renk, simge). */
+/** Modül kartları (ad, açıklama, renk, simge); gruplarla aynı sırada. */
 const DEFINITIONS: readonly LauncherDefinition[] = [
   {
-    key: "events",
-    name: "Etkinlik Planlama",
-    description: "Etkinlik oluşturma, masa yerleşimi ve personel yönetimi",
+    key: "entertainment",
+    name: "Entertainment",
+    description: "Etkinlik oluşturma, pano ve davetiye şablonları",
     icon: "calendar",
     accent: "blue",
   },
   {
-    key: "leader",
-    name: "Ekip Lideri",
-    description: "Ekibinizin etkinlikleri, değerlendirmeleri ve raporları",
+    key: "fnb",
+    name: "Food & Beverage",
+    description: "Salon yerleşimi, ekip organizasyonu ve ekip değerlendirmeleri",
     icon: "star",
     accent: "cyan",
   },
   {
-    key: "reservations",
-    name: "Rezervasyon",
-    description: "Misafir rezervasyonları ve QR bilet yönetimi",
+    key: "casino",
+    name: "Casino",
+    description: "Misafir rezervasyonları, müşteriler ve QR bilet yönetimi",
     icon: "ticket",
     accent: "purple",
   },
@@ -56,8 +56,7 @@ const DEFINITIONS: readonly LauncherDefinition[] = [
 /** Panel sayfası yetkisi yoksa modülün ilk erişilebilir sayfasına gidilir. */
 function targetHref(actor: PolicyActor, group: NavGroupView): string {
   const fallback = group.items[0]?.href ?? "/";
-  if (group.key === "events") return can(actor, "events", "view") ? "/dashboard" : fallback;
-  if (group.key === "leader") return "/leader";
+  if (group.key === "entertainment") return can(actor, "events", "view") ? "/dashboard" : fallback;
   if (group.key === "admin") {
     return can(actor, "users", "view") && can(actor, "settings", "view") ? "/admin" : fallback;
   }
@@ -72,10 +71,12 @@ export function launcherModules(actor: PolicyActor, groups: readonly NavGroupVie
   });
 }
 
-/** Eski arayüzdeki rol yönlendirmeleri: bu roller modül seçmez, doğrudan çalışma alanına gider. */
-export function roleLanding(role: PolicyActor["role"]): string | null {
-  if (role === "leader") return "/leader";
-  if (role === "controller") return "/check-in";
-  if (role === "venue_owner") return "/venues";
-  return null;
+/**
+ * Giriş sonrası açılış: aktörün görebildiği tek bir modül grubu varsa doğrudan onun ilk sayfası,
+ * aksi hâlde (çok grup ya da hiç) başlatıcı. `general` (bildirimler) modül sayılmaz.
+ */
+export function landingFor(actor: PolicyActor): string {
+  const modules = visibleNavGroups(actor).filter((group) => group.key !== "general");
+  const [only] = modules;
+  return modules.length === 1 && only ? (only.items[0]?.href ?? "/") : "/";
 }

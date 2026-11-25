@@ -1,6 +1,9 @@
+import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
+import { departmentMemberships } from "@/db/schema";
 import type { Role } from "@/features/auth/roles";
-import { createUser as createLoginUser } from "@/features/users/service";
+import type { Actor } from "@/features/auth/session";
+import { createLoginAccount, grantActor } from "../../helpers/actors";
 import { createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD, signedInCookie } from "../auth/helpers";
 
@@ -66,14 +69,23 @@ export function sseReader(body: ReadableStream<Uint8Array>) {
   return { until, first, frames, cancel: () => reader.cancel() };
 }
 
-/** Parolası olan, giriş yapabilen bir kullanıcı oluşturur ve oturum çerezini döndürür. */
-export async function loginAs(role: Role): Promise<{ id: string; cookie: string }> {
+/**
+ * Parolası olan, giriş yapabilen bir kullanıcı oluşturur ve oturum çerezini döndürür.
+ * Rol adı (`admin`; `user` üyeliksiz açılır) ya da üyelik/izin taşıyan bir test aktörü verilir.
+ */
+export async function loginAs(who: Role | Actor): Promise<{ id: string; cookie: string }> {
+  const actor = typeof who === "string" ? null : who;
+  const role = typeof who === "string" ? who : who.role;
   const admin = await insertUser(db, { role: "admin" });
   const username = `rt_${role}_${Math.random().toString(36).slice(2, 8)}`;
-  const created = await createLoginUser(
+  const created = await createLoginAccount(
     db,
-    { id: admin.id, username: admin.username, role: "admin", staffId: null },
-    { username, password: PASSWORD, role },
+    { id: admin.id, username: admin.username, role: "admin", staffId: null, memberships: [], permissions: [] },
+    role,
+    { username, password: PASSWORD },
   );
+  // Servisin varsayılan üyeliği yerine aktörün kendi üyelikleri yazılır.
+  await db.delete(departmentMemberships).where(eq(departmentMemberships.userId, created.id));
+  if (actor) await grantActor(db, created.id, actor);
   return { id: created.id, cookie: await signedInCookie(username) };
 }

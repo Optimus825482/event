@@ -8,6 +8,7 @@ import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
 import { actorOf, bookable, createTable, customerRow, expectDomain, reservationRow } from "./fixtures";
+import { adminActor, memberActor } from "../../helpers/actors";
 
 function bulkFor(actor: Actor | null) {
   const { defineAction } = createAction({ getActor: async () => actor });
@@ -37,7 +38,7 @@ describe("toplu iptal", () => {
   });
 
   it("hepsini tek işlemde iptal eder ve müşteri sayaçlarını geri alır", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const { a, b, customer } = await twoReservations();
     expect(await cancelReservations(db, admin, { ids: [a.id, b.id] })).toEqual({ cancelled: 2 });
     expect((await reservationRow(a.id)).status).toBe("cancelled");
@@ -46,7 +47,7 @@ describe("toplu iptal", () => {
   });
 
   it("biri geçersizse hiçbiri iptal edilmez (atomik)", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const { event, a } = await twoReservations();
     const t3 = await createTable(db, event.id, { capacity: 4, label: "A3" });
     const c3 = await createCustomer(db);
@@ -56,27 +57,17 @@ describe("toplu iptal", () => {
     expect((await reservationRow(done.id)).status).toBe("checked_in");
   });
 
-  it("organizatör başkasının rezervasyonunu iptal edemez; hiçbiri değişmez", async () => {
-    const organizer = await actorOf("organizer");
-    const own = await bookable(organizer.id);
-    const mine = await seedReservation(db, { eventId: own.event.id, tableId: own.table.id, customerId: own.customer.id });
-    const { a } = await twoReservations();
-    await expectDomain(cancelReservations(db, organizer, { ids: [mine.id, a.id] }), "not_found", "Rezervasyon bulunamadı");
-    expect((await reservationRow(mine.id)).status).toBe("confirmed");
-    expect((await reservationRow(a.id)).status).toBe("pending");
-  });
-
-  it("action: staff iptal eder; controller forbidden, oturumsuz unauthenticated", async () => {
+  it("action: Casino kullanıcısı iptal eder; yalnızca check-in izni olan forbidden, oturumsuz unauthenticated", async () => {
     const { a, b } = await twoReservations();
     const ids = [a.id, b.id];
-    expect(await bulkFor(await actorOf("controller"))({ ids })).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await bulkFor(await actorOf(memberActor("casino", { check_in: "vc--" })))({ ids })).toMatchObject({ ok: false, code: "forbidden" });
     expect(await bulkFor(null)({ ids })).toMatchObject({ ok: false, code: "unauthenticated" });
     expect((await reservationRow(a.id)).status).toBe("pending");
-    expect(await bulkFor(await actorOf("staff"))({ ids })).toMatchObject({ ok: true, data: { cancelled: 2 } });
+    expect(await bulkFor(await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" })))({ ids })).toMatchObject({ ok: true, data: { cancelled: 2 } });
     expect((await reservationRow(b.id)).status).toBe("cancelled");
   });
 
   it("action: geçersiz girdi invalid döner", async () => {
-    expect(await bulkFor(await actorOf("admin"))({ ids: [] })).toMatchObject({ ok: false, code: "invalid" });
+    expect(await bulkFor(await actorOf(adminActor()))({ ids: [] })).toMatchObject({ ok: false, code: "invalid" });
   });
 });

@@ -5,32 +5,44 @@ import { useState, useTransition, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { ROLE_LABELS } from "@/components/layout/role-labels";
-import { ROLES } from "@/features/auth/roles";
+import type { Role } from "@/features/auth/roles";
+import type { ActionResult } from "@/lib/action";
 import { updateUserAction } from "../actions";
-import type { UserSummary } from "../types";
+import { ACCESS_MESSAGES } from "../access-rules";
+import { ROLE_CHOICES, usesDepartments } from "../form-model";
+import type { UserDetail } from "../queries";
 import { Field, FormStatus, SELECT_CLASS, toFormState, type FormState } from "./field";
+import { AccessFields, type AccessValue } from "./membership-fields";
 
 const UPDATED_MESSAGE = "Kullanıcı güncellendi";
 
-export function EditUserForm({ user, onDone }: { user: UserSummary; onDone?: (message: string) => void }) {
+export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (message: string) => void }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(null);
+  const [role, setRole] = useState<Role>(user.role);
+  const [access, setAccess] = useState<AccessValue>({ memberships: user.memberships, grants: user.permissions });
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     setState(null);
+    const withDepartments = usesDepartments(role);
+    if (withDepartments && access.memberships.length === 0) {
+      setState({ ok: false, message: ACCESS_MESSAGES.needDepartment });
+      return;
+    }
     startTransition(async () => {
-      const result = await updateUserAction({
+      // Rol, üyelikler ve izinler tek eylemde, sunucuda tek işlemle yazılır.
+      const result: ActionResult<unknown> = await updateUserAction({
         id: user.id,
         name: String(data.get("name") ?? ""),
         email: String(data.get("email") ?? ""),
-        role: String(data.get("role") ?? ""),
+        role,
         phone: String(data.get("phone") ?? ""),
         position: String(data.get("position") ?? ""),
+        ...(withDepartments ? { memberships: access.memberships, permissions: access.grants } : {}),
       });
       setState(toFormState(result, UPDATED_MESSAGE));
       if (result.ok) {
@@ -45,7 +57,7 @@ export function EditUserForm({ user, onDone }: { user: UserSummary; onDone?: (me
 
   const errors = state?.fieldErrors;
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2" noValidate>
+    <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2" noValidate>
       <Field id="name" label="Ad soyad" errors={errors?.name}>
         <Input id="name" name="name" defaultValue={user.name} required />
       </Field>
@@ -53,10 +65,16 @@ export function EditUserForm({ user, onDone }: { user: UserSummary; onDone?: (me
         <Input id="email" name="email" type="email" defaultValue={user.email} required />
       </Field>
       <Field id="role" label="Rol" errors={errors?.role}>
-        <select id="role" name="role" defaultValue={user.role} className={SELECT_CLASS}>
-          {ROLES.map((role) => (
-            <option key={role} value={role}>
-              {ROLE_LABELS[role]}
+        <select
+          id="role"
+          name="role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as Role)}
+          className={SELECT_CLASS}
+        >
+          {ROLE_CHOICES.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
             </option>
           ))}
         </select>
@@ -67,7 +85,8 @@ export function EditUserForm({ user, onDone }: { user: UserSummary; onDone?: (me
       <Field id="position" label="Görev" errors={errors?.position}>
         <Input id="position" name="position" defaultValue={user.position ?? ""} />
       </Field>
-      <div className="flex items-end gap-3 sm:col-span-2">
+      {usesDepartments(role) ? <AccessFields value={access} onChange={setAccess} /> : null}
+      <div className="flex items-end gap-3 sm:col-span-2 in-data-[slot=dialog-content]:sticky in-data-[slot=dialog-content]:bottom-0 in-data-[slot=dialog-content]:z-10 in-data-[slot=dialog-content]:-mx-6 in-data-[slot=dialog-content]:-mb-6 in-data-[slot=dialog-content]:border-t in-data-[slot=dialog-content]:bg-background in-data-[slot=dialog-content]:px-6 in-data-[slot=dialog-content]:py-4">
         <Button type="submit" disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">
           {pending ? "Kaydediliyor…" : "Kaydet"}
         </Button>

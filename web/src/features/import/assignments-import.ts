@@ -20,7 +20,7 @@ export type AssignmentImportResult = {
 
 const LOCKED = "Tamamlanmış veya iptal edilmiş etkinlikte ekip organizasyonu değiştirilemez";
 
-/** Önizleme: çözümleme okunarak yapılır; hiçbir şey yazılmaz. İzin: ekip organizasyonu kaydıyla aynı (`events.edit`). */
+/** Önizleme: çözümleme okunarak yapılır; hiçbir şey yazılmaz. İzin: ekip organizasyonu kaydıyla aynı (`staff.edit`). */
 export async function previewAssignmentImport(
   db: Db | Tx,
   actor: Actor,

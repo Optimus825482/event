@@ -4,6 +4,7 @@ import { customers, eventTables, events, reservations, systemSettings } from "@/
 import { withFieldValues, type FieldValues, type InvitationElement } from "./elements";
 import { layoutImagePaths, resolveEventLayout, type ResolvedLayout } from "./layout";
 import { parseInvitationToken, verifyInvitationMac } from "./token";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 type Executor = Db | Tx;
 
@@ -64,24 +65,17 @@ async function loadTarget(db: Executor, token: string): Promise<Target | null> {
   return row;
 }
 
-async function readSystemFlags(db: Executor): Promise<{ enabled: boolean; timezone: string }> {
-  const [row] = await db
-    .select({ enabled: systemSettings.invitationSystemEnabled, timezone: systemSettings.timezone })
-    .from(systemSettings)
-    .limit(1);
-  return { enabled: row?.enabled ?? true, timezone: row?.timezone ?? "Europe/Istanbul" };
+async function readSystemFlags(db: Executor): Promise<{ enabled: boolean }> {
+  const [row] = await db.select({ enabled: systemSettings.invitationSystemEnabled }).from(systemSettings).limit(1);
+  return { enabled: row?.enabled ?? true };
 }
 
-export function formatEventWhen(date: Date, timeZone: string): { date: string; time: string } {
-  const make = (zone: string) => ({
-    date: new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: zone }).format(date),
-    time: new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: zone }).format(date),
-  });
-  try {
-    return make(timeZone);
-  } catch {
-    return make("Europe/Istanbul");
-  }
+/** Davetiyedeki etkinlik tarihi ve saati; her zaman uygulama saat diliminde (Kıbrıs). */
+export function formatEventWhen(date: Date): { date: string; time: string } {
+  return {
+    date: new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: APP_TIME_ZONE }).format(date),
+    time: new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: APP_TIME_ZONE }).format(date),
+  };
 }
 
 type Fields = FieldValues;
@@ -108,7 +102,7 @@ export async function getPublicInvitation(db: Executor, token: string): Promise<
   if (!flags.enabled) return null;
 
   const layout = await resolveEventLayout(db, target.eventId);
-  const when = formatEventWhen(target.startsAt, flags.timezone);
+  const when = formatEventWhen(target.startsAt);
   const guestName = target.guestName?.trim() || target.customerName || "Misafir";
   const fields: Fields = {
     guestName,

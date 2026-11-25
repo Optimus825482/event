@@ -4,10 +4,10 @@ import { customers, eventTables, events, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import { publish } from "@/features/realtime/publish";
-import { canAccessEvent } from "@/features/events/access";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import type { EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
+import { isAdmin } from "@/features/auth/scope";
 
 export type Executor = Db | Tx;
 export type ReservationRow = typeof reservations.$inferSelect;
@@ -59,15 +59,13 @@ function mapDbError(error: unknown): unknown {
   return error;
 }
 
-export { canAccessEvent };
-
 /**
  * Etkinliği `FOR SHARE` ile kilitler: durum geçişi (`FOR UPDATE`) ve yerleşim kaydı
  * (`FOR UPDATE`) bu transaction bitene kadar bekler; eşzamanlı rezervasyonlar birbirini beklemez.
  */
 export async function lockEvent(tx: Tx, actor: Actor, eventId: string, notFound: string = MSG.eventNotFound) {
   const [event] = await tx.select().from(events).where(eq(events.id, eventId)).for("share");
-  if (!event || !canAccessEvent(actor, event)) throw new DomainError("not_found", notFound);
+  if (!event) throw new DomainError("not_found", notFound);
   return event;
 }
 
@@ -107,7 +105,7 @@ export function assertCapacity(guestCount: number, table: Pick<EventTableRow, "c
 
 /** Kara listedeki müşteri yalnızca yönetici açıkça onaylarsa (`overrideBlacklist`) geçer. */
 export function assertNotBlacklisted(actor: Actor, isBlacklisted: boolean, override: boolean | undefined): void {
-  if (isBlacklisted && !(actor.role === "admin" && override === true)) {
+  if (isBlacklisted && !(isAdmin(actor) && override === true)) {
     throw new DomainError("conflict", MSG.blacklisted);
   }
 }

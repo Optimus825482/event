@@ -3,6 +3,7 @@ import { StatCard } from "@/components/layout/stat-card";
 import { cn } from "@/lib/utils";
 import { vipTier } from "../vip";
 import { TagChips } from "./tag-chips";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 type Props = {
   fullName: string;
@@ -15,7 +16,7 @@ type Props = {
   tags: string[];
 };
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: APP_TIME_ZONE });
 
 /** Müşteri ayrıntı başlığı (eski VIP analizi): avatar, VIP seviyesi ve puan çubuğu, etiketler, sayaç kartları. */
 export function CustomerSummary({ fullName, vipScore, isBlacklisted, totalReservations, totalAttendedEvents, noShowCount, lastEventAt, tags }: Props) {

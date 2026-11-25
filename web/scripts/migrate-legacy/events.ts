@@ -18,7 +18,7 @@ function isEventStatus(value: string | null): value is EventStatus {
   return value !== null && (EVENT_STATUSES as readonly string[]).includes(value);
 }
 
-/** Organizatörsüz etkinliklere atanacak kullanıcı: seçenek → en eski etkin admin → admin → organizer → herhangi biri. */
+/** Organizatörsüz etkinliklere atanacak kullanıcı: seçenek → en eski etkin admin → admin → herhangi biri. */
 function defaultOrganizer(ctx: Ctx): string | null {
   const wanted = ctx.options.defaultOrganizerId;
   if (wanted !== undefined) {
@@ -30,7 +30,6 @@ function defaultOrganizer(ctx: Ctx): string | null {
   return (
     pick((u) => u.str("role") === "admin" && u.bool("isActive", true)) ??
     pick((u) => u.str("role") === "admin") ??
-    pick((u) => u.str("role") === "organizer") ??
     pick(() => true)
   );
 }

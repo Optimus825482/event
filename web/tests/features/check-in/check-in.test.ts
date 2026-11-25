@@ -8,17 +8,8 @@ import { signQrToken } from "@/features/reservations/qr-token";
 import { createReservation as bookReservation } from "@/features/reservations/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation, createTable } from "../../helpers/factories";
-import {
-  actorOf,
-  bookedGuest,
-  checkInLog,
-  customerRow,
-  expectDomain,
-  key,
-  reservationRow,
-  setEventStatus,
-  setReservationStatus,
-} from "./fixtures";
+import { actorOf, bookedGuest, checkInLog, customerRow, expectDomain, key, reservationRow, setEventStatus, setReservationStatus } from "./fixtures";
+import { adminActor, memberActor } from "../../helpers/actors";
 
 describe("checkIn", () => {
   beforeAll(async () => {
@@ -30,7 +21,7 @@ describe("checkIn", () => {
 
   it("imzalı QR ile giriş yapar, sayacı artırır ve kaydı saklar", async () => {
     const { event, table, customer, reservation } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const before = Date.now();
 
     const result = await checkIn(db, door, {
@@ -64,8 +55,8 @@ describe("checkIn", () => {
 
   it("zaten giriş yapmışsa hata değil 'already_checked_in' ve kimin/ne zaman yaptığını döner", async () => {
     const { event, customer, reservation } = await bookedGuest();
-    const first = await actorOf("controller");
-    const second = await actorOf("staff");
+    const first = await actorOf(memberActor("casino", { check_in: "vc--" }));
+    const second = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const done = await checkIn(db, first, {
       eventId: event.id,
       idempotencyKey: key(),
@@ -92,7 +83,7 @@ describe("checkIn", () => {
   it("iptal edilmiş rezervasyon conflict verir, hiçbir şey değişmez", async () => {
     const { event, customer, reservation } = await bookedGuest();
     await setReservationStatus(reservation.id, "cancelled");
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     await expectDomain(
       checkIn(db, door, {
@@ -113,7 +104,7 @@ describe("checkIn", () => {
     await setReservationStatus(reservation.id, "no_show");
     await db.update(customers).set({ noShowCount: 1 }).where(eq(customers.id, customer.id));
     await setEventStatus(event.id, "completed");
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     const result = await checkIn(db, door, {
       eventId: event.id,
@@ -137,7 +128,7 @@ describe("checkIn", () => {
       customerId: other.id,
       qrToken: signQrToken(randomUUID()),
     });
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     await expectDomain(
       checkIn(db, door, {
@@ -156,7 +147,7 @@ describe("checkIn", () => {
     const { event, reservation } = await bookedGuest();
     const legacyHash = "0123456789abcdef0123456789abcdef";
     await db.update(reservations).set({ legacyQrHash: legacyHash }).where(eq(reservations.id, reservation.id));
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     const result = await checkIn(db, door, {
       eventId: event.id,
@@ -173,7 +164,7 @@ describe("checkIn", () => {
 
   it("manuel aramadan rezervasyon kimliğiyle giriş yapar", async () => {
     const { event, reservation } = await bookedGuest();
-    const door = await actorOf("staff");
+    const door = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const result = await checkIn(db, door, {
       eventId: event.id,
       idempotencyKey: key(),
@@ -185,7 +176,7 @@ describe("checkIn", () => {
   it("başka etkinliğin geçerli QR'ı conflict verir ve o rezervasyona dokunmaz", async () => {
     const a = await bookedGuest();
     const b = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     await expectDomain(
       checkIn(db, door, {
@@ -201,7 +192,7 @@ describe("checkIn", () => {
 
   it("geçersiz, kurcalanmış ya da satırla eşleşmeyen belirteç not_found verir", async () => {
     const { event, reservation } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const message = "QR kod geçersiz veya rezervasyon bulunamadı";
     await expectDomain(
       checkIn(db, door, {
@@ -243,7 +234,7 @@ describe("checkIn", () => {
   });
 
   it("istemci zaman damgası yalnızca geçmiş 24 saat içindeyse giriş zamanı olur", async () => {
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const valid = await bookedGuest();
     const r1 = await checkIn(db, door, {
@@ -277,7 +268,7 @@ describe("checkIn", () => {
 
   it("aynı anahtarla tekrar, ilk sonucu (başarısızlık dahil) aynen döndürür; farklı istekte anahtar reddedilir", async () => {
     const { event, reservation } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const k = key();
     await setReservationStatus(reservation.id, "cancelled");
     await expectDomain(
@@ -318,23 +309,8 @@ describe("checkIn", () => {
     );
   });
 
-  it("organizatör başka organizatörün etkinliğinde not_found alır", async () => {
-    const { event, reservation } = await bookedGuest();
-    const stranger = await actorOf("organizer");
-    await expectDomain(
-      checkIn(db, stranger, {
-        eventId: event.id,
-        idempotencyKey: key(),
-        token: reservation.qrToken,
-      }),
-      "not_found",
-      "Etkinlik bulunamadı",
-    );
-    expect((await reservationRow(reservation.id)).status).toBe("confirmed");
-  });
-
   it("taslak veya iptal edilmiş etkinlikte check-in yapılamaz", async () => {
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     for (const status of ["draft", "cancelled"] as const) {
       const { event, reservation } = await bookedGuest();
       await setEventStatus(event.id, status);
@@ -354,7 +330,7 @@ describe("checkIn", () => {
   it("spec §13 madde 8 (QR): içe aktarma yolu (transaction içinde createReservation) imzalı QR üretir ve check-in onu kabul eder", async () => {
     const { event } = await bookedGuest();
     const table = await createTable(db, event.id, { capacity: 6, label: "B2" });
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const imported = await db.transaction((tx) =>
       bookReservation(tx, admin, {
         eventId: event.id,
@@ -363,7 +339,7 @@ describe("checkIn", () => {
         guestName: "Excel Misafiri",
       }),
     );
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const result = await checkIn(db, door, {
       eventId: event.id,
       idempotencyKey: key(),

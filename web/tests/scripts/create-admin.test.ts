@@ -86,15 +86,15 @@ describe("scripts/create-admin.mjs (üretim imajındaki düz Node betiği)", () 
 
   it("--reset var olmayan ya da yönetici olmayan kullanıcıda çıkış 4 verir", async () => {
     expect(run(["--reset", "yok"], { ADMIN_PASSWORD: PASSWORD }).status).toBe(4);
-    await db.insert(users).values({ name: "p", email: "p@example.com", username: "personel", role: "staff" });
+    await db.insert(users).values({ name: "p", email: "p@example.com", username: "personel", role: "user" });
     const res = run(["--reset", "personel"], { ADMIN_PASSWORD: PASSWORD });
     expect(res.status).toBe(4);
     const [user] = await db.select().from(users).where(eq(users.username, "personel"));
-    expect(user?.role).toBe("staff");
+    expect(user?.role).toBe("user");
   });
 
   it("etkin yönetici yokken var olan kullanıcı adını sessizce ele geçirmez (çıkış 3)", async () => {
-    await db.insert(users).values({ name: "p", email: "p@example.com", username: "personel", role: "staff" });
+    await db.insert(users).values({ name: "p", email: "p@example.com", username: "personel", role: "user" });
     const res = run(["personel"], { ADMIN_PASSWORD: PASSWORD });
     expect(res.status).toBe(3);
     expect(res.stderr).toContain("--reset");

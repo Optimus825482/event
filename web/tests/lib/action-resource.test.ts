@@ -5,7 +5,7 @@ import type { Actor } from "@/features/auth/session";
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../helpers/db";
 import { createStaff } from "../helpers/factories";
-import { makeActor } from "../features/reviews/helpers";
+import { makeLeader } from "../features/reviews/helpers";
 
 const input = z.object({ teamLeaderStaffId: z.uuid() });
 
@@ -20,7 +20,7 @@ describe("defineAction resource seçeneği", () => {
   beforeEach(async () => {
     await truncateAll();
     ownStaffId = (await createStaff(db, { fullName: "Lider Bir" })).id;
-    leader = await makeActor("leader", ownStaffId);
+    leader = await makeLeader(ownStaffId);
   });
 
   it("resource yokken yetki girdi doğrulamasından önce denetlenir", async () => {

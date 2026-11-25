@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@/db/schema";
+import type { Department, DepartmentLevel } from "@/features/auth/departments";
 import {
   customers,
+  departmentMemberships,
   eventStaffAssignments,
   eventTables,
   events,
@@ -41,6 +43,15 @@ export async function createUser(ex: Executor, o: Overrides<typeof users.$inferI
     .values({ name: `Kullanıcı ${u}`, email: `u-${u}@test.local`, username: `u_${u}`, ...o })
     .returning();
   if (!row) throw new Error("kullanıcı eklenemedi");
+  return row;
+}
+
+export async function createMembership(
+  ex: Executor,
+  o: { userId: string; department: Department; level: DepartmentLevel },
+) {
+  const [row] = await ex.insert(departmentMemberships).values(o).returning();
+  if (!row) throw new Error("üyelik eklenemedi");
   return row;
 }
 

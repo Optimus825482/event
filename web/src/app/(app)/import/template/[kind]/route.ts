@@ -1,4 +1,3 @@
-import { withPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { getActor } from "@/features/auth/session";
 import {
@@ -23,8 +22,7 @@ export async function GET(_request: Request, { params }: { params: Params }) {
   if (!actor) return Response.json({ message: "Oturum gerekli" }, { status: 401 });
   if (!isKind(kind)) return Response.json({ message: "Şablon bulunamadı" }, { status: 404 });
 
-  const withPerms = await withPermissions(actor);
-  const allowed = kind === "reservations" ? can(withPerms, "reservations", "create") : can(withPerms, "events", "edit");
+  const allowed = kind === "reservations" ? can(actor, "reservations", "create") : can(actor, "staff", "edit");
   if (!allowed) return Response.json({ message: "Bu işlem için yetkiniz yok" }, { status: 403 });
 
   const bytes = kind === "reservations" ? await buildReservationTemplate() : await buildAssignmentTemplate();

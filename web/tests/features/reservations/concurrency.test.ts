@@ -12,6 +12,7 @@ import { DomainError } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
 import { activeRows, actorOf, bookable, createTable, customerRow, TABLE_TAKEN } from "./fixtures";
+import { adminActor } from "../../helpers/actors";
 
 /** Her çağrı `db` alır; `db.transaction` havuzdan kendi bağlantısını çeker (gerçek eşzamanlılık). */
 async function settle<T>(calls: (() => Promise<T>)[]) {
@@ -34,7 +35,7 @@ describe("eşzamanlılık (spec §13 madde 1, 6, 15)", () => {
 
   beforeEach(async () => {
     await truncateAll();
-    admin = await actorOf("admin");
+    admin = await actorOf(adminActor());
   });
 
   it("aynı masaya 10 eşzamanlı rezervasyon: 1 başarı, 9 conflict, tek aktif satır", async () => {

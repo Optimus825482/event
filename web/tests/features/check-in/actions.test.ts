@@ -6,6 +6,7 @@ import { createAction } from "@/lib/action";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createTable } from "../../helpers/factories";
 import { actorOf, bookedGuest, key } from "./fixtures";
+import { memberActor } from "../../helpers/actors";
 
 function as(actor: Actor | null) {
   return createAction({ getActor: async () => actor }).defineAction;
@@ -19,11 +20,11 @@ describe("check-in action'ları", () => {
     await truncateAll();
   });
 
-  it("kapı personeli (controller) ve lider check-in, walk-in ve kişi sayısı yapabilir; venue_owner yapamaz", async () => {
+  it("check-in yetkili kullanıcılar check-in, walk-in ve kişi sayısı yapabilir; check_in yetkisi olmayan yapamaz", async () => {
     const { event, reservation } = await bookedGuest();
     const free = await createTable(db, event.id, { capacity: 4 });
-    const controller = await actorOf("controller");
-    const leader = await actorOf("leader");
+    const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
+    const leader = await actorOf(memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }));
 
     const checked = await as(controller)(checkInActionDefs.checkIn)({
       eventId: event.id,
@@ -65,8 +66,8 @@ describe("check-in action'ları", () => {
     });
     expect(remaining.ok && remaining.data.map((t) => t.id)).toEqual([]);
 
-    const owner = await actorOf("venue_owner");
-    expect(await as(owner)(checkInActionDefs.stats)({ eventId: event.id })).toMatchObject({
+    const outsider = memberActor("fnb", { venues: "vced" });
+    expect(await as(outsider)(checkInActionDefs.stats)({ eventId: event.id })).toMatchObject({
       ok: false,
       code: "forbidden",
     });
@@ -78,7 +79,7 @@ describe("check-in action'ları", () => {
 
   it("geçersiz girdi alan hatalarıyla döner; conflict mesajı kullanıcıya iletilir", async () => {
     const { event, table } = await bookedGuest();
-    const controller = await actorOf("controller");
+    const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const invalid = await as(controller)(checkInActionDefs.walkIn)({
       eventId: event.id,
       tableId: "",
@@ -120,7 +121,7 @@ describe("check-in action'ları", () => {
       capacity: 4,
       label: "VIP-3",
     });
-    const controller = await actorOf("controller");
+    const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await as(controller)(checkInActionDefs.walkIn)({
       eventId: event.id,
       tableId: table.id,

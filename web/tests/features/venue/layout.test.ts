@@ -2,19 +2,19 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { assignmentTables, eventTables, events, tableGroupTables, tableTypes } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { listEventTables, totalCapacity } from "@/features/events/service";
 import type { TableInput } from "@/features/venue/schemas";
 import { getVenueLayout, saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
+import { ForbiddenError } from "@/features/auth/errors";
+import { adminActor, managerActor, memberActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role = "organizer"): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 async function caught(promise: Promise<unknown>): Promise<DomainError> {
@@ -41,8 +41,8 @@ const decor = {
   elements: [{ id: "stage-1", kind: "stage" as const, x: 10, y: 10, width: 300, height: 80, label: "Sahne" }],
 };
 
-async function setup(role: Role = "organizer") {
-  const actor = await makeActor(role);
+async function setup(actor?: Actor) {
+  actor = await makeActor(actor);
   const event = await f.createEvent(db, { organizerId: actor.id });
   return { actor, event };
 }
@@ -226,12 +226,11 @@ describe("saveLayout", () => {
     }
   });
 
-  it("organizatör başkasının etkinliğini not_found görür; admin kaydedebilir", async () => {
+  it("başka bir F&B yöneticisi ve admin başkasının oluşturduğu etkinliğe kaydeder", async () => {
     const { event } = await setup();
-    const stranger = await makeActor("organizer");
-    const err = await caught(saveLayout(db, stranger, { eventId: event.id, tables: grid(1), decor }));
-    expect(err.code).toBe("not_found");
-    const admin = await makeActor("admin");
+    const other = await makeActor(managerActor("fnb"));
+    expect((await saveLayout(db, other, { eventId: event.id, tables: grid(1), decor })).tables).toHaveLength(1);
+    const admin = await makeActor(adminActor());
     const res = await saveLayout(db, admin, { eventId: event.id, tables: grid(1), decor });
     expect(res.tables).toHaveLength(1);
   });
@@ -366,9 +365,18 @@ describe("getVenueLayout", () => {
     expect(layout.decor.elements).toEqual([]);
   });
 
-  it("başkasının etkinliği not_found", async () => {
-    const { event } = await setup();
-    const stranger = await makeActor("organizer");
-    expect((await caught(getVenueLayout(db, stranger, event.id))).code).toBe("not_found");
+  it("events:view var ama venues:view yoksa ForbiddenError", async () => {
+    const { actor, event } = await setup(memberActor("fnb", { events: "v---" }));
+    await expect(getVenueLayout(db, actor, event.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("events:view ve venues:view ikisi de varsa okur", async () => {
+    const { actor, event } = await setup(memberActor("fnb", { events: "v---", venues: "v---" }));
+    await expect(getVenueLayout(db, actor, event.id)).resolves.toMatchObject({ event: { id: event.id } });
+  });
+
+  it("olmayan etkinlik not_found", async () => {
+    const { actor } = await setup();
+    expect((await caught(getVenueLayout(db, actor, crypto.randomUUID()))).code).toBe("not_found");
   });
 });

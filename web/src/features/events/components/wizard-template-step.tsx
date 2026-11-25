@@ -19,8 +19,8 @@ type Props = {
   onNext: () => void;
   emptyTitle: string;
   emptyDescription: string;
-  /** Şablonsuz/elle devam için bağlantı. */
-  manualHref: string;
+  /** Şablonsuz/elle devam için bağlantı; hedef sayfaya erişim izni yoksa `null` (bağlantı gösterilmez). */
+  manualHref: string | null;
   manualLabel: string;
   icon: ReactNode;
 };
@@ -68,9 +68,11 @@ export function WizardTemplateStep({
           title={emptyTitle}
           description={emptyDescription}
           action={
-            <Link href={manualHref} className={cn(buttonVariants({ variant: "outline" }), "border-slate-600 bg-transparent")}>
-              {manualLabel}
-            </Link>
+            manualHref ? (
+              <Link href={manualHref} className={cn(buttonVariants({ variant: "outline" }), "border-slate-600 bg-transparent")}>
+                {manualLabel}
+              </Link>
+            ) : null
           }
         />
         <div className="flex justify-end">
@@ -118,9 +120,13 @@ export function WizardTemplateStep({
         })}
       </ul>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={manualHref} className="text-sm text-slate-400 hover:text-white hover:underline">
-          {manualLabel}
-        </Link>
+        {manualHref ? (
+          <Link href={manualHref} className="text-sm text-slate-400 hover:text-white hover:underline">
+            {manualLabel}
+          </Link>
+        ) : (
+          <span />
+        )}
         <div className="flex gap-2">
           <Button
             onClick={() => void handleApply()}

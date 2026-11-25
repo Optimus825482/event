@@ -3,8 +3,8 @@ import type { Db, Tx } from "@/db/client";
 import { events, staff, teamMembers, teams } from "@/db/schema";
 import { can, type PolicyActor } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { authorizeReviewsGate } from "./service";
+import { ownTeamOnly } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -35,13 +35,13 @@ export function canUseLeaderPanel(actor: PolicyActor): boolean {
 }
 
 /**
- * Aktörün görebildiği ekipler. Lider yalnızca kendi ekibini (lideri olduğu) görür; organizatör
- * yalnızca kendi etkinliklerinin ekiplerini; yönetici tümünü. Başkasının ekibi buraya hiç girmez.
+ * Aktörün görebildiği ekipler. Kendi ekibiyle sınırlı aktör (`ownTeamOnly`) yalnızca lideri olduğu ekibi
+ * görür; F&B yöneticisi/asistanı ve admin tümünü. Başkasının ekibi buraya hiç girmez.
  */
 export async function scopedTeams(executor: Executor, actor: Actor): Promise<ScopedTeam[]> {
   authorizeReviewsGate(actor, "view");
   const conditions = [eq(teams.isActive, true)];
-  if (actor.role === "leader") {
+  if (ownTeamOnly(actor)) {
     if (!actor.staffId) return [];
     conditions.push(eq(teams.leaderStaffId, actor.staffId));
   }
@@ -55,15 +55,12 @@ export async function scopedTeams(executor: Executor, actor: Actor): Promise<Sco
       eventName: events.name,
       eventStartsAt: events.startsAt,
       eventStatus: events.status,
-      organizerId: events.organizerId,
     })
     .from(teams)
     .leftJoin(events, eq(events.id, teams.eventId))
     .where(and(...conditions))
     .orderBy(asc(events.startsAt), asc(teams.sortOrder), asc(teams.name));
   return rows
-    .filter((r) => (actor.role === "organizer" ? r.organizerId === actor.id : true))
-    .filter((r) => r.organizerId === null || canAccessEvent(actor, { organizerId: r.organizerId }))
     .map((r) => ({
       id: r.id,
       name: r.name,

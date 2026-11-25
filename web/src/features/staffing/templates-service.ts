@@ -15,6 +15,7 @@ import { loadServicePointRoles } from "./service-point-roles-service";
 import type { ApplyTemplateInput, AssignmentInput, CreateTemplateInput, DeleteTemplateInput, GroupInput, TeamInput } from "./schemas";
 import { applyTeams } from "./teams-service";
 import { templateSnapshotSchema, type TableRef, type TemplateSnapshot } from "./template-snapshot";
+import { isAdmin } from "@/features/auth/scope";
 
 const NOT_FOUND = "Şablon bulunamadı";
 
@@ -22,12 +23,12 @@ type OwnedTemplate = Pick<typeof organizationTemplates.$inferSelect, "createdByI
 
 /** Yönetici hepsini; diğerleri kendi şablonlarını ve varsayılan işaretli olanları görür. */
 export function canSeeOrganizationTemplate(actor: Actor, template: OwnedTemplate): boolean {
-  return actor.role === "admin" || template.isDefault || template.createdById === actor.id;
+  return isAdmin(actor) || template.isDefault || template.createdById === actor.id;
 }
 
 /** Yalnızca yönetici ve sahibi siler (sahipsiz şablonu yalnızca yönetici). */
 export function canManageOrganizationTemplate(actor: Actor, template: Pick<OwnedTemplate, "createdById">): boolean {
-  return actor.role === "admin" || template.createdById === actor.id;
+  return isAdmin(actor) || template.createdById === actor.id;
 }
 
 export type TemplateApplyReport = {
@@ -115,7 +116,7 @@ export async function createOrganizationTemplate(
 export async function listOrganizationTemplates(db: Db | Tx, actor: Actor) {
   ensureStaffingAccess(actor, "view");
   const visible: SQL | undefined =
-    actor.role === "admin"
+    isAdmin(actor)
       ? undefined
       : or(eq(organizationTemplates.isDefault, true), eq(organizationTemplates.createdById, actor.id));
   const rows = await db

@@ -1,3 +1,4 @@
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 import bcrypt from "bcryptjs";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -66,7 +67,7 @@ beforeAll(async () => {
   await createLegacyDb(LEGACY);
   await withClient(LEGACY, seed);
   await createTargetDb(TARGET);
-  report = await runMigration({ legacyUrl: dbUrl(LEGACY), targetUrl: dbUrl(TARGET), dryRun: false, legacyTz: "Europe/Istanbul", emptyCheck: true });
+  report = await runMigration({ legacyUrl: dbUrl(LEGACY), targetUrl: dbUrl(TARGET), dryRun: false, legacyTz: APP_TIME_ZONE, emptyCheck: true });
 }, 180_000);
 
 afterAll(async () => {

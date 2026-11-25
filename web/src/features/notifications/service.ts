@@ -2,24 +2,29 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { events, notificationReads, notifications } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
-import type { Role } from "@/features/auth/roles";
+import { DEPARTMENTS } from "@/features/auth/departments";
+import type { PolicyActor } from "@/features/auth/policy";
+import { inDepartment, isAdmin } from "@/features/auth/scope";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { DomainError } from "@/lib/action";
-import type { CreateNotificationInput, ListNotificationsInput, MarkReadInput } from "./schemas";
+import type { Audience, CreateNotificationInput, ListNotificationsInput, MarkReadInput } from "./schemas";
 
 type Executor = Db | Tx;
 export type NotificationRow = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
-type TargetRole = NotificationRow["targetRole"];
 
 const DEFAULT_PAGE_SIZE = 20;
 const NOT_FOUND = "Bildirim bulunamadı";
 
-/** Rolün görebildiği hedef roller (eski davranış: herkese + kendi rolü; organizatör yalnızca "herkes"). */
-export function visibleTargetRoles(role: Role): TargetRole[] {
-  if (role === "admin" || role === "leader" || role === "staff") return ["all", role];
-  return ["all"];
+/**
+ * Aktörün görebildiği hedef kitleler. Sistem Yöneticisi beşini de görür; diğerleri "herkes" ile
+ * üyesi oldukları departmanları (düzeyden bağımsız) görür. Üyeliği olmayan kullanıcı
+ * yalnızca "herkes" bildirimlerini görür. Liste, okunmamış sayısı, okundu işaretleme ve gerçek
+ * zamanlı yayın aynı kuralı bu işlevden alır.
+ */
+export function visibleAudiences(actor: PolicyActor): Audience[] {
+  if (isAdmin(actor)) return ["all", "admin", ...DEPARTMENTS];
+  return ["all", ...DEPARTMENTS.filter((department) => inDepartment(actor, department))];
 }
 
 /**
@@ -35,7 +40,7 @@ export async function insertNotification(executor: Executor, input: NewNotificat
   return row;
 }
 
-/** Elle duyuru oluşturma (yönetici/organizatör). */
+/** Elle duyuru oluşturma (bildirim modülünde oluşturma yetkisi olanlar; her kitleye gönderebilir). */
 export async function createNotification(
   executor: Executor,
   actor: Actor,
@@ -44,11 +49,10 @@ export async function createNotification(
   authorize(actor, "notifications", "create");
   if (input.eventId) {
     const [event] = await executor
-      .select({ id: events.id, organizerId: events.organizerId })
+      .select({ id: events.id })
       .from(events)
       .where(eq(events.id, input.eventId));
-    // Organizatör yalnızca kendi etkinliğine bağlayabilir; başkasınınki "yok" gibi davranır.
-    if (!event || !canAccessEvent(actor, event)) {
+    if (!event) {
       throw new DomainError("not_found", "Etkinlik bulunamadı");
     }
   }
@@ -57,7 +61,7 @@ export async function createNotification(
     title: input.title,
     message: input.message,
     priority: input.priority,
-    targetRole: input.targetRole,
+    audience: input.audience,
     eventId: input.eventId ?? null,
     actionUrl: input.actionUrl ?? null,
     createdById: actor.id,
@@ -65,7 +69,7 @@ export async function createNotification(
 }
 
 function visibleTo(actor: Actor) {
-  return and(eq(notifications.isActive, true), inArray(notifications.targetRole, visibleTargetRoles(actor.role)));
+  return and(eq(notifications.isActive, true), inArray(notifications.audience, visibleAudiences(actor)));
 }
 
 function readJoin(actor: Actor) {

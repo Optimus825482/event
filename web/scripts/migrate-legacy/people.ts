@@ -1,5 +1,5 @@
 import * as schema from "@/db/schema";
-import { ROLES, type Role } from "@/features/auth/roles";
+import type { Role } from "@/features/auth/roles";
 import { isValidUsername } from "@/features/auth/username";
 import { normalizeEmail, normalizePhone } from "@/features/customers/normalize";
 import { type CatalogIndex, timestamps } from "./catalogs";
@@ -21,11 +21,6 @@ import { asUuid, byCreatedThenId, type Row, stableId } from "./values";
 /** create-admin-dev.ts ile aynı yer tutucu e-posta alanı (o modül auth/db yüklediği için içe aktarılmaz). */
 export const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
 const BCRYPT_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
-const PERMISSION_MODULES = new Set<string>(schema.permissionModule.enumValues);
-
-function isRole(value: string | null): value is Role {
-  return value !== null && (ROLES as readonly string[]).includes(value);
-}
 
 const nameKey = (s: string | null) => (s ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("tr");
 
@@ -203,8 +198,10 @@ export async function migratePeople(ctx: Ctx, catalogs: Catalogs): Promise<void>
   await ctx.w.insert(
     schema.users,
     users.map((u) => {
-      const role = u.str("role");
-      if (!isRole(role)) ctx.add("invalidValues", { table: "users", id: u.id, field: "role", from: role, to: "staff" });
+      // Eski roller üyeliksiz `user` olur (giriş yapar, yönetici departman atayana dek hiçbir modüle erişemez).
+      const legacyRole = u.str("role");
+      const role: Role = legacyRole === "admin" ? "admin" : "user";
+      if (legacyRole !== role) ctx.add("information", { table: "users", id: u.id, field: "role", from: legacyRole, to: role });
       return {
         id: u.id,
         name: u.trimmed("fullName") ?? usernames.get(u.id) ?? u.id,
@@ -212,7 +209,7 @@ export async function migratePeople(ctx: Ctx, catalogs: Catalogs): Promise<void>
         emailVerified: true,
         image: u.str("avatar"),
         username: usernames.get(u.id) ?? `kullanici-${u.id.slice(0, 8)}`,
-        role: isRole(role) ? role : "staff",
+        role,
         isActive: u.bool("isActive", true),
         staffId: ctx.userToStaff.get(u.id) ?? null,
         color: u.str("color"),
@@ -237,7 +234,7 @@ export async function migratePeople(ctx: Ctx, catalogs: Catalogs): Promise<void>
       };
     }),
   );
-  await migratePermissions(ctx);
+  skipLegacyPermissions(ctx);
 }
 
 function linkUsersToStaff(ctx: Ctx, users: Row[]): void {
@@ -282,35 +279,20 @@ function linkUsersToStaff(ctx: Ctx, users: Row[]): void {
   }
 }
 
-async function migratePermissions(ctx: Ctx): Promise<void> {
-  const merged = new Map<string, { id: string; userId: string; module: string; v: boolean; c: boolean; e: boolean; d: boolean; row: Row }>();
+/**
+ * Eski izin satırları taşınmaz. Eski modelde satır rolün tabanını yalnızca daraltırdı; yeni modelde satır verilen
+ * yetkidir. Taşınsaydı, yönetici departman atadığında tavan içindeki eski satırlar kimse seçmeden yetkiye dönüşürdü
+ * (0014 aynı nedenle eski rollü kullanıcıların satırlarını siler). Her satır atlanan olarak raporlanır.
+ */
+function skipLegacyPermissions(ctx: Ctx): void {
   for (const r of [...ctx.legacy.user_permissions].sort(byCreatedThenId)) {
-    const userId = ctx.resolveUser(r.str("userId"));
-    const moduleName = r.str("module");
-    if (userId === null || moduleName === null || !PERMISSION_MODULES.has(moduleName)) {
-      ctx.add("skippedRows", { table: "user_permissions", id: r.id, reason: userId === null ? "kullanıcı yok" : "modül geçersiz" });
-      continue;
-    }
-    const key = `${userId}:${moduleName}`;
-    const prev = merged.get(key);
-    const flags = { v: r.bool("canView", true), c: r.bool("canCreate", false), e: r.bool("canEdit", false), d: r.bool("canDelete", false) };
-    if (prev) {
-      Object.assign(prev, { v: prev.v || flags.v, c: prev.c || flags.c, e: prev.e || flags.e, d: prev.d || flags.d });
-      ctx.add("information", { table: "user_permissions", id: r.id, detail: `aynı (kullanıcı, modül) ${prev.id} ile birleştirildi (bayraklar VEYA)` });
-    } else merged.set(key, { id: r.id, userId, module: moduleName, ...flags, row: r });
+    ctx.add("skippedRows", {
+      table: "user_permissions",
+      id: r.id,
+      userId: ctx.resolveUser(r.str("userId")) ?? r.str("userId"),
+      module: r.str("module"),
+      reason: "eski izin satırı taşınmaz; yetki departman atamasıyla verilir",
+    });
   }
-  await ctx.w.insert(
-    schema.userPermissions,
-    [...merged.values()].map((p) => ({
-      id: p.id,
-      userId: p.userId,
-      module: p.module as (typeof schema.permissionModule.enumValues)[number],
-      canView: p.v,
-      canCreate: p.c,
-      canEdit: p.e,
-      canDelete: p.d,
-      ...timestamps(p.row),
-    })),
-  );
 }
 

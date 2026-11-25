@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { customers, reservations } from "@/db/schema";
-import { withPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { findOrCreateCustomer } from "@/features/customers/find-or-create";
@@ -34,7 +33,7 @@ export type { ReservationRow } from "./internal";
  * bilinmeyen müşteriyle aynı hata verilir (varlık sızdırılmaz).
  */
 async function canReadCustomers(actor: Actor): Promise<boolean> {
-  return can(await withPermissions(actor), "customers", "view");
+  return can(actor, "customers", "view");
 }
 
 /**

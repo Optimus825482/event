@@ -4,7 +4,7 @@ import { eventTables, reservations } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow } from "@/features/events/service";
-import { ACTIVE_STATUSES, assertBookable, canAccessEvent, MSG } from "@/features/reservations/internal";
+import { ACTIVE_STATUSES, assertBookable, MSG } from "@/features/reservations/internal";
 import { createReservation } from "@/features/reservations/service";
 import { DomainError } from "@/lib/action";
 import { logError } from "@/lib/log";
@@ -24,7 +24,6 @@ export type ReservationImportResult = {
 async function loadContext(db: Executor, actor: Actor, eventId: string) {
   authorize(actor, "reservations", "create");
   const event = await getEventOrThrow(db, eventId);
-  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", MSG.eventNotFound);
   assertBookable(event);
   const tables = await db
     .select({ id: eventTables.id, label: eventTables.label, capacity: eventTables.capacity })

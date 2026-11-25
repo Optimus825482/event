@@ -5,7 +5,6 @@ import { canTransitionEvent } from "@/domain/event-status";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { escapeLike } from "@/lib/identifiers";
-import { canAccessEvent } from "./access";
 import { EVENT_STATUS_LABELS } from "./labels";
 import type {
   ChangeEventStatusInput,
@@ -27,16 +26,6 @@ export async function getEventOrThrow(db: Executor, id: string): Promise<EventRo
   const [row] = await db.select().from(events).where(eq(events.id, id));
   if (!row) throw new DomainError("not_found", NOT_FOUND);
   return row;
-}
-
-function assertAccess(actor: Actor, event: EventRow): void {
-  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", NOT_FOUND);
-}
-
-async function getAccessibleEvent(db: Executor, actor: Actor, id: string): Promise<EventRow> {
-  const event = await getEventOrThrow(db, id);
-  assertAccess(actor, event);
-  return event;
 }
 
 export async function listEventTables(db: Executor, eventId: string) {
@@ -75,7 +64,6 @@ export async function updateEvent(db: Db, actor: Actor, input: UpdateEventInput)
     // Durum denetimi ile yazma arasında eşzamanlı bir durum geçişi araya girmesin diye satır kilitlenir.
     const [existing] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!existing) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, existing);
     if (existing.status === "completed" || existing.status === "cancelled") {
       throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinlik düzenlenemez");
     }
@@ -104,7 +92,6 @@ export async function setReviewSettings(db: Db, actor: Actor, input: ReviewSetti
   return db.transaction(async (tx) => {
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!locked) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, locked);
     const [row] = await tx
       .update(events)
       .set({
@@ -128,7 +115,6 @@ export async function changeEventStatus(
     // Eşzamanlı iki geçişin aynı eski durumu görmemesi için satır kilitlenir.
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!locked) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, locked);
     if (!canTransitionEvent(locked.status, input.status)) {
       throw new DomainError(
         "conflict",
@@ -150,7 +136,6 @@ export async function deleteEvent(db: Db, actor: Actor, input: DeleteEventInput)
   return db.transaction(async (tx) => {
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!locked) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, locked);
     if (locked.status !== "draft") {
       throw new DomainError("conflict", "Yalnızca taslak etkinlikler silinebilir");
     }
@@ -171,7 +156,6 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
   const pageSize = filter.pageSize ?? DEFAULT_PAGE_SIZE;
 
   const conditions: SQL[] = [];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
   if (filter.status) conditions.push(eq(events.status, filter.status));
   if (filter.search) conditions.push(ilike(events.name, `%${escapeLike(filter.search)}%`));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -201,7 +185,7 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
 }
 
 export async function getEvent(db: Executor, actor: Actor, id: string) {
-  const event = await getAccessibleEvent(db, actor, id);
+  const event = await getEventOrThrow(db, id);
   const [tables, capacity, reserved, assigned] = await Promise.all([
     db.select({ n: count() }).from(eventTables).where(eq(eventTables.eventId, id)),
     totalCapacity(db, id),
@@ -225,7 +209,6 @@ const BOARD_LIMIT = 500;
  */
 export async function listEventBoard(db: Executor, actor: Actor, filter: { search?: string | undefined }) {
   const conditions: SQL[] = [];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
   if (filter.search) conditions.push(ilike(events.name, `%${escapeLike(filter.search)}%`));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 

@@ -23,14 +23,14 @@ import {
   revokeSession,
 } from "@/features/settings/security-service";
 import { DomainError } from "@/lib/action";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createUser } from "../../helpers/factories";
 
 const HOUR = 60 * 60 * 1000;
 
-async function actorOf(role: Actor["role"]): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+async function actorOf(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 async function addSession(userId: string, opts: { expiresInMs?: number; ip?: string | null } = {}) {
@@ -71,8 +71,8 @@ describe("güvenlik sekmesi", () => {
 
   describe("oturum listesi", () => {
     it("etkin oturumları üst veriyle listeler, belirteç sızdırmaz, süresi dolanı ve başkasının belirtecini göstermez", async () => {
-      const admin = await actorOf("admin");
-      const other = await createUser(db, { role: "staff" });
+      const admin = await actorOf(adminActor());
+      const other = await createUser(db, { role: "user" });
       const mine = await addSession(admin.id);
       const theirs = await addSession(other.id, { ip: null });
       await addSession(other.id, { expiresInMs: -HOUR });
@@ -86,7 +86,7 @@ describe("güvenlik sekmesi", () => {
     });
 
     it("admin olmayan okuyamaz", async () => {
-      const organizer = await actorOf("organizer");
+      const organizer = await actorOf(managerActor("entertainment"));
       await expect(listActiveSessions(db, organizer, null)).rejects.toBeInstanceOf(ForbiddenError);
       await expect(getSecurityOverview(db, organizer, null)).rejects.toBeInstanceOf(ForbiddenError);
     });
@@ -94,7 +94,7 @@ describe("güvenlik sekmesi", () => {
 
   describe("oturum kapatma", () => {
     it("başkasının oturumunu kapatır", async () => {
-      const admin = await actorOf("admin");
+      const admin = await actorOf(adminActor());
       const other = await createUser(db);
       const mine = await addSession(admin.id);
       const theirs = await addSession(other.id);
@@ -105,21 +105,21 @@ describe("güvenlik sekmesi", () => {
     });
 
     it("kendi geçerli oturumu tek tek kapatılamaz; geçerli oturum bilinmiyorsa da koruma sürer", async () => {
-      const admin = await actorOf("admin");
+      const admin = await actorOf(adminActor());
       const mine = await addSession(admin.id);
       await expect(revokeSession(db, admin, { sessionId: mine.id }, mine.id)).rejects.toBeInstanceOf(DomainError);
       expect(await db.select().from(sessions).where(eq(sessions.id, mine.id))).toHaveLength(1);
     });
 
     it("olmayan oturum için not_found", async () => {
-      const admin = await actorOf("admin");
+      const admin = await actorOf(adminActor());
       await expect(revokeSession(db, admin, { sessionId: randomUUID() }, null)).rejects.toMatchObject({
         code: "not_found",
       });
     });
 
     it("toplu kapatma geçerli oturumu korur, diğerlerini siler", async () => {
-      const admin = await actorOf("admin");
+      const admin = await actorOf(adminActor());
       const other = await createUser(db);
       const mine = await addSession(admin.id);
       const sibling = await addSession(admin.id);
@@ -133,14 +133,14 @@ describe("güvenlik sekmesi", () => {
     });
 
     it("geçerli oturum bilinmiyorsa toplu kapatma hiçbir şey silmez", async () => {
-      const admin = await actorOf("admin");
+      const admin = await actorOf(adminActor());
       await addSession(admin.id);
       await expect(revokeOtherSessions(db, admin, null)).rejects.toBeInstanceOf(DomainError);
       expect(await db.select().from(sessions)).toHaveLength(1);
     });
 
     it("admin olmayan kapatamaz ve hiçbir oturum silinmez", async () => {
-      const organizer = await actorOf("organizer");
+      const organizer = await actorOf(managerActor("entertainment"));
       const victim = await addSession((await createUser(db)).id);
       await expect(revokeSession(db, organizer, { sessionId: victim.id }, null)).rejects.toBeInstanceOf(ForbiddenError);
       await expect(revokeOtherSessions(db, organizer, randomUUID())).rejects.toBeInstanceOf(ForbiddenError);
@@ -150,7 +150,7 @@ describe("güvenlik sekmesi", () => {
 
   describe("giriş kilitleri", () => {
     it("yalnızca sınırı aşmış ve süresi dolmamış satırları listeler", async () => {
-      const admin = await actorOf("admin");
+      const admin = await actorOf(adminActor());
       await addAttempt("kilitli", "1.2.3.4", MAX_ATTEMPTS_PER_IP + 1);
       await addAttempt("sinirda", "1.2.3.4", MAX_ATTEMPTS_PER_IP);
       await addAttempt("suresi-dolmus", "1.2.3.4", MAX_ATTEMPTS_PER_IP + 3, -HOUR);
@@ -163,7 +163,7 @@ describe("güvenlik sekmesi", () => {
     });
 
     it("kilidi kaldırır; kilitli olmayan ya da olmayan satır için not_found", async () => {
-      const admin = await actorOf("admin");
+      const admin = await actorOf(adminActor());
       await addAttempt("kilitli", "1.2.3.4", MAX_ATTEMPTS_PER_IP + 2);
       await addAttempt("kilitli", ALL_IPS_KEY, 9);
 
@@ -181,7 +181,7 @@ describe("güvenlik sekmesi", () => {
     });
 
     it("admin olmayan listeleyemez ve kaldıramaz", async () => {
-      const organizer = await actorOf("organizer");
+      const organizer = await actorOf(managerActor("entertainment"));
       await addAttempt("kilitli", "1.2.3.4", MAX_ATTEMPTS_PER_IP + 1);
       await expect(listLockouts(db, organizer)).rejects.toBeInstanceOf(ForbiddenError);
       await expect(clearLockout(db, organizer, { username: "kilitli", ip: "1.2.3.4" })).rejects.toBeInstanceOf(

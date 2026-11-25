@@ -10,9 +10,10 @@ import {
   listLeaderTeams,
 } from "@/features/reviews/leader-queries";
 import { canUseLeaderPanel } from "@/features/reviews/leader-scope";
+import { managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld } from "./helpers";
+import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
 
 async function completedReview(w: Awaited<ReturnType<typeof setupReviewWorld>>, staffId: string, score: number) {
   await db.insert(staffPerformanceReviews).values({
@@ -59,7 +60,7 @@ describe("lider paneli: kapsam", () => {
 
   it("başkasının etkinliği ve üyesi not_found; olmayan kayıt da aynı", async () => {
     const w = await setupReviewWorld();
-    const foreignEvent = await f.createEvent(db, { organizerId: w.organizer.id });
+    const foreignEvent = await f.createEvent(db, { organizerId: w.fnbManager.id });
     await expectDomain(getLeaderEventDetail(db, w.leader, foreignEvent.id), "not_found");
     await expectDomain(getMemberPerformance(db, w.leader, w.otherMember.id), "not_found");
     await expectDomain(getMemberPerformance(db, w.leader, w.leaderStaff.id), "not_found");
@@ -69,27 +70,26 @@ describe("lider paneli: kapsam", () => {
   it("başka liderin ekibinin etkinliği, ekibi olmayan lider için not_found", async () => {
     const w = await setupReviewWorld();
     const loneStaff = await f.createStaff(db);
-    const lone = await makeActor("leader", loneStaff.id);
+    const lone = await makeLeader(loneStaff.id);
     await expectDomain(getLeaderEventDetail(db, lone, w.event.id), "not_found");
     expect(await listLeaderTeams(db, lone)).toEqual([]);
   });
 
-  it("rol kapısı: personel ve kontrolör reddedilir; bağlı personeli olmayan lider panel kullanamaz", async () => {
+  it("izin kapısı: değerlendirme izni olmayanlar reddedilir; bağlı personeli olmayan lider panel kullanamaz", async () => {
     const w = await setupReviewWorld();
-    await expectForbidden(getLeaderDashboard(db, await makeActor("staff")));
-    await expectForbidden(listLeaderTeams(db, await makeActor("controller")));
-    const unlinked = await makeActor("leader");
+    await expectForbidden(getLeaderDashboard(db, await makeActor(noAccessActor())));
+    await expectForbidden(listLeaderTeams(db, await makeActor(memberActor("casino", { check_in: "vc--" }))));
+    const unlinked = await makeLeader();
     expect(canUseLeaderPanel(unlinked)).toBe(false);
     expect(canUseLeaderPanel(w.leader)).toBe(true);
     await expectForbidden(getLeaderReport(db, unlinked));
   });
 
-  it("organizatör başkasının etkinliğinin ekiplerini görmez", async () => {
+  it("F&B yöneticisi kimin oluşturduğuna bakılmaksızın tüm ekipleri görür", async () => {
     const w = await setupReviewWorld();
-    const stranger = await makeActor("organizer");
-    expect(await listLeaderTeams(db, stranger)).toEqual([]);
-    await expectDomain(getLeaderEventDetail(db, stranger, w.event.id), "not_found");
-    expect((await listLeaderTeams(db, w.organizer)).length).toBe(2);
+    const other = await makeActor(managerActor("fnb"));
+    expect((await listLeaderTeams(db, other)).length).toBe(2);
+    expect((await listLeaderTeams(db, w.fnbManager)).length).toBe(2);
   });
 });
 

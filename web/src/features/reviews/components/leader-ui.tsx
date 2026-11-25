@@ -7,9 +7,10 @@ import { cn } from "@/lib/utils";
 import { TREND_LABELS, type Trend } from "../leader-stats";
 import { BAND_LABELS } from "../labels";
 import type { RatingBand } from "../score";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
-const dateTime = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" });
-const dateOnly = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+const dateTime = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: APP_TIME_ZONE });
+const dateOnly = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: APP_TIME_ZONE });
 
 export function formatDateTime(iso: string): string {
   return dateTime.format(new Date(iso));

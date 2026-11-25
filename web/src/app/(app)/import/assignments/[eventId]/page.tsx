@@ -10,7 +10,7 @@ type Params = Promise<{ eventId: string }>;
 
 export default async function AssignmentImportPage({ params }: { params: Params }) {
   const { eventId } = await params;
-  const { event, tableCount } = await loadImportPage("events", "edit", eventId);
+  const { event, tableCount } = await loadImportPage("staff", "edit", eventId);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

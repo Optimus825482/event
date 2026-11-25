@@ -1,16 +1,15 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { customers, reservations } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
-import { createCustomer, createEvent, createTable, createUser } from "../../helpers/factories";
+import { persistActor } from "../../helpers/actors";
+import { createCustomer, createEvent, createTable } from "../../helpers/factories";
 
 export const TABLE_TAKEN = "Bu masa için aktif bir rezervasyon var";
 
-export async function actorOf(role: Role): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null };
+export async function actorOf(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 /** Yayında bir etkinlik, bir masa (kapasite 4) ve bir müşteri. */

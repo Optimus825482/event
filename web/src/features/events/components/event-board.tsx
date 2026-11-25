@@ -14,9 +14,10 @@ import {
   type BoardTab,
 } from "../board";
 import { CreateEventDialog, EventRowActions } from "./event-dialogs";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Istanbul" });
-const timeFormat = new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Istanbul" });
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric", timeZone: APP_TIME_ZONE });
+const timeFormat = new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: APP_TIME_ZONE });
 
 const ACTIVE_TAB_CLASS: Record<BoardTab, string> = {
   planning: "bg-amber-600 text-white",

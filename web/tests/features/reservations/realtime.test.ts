@@ -13,6 +13,7 @@ import { truncateAll } from "../../helpers/db";
 import { createCustomer, createEvent, createReservation as seedReservation } from "../../helpers/factories";
 import { watchEvents } from "../realtime/emitted";
 import { actorOf, bookable, createTable } from "./fixtures";
+import { adminActor } from "../../helpers/actors";
 
 const PAIR = ["reservation.changed", "stats.updated"];
 
@@ -21,7 +22,7 @@ describe("rezervasyon servisi gerçek zamanlı olaylar", () => {
 
   beforeEach(async () => {
     await truncateAll();
-    admin = await actorOf("admin");
+    admin = await actorOf(adminActor());
   });
   afterAll(async () => {
     await closeRealtime();

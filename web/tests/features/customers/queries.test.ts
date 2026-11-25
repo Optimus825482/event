@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { customerTags, guestNotes } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
-import type { PolicyActor } from "@/features/auth/policy";
 import { getCustomerDetail, searchCustomers } from "@/features/customers/queries";
+import { adminActor, memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createBookingParents, createCustomer, createReservation, createUser } from "../../helpers/factories";
 
-const ADMIN: PolicyActor = { id: "00000000-0000-4000-8000-000000000001", role: "admin", staffId: null };
+const ADMIN = adminActor({ id: "00000000-0000-4000-8000-000000000001" });
 
 describe("customers queries", () => {
   beforeEach(async () => {
@@ -15,22 +15,19 @@ describe("customers queries", () => {
   });
 
   describe("yetki", () => {
-    it("controller rolü hiçbir sorguyu çalıştıramaz", async () => {
-      const controller: PolicyActor = { id: ADMIN.id, role: "controller", staffId: null };
+    it("yalnızca check-in izni olan kullanıcı hiçbir sorguyu çalıştıramaz", async () => {
+      const controller = memberActor("casino", { check_in: "vc--" }, { id: ADMIN.id });
 
       await expect(searchCustomers(db, controller, {})).rejects.toBeInstanceOf(ForbiddenError);
       await expect(getCustomerDetail(db, controller, ADMIN.id)).rejects.toBeInstanceOf(ForbiddenError);
     });
 
-    it("staff görüntüleyebilir; izin satırı customers.view kapatırsa göremez", async () => {
+    it("Casino kullanıcısı görüntüleyebilir; izin satırı customers.view kapatırsa göremez", async () => {
       await createCustomer(db, { fullName: "Gösterilen" });
-      const staff: PolicyActor = { id: ADMIN.id, role: "staff", staffId: null };
+      const staff = memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }, { id: ADMIN.id });
       expect((await searchCustomers(db, staff, {})).items).toHaveLength(1);
 
-      const restricted: PolicyActor = {
-        ...staff,
-        permissions: [{ module: "customers", canView: false, canCreate: false, canEdit: false, canDelete: false }],
-      };
+      const restricted = memberActor("casino", { customers: "----" }, { id: ADMIN.id });
       await expect(searchCustomers(db, restricted, {})).rejects.toBeInstanceOf(ForbiddenError);
     });
   });

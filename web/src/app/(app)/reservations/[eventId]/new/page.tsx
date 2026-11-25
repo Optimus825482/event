@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { can } from "@/features/auth/policy";
 import { ReservationForm } from "@/features/reservations/components/reservation-form";
 import { loadNewReservationPage } from "@/features/reservations/queries";
+import { isAdmin } from "@/features/auth/scope";
 
 export const metadata: Metadata = { title: "Yeni rezervasyon | EventFlow" };
 
@@ -77,7 +78,7 @@ export default async function NewReservationPage({ params, searchParams }: { par
               email: c.email,
               isBlacklisted: c.isBlacklisted,
             }))}
-            canOverrideBlacklist={actor.role === "admin"}
+            canOverrideBlacklist={isAdmin(actor)}
           />
         </>
       )}

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { env } from "@/env";
-import { loadPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { getActorFromHeaders } from "@/features/auth/session";
 import { createAction, type ActionResult } from "@/lib/action";
@@ -95,8 +94,7 @@ export async function handleCheckInPost(request: Request): Promise<Response> {
 
   const actor = await getActorFromHeaders(request.headers);
   if (!actor) return failure(401, "unauthenticated", "Oturum gerekli");
-  const permissions = await loadPermissions(actor.id);
-  if (!can({ ...actor, permissions }, "check_in", "create")) {
+  if (!can(actor, "check_in", "create")) {
     return failure(403, "forbidden", "Bu işlem için yetkiniz yok");
   }
 
@@ -109,7 +107,7 @@ export async function handleCheckInPost(request: Request): Promise<Response> {
   const single = singleSchema.safeParse(raw);
   if (!single.success) return failure(400, "invalid", "Girdi geçersiz");
 
-  // Action ile aynı hat: oturum → izin satırları → authorize → Zod → servis (her öğe için).
+  // Action ile aynı hat: oturum (üyelik + izin satırlarıyla) → authorize → Zod → servis (her öğe için).
   const { defineAction } = createAction({ getActor: async () => actor });
   const run = defineAction(checkInActionDefs.checkIn);
   const runWalkIn = defineAction(checkInActionDefs.walkInOnce);

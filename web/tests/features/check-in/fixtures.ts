@@ -4,13 +4,13 @@ import { db } from "@/db/client";
 import { checkInEvents, customers, events, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { createReservation as bookReservation } from "@/features/reservations/service";
-import { createCustomer, createEvent, createTable, createUser } from "../../helpers/factories";
+import { managerActor, persistActor } from "../../helpers/actors";
+import { createCustomer, createEvent, createTable } from "../../helpers/factories";
 
 export { expectDomain, rejection } from "../reservations/fixtures";
 
-export async function actorOf(role: Actor["role"]): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null };
+export async function actorOf(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 /**
@@ -18,19 +18,16 @@ export async function actorOf(role: Actor["role"]): Promise<Actor> {
  * oluşturulmuş onaylı bir rezervasyon (imzalı QR belirteci ile).
  */
 export async function bookedGuest(options: { organizerId?: string; status?: "published" | "active" } = {}) {
-  const organizerId = options.organizerId ?? (await createUser(db, { role: "organizer" })).id;
+  const organizer = options.organizerId
+    ? managerActor("casino", { id: options.organizerId })
+    : await persistActor(db, managerActor("casino"));
+  const organizerId = organizer.id;
   const event = await createEvent(db, {
     status: options.status ?? "active",
     organizerId,
   });
   const table = await createTable(db, event.id, { capacity: 4, label: "A1" });
   const customer = await createCustomer(db);
-  const organizer: Actor = {
-    id: organizerId,
-    username: "org",
-    role: "organizer",
-    staffId: null,
-  };
   const reservation = await bookReservation(db, organizer, {
     eventId: event.id,
     tableId: table.id,

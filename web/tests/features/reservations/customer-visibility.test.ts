@@ -1,18 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { userPermissions } from "@/db/schema";
-import { withPermissions } from "@/features/auth/permissions";
 import type { Actor } from "@/features/auth/session";
 import { getReservationDetail, listReservations } from "@/features/reservations/queries";
 import { createReservation } from "@/features/reservations/service";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
 import { actorOf, bookable, expectDomain } from "./fixtures";
+import { adminActor, memberActor } from "../../helpers/actors";
 
 async function staffWithoutCustomerView(): Promise<Actor> {
-  const staff = await actorOf("staff");
-  await db.insert(userPermissions).values({ userId: staff.id, module: "customers", canView: false });
-  return staff;
+  // customers satırı var ama görüntüleme bayrağı kapalı.
+  return actorOf(memberActor("casino", { reservations: "vce-", customers: "----", check_in: "vc--" }));
 }
 
 describe("rezervasyon: müşteri verisi customers:view ister", () => {
@@ -33,7 +31,7 @@ describe("rezervasyon: müşteri verisi customers:view ister", () => {
   });
 
   it("customers:view olan kullanıcı customerId bağlar ve iletişim bilgisi ön dolar", async () => {
-    const staff = await actorOf("staff");
+    const staff = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const { event, table, customer } = await bookable();
     const row = await createReservation(db, staff, { eventId: event.id, tableId: table.id, guestCount: 2, customerId: customer.id });
     expect(row.customerId).toBe(customer.id);
@@ -63,7 +61,7 @@ describe("rezervasyon: müşteri verisi customers:view ister", () => {
 
   it("detay ve liste: customers:view yoksa müşteri bloğu ve müşteri adı dönmez, misafir bilgisi kalır", async () => {
     const staffActor = await staffWithoutCustomerView();
-    const staff = await withPermissions(staffActor);
+    const staff = staffActor;
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, {
       eventId: event.id,
@@ -82,7 +80,7 @@ describe("rezervasyon: müşteri verisi customers:view ister", () => {
     // Müşteri adına göre arama, varlığı sızdırmamak için yok sayılır.
     expect((await listReservations(db, staff, { eventId: event.id, q: customer.fullName })).total).toBe(0);
 
-    const admin = await withPermissions(await actorOf("admin"));
+    const admin = await actorOf(adminActor());
     expect((await getReservationDetail(db, admin, row.id))?.customer?.id).toBe(customer.id);
   });
 });

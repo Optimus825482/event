@@ -5,6 +5,7 @@ import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { authorizeReviewsGate, loadReviewEvent, type ReviewRow } from "./service";
 import { RATING_KEYS, type RatingBand, type RatingKey } from "./score";
+import { ownTeamOnly } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -62,7 +63,7 @@ function toView(row: ReviewRow): ReviewView {
 async function visibleTeams(executor: Executor, actor: Actor, eventIds?: string[]) {
   const conditions = [eq(teams.isActive, true)];
   if (eventIds) conditions.push(inArray(teams.eventId, eventIds));
-  if (actor.role === "leader") {
+  if (ownTeamOnly(actor)) {
     if (!actor.staffId) return [];
     conditions.push(eq(teams.leaderStaffId, actor.staffId));
   }
@@ -100,7 +101,7 @@ export async function listReviewableEvents(executor: Executor, actor: Actor): Pr
     .where(inArray(events.id, eventIds))
     .orderBy(desc(events.startsAt))
     .limit(100);
-  const allowed = eventRows.filter((e) => actor.role !== "organizer" || e.organizerId === actor.id);
+  const allowed = eventRows;
   if (allowed.length === 0) return [];
   const allowedIds = new Set(allowed.map((e) => e.id));
   const teamRows = baseTeams.filter((t) => t.eventId && allowedIds.has(t.eventId));
@@ -141,8 +142,8 @@ export async function getReviewBoard(executor: Executor, actor: Actor, eventId: 
   const event = await loadReviewEvent(executor, actor, eventId);
   const teamRows = await visibleTeams(executor, actor, [eventId]);
   // Lider bu etkinlikte ekip yönetmiyorsa: kaynak sahipliği olmadan görüntüleme reddedilir.
-  if (teamRows.length === 0 && actor.role === "leader") authorize(actor, "reviews", "view", {});
-  if (teamRows.length === 0 && actor.role !== "leader") {
+  if (teamRows.length === 0 && ownTeamOnly(actor)) authorize(actor, "reviews", "view", {});
+  if (teamRows.length === 0 && !ownTeamOnly(actor)) {
     return { event: toEvent(event), teams: [] };
   }
   for (const team of teamRows) {

@@ -1,15 +1,20 @@
 import { expect } from "vitest";
 import { db } from "@/db/client";
 import { teamMembers, teams } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { ForbiddenError } from "@/features/auth/errors";
+import { adminActor, managerActor, memberActor, persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
-export async function makeActor(role: Role, staffId?: string | null): Promise<Actor> {
-  const u = await f.createUser(db, { role, ...(staffId ? { staffId } : {}) });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+/** Aktörü veritabanına yazar: departman aktörü ya da `"admin"`. */
+export async function makeActor(who: Actor | "admin", staffId?: string | null): Promise<Actor> {
+  return persistActor(db, who === "admin" ? adminActor({ staffId: staffId ?? null }) : who);
+}
+
+/** Ekip lideri: F&B kullanıcı düzeyi; yalnızca kendi ekibini görür (`ownTeamOnly`). */
+export async function makeLeader(staffId: string | null = null): Promise<Actor> {
+  return persistActor(db, memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }, { staffId }));
 }
 
 export async function expectDomain(promise: Promise<unknown>, code: "conflict" | "not_found" | "invalid") {
@@ -46,16 +51,16 @@ export const FULL_RATINGS = {
  * ayrıca başka liderin ekibi ve üyesi.
  */
 export async function setupReviewWorld(opts: { reviewEnabled?: boolean } = {}) {
-  const organizer = await makeActor("organizer");
+  const fnbManager = await makeActor(managerActor("fnb"));
   const event = await f.createEvent(db, {
-    organizerId: organizer.id,
+    organizerId: fnbManager.id,
     reviewEnabled: opts.reviewEnabled ?? true,
   });
 
   const leaderStaff = await f.createStaff(db, { fullName: "Lider Bir" });
-  const leader = await makeActor("leader", leaderStaff.id);
+  const leader = await makeLeader(leaderStaff.id);
   const otherLeaderStaff = await f.createStaff(db, { fullName: "Lider İki" });
-  const otherLeader = await makeActor("leader", otherLeaderStaff.id);
+  const otherLeader = await makeLeader(otherLeaderStaff.id);
 
   const [team] = await db
     .insert(teams)
@@ -78,6 +83,6 @@ export async function setupReviewWorld(opts: { reviewEnabled?: boolean } = {}) {
     { teamId: otherTeam.id, staffId: otherMember.id },
   ]);
 
-  const admin = await makeActor("admin");
-  return { organizer, event, leader, leaderStaff, otherLeader, team, otherTeam, member1, member2, otherMember, admin };
+  const admin = await makeActor(adminActor());
+  return { fnbManager, event, leader, leaderStaff, otherLeader, team, otherTeam, member1, member2, otherMember, admin };
 }
