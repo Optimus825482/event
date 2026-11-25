@@ -28,6 +28,8 @@ export type NavItem = {
   label: string;
   /** Yetki modülü (`policy.ts`). */
   module: Module;
+  /** Sayfa ayrıca bu modülün görüntüleme iznini de ister (örn. `/fnb` etkinlik listeler). */
+  alsoRequires?: Module;
   group: NavGroupKey;
   icon: NavIconName;
 };
@@ -63,7 +65,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Pano", module: "events", group: "entertainment", icon: "layout-template" },
   { href: "/events", label: "Etkinlikler", module: "events", group: "entertainment", icon: "calendar" },
   { href: "/templates", label: "Davetiye Şablonları", module: "invitations", group: "entertainment", icon: "mail" },
-  { href: "/fnb", label: "Etkinlikler", module: "venues", group: "fnb", icon: "calendar" },
+  { href: "/fnb", label: "Etkinlikler", module: "venues", alsoRequires: "events", group: "fnb", icon: "calendar" },
   { href: "/venues", label: "Yerleşim Şablonları", module: "venues", group: "fnb", icon: "layout-template" },
   { href: "/staff", label: "Ekipler", module: "staff", group: "fnb", icon: "users" },
   { href: "/leader", label: "Ekip Panosu", module: "reviews", group: "fnb", icon: "layout-dashboard" },
@@ -98,6 +100,7 @@ export function visibleNavItems(actor: PolicyActor): NavItem[] {
   return NAV_ITEMS.filter((item) => {
     const group = GROUPS_BY_KEY.get(item.group);
     if (!group || !groupAllows(actor, group)) return false;
+    if (item.alsoRequires && !can(actor, item.alsoRequires, "view")) return false;
     return can(actor, item.module, "view", navResource(actor, item.module));
   });
 }

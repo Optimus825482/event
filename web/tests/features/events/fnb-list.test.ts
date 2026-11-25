@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { teams } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
 import { listEventsForFnb } from "@/features/events/fnb-list";
-import { managerActor, noAccessActor } from "../../helpers/actors";
+import { managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -36,6 +36,16 @@ describe("listEventsForFnb", () => {
   it("Entertainment yöneticisi (venues:view) listeyi alır", async () => {
     await f.createEvent(db, { startsAt: inDays(1) });
     await expect(listEventsForFnb(db, managerActor("entertainment"))).resolves.toHaveLength(1);
+  });
+
+  it("F&B yöneticisi listeyi alır", async () => {
+    await f.createEvent(db, { startsAt: inDays(1) });
+    await expect(listEventsForFnb(db, managerActor("fnb"))).resolves.toHaveLength(1);
+  });
+
+  it("venues:view var ama events:view yoksa ForbiddenError", async () => {
+    await f.createEvent(db, { startsAt: inDays(1) });
+    await expect(listEventsForFnb(db, memberActor("fnb", { venues: "v---" }))).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("venues:view izni olmayan aktör için ForbiddenError", async () => {

@@ -77,6 +77,12 @@ describe("landingFor", () => {
     expect(landingFor(memberActor("fnb", { reviews: "v---" }, { staffId: "s1" }))).toBe("/leader");
   });
 
+  it("events:view olmayan F&B kullanıcısı /venues sayfasına iner; kart da oraya gider", () => {
+    const a = memberActor("fnb", { venues: "v---" });
+    expect(landingFor(a)).toBe("/venues");
+    expect(cards(a)).toEqual([expect.objectContaining({ key: "fnb", href: "/venues" })]);
+  });
+
   it("bildirim grubu modül sayılmaz", () => {
     expect(landingFor(memberActor("casino", { reservations: "v---", notifications: "v---" }))).toBe("/reservations");
   });
@@ -104,7 +110,7 @@ describe("landingFor", () => {
 
   it("eski roller çalışma alanına gider", () => {
     expect(landingFor(legacy("controller"))).toBe("/check-in");
-    expect(landingFor(legacy("venue_owner"))).toBe("/fnb");
+    expect(landingFor(legacy("venue_owner"))).toBe("/venues");
     expect(landingFor(legacy("leader", "s1"))).toBe("/");
   });
 });

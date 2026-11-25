@@ -108,7 +108,13 @@ describe("departman grupları", () => {
 
   it("kendi ekibiyle sınırlı kullanıcı, izin verilen F&B öğeleriyle ekip öğelerini birlikte görür", () => {
     const a = memberActor("fnb", { reviews: "v---", venues: "v---", staff: "v---" }, { staffId: "s1" });
-    expect(hrefs(a)).toEqual(["/fnb", "/venues", "/staff", "/leader", "/leader/events", "/leader/team", "/leader/reviews", "/leader/reports"]);
+    expect(hrefs(a)).toEqual(["/venues", "/staff", "/leader", "/leader/events", "/leader/team", "/leader/reviews", "/leader/reports"]);
+  });
+
+  it("events:view olmayan F&B kullanıcısı /fnb görmez, /venues görür", () => {
+    const a = memberActor("fnb", { venues: "v---" });
+    expect(hrefs(a)).toEqual(["/venues"]);
+    expect(hrefs(memberActor("fnb", { venues: "v---", events: "v---" }))).toEqual(["/fnb", "/venues"]);
   });
 
   it("admin altı grubun hepsini görür", () => {
@@ -150,7 +156,7 @@ describe("eski roller (Task 10'a kadar)", () => {
   });
 
   it("venue_owner yalnızca mekân öğelerini görür", () => {
-    expect(hrefs(legacy("venue_owner"))).toEqual(["/fnb", "/venues"]);
+    expect(hrefs(legacy("venue_owner"))).toEqual(["/venues"]);
   });
 
   it("leader ekip öğelerini ve check-in'i görür", () => {
@@ -208,6 +214,7 @@ describe("görünen her öğe erişilebilir bir sayfaya gider", () => {
         for (const item of group.items) {
           const resource = item.module === "reviews" && actor.staffId ? { teamLeaderStaffId: actor.staffId } : undefined;
           expect(can(actor, item.module, "view", resource), `${item.href}`).toBe(true);
+          if (item.alsoRequires) expect(can(actor, item.alsoRequires, "view"), `${item.href} ek izin`).toBe(true);
           if (group.departments !== null && actor.role === "user") {
             const member = (actor.memberships ?? []).some((m) => group.departments?.includes(m.department));
             expect(member, `${item.href} grup kapsamı`).toBe(true);

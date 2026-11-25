@@ -19,10 +19,11 @@ export type FnbEventRow = {
 
 /**
  * F&B etkinlik listesi: yaklaşan etkinlikler, tarihe göre. Salon yerleşimi (en az bir masa) ve
- * ekip sayısı özetlenir. `venues:view` ister.
+ * ekip sayısı özetlenir. `venues:view` ve `events:view` ister (liste etkinlikleri gösterir).
  */
 export async function listEventsForFnb(db: Executor, actor: Actor): Promise<FnbEventRow[]> {
   authorize(actor, "venues", "view");
+  authorize(actor, "events", "view");
   const conditions: SQL[] = [gte(events.startsAt, new Date())];
   if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
 
