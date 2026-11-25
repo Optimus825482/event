@@ -108,6 +108,28 @@ describe("saveLayout", () => {
     for (const t of res.tables) expect(t.label).not.toBe(before.get(t.id));
   });
 
+  it("aynı masa kimliği iki kez gönderilirse reddedilir (şema atlansa bile), hiçbir şey yazılmaz", async () => {
+    const { actor, event } = await setup();
+    const first = await saveLayout(db, actor, { eventId: event.id, tables: grid(1), decor });
+    const [m1] = first.tables;
+    if (!m1) throw new Error("masa yok");
+
+    const err = await caught(
+      saveLayout(db, actor, {
+        eventId: event.id,
+        tables: [
+          { ...m1, label: "ZZ", x: 400 },
+          { ...m1, label: "M1", x: m1.x },
+        ],
+        decor,
+      }),
+    );
+    expect(err.code).toBe("conflict");
+    expect(err.message).toBe("Masa iki kez gönderildi");
+    const [row] = await db.select().from(eventTables).where(eq(eventTables.id, m1.id));
+    expect(row).toMatchObject({ label: "M1", x: m1.x });
+  });
+
   it("silinen masanın etiketi yeni masaya verilebilir", async () => {
     const { actor, event } = await setup();
     await saveLayout(db, actor, { eventId: event.id, tables: grid(1), decor });
