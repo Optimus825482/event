@@ -1,10 +1,16 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
+import { isLayoutLockedStage } from "@/domain/planning-stage";
 import { eventTables, events, tableTypes, venueTemplates } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow, listEventTables, totalCapacity } from "@/features/events/service";
 import { publish } from "@/features/realtime/publish";
+import {
+  assertLayoutChangeAllowed,
+  assertTemplateApplyAllowed,
+  frozenTableIds,
+} from "@/features/planning/layout-lock";
 import { DomainError } from "@/lib/action";
 import {
   isLayoutEditable,
@@ -37,11 +43,14 @@ export type SaveLayoutServiceInput = { eventId: string; tables: TableInput[]; de
  * girdide olmayanlar silinir. Kullanımdaki (rezervasyon/atama/grup) bir masa silinmek istenirse
  * hiçbir değişiklik yazılmaz ve `conflict` mesajı masa etiketlerini listeler.
  * `events.total_capacity` aynı transaction'da masalardan yeniden hesaplanır.
+ * Satış başladıktan sonra taahhütlü masalarda yasak değişiklik varsa da hiçbir şey yazılmaz
+ * (`assertLayoutChangeAllowed`).
  */
 export async function saveLayout(db: Db, actor: Actor, input: SaveLayoutServiceInput): Promise<WriteLayoutResult> {
   try {
     return await db.transaction(async (tx) => {
-      await lockEditableEvent(tx, actor, input.eventId);
+      const event = await lockEditableEvent(tx, actor, input.eventId);
+      await assertLayoutChangeAllowed(tx, event, input.tables);
       const result = await writeLayout(tx, input.eventId, input.tables, input.decor);
       await publish(tx, { type: "table.updated", eventId: input.eventId });
       return result;
@@ -58,6 +67,10 @@ export type VenueLayout = {
   decor: Decor;
   /** Silinemeyen (rezervasyonu/ataması olan) masalar. */
   lockedTableIds: string[];
+  /** Satış başladığı için yerleşim kilidi etkin (`on_sale`/`sales_closed`). */
+  layoutLocked: boolean;
+  /** Kilit altında değiştirilemeyen (taahhütlü) masalar; kilit yoksa boş. */
+  frozenTableIds: string[];
   editable: boolean;
   totalCapacity: number;
 };
@@ -77,6 +90,8 @@ export async function getVenueLayout(db: Db, actor: Actor, eventId: string): Pro
     tables,
     decor: parseDecor(event.layoutDecor),
     lockedTableIds: tables.filter((t) => used.has(t.id)).map((t) => t.id),
+    layoutLocked: isLayoutLockedStage(event.planningStage),
+    frozenTableIds: await frozenTableIds(db, event),
     editable: isLayoutEditable(event),
     totalCapacity: await totalCapacity(db, eventId),
   };
@@ -97,7 +112,8 @@ export type ApplyTemplateResult = WriteLayoutResult & {
 export async function applyVenueTemplate(db: Db, actor: Actor, input: ApplyTemplateInput): Promise<ApplyTemplateResult> {
   try {
     return await db.transaction(async (tx) => {
-      await lockEditableEvent(tx, actor, input.eventId);
+      const event = await lockEditableEvent(tx, actor, input.eventId);
+      assertTemplateApplyAllowed(event);
       const template = await getTemplateOrThrow(tx, input.templateId);
       assertTemplateVisible(actor, template);
       const layout = parseTemplateLayout(template.layoutData);
