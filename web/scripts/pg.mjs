@@ -2,18 +2,16 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolvePgConfig } from "./pg-config.mjs";
+import { assertDestructiveAllowed, assertLaneClusterExists, PG_PORT, resolveClusterDir, resolveDatabaseNames } from "./pg-config.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Paralel worktree'ler tek kümeyi paylaşır: PGDATA_DIR, DATABASE_URL ve TEST_DB_NAME (.env.local) şeridi belirler.
-let config;
-try {
-  config = resolvePgConfig(process.env, root);
-} catch (err) {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-}
-const { dataDir, port: PORT, databases: DATABASES } = config;
+// Çözümler tembeldir: küme dizini her komutta, veritabanı adları yalnızca gereken komutlarda çözülür
+// (geçersiz bir ad `ensure`/`stop` komutlarını, dolayısıyla `npm run dev`i engellemez).
+let resolvedCluster;
+const getCluster = () => (resolvedCluster ??= resolveClusterDir(process.env, root));
+const PORT = PG_PORT;
+const databases = () => resolveDatabaseNames(process.env);
 const WIN_BIN = "C:/Program Files/PostgreSQL/17/bin";
 const ext = process.platform === "win32" ? ".exe" : "";
 
@@ -44,17 +42,19 @@ const psql = (sql, db = "postgres") =>
   run("psql", ["-h", "localhost", "-p", PORT, "-U", "postgres", "-d", db, "-tAc", sql]);
 
 function isRunning() {
-  return run("pg_ctl", ["-D", dataDir, "status"], { allowFail: true }).status === 0;
+  return run("pg_ctl", ["-D", getCluster().dataDir, "status"], { allowFail: true }).status === 0;
 }
 
 function init() {
-  if (existsSync(join(dataDir, "PG_VERSION"))) return;
-  run("initdb", ["-D", dataDir, "-U", "postgres", "-A", "trust", "-E", "UTF8", "--locale=C"]);
-  console.log("küme oluşturuldu:", dataDir);
+  if (existsSync(join(getCluster().dataDir, "PG_VERSION"))) return;
+  // Şerit (PGDATA_DIR) asla küme kurmaz; yanlış yol ikinci bir küme oluşturmasın.
+  assertLaneClusterExists(getCluster());
+  run("initdb", ["-D", getCluster().dataDir, "-U", "postgres", "-A", "trust", "-E", "UTF8", "--locale=C"]);
+  console.log("küme oluşturuldu:", getCluster().dataDir);
 }
 
 function ensureDatabases() {
-  for (const name of DATABASES) {
+  for (const name of databases()) {
     const exists = psql(`select 1 from pg_database where datname='${name}'`).stdout.trim() === "1";
     if (!exists) psql(`create database ${name}`);
   }
@@ -63,7 +63,7 @@ function ensureDatabases() {
 function start() {
   init();
   if (!isRunning()) {
-    run("pg_ctl", ["-D", dataDir, "-l", join(dataDir, "server.log"), "-o", `-p ${PORT} -c listen_addresses=localhost`, "-w", "-t", "180", "start"], {
+    run("pg_ctl", ["-D", getCluster().dataDir, "-l", join(getCluster().dataDir, "server.log"), "-o", `-p ${PORT} -c listen_addresses=localhost`, "-w", "-t", "180", "start"], {
       detached: true,
     });
   }
@@ -72,21 +72,25 @@ function start() {
 }
 
 function stop() {
-  if (isRunning()) run("pg_ctl", ["-D", dataDir, "-m", "fast", "-w", "stop"]);
+  if (isRunning()) run("pg_ctl", ["-D", getCluster().dataDir, "-m", "fast", "-w", "stop"]);
   console.log("PostgreSQL durduruldu");
 }
 
 function reset() {
+  const names = databases();
+  assertDestructiveAllowed(process.env, names);
   start();
-  for (const name of DATABASES) psql(`drop database if exists ${name} with (force)`);
+  for (const name of names) psql(`drop database if exists ${name} with (force)`);
   ensureDatabases();
   console.log("veritabanları sıfırlandı");
 }
 
 /** Yalnızca bu şeridin test veritabanını siler; sonraki `npm test` yeniden kurar ve migrate eder. */
 function dropTest() {
+  const names = databases();
+  assertDestructiveAllowed(process.env, names);
   start();
-  const name = DATABASES.at(-1);
+  const name = names.at(-1);
   psql(`drop database if exists ${name} with (force)`);
   console.log(`test veritabanı silindi: ${name}`);
 }
