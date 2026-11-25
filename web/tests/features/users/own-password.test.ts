@@ -28,7 +28,7 @@ async function makeUser(username: string, active = true): Promise<Actor> {
   const adminActor: Actor = { id: admin.id, username: admin.username, role: "admin", staffId: null, memberships: [], permissions: [] };
   const created = await createUser(db, adminActor, { username, password: PASSWORD, ...USER_ACCESS });
   if (!active) await db.update(users).set({ isActive: false }).where(eq(users.id, created.id));
-  return { id: created.id, username, role: "staff", staffId: null, memberships: [], permissions: [] };
+  return { id: created.id, username, role: "user", staffId: null, memberships: USER_ACCESS.memberships, permissions: [] };
 }
 
 /** Gerçek bir giriş yapar ve oluşan oturum satırının kimliğini döner. */

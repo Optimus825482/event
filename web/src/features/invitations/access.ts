@@ -1,7 +1,6 @@
 import type { Db, Tx } from "@/db/client";
 import { systemSettings } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { getEventOrThrow, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 
@@ -15,11 +14,7 @@ export async function assertInvitationSystemEnabled(db: Executor): Promise<void>
   }
 }
 
-/** Organizatör yalnızca kendi etkinliğine erişir; başkasınınki "yok" gibi davranır (events modülüyle aynı kural). */
+/** Etkinliği okur; yoksa `not_found`. */
 export async function getAccessibleEvent(db: Executor, actor: Actor, eventId: string): Promise<EventRow> {
-  const event = await getEventOrThrow(db, eventId);
-  if (!canAccessEvent(actor, event)) {
-    throw new DomainError("not_found", "Etkinlik bulunamadı");
-  }
-  return event;
+  return getEventOrThrow(db, eventId);
 }

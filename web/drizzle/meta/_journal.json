@@ -99,6 +99,13 @@
       "when": 1795601665643,
       "tag": "0013_notification_audience",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795625639786,
+      "tag": "0014_remove_legacy_roles",
+      "breakpoints": true
     }
   ]
 }

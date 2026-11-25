@@ -10,7 +10,7 @@ import { isUuid } from "@/lib/identifiers";
 export async function loadCheckInEvents() {
   const actor = await requirePolicyActor();
   authorize(actor, "check_in", "view");
-  return listCheckInEvents(db, actor);
+  return listCheckInEvents(db);
 }
 
 /** `/check-in/[eventId]`: etkinlik başlığı, yazma yetkisi ve ilk istatistikler (sonrası canlı). */

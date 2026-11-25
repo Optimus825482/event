@@ -9,35 +9,21 @@ export function isAdmin(actor: { role: Role }): boolean {
 
 /** Aktör verilen departmana (isteğe bağlı olarak verilen düzeylerden birinde) üye mi? */
 export function inDepartment(
-  actor: PolicyActor,
+  actor: Pick<PolicyActor, "memberships">,
   department: Department,
   levels?: readonly DepartmentLevel[],
 ): boolean {
-  return (actor.memberships ?? []).some(
+  return actor.memberships.some(
     (membership) =>
       membership.department === department && (levels === undefined || levels.includes(membership.level)),
   );
 }
 
 /**
- * Yetkisi departman üyelikleriyle belirlenen aktör (`user` rolü). Eski roller (Task 10'da silinir)
- * departman kapsamına bağlı değildir; menüde yalnızca modül izni belirler.
- */
-export function isDepartmentUser(actor: { role: Role }): boolean {
-  return actor.role === "user";
-}
-
-/**
- * Değerlendirmelerde yalnızca kendi ekibini görebilen aktör: eski `leader` rolü ya da
- * F&B'de yönetici/asistan olmayan `user` (F&B üyeliği hiç olmayan `user` da dahil).
+ * Değerlendirmelerde yalnızca kendi ekibini görebilen aktör: F&B'de yönetici/asistan olmayan `user`
+ * (F&B üyeliği hiç olmayan `user` da dahil). Admin her ekibi görür.
  */
 export function ownTeamOnly(actor: PolicyActor): boolean {
-  if (actor.role === "leader") return true;
-  if (actor.role !== "user") return false;
+  if (isAdmin(actor)) return false;
   return !inDepartment(actor, "fnb", ["manager", "assistant"]);
-}
-
-/** Yalnızca kendi etkinliklerini gören aktör (eski `organizer` rolü; Task 10'da silinir). */
-export function seesOnlyOwnEvents(actor: { role: Role }): boolean {
-  return actor.role === "organizer";
 }

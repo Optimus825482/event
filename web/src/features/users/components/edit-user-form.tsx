@@ -5,7 +5,6 @@ import { useState, useTransition, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { ROLE_LABELS } from "@/components/layout/role-labels";
 import type { Role } from "@/features/auth/roles";
 import type { ActionResult } from "@/lib/action";
 import { updateUserAction } from "../actions";
@@ -24,8 +23,6 @@ export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (mes
   const [state, setState] = useState<FormState>(null);
   const [role, setRole] = useState<Role>(user.role);
   const [access, setAccess] = useState<AccessValue>({ memberships: user.memberships, grants: user.permissions });
-  // Eski roller (kaldırılana dek) listede kendi adıyla görünür ve değiştirilmedikçe korunur.
-  const legacyRole = !ROLE_CHOICES.some((choice) => choice.value === user.role);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +72,6 @@ export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (mes
           onChange={(e) => setRole(e.target.value as Role)}
           className={SELECT_CLASS}
         >
-          {legacyRole ? <option value={user.role}>{ROLE_LABELS[user.role]}</option> : null}
           {ROLE_CHOICES.map(({ value, label }) => (
             <option key={value} value={value}>
               {label}

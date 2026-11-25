@@ -8,7 +8,7 @@ import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
 import { actorOf, bookable, createTable, customerRow, expectDomain, reservationRow } from "./fixtures";
-import { adminActor, memberActor, legacyActor } from "../../helpers/actors";
+import { adminActor, memberActor } from "../../helpers/actors";
 
 function bulkFor(actor: Actor | null) {
   const { defineAction } = createAction({ getActor: async () => actor });
@@ -57,17 +57,7 @@ describe("toplu iptal", () => {
     expect((await reservationRow(done.id)).status).toBe("checked_in");
   });
 
-  it("organizatör başkasının rezervasyonunu iptal edemez; hiçbiri değişmez", async () => {
-    const organizer = await legacyActor(db, "organizer");
-    const own = await bookable(organizer.id);
-    const mine = await seedReservation(db, { eventId: own.event.id, tableId: own.table.id, customerId: own.customer.id });
-    const { a } = await twoReservations();
-    await expectDomain(cancelReservations(db, organizer, { ids: [mine.id, a.id] }), "not_found", "Rezervasyon bulunamadı");
-    expect((await reservationRow(mine.id)).status).toBe("confirmed");
-    expect((await reservationRow(a.id)).status).toBe("pending");
-  });
-
-  it("action: staff iptal eder; controller forbidden, oturumsuz unauthenticated", async () => {
+  it("action: Casino kullanıcısı iptal eder; yalnızca check-in izni olan forbidden, oturumsuz unauthenticated", async () => {
     const { a, b } = await twoReservations();
     const ids = [a.id, b.id];
     expect(await bulkFor(await actorOf(memberActor("casino", { check_in: "vc--" })))({ ids })).toMatchObject({ ok: false, code: "forbidden" });

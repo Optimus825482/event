@@ -46,7 +46,7 @@ describe("defineAction", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("controller events/create için forbidden alır ve handler çalışmaz", async () => {
+  it("yalnızca check-in izni olan events/create için forbidden alır ve handler çalışmaz", async () => {
     const actor = await makeActor(memberActor("casino", { check_in: "vc--" }));
     const handler = vi.fn(async () => "x");
     const run = actionFor(actor)({ module: "events", verb: "create", input: z.object({}), handler });

@@ -8,7 +8,7 @@ const base: UserSummary = {
   username: "ayse",
   name: "Ayşe Yılmaz",
   email: "ayse@example.com",
-  role: "staff",
+  role: "user",
   isActive: true,
   staffId: null,
   color: null,

@@ -27,12 +27,9 @@ export function withinCeiling(row: PermissionRow, memberships: readonly Membersh
   return FLAGS.every(([verb, flag]) => !row[flag] || allowed.includes(verb));
 }
 
-/**
- * Kaydedilecek satırlar. Tüm bayrakları kapalı satır yalnızca `user` ve `admin` hedefte atılır;
- * eski rollerde bu satır "modülü kapat" kısıtıdır ve atılması taban erişimi geri getirir.
- */
-export function effectiveRows(rows: readonly PermissionRow[], role: Role): PermissionRow[] {
-  return role === "admin" || role === "user" ? rows.filter((row) => !isEmptyRow(row)) : [...rows];
+/** Kaydedilecek satırlar: izin satırı verilen yetkidir, tüm bayrakları kapalı satır hiçbir şey vermez ve atılır. */
+export function effectiveRows(rows: readonly PermissionRow[]): PermissionRow[] {
+  return rows.filter((row) => !isEmptyRow(row));
 }
 
 /** Üyelikler değişince korunabilecek satırlar: tavan içinde, görüntüleme açık, boş değil. */
@@ -41,19 +38,18 @@ export function pruneToCeiling(rows: readonly PermissionRow[], memberships: read
 }
 
 /**
- * Rol, üyelik ve izin satırlarının tutarlılığını denetler: hata mesajı ya da `null`.
- * Eski roller (Task 10'da kalkar) bu denetimin dışındadır.
+ * Rol, üyelik ve izin satırlarının tutarlılığını denetler: hata mesajı ya da `null`. Sistem yöneticisine
+ * departman/izin atanmaz; `user` en az bir departmana üye olmalı ve satırları tavanı aşamaz.
  */
 export function checkAccess(
   role: Role,
   memberships: readonly Membership[],
   permissions: readonly PermissionRow[],
 ): string | null {
-  const rows = effectiveRows(permissions, role);
+  const rows = effectiveRows(permissions);
   if (role === "admin") {
     return memberships.length > 0 || rows.length > 0 ? ACCESS_MESSAGES.adminNoAccess : null;
   }
-  if (role !== "user") return null;
   if (memberships.length === 0) return ACCESS_MESSAGES.needDepartment;
   for (const row of rows) {
     if (!row.canView) return ACCESS_MESSAGES.needView;

@@ -10,7 +10,6 @@ import {
   tableTypes,
 } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { listEventTables, totalCapacity, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
@@ -21,11 +20,6 @@ export type EventTableRow = typeof eventTables.$inferSelect;
 
 export const EVENT_NOT_FOUND = "Etkinlik bulunamadı";
 
-/** Etkinlikler modülüyle aynı kural: organizatör yalnızca kendi etkinliğini görür, başkasınınki "yok"tur. */
-export function assertEventAccess(actor: Actor, event: EventRow): void {
-  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", EVENT_NOT_FOUND);
-}
-
 export function isLayoutEditable(event: Pick<EventRow, "status">): boolean {
   return event.status !== "completed" && event.status !== "cancelled";
 }
@@ -34,7 +28,6 @@ export function isLayoutEditable(event: Pick<EventRow, "status">): boolean {
 export async function lockEditableEvent(tx: Tx, actor: Actor, eventId: string): Promise<EventRow> {
   const [event] = await tx.select().from(events).where(eq(events.id, eventId)).for("update");
   if (!event) throw new DomainError("not_found", EVENT_NOT_FOUND);
-  assertEventAccess(actor, event);
   if (!isLayoutEditable(event)) {
     throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinliğin yerleşimi değiştirilemez");
   }

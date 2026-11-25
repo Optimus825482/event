@@ -55,15 +55,15 @@ describe("POST /api/check-in", () => {
     expect((await reservationRow(reservation.id)).status).toBe("confirmed");
   });
 
-  it("check_in izni olmayan kullanıcı 403 alır (rol ya da kullanıcı izni)", async () => {
+  it("check_in izni olmayan kullanıcı 403 alır (departman ya da kullanıcı izni)", async () => {
     const { event, reservation } = await bookedGuest();
     const body = {
       eventId: event.id,
       idempotencyKey: key(),
       token: reservation.qrToken,
     };
-    const owner = await loginAs("venue_owner");
-    expect((await post(body, { cookie: owner.cookie })).status).toBe(403);
+    const outsider = await loginAs(memberActor("fnb", { venues: "vced" }));
+    expect((await post(body, { cookie: outsider.cookie })).status).toBe(403);
     // Yalnızca görüntüleme izni var, oluşturma yok.
     const staff = await loginAs(memberActor("casino", { check_in: "v---" }));
     const res = await post(body, { cookie: staff.cookie });

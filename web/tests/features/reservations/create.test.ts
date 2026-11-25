@@ -9,7 +9,7 @@ import { createReservation } from "@/features/reservations/service";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createEvent, pgErrorCode } from "../../helpers/factories";
 import { actorOf, bookable, createTable, customerRow, expectDomain, rejection, reservationRow, TABLE_TAKEN } from "./fixtures";
-import { adminActor, managerActor, memberActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, memberActor } from "../../helpers/actors";
 
 describe("createReservation", () => {
   let admin: Actor;
@@ -176,27 +176,16 @@ describe("createReservation", () => {
       );
     });
 
-    it("organizatör başkasının etkinliğini not_found görür; kendi etkinliğinde yapabilir", async () => {
-      const organizer = await legacyActor(db, "organizer");
+    it("Casino yöneticisi başkasının oluşturduğu etkinlikte rezervasyon yapar", async () => {
+      const manager = await actorOf(managerActor("casino"));
       const foreign = await bookable();
-      await expectDomain(
-        createReservation(db, organizer, {
-          eventId: foreign.event.id,
-          tableId: foreign.table.id,
-          guestCount: 2,
-          customerId: foreign.customer.id,
-        }),
-        "not_found",
-        "Etkinlik bulunamadı",
-      );
-      const own = await bookable(organizer.id);
-      const row = await createReservation(db, organizer, {
-        eventId: own.event.id,
-        tableId: own.table.id,
+      const row = await createReservation(db, manager, {
+        eventId: foreign.event.id,
+        tableId: foreign.table.id,
         guestCount: 2,
-        customerId: own.customer.id,
+        customerId: foreign.customer.id,
       });
-      expect(row.eventId).toBe(own.event.id);
+      expect(row.eventId).toBe(foreign.event.id);
     });
   });
 
@@ -210,9 +199,9 @@ describe("createReservation", () => {
       expect(row.customerId).toBe(banned.id);
     });
 
-    it.each(["organizer", "staff"] as const)("%s overrideBlacklist ile aşamaz", async (role) => {
-      const actor = await actorOf(role === "organizer" ? managerActor("casino") : memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
-      const { event, table } = await bookable(role === "organizer" ? actor.id : undefined);
+    it.each(["Casino yöneticisi", "Casino kullanıcısı"] as const)("%s overrideBlacklist ile aşamaz", async (who) => {
+      const actor = await actorOf(who === "Casino yöneticisi" ? managerActor("casino") : memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
+      const { event, table } = await bookable();
       const banned = await createCustomer(db, { isBlacklisted: true });
       await expectDomain(
         createReservation(db, actor, {

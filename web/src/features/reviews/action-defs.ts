@@ -1,7 +1,6 @@
 import type { z } from "zod";
 import { db } from "@/db/client";
 import { publishNotifications } from "@/features/notifications/publish";
-import { withPermissions } from "@/features/auth/permissions";
 import type { Actor } from "@/features/auth/session";
 import type { ActionOptions } from "@/lib/action";
 import { completeAllReviewsSchema, completeReviewSchema, saveReviewSchema } from "./schemas";
@@ -29,7 +28,7 @@ export const reviewActionDefs = {
     ...SAVE_GATE,
     input: saveReviewSchema,
     handler: async ({ actor, input }) => {
-      const review = await saveReviewDraft(db, await withPermissions(actor), input);
+      const review = await saveReviewDraft(db, actor, input);
       return { id: review.id, score: review.score, band: review.rating, updatedAt: review.updatedAt.toISOString() };
     },
   }),

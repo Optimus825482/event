@@ -71,7 +71,7 @@ export function sseReader(body: ReadableStream<Uint8Array>) {
 
 /**
  * Parolası olan, giriş yapabilen bir kullanıcı oluşturur ve oturum çerezini döndürür.
- * Eski bir rol adı ya da üyelik/izin taşıyan bir test aktörü verilir.
+ * Rol adı (`admin`; `user` üyeliksiz açılır) ya da üyelik/izin taşıyan bir test aktörü verilir.
  */
 export async function loginAs(who: Role | Actor): Promise<{ id: string; cookie: string }> {
   const actor = typeof who === "string" ? null : who;

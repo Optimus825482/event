@@ -41,6 +41,7 @@ async function actorOf(role: Actor["role"], extra: Partial<typeof users.$inferIn
   return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
+const FNB_MEMBER = [{ department: "fnb" as const, level: "member" as const }];
 const validCreate = { username: "ayse", password: PASSWORD, ...USER_ACCESS };
 
 async function sessionCount(userId: string): Promise<number> {
@@ -74,8 +75,8 @@ describe("kullanıcı oluşturma", () => {
   });
 
   it("admin olmayan kullanıcı oluşturamaz", async () => {
-    for (const role of ["organizer", "staff", "leader", "controller", "venue_owner"] as const) {
-      const actor = await actorOf(role);
+    const others = [await actorOf("user"), await persistActor(db, managerActor("entertainment"))];
+    for (const actor of others) {
       await expect(createUser(db, actor, validCreate)).rejects.toBeInstanceOf(ForbiddenError);
     }
     expect(await db.select().from(users).where(eq(users.username, "ayse"))).toHaveLength(0);
@@ -159,7 +160,7 @@ describe("pasifleştirme ve son admin", () => {
 
   it("admin olmayan kullanıcı pasifleştiremez", async () => {
     const organizer = await persistActor(db, managerActor("entertainment"));
-    const target = await actorOf("staff");
+    const target = await actorOf("user");
     await expect(setUserActive(db, organizer, { id: target.id, active: false })).rejects.toBeInstanceOf(
       ForbiddenError,
     );
@@ -180,26 +181,26 @@ describe("kullanıcı güncelleme", () => {
 
   it("rol ve profil alanlarını günceller", async () => {
     const admin = await actorOf("admin");
-    const target = await actorOf("staff");
-    const updated = await updateUser(db, admin, { id: target.id, role: "organizer", name: "Yeni Ad", phone: "555" });
-    expect(updated).toMatchObject({ role: "organizer", name: "Yeni Ad", phone: "555" });
+    const target = await actorOf("user");
+    const updated = await updateUser(db, admin, { id: target.id, role: "admin", name: "Yeni Ad", phone: "555" });
+    expect(updated).toMatchObject({ role: "admin", name: "Yeni Ad", phone: "555" });
   });
 
   it("son aktif adminin rolü düşürülemez; ikinci admin varken düşürülebilir", async () => {
     const admin = await actorOf("admin");
-    await expect(updateUser(db, admin, { id: admin.id, role: "organizer" })).rejects.toMatchObject({
+    await expect(updateUser(db, admin, { id: admin.id, role: "user", memberships: FNB_MEMBER })).rejects.toMatchObject({
       code: "conflict",
     });
     const second = await actorOf("admin");
-    await expect(updateUser(db, admin, { id: second.id, role: "organizer" })).resolves.toMatchObject({
-      role: "organizer",
+    await expect(updateUser(db, admin, { id: second.id, role: "user", memberships: FNB_MEMBER })).resolves.toMatchObject({
+      role: "user",
     });
   });
 
   it("yinelenen e-posta conflict olur", async () => {
     const admin = await actorOf("admin");
-    await actorOf("staff", { email: "a@example.com" });
-    const b = await actorOf("staff");
+    await actorOf("user", { email: "a@example.com" });
+    const b = await actorOf("user");
     await expect(updateUser(db, admin, { id: b.id, email: "a@example.com" })).rejects.toMatchObject({
       code: "conflict",
     });
@@ -207,7 +208,7 @@ describe("kullanıcı güncelleme", () => {
 
   it("admin olmayan güncelleyemez", async () => {
     const organizer = await persistActor(db, managerActor("entertainment"));
-    const target = await actorOf("staff");
+    const target = await actorOf("user");
     await expect(updateUser(db, organizer, { id: target.id, role: "admin" })).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
@@ -242,14 +243,14 @@ describe("parola sıfırlama", () => {
 
   it("parolası olmayan hesaba credential hesabı ekler", async () => {
     const admin = await actorOf("admin");
-    const target = await actorOf("staff", { username: "eski" });
+    const target = await actorOf("user", { username: "eski" });
     await resetUserPassword(db, admin, { id: target.id, password: NEW_PASSWORD });
     expect((await signIn("eski", NEW_PASSWORD)).status).toBe(200);
   });
 
   it("yalnızca admin sıfırlayabilir", async () => {
     const organizer = await persistActor(db, managerActor("entertainment"));
-    const target = await actorOf("staff");
+    const target = await actorOf("user");
     await expect(
       resetUserPassword(db, organizer, { id: target.id, password: NEW_PASSWORD }),
     ).rejects.toBeInstanceOf(ForbiddenError);

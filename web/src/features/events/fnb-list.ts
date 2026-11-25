@@ -1,9 +1,8 @@
-import { and, asc, eq, gte, sql, type SQL } from "drizzle-orm";
+import { and, asc, gte, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, events, teams } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
-import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -25,7 +24,6 @@ export async function listEventsForFnb(db: Executor, actor: Actor): Promise<FnbE
   authorize(actor, "venues", "view");
   authorize(actor, "events", "view");
   const conditions: SQL[] = [gte(events.startsAt, new Date())];
-  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
 
   const tableCount = sql<number>`(select count(*)::int from ${eventTables} where ${eventTables.eventId} = "events"."id")`;
   const teamCount = sql<number>`(select count(*)::int from ${teams} where ${teams.eventId} = "events"."id")`;

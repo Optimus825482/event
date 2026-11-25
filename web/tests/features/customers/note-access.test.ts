@@ -4,13 +4,9 @@ import { db } from "@/db/client";
 import { guestNotes } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { deleteNote, updateNote } from "@/features/customers/notes-service";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { createCustomer, createEvent, createReservation, createTable, createUser } from "../../helpers/factories";
-
-async function actorOf(role: "admin" | "organizer"): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null, memberships: [], permissions: [] };
-}
+import { createCustomer, createEvent, createReservation, createTable } from "../../helpers/factories";
 
 describe("not güncelleme/silme: not başına erişim (M5)", () => {
   let mine: Actor;
@@ -20,9 +16,9 @@ describe("not güncelleme/silme: not başına erişim (M5)", () => {
 
   beforeEach(async () => {
     await truncateAll();
-    mine = await actorOf("organizer");
-    other = await actorOf("organizer");
-    admin = await actorOf("admin");
+    mine = await persistActor(db, managerActor("casino"));
+    other = await persistActor(db, managerActor("casino"));
+    admin = await persistActor(db, adminActor());
     customerId = (await createCustomer(db)).id;
   });
 
@@ -39,26 +35,8 @@ describe("not güncelleme/silme: not başına erişim (M5)", () => {
     return (await db.select().from(guestNotes).where(eq(guestNotes.id, id)))[0]?.content;
   }
 
-  it("organizatör başkasının etkinliğindeki notu değiştiremez ya da silemez (not_found)", async () => {
+  it("yazar, başkasının oluşturduğu etkinlikteki kendi notunu değiştirebilir ve silebilir", async () => {
     const event = await createEvent(db, { organizerId: other.id });
-    const id = await note({ eventId: event.id, createdById: mine.id });
-
-    await expect(updateNote(db, mine, { id, content: "x" })).rejects.toMatchObject({ code: "not_found" });
-    await expect(deleteNote(db, mine, { id })).rejects.toMatchObject({ code: "not_found" });
-    expect(await content(id)).toBe("ilk");
-  });
-
-  it("rezervasyona bağlı notta erişim rezervasyonun etkinliğinden çözülür", async () => {
-    const event = await createEvent(db, { organizerId: other.id });
-    const table = await createTable(db, event.id);
-    const reservation = await createReservation(db, { eventId: event.id, tableId: table.id, customerId });
-    const id = await note({ reservationId: reservation.id, createdById: mine.id });
-
-    await expect(updateNote(db, mine, { id, content: "x" })).rejects.toMatchObject({ code: "not_found" });
-  });
-
-  it("organizatör kendi etkinliğindeki kendi notunu değiştirebilir ve silebilir", async () => {
-    const event = await createEvent(db, { organizerId: mine.id });
     const id = await note({ eventId: event.id });
 
     await updateNote(db, mine, { id, content: "yeni" });
@@ -67,7 +45,18 @@ describe("not güncelleme/silme: not başına erişim (M5)", () => {
     expect(await content(id)).toBeUndefined();
   });
 
-  it("başka bir kullanıcının yazdığı notu (kendi etkinliğinde bile) yalnızca yönetici değiştirir", async () => {
+  it("rezervasyona bağlı notu da yalnızca yazarı ya da yönetici değiştirir", async () => {
+    const event = await createEvent(db, { organizerId: mine.id });
+    const table = await createTable(db, event.id);
+    const reservation = await createReservation(db, { eventId: event.id, tableId: table.id, customerId });
+    const id = await note({ reservationId: reservation.id, createdById: other.id });
+
+    await expect(updateNote(db, mine, { id, content: "x" })).rejects.toMatchObject({ code: "not_found" });
+    await updateNote(db, other, { id, content: "yazar" });
+    expect(await content(id)).toBe("yazar");
+  });
+
+  it("başka bir kullanıcının yazdığı notu (kendi oluşturduğu etkinlikte bile) yalnızca yönetici değiştirir", async () => {
     const event = await createEvent(db, { organizerId: mine.id });
     const id = await note({ eventId: event.id, createdById: admin.id });
 

@@ -1,5 +1,5 @@
 import * as schema from "@/db/schema";
-import { ROLES, type Role } from "@/features/auth/roles";
+import type { Role } from "@/features/auth/roles";
 import { isValidUsername } from "@/features/auth/username";
 import { normalizeEmail, normalizePhone } from "@/features/customers/normalize";
 import { type CatalogIndex, timestamps } from "./catalogs";
@@ -22,10 +22,6 @@ import { asUuid, byCreatedThenId, type Row, stableId } from "./values";
 export const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
 const BCRYPT_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 const PERMISSION_MODULES = new Set<string>(schema.permissionModule.enumValues);
-
-function isRole(value: string | null): value is Role {
-  return value !== null && (ROLES as readonly string[]).includes(value);
-}
 
 const nameKey = (s: string | null) => (s ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("tr");
 
@@ -203,8 +199,10 @@ export async function migratePeople(ctx: Ctx, catalogs: Catalogs): Promise<void>
   await ctx.w.insert(
     schema.users,
     users.map((u) => {
-      const role = u.str("role");
-      if (!isRole(role)) ctx.add("invalidValues", { table: "users", id: u.id, field: "role", from: role, to: "staff" });
+      // Eski roller üyeliksiz `user` olur (giriş yapar, yönetici departman atayana dek hiçbir modüle erişemez).
+      const legacyRole = u.str("role");
+      const role: Role = legacyRole === "admin" ? "admin" : "user";
+      if (legacyRole !== role) ctx.add("invalidValues", { table: "users", id: u.id, field: "role", from: legacyRole, to: role });
       return {
         id: u.id,
         name: u.trimmed("fullName") ?? usernames.get(u.id) ?? u.id,
@@ -212,7 +210,7 @@ export async function migratePeople(ctx: Ctx, catalogs: Catalogs): Promise<void>
         emailVerified: true,
         image: u.str("avatar"),
         username: usernames.get(u.id) ?? `kullanici-${u.id.slice(0, 8)}`,
-        role: isRole(role) ? role : "staff",
+        role,
         isActive: u.bool("isActive", true),
         staffId: ctx.userToStaff.get(u.id) ?? null,
         color: u.str("color"),

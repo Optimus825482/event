@@ -8,7 +8,7 @@ import { listRecipients } from "@/features/invitations/event-invitation";
 import { parseInvitationToken, verifyInvitationMac } from "@/features/invitations/token";
 import { encryptSecret } from "@/features/settings/crypto";
 import { getSmtpConfig } from "@/features/settings/smtp";
-import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -152,16 +152,15 @@ describe("e-posta gönderimi", () => {
     expect(String((error as Error).message)).not.toContain("10.0.0.5");
   });
 
-  it("organizatör başkasının etkinliği için gönderemez; staff rolü yetkisizdir", async () => {
+  it("Entertainment yöneticisi başkasının oluşturduğu etkinlik için de gönderir; üyeliksiz kullanıcı yetkisizdir", async () => {
     await configureSmtp();
-    const owner = await legacyActor(db, "organizer");
-    const other = await legacyActor(db, "organizer");
-    const { reservation } = await seed(owner.id);
+    const creator = await makeActor(adminActor());
+    const manager = await makeActor(managerActor("entertainment"));
+    const { reservation } = await seed(creator.id);
     const mail = recorder();
-    await expect(sendInvitationEmail(db, other, { reservationId: reservation.id }, mail.factory)).rejects.toMatchObject({ code: "not_found" });
     await expect(sendInvitationEmail(db, await makeActor(noAccessActor()), { reservationId: reservation.id }, mail.factory)).rejects.toThrow();
     expect(mail.sent).toHaveLength(0);
-    await expect(sendInvitationEmail(db, owner, { reservationId: reservation.id }, mail.factory)).resolves.toBeDefined();
+    await expect(sendInvitationEmail(db, manager, { reservationId: reservation.id }, mail.factory)).resolves.toBeDefined();
   });
 });
 
@@ -214,10 +213,4 @@ describe("alıcı listesi", () => {
     expect(json).not.toContain("0532");
   });
 
-  it("organizatör başkasının etkinliğinin alıcılarını göremez", async () => {
-    const owner = await legacyActor(db, "organizer");
-    const other = await legacyActor(db, "organizer");
-    const { event } = await seed(owner.id);
-    await expect(listRecipients(db, other, { eventId: event.id })).rejects.toMatchObject({ code: "not_found" });
-  });
 });

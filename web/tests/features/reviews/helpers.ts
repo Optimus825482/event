@@ -1,17 +1,15 @@
 import { expect } from "vitest";
 import { db } from "@/db/client";
 import { teamMembers, teams } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { ForbiddenError } from "@/features/auth/errors";
-import { adminActor, managerActor, memberActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, memberActor, persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
-/** Departman aktörü ya da eski rol adı (bildirim testleri hedef rol için eski rolleri kullanır). */
-export async function makeActor(who: Actor | Role, staffId?: string | null): Promise<Actor> {
-  if (typeof who !== "string") return persistActor(db, who);
-  return legacyActor(db, who, { staffId: staffId ?? null });
+/** Aktörü veritabanına yazar: departman aktörü ya da `"admin"`. */
+export async function makeActor(who: Actor | "admin", staffId?: string | null): Promise<Actor> {
+  return persistActor(db, who === "admin" ? adminActor({ staffId: staffId ?? null }) : who);
 }
 
 /** Ekip lideri: F&B kullanıcı düzeyi; yalnızca kendi ekibini görür (`ownTeamOnly`). */
@@ -53,9 +51,9 @@ export const FULL_RATINGS = {
  * ayrıca başka liderin ekibi ve üyesi.
  */
 export async function setupReviewWorld(opts: { reviewEnabled?: boolean } = {}) {
-  const organizer = await makeActor(managerActor("fnb"));
+  const fnbManager = await makeActor(managerActor("fnb"));
   const event = await f.createEvent(db, {
-    organizerId: organizer.id,
+    organizerId: fnbManager.id,
     reviewEnabled: opts.reviewEnabled ?? true,
   });
 
@@ -86,5 +84,5 @@ export async function setupReviewWorld(opts: { reviewEnabled?: boolean } = {}) {
   ]);
 
   const admin = await makeActor(adminActor());
-  return { organizer, event, leader, leaderStaff, otherLeader, team, otherTeam, member1, member2, otherMember, admin };
+  return { fnbManager, event, leader, leaderStaff, otherLeader, team, otherTeam, member1, member2, otherMember, admin };
 }

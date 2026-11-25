@@ -3,7 +3,6 @@ import type { Db, Tx } from "@/db/client";
 import { events } from "@/db/schema";
 import { authorize, type PolicyActor, type Verb } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { getEventOrThrow, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { mapStaffingDbError } from "./db-errors";
@@ -19,14 +18,9 @@ export function ensureStaffingAccess(actor: PolicyActor, verb: Verb): void {
   authorize(actor, "staff", verb);
 }
 
-function assertOwnership(actor: Actor, event: EventRow): void {
-  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", NOT_FOUND);
-}
-
 export async function getReadableEvent(db: Db | Tx, actor: Actor, eventId: string): Promise<EventRow> {
   ensureStaffingAccess(actor, "view");
   const event = await getEventOrThrow(db, eventId);
-  assertOwnership(actor, event);
   return event;
 }
 
@@ -37,7 +31,6 @@ export async function getReadableEvent(db: Db | Tx, actor: Actor, eventId: strin
 export async function lockEditableEvent(tx: Tx, actor: Actor, eventId: string): Promise<EventRow> {
   const [event] = await tx.select().from(events).where(eq(events.id, eventId)).for("update");
   if (!event) throw new DomainError("not_found", NOT_FOUND);
-  assertOwnership(actor, event);
   if (event.status === "completed" || event.status === "cancelled") {
     throw new DomainError("conflict", LOCKED);
   }

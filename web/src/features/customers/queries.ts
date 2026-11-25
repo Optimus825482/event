@@ -1,11 +1,10 @@
-import { and, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { customers, customerTags, events, guestNotes, reservations, users } from "@/db/schema";
 import { authorize, type PolicyActor } from "@/features/auth/policy";
 import { searchCustomersInput, type SearchCustomersInput } from "./schemas";
 import { VIP_SCORE_THRESHOLD } from "./vip";
 import { escapeLike } from "@/lib/identifiers";
-import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -80,8 +79,6 @@ export async function getCustomerDetail(db: Executor, actor: PolicyActor, id: st
   const [customer] = await db.select().from(customers).where(eq(customers.id, id));
   if (!customer) return null;
 
-  // Organizatör yalnızca kendi etkinliklerinin geçmişini ve notlarını görür (başkasının etkinlik adı sızmaz).
-  const ownEventOnly = seesOnlyOwnEvents(actor);
   const [tags, notes, history] = await Promise.all([
     tagsByCustomer(db, [id]),
     db
@@ -97,10 +94,7 @@ export async function getCustomerDetail(db: Executor, actor: PolicyActor, id: st
       .leftJoin(events, eq(events.id, guestNotes.eventId))
       .leftJoin(users, eq(users.id, guestNotes.createdById))
       .where(
-        and(
-          eq(guestNotes.customerId, id),
-          ownEventOnly ? or(isNull(guestNotes.eventId), eq(events.organizerId, actor.id)) : undefined,
-        ),
+        eq(guestNotes.customerId, id),
       )
       .orderBy(desc(guestNotes.createdAt)),
     db
@@ -114,7 +108,7 @@ export async function getCustomerDetail(db: Executor, actor: PolicyActor, id: st
       })
       .from(reservations)
       .innerJoin(events, eq(events.id, reservations.eventId))
-      .where(and(eq(reservations.customerId, id), ownEventOnly ? eq(events.organizerId, actor.id) : undefined))
+      .where(eq(reservations.customerId, id))
       .orderBy(desc(events.startsAt))
       .limit(50),
   ]);

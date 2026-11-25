@@ -1,6 +1,6 @@
 import type { Department } from "./departments";
 import { can, type Module, type PolicyActor } from "./policy";
-import { inDepartment, isDepartmentUser, ownTeamOnly } from "./scope";
+import { inDepartment, isAdmin, ownTeamOnly } from "./scope";
 
 /** Menü grupları: üç departman + yetkiyle açılan ortak gruplar. `general` yalnızca zil/profil menüsünden erişilir. */
 export type NavGroupKey = "entertainment" | "fnb" | "casino" | "check_in" | "admin" | "general";
@@ -89,9 +89,9 @@ export type NavGroupView = NavGroup & { items: NavItem[] };
 
 const GROUPS_BY_KEY = new Map(NAV_GROUPS.map((group) => [group.key, group]));
 
-/** Departman kapsamlı grup yalnızca üyesine görünür (admin ve eski roller kapsama bağlı değildir). */
+/** Departman kapsamlı grup yalnızca üyesine görünür (admin kapsama bağlı değildir). */
 function groupAllows(actor: PolicyActor, group: NavGroup): boolean {
-  if (group.departments === null || !isDepartmentUser(actor)) return true;
+  if (group.departments === null || isAdmin(actor)) return true;
   return group.departments.some((department) => inDepartment(actor, department));
 }
 
@@ -113,7 +113,7 @@ export function visibleNavGroups(actor: PolicyActor): NavGroupView[] {
   );
 }
 
-// `reviews` modülünde lider yalnızca kendi ekibini görür; menüde modülün görünmesi için
+// `reviews` modülünde kendi ekibiyle sınırlı aktör yalnızca kendi ekibini görür; menüde modülün görünmesi için
 // aktörün kendi ekibi varsayılır. Gerçek sahiplik denetimi sayfa/action içinde yapılır.
 function navResource(actor: PolicyActor, module: Module) {
   if (module === "reviews" && ownTeamOnly(actor) && actor.staffId !== null) {

@@ -190,7 +190,18 @@ describe("hedef durum", () => {
       expect(row).toMatchObject({ provider_id: "credential", account_id: IDS.users.admin, username: "admin", email: "admin@example.test" });
       expect(await bcrypt.compare(LEGACY_PASSWORD, row?.password ?? "")).toBe(true);
       const blank = await c.query<{ username: string; email: string; role: string }>("SELECT username, email, role FROM users WHERE id = $1", [IDS.users.blank]);
-      expect(blank.rows[0]).toEqual({ username: "kullanici-00000000", email: `eski-${IDS.users.blank}@eventflow.invalid`, role: "controller" });
+      expect(blank.rows[0]).toEqual({ username: "kullanici-00000000", email: `eski-${IDS.users.blank}@eventflow.invalid`, role: "user" });
+      // Eski roller üyeliksiz `user` olur (yönetici departman atayana dek hiçbir modüle erişemez); admin admin kalır.
+      const roles = await c.query<{ id: string; role: string }>("SELECT id, role FROM users WHERE id = ANY($1)", [
+        [IDS.users.admin, IDS.users.organizer, IDS.users.linked],
+      ]);
+      expect(Object.fromEntries(roles.rows.map((r) => [r.id, r.role]))).toEqual({
+        [IDS.users.admin]: "admin",
+        [IDS.users.organizer]: "user",
+        [IDS.users.linked]: "user",
+      });
+      const memberships = await c.query("SELECT 1 FROM department_memberships");
+      expect(memberships.rowCount).toBe(0);
     });
   });
 

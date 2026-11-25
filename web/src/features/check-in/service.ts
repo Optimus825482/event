@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { Tx } from "@/db/client";
 import { checkInEvents } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
-import { withPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import { lockEvent, MSG, type Executor } from "@/features/reservations/internal";
@@ -190,7 +189,7 @@ export async function registerWalkInOnce(db: Executor, actor: Actor, raw: WalkIn
   const print = walkInFingerprint(input);
   const clientTimestamp = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
   // İzinler transaction açılmadan okunur (havuz kilitlenmesini önler, bkz. registerWalkIn).
-  const mayReadCustomers = can(await withPermissions(actor), "customers", "view");
+  const mayReadCustomers = can(actor, "customers", "view");
 
   const result = await db.transaction(async (tx): Promise<StoredResult> => {
     const [claimed] = await tx

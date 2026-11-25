@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { accounts, events, sessions, staffPerformanceReviews, userPermissions, users } from "@/db/schema";
+import { DEPARTMENTS } from "@/features/auth/departments";
 import { ForbiddenError } from "@/features/auth/errors";
 import { getActorFromHeaders, type Actor } from "@/features/auth/session";
 import { createAction } from "@/lib/action";
@@ -75,7 +76,7 @@ describe("kullanıcı silme", () => {
     expect(row).toMatchObject({
       name: "Silinmiş kullanıcı",
       username: `silinmis-${target.id}`,
-      role: "staff",
+      role: "user",
       isActive: false,
       staffId: null,
       phone: null,
@@ -100,7 +101,7 @@ describe("kullanıcı silme", () => {
 
   it("değerlendiren olarak anılan kullanıcı anonimleştirilir", async () => {
     const admin = await actorOf("admin");
-    const reviewer = await actorOf("leader");
+    const reviewer = await actorOf("user");
     const event = await createEvent(db);
     const staffRow = await createStaff(db);
     await db
@@ -120,7 +121,7 @@ describe("kullanıcı silme", () => {
   it("son yönetici silinemez; ikinci aktif yönetici varken silinebilir", async () => {
     const lastAdmin = await actorOf("admin");
     // Eski oturum: rolü düşürülmüş ama önbellekte admin görünen aktör.
-    const stale = await actorOf("staff");
+    const stale = await actorOf("user");
     const staleAdmin: Actor = { ...stale, role: "admin" };
     await expect(deleteUser(db, staleAdmin, { id: lastAdmin.id })).rejects.toMatchObject({
       code: "conflict",
@@ -139,10 +140,10 @@ describe("kullanıcı silme", () => {
     await expect(deleteUser(db, admin, { id: inactiveAdmin.id })).resolves.toMatchObject({ mode: "deleted" });
   });
 
-  it("yönetici olmayan roller silemez", async () => {
-    const target = await actorOf("staff");
-    for (const role of ["organizer", "staff", "leader", "controller", "venue_owner"] as const) {
-      const actor = await actorOf(role);
+  it("yönetici olmayanlar (departman yöneticileri dahil) silemez", async () => {
+    const target = await actorOf("user");
+    const others = [await actorOf("user"), ...(await Promise.all(DEPARTMENTS.map((d) => persistActor(db, managerActor(d)))))];
+    for (const actor of others) {
       await expect(deleteUser(db, actor, { id: target.id })).rejects.toBeInstanceOf(ForbiddenError);
     }
     expect(await rowOf(target.id)).toBeDefined();
@@ -157,7 +158,7 @@ describe("kullanıcı silme", () => {
 
   it("action: oturumsuz unauthenticated, yetkisiz forbidden, geçersiz kimlik invalid", async () => {
     const admin = await actorOf("admin");
-    const target = await actorOf("staff");
+    const target = await actorOf("user");
     const organizer = await persistActor(db, managerActor("entertainment"));
 
     const anon = createAction({ getActor: async () => null }).defineAction(userActionDefs.deleteUser);

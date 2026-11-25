@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { checkInEvents, reservations } from "@/db/schema";
-import { withPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
@@ -33,7 +32,7 @@ export async function registerWalkIn(
   const input = walkInInput.parse(raw);
   // İzinler transaction AÇILMADAN okunur: açıkken havuzdan ikinci bağlantı almak, eşzamanlı
   // walk-in'lerde havuzu tüketip kilitlenmeye yol açar.
-  const mayReadCustomers = options.mayReadCustomers ?? can(await withPermissions(actor), "customers", "view");
+  const mayReadCustomers = options.mayReadCustomers ?? can(actor, "customers", "view");
   return db.transaction(async (tx) => {
     const reservation = await createReservation(
       tx,

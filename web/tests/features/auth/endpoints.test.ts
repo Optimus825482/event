@@ -109,7 +109,7 @@ describe("Better Auth uç izin listesi", () => {
           name: "Yeni Ad",
           username: "baska",
           email: "baska@example.com",
-          role: "staff",
+          role: "user",
           isActive: false,
           staffId: "00000000-0000-4000-8000-000000000000",
           phone: "05550000000",

@@ -9,7 +9,7 @@ import { getOrganizationCatalogs } from "@/features/staff/queries";
 
 export const metadata: Metadata = { title: "Kuruluş ayarları | EventFlow" };
 
-// Katalog yönetimi `staff` modülünün yetkisine bağlıdır (organizatör de düzenler);
+// Katalog yönetimi `staff` modülünün yetkisine bağlıdır (F&B departmanı da düzenler);
 // `settings` modülü yalnızca yöneticiye açıktır.
 export default async function OrganizationSettingsPage() {
   const actor = await requirePolicyActor();

@@ -6,7 +6,7 @@ import { checkInEvents } from "@/db/schema";
 import { checkIn } from "@/features/check-in/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { actorOf, bookedGuest, expectDomain, key } from "./fixtures";
-import { managerActor, memberActor, persistActor, legacyActor } from "../../helpers/actors";
+import { managerActor, memberActor, persistActor } from "../../helpers/actors";
 
 describe("checkIn: idempotent tekrar ve erişim (M1)", () => {
   beforeAll(async () => {
@@ -16,23 +16,14 @@ describe("checkIn: idempotent tekrar ve erişim (M1)", () => {
     await truncateAll();
   });
 
-  it("M1: başkasının anahtarı tekrarlanınca saklanan yanıt sızmaz (erişimsiz not_found, başka kullanıcı keyReused)", async () => {
+  it("M1: başkasının anahtarı tekrarlanınca saklanan yanıt sızmaz (başka kullanıcı keyReused)", async () => {
     const owner = await persistActor(db, managerActor("casino"));
     const { event, reservation } = await bookedGuest({ organizerId: owner.id });
     const k = key();
     const first = await checkIn(db, owner, { eventId: event.id, idempotencyKey: k, token: reservation.qrToken });
     expect(first.outcome).toBe("checked_in");
 
-    // Etkinliğe erişimi olmayan, check_in yetkili başka bir organizatör: aynı anahtar + aynı istek.
-    const stranger = await legacyActor(db, "organizer");
-    const leak = await expectDomain(
-      checkIn(db, stranger, { eventId: event.id, idempotencyKey: k, token: reservation.qrToken }),
-      "not_found",
-      "Etkinlik bulunamadı",
-    );
-    expect(leak.message).not.toContain(reservation.id);
-
-    // Erişimi olan ama anahtarı üretmemiş başka kullanıcı: anahtar başka istek için kullanılmış sayılır.
+    // Anahtarı üretmemiş başka kullanıcı: anahtar başka istek için kullanılmış sayılır.
     const otherDoor = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await expectDomain(
       checkIn(db, otherDoor, { eventId: event.id, idempotencyKey: k, token: reservation.qrToken }),

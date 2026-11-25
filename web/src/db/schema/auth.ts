@@ -34,7 +34,7 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   username: text("username").notNull().unique(),
-  role: userRole("role").notNull().default("staff"),
+  role: userRole("role").notNull().default("user"),
   isActive: boolean("is_active").notNull().default(true),
   // Hesabın bağlı olduğu personel kaydı (en fazla bir hesap). people.ts ile döngüsel
   // içe aktarım tembel `references` geri çağrısı sayesinde güvenlidir.

@@ -1,4 +1,11 @@
 import { describe, expect, it } from "vitest";
+import {
+  DEPARTMENT_LEVELS,
+  DEPARTMENTS,
+  type Department,
+  type DepartmentLevel,
+  type Membership,
+} from "@/features/auth/departments";
 import { ForbiddenError } from "@/features/auth/errors";
 import {
   authorize,
@@ -6,169 +13,159 @@ import {
   MODULES,
   VERBS,
   type Module,
+  type PermissionRow,
   type PolicyActor,
 } from "@/features/auth/policy";
-import { ROLES, type Role } from "@/features/auth/roles";
+import { ROLES } from "@/features/auth/roles";
 
-// Verb string notation: v=view c=create e=edit d=delete, "-" = denied.
-// Expected values are written by hand from the rules, resource omitted.
-// Ownership-gated cells (leader/reviews, venue_owner/venues) are given for
-// the no-resource case: leader reviews is fully denied, venue_owner venues is "vc--".
-const ALL = "vced";
-const NONE = "----";
+// Fiil gösterimi: v=view c=create e=edit d=delete, "-" = ret. Kaynak verilmez.
 type Row = Record<Module, string>;
-
-const row = (overrides: Partial<Row>): Row => ({
-  users: NONE, settings: NONE, events: NONE, venues: NONE, staff: NONE,
-  customers: NONE, invitations: NONE, reservations: NONE, check_in: NONE,
-  reviews: NONE, notifications: NONE,
-  ...overrides,
-});
-
-const EXPECTED: Record<Role, Row> = {
-  admin: row({
-    users: ALL, settings: ALL, events: ALL, venues: ALL, staff: ALL,
-    customers: ALL, invitations: ALL, reservations: ALL, check_in: ALL,
-    reviews: ALL, notifications: ALL,
-  }),
-  organizer: row({
-    events: ALL, venues: ALL, staff: ALL, customers: ALL, invitations: ALL,
-    reservations: ALL, check_in: ALL, reviews: ALL, notifications: ALL,
-  }),
-  staff: row({ reservations: "vce-", customers: "v---", check_in: "vc--" }),
-  leader: row({ check_in: "vc--", reviews: NONE, notifications: "v---" }),
-  controller: row({ check_in: "vc--" }),
-  venue_owner: row({ venues: "vc--" }),
-  user: row({}),
-};
-
+const NONE = "----";
 const VERB_CHARS = { view: "v", create: "c", edit: "e", delete: "d" } as const;
 
-const actorFor = (role: Role, over: Partial<PolicyActor> = {}): PolicyActor => ({
-  id: "u1",
-  role,
-  staffId: role === "leader" ? "s1" : null,
-  ...over,
+const m = (department: Department, level: DepartmentLevel): Membership => ({ department, level });
+
+// "vce-" gibi dizgileri izin satırına çevirir.
+const rowsFrom = (grants: Partial<Record<Module, string>>): PermissionRow[] =>
+  (Object.entries(grants) as [Module, string][]).map(([module, flags]) => ({
+    module,
+    canView: flags.includes("v"),
+    canCreate: flags.includes("c"),
+    canEdit: flags.includes("e"),
+    canDelete: flags.includes("d"),
+  }));
+
+const user = (
+  memberships: Membership[],
+  grants: Partial<Record<Module, string>> = {},
+  staffId: string | null = null,
+): PolicyActor => ({ id: "u1", role: "user" as const, staffId, memberships, permissions: rowsFrom(grants) });
+
+const admin = (grants: Partial<Record<Module, string>> = {}): PolicyActor => ({
+  id: "a1",
+  role: "admin",
+  staffId: null,
+  memberships: [],
+  permissions: rowsFrom(grants),
 });
 
-describe("policy matrix", () => {
-  it("covers 7 roles x 11 modules x 4 verbs", () => {
-    expect(ROLES.length * MODULES.length * VERBS.length).toBe(308);
+describe("roller", () => {
+  it("yalnızca admin ve user vardır", () => {
+    expect([...ROLES]).toEqual(["admin", "user"]);
+  });
+});
+
+describe("admin", () => {
+  for (const mod of MODULES) {
+    it(`admin ${mod} -> vced`, () => {
+      for (const verb of VERBS) expect(can(admin(), mod, verb)).toBe(true);
+    });
+  }
+
+  it("izin satırları admini daraltmaz", () => {
+    const a = admin({ events: NONE, users: NONE });
+    for (const verb of VERBS) {
+      expect(can(a, "events", verb)).toBe(true);
+      expect(can(a, "users", verb)).toBe(true);
+    }
   });
 
-  for (const role of ROLES) {
+  it("admin ekip kaynağından bağımsızdır", () => {
+    expect(can(admin(), "reviews", "edit", { teamLeaderStaffId: "baska" })).toBe(true);
+  });
+});
+
+const CASES: [string, PolicyActor, Partial<Row>][] = [
+  ["entertainment yönetici", user([m("entertainment", "manager")]),
+    { events: "vced", invitations: "vced", notifications: "vced", venues: "v---", check_in: "vc--" }],
+  ["entertainment asistan", user([m("entertainment", "assistant")]),
+    { events: "vce-", invitations: "vce-", notifications: "vce-", venues: "v---", check_in: "vc--" }],
+  ["fnb yönetici", user([m("fnb", "manager")]),
+    { events: "v---", venues: "vced", staff: "vced", reviews: "vced", check_in: "vc--", notifications: "v---" }],
+  ["casino yönetici", user([m("casino", "manager")]),
+    { events: "v---", reservations: "vced", customers: "vced", venues: "v---", check_in: "vc--", notifications: "v---" }],
+  ["casino kullanıcı, tavan dışı izin yok sayılır",
+    user([m("casino", "member")], { reservations: "vc--", staff: "vced" }), { reservations: "vc--" }],
+  ["izinsiz kullanıcı", user([m("casino", "member")]), {}],
+  ["iki departman birleşimi", user([m("fnb", "member"), m("casino", "manager")], { venues: "vce-" }),
+    { venues: "vce-", events: "v---", reservations: "vced", customers: "vced", check_in: "vc--", notifications: "v---" }],
+  ["üyeliksiz", user([]), {}],
+  ["üyeliksiz, izin satırı da yetki vermez", user([], { events: "vced", reservations: "vced", check_in: "vc--" }), {}],
+  ["casino asistan", user([m("casino", "assistant")]),
+    { events: "v---", reservations: "vce-", customers: "vce-", venues: "v---", check_in: "vc--", notifications: "v---" }],
+  ["entertainment kullanıcı, yalnızca check_in", user([m("entertainment", "member")], { check_in: "vc--" }),
+    { check_in: "vc--" }],
+];
+
+describe("departman yetki matrisi", () => {
+  for (const [name, actor, expected] of CASES) {
     for (const mod of MODULES) {
       for (const verb of VERBS) {
-        const expected = EXPECTED[role][mod].includes(VERB_CHARS[verb]);
-        it(`${role} ${mod} ${verb} -> ${expected}`, () => {
-          expect(can(actorFor(role), mod, verb)).toBe(expected);
+        const allowed = (expected[mod] ?? NONE).includes(VERB_CHARS[verb]);
+        it(`${name}: ${mod} ${verb} -> ${allowed}`, () => {
+          expect(can(actor, mod, verb)).toBe(allowed);
         });
       }
     }
   }
 });
 
-describe("ownership", () => {
-  it("leader can edit own team's review, not another team's", () => {
-    const leader = actorFor("leader");
-    expect(can(leader, "reviews", "edit", { teamLeaderStaffId: "s1" })).toBe(true);
-    expect(can(leader, "reviews", "edit", { teamLeaderStaffId: "s2" })).toBe(false);
-    expect(can(leader, "reviews", "view", { teamLeaderStaffId: "s1" })).toBe(true);
-    expect(can(leader, "reviews", "create", { teamLeaderStaffId: "s1" })).toBe(true);
-    expect(can(leader, "reviews", "delete", { teamLeaderStaffId: "s1" })).toBe(false);
+describe("departman kuralları", () => {
+  it("asistan silemez", () => {
+    expect(() => authorize(user([m("fnb", "assistant")]), "staff", "delete")).toThrow(ForbiddenError);
   });
 
-  it("leader without a staffId is always denied on reviews", () => {
-    const leader = actorFor("leader", { staffId: null });
-    expect(can(leader, "reviews", "view", {})).toBe(false);
-    expect(can(leader, "reviews", "edit", { teamLeaderStaffId: "s1" })).toBe(false);
+  it("F&B kullanıcısı yalnızca kendi ekibinin değerlendirmesine erişir", () => {
+    const a = user([m("fnb", "member")], { reviews: "vce-" }, "s1");
+    expect(can(a, "reviews", "view", { teamLeaderStaffId: "s1" })).toBe(true);
+    expect(can(a, "reviews", "view", { teamLeaderStaffId: "s2" })).toBe(false);
+    expect(can(a, "reviews", "view")).toBe(false);
   });
 
-  it("leader without resource is denied on reviews", () => {
-    for (const verb of VERBS) {
-      expect(can(actorFor("leader"), "reviews", verb)).toBe(false);
+  it("staffId'siz F&B kullanıcısı hiçbir ekibe erişemez", () => {
+    expect(can(user([m("fnb", "member")], { reviews: "vced" }), "reviews", "view", { teamLeaderStaffId: "s1" })).toBe(false);
+  });
+
+  it("F&B yöneticisi tüm ekiplere erişir", () => {
+    expect(can(user([m("fnb", "manager")]), "reviews", "edit", { teamLeaderStaffId: "s9" })).toBe(true);
+  });
+
+  it("izin satırı kısıt değildir: yöneticinin açık bayrakları kapatan satırı yok sayılır", () => {
+    const a = user([m("entertainment", "manager")], { events: NONE });
+    for (const verb of VERBS) expect(can(a, "events", verb)).toBe(true);
+  });
+
+  describe("users ve settings hiçbir departman aktörüne açılmaz", () => {
+    for (const department of DEPARTMENTS) {
+      for (const level of DEPARTMENT_LEVELS) {
+        it(`${department} ${level}`, () => {
+          const a = user([m(department, level)], { users: "vced", settings: "vced" });
+          for (const mod of ["users", "settings"] as const) {
+            for (const verb of VERBS) expect(can(a, mod, verb)).toBe(false);
+          }
+        });
+      }
     }
-  });
 
-  it("venue_owner cannot delete or edit someone else's venue", () => {
-    const owner = actorFor("venue_owner");
-    expect(can(owner, "venues", "delete", { ownerId: "u2" })).toBe(false);
-    expect(can(owner, "venues", "edit", { ownerId: "u2" })).toBe(false);
-    expect(can(owner, "venues", "delete", { ownerId: "u1" })).toBe(true);
-    expect(can(owner, "venues", "edit", { ownerId: "u1" })).toBe(true);
-    expect(can(owner, "venues", "edit")).toBe(false);
-    expect(can(owner, "venues", "delete")).toBe(false);
-  });
-
-  it("venue_owner view with a resource must be owned", () => {
-    const owner = actorFor("venue_owner");
-    expect(can(owner, "venues", "view", { ownerId: "u1" })).toBe(true);
-    expect(can(owner, "venues", "view", { ownerId: "u2" })).toBe(false);
-    expect(can(owner, "venues", "view")).toBe(true);
-    expect(can(owner, "venues", "create")).toBe(true);
-  });
-
-  it("organizer and admin ignore ownership", () => {
-    const res = { ownerId: "other", teamLeaderStaffId: "other" };
-    expect(can(actorFor("organizer"), "venues", "delete", res)).toBe(true);
-    expect(can(actorFor("organizer"), "reviews", "edit", res)).toBe(true);
-    expect(can(actorFor("admin"), "venues", "delete", res)).toBe(true);
-    expect(can(actorFor("admin"), "reviews", "edit", res)).toBe(true);
-  });
-});
-
-describe("permission rows", () => {
-  const row = (module: Module, flags: Partial<Record<"canView" | "canCreate" | "canEdit" | "canDelete", boolean>>) => ({
-    module, canView: true, canCreate: true, canEdit: true, canDelete: true, ...flags,
-  });
-
-  it("organizer row with canDelete=false closes delete only", () => {
-    const org = actorFor("organizer", { permissions: [row("events", { canDelete: false })] });
-    expect(can(org, "events", "delete")).toBe(false);
-    expect(can(org, "events", "edit")).toBe(true);
-    expect(can(org, "venues", "delete")).toBe(true);
-  });
-
-  it("staff row never opens access", () => {
-    const staff = actorFor("staff", { permissions: [row("events", {})] });
-    expect(can(staff, "events", "view")).toBe(false);
-    expect(can(staff, "customers", "create")).toBe(false);
-  });
-
-  it("rows do not apply to admin", () => {
-    const admin = actorFor("admin", {
-      permissions: [row("events", { canView: false, canCreate: false, canEdit: false, canDelete: false })],
+    it("üç departmanda yönetici + tam izin satırı", () => {
+      const a = user(
+        [m("entertainment", "manager"), m("fnb", "manager"), m("casino", "manager")],
+        { users: "vced", settings: "vced" },
+      );
+      for (const verb of VERBS) {
+        expect(can(a, "users", verb)).toBe(false);
+        expect(can(a, "settings", verb)).toBe(false);
+      }
     });
-    for (const verb of VERBS) expect(can(admin, "events", verb)).toBe(true);
-  });
-
-  it("module without a row keeps the baseline", () => {
-    const staff = actorFor("staff", { permissions: [row("customers", { canView: false })] });
-    expect(can(staff, "customers", "view")).toBe(false);
-    expect(can(staff, "reservations", "edit")).toBe(true);
-  });
-
-  it("duplicate rows must all allow", () => {
-    const org = actorFor("organizer", {
-      permissions: [row("events", {}), row("events", { canEdit: false })],
-    });
-    expect(can(org, "events", "edit")).toBe(false);
-    expect(can(org, "events", "view")).toBe(true);
-  });
-
-  it("rows also narrow ownership-gated roles", () => {
-    const owner = actorFor("venue_owner", { permissions: [row("venues", { canCreate: false })] });
-    expect(can(owner, "venues", "create")).toBe(false);
-    expect(can(owner, "venues", "view")).toBe(true);
   });
 });
 
 describe("authorize", () => {
-  it("throws ForbiddenError when denied", () => {
-    expect(() => authorize(actorFor("staff"), "users", "view")).toThrow(ForbiddenError);
+  it("reddedilince ForbiddenError fırlatır", () => {
+    expect(() => authorize(user([m("casino", "manager")]), "users", "view")).toThrow(ForbiddenError);
   });
 
-  it("returns undefined when allowed", () => {
-    expect(authorize(actorFor("admin"), "users", "view")).toBeUndefined();
+  it("izin verilince undefined döner", () => {
+    expect(authorize(admin(), "users", "view")).toBeUndefined();
   });
 });

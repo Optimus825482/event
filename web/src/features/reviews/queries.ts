@@ -5,7 +5,7 @@ import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { authorizeReviewsGate, loadReviewEvent, type ReviewRow } from "./service";
 import { RATING_KEYS, type RatingBand, type RatingKey } from "./score";
-import { ownTeamOnly, seesOnlyOwnEvents } from "@/features/auth/scope";
+import { ownTeamOnly } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -101,7 +101,7 @@ export async function listReviewableEvents(executor: Executor, actor: Actor): Pr
     .where(inArray(events.id, eventIds))
     .orderBy(desc(events.startsAt))
     .limit(100);
-  const allowed = eventRows.filter((e) => !seesOnlyOwnEvents(actor) || e.organizerId === actor.id);
+  const allowed = eventRows;
   if (allowed.length === 0) return [];
   const allowedIds = new Set(allowed.map((e) => e.id));
   const teamRows = baseTeams.filter((t) => t.eventId && allowedIds.has(t.eventId));

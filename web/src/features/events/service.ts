@@ -5,7 +5,6 @@ import { canTransitionEvent } from "@/domain/event-status";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { escapeLike } from "@/lib/identifiers";
-import { canAccessEvent } from "./access";
 import { EVENT_STATUS_LABELS } from "./labels";
 import type {
   ChangeEventStatusInput,
@@ -15,7 +14,6 @@ import type {
   ReviewSettingsInput,
   UpdateEventInput,
 } from "./schemas";
-import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 export type EventRow = typeof events.$inferSelect;
@@ -30,13 +28,8 @@ export async function getEventOrThrow(db: Executor, id: string): Promise<EventRo
   return row;
 }
 
-function assertAccess(actor: Actor, event: EventRow): void {
-  if (!canAccessEvent(actor, event)) throw new DomainError("not_found", NOT_FOUND);
-}
-
 async function getAccessibleEvent(db: Executor, actor: Actor, id: string): Promise<EventRow> {
   const event = await getEventOrThrow(db, id);
-  assertAccess(actor, event);
   return event;
 }
 
@@ -76,7 +69,6 @@ export async function updateEvent(db: Db, actor: Actor, input: UpdateEventInput)
     // Durum denetimi ile yazma arasında eşzamanlı bir durum geçişi araya girmesin diye satır kilitlenir.
     const [existing] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!existing) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, existing);
     if (existing.status === "completed" || existing.status === "cancelled") {
       throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinlik düzenlenemez");
     }
@@ -105,7 +97,6 @@ export async function setReviewSettings(db: Db, actor: Actor, input: ReviewSetti
   return db.transaction(async (tx) => {
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!locked) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, locked);
     const [row] = await tx
       .update(events)
       .set({
@@ -129,7 +120,6 @@ export async function changeEventStatus(
     // Eşzamanlı iki geçişin aynı eski durumu görmemesi için satır kilitlenir.
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!locked) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, locked);
     if (!canTransitionEvent(locked.status, input.status)) {
       throw new DomainError(
         "conflict",
@@ -151,7 +141,6 @@ export async function deleteEvent(db: Db, actor: Actor, input: DeleteEventInput)
   return db.transaction(async (tx) => {
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
     if (!locked) throw new DomainError("not_found", NOT_FOUND);
-    assertAccess(actor, locked);
     if (locked.status !== "draft") {
       throw new DomainError("conflict", "Yalnızca taslak etkinlikler silinebilir");
     }
@@ -172,7 +161,6 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
   const pageSize = filter.pageSize ?? DEFAULT_PAGE_SIZE;
 
   const conditions: SQL[] = [];
-  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
   if (filter.status) conditions.push(eq(events.status, filter.status));
   if (filter.search) conditions.push(ilike(events.name, `%${escapeLike(filter.search)}%`));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -226,7 +214,6 @@ const BOARD_LIMIT = 500;
  */
 export async function listEventBoard(db: Executor, actor: Actor, filter: { search?: string | undefined }) {
   const conditions: SQL[] = [];
-  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
   if (filter.search) conditions.push(ilike(events.name, `%${escapeLike(filter.search)}%`));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 

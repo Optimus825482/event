@@ -6,7 +6,6 @@ import { getEventOrThrow, listEventTables, totalCapacity } from "@/features/even
 import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
 import {
-  assertEventAccess,
   isLayoutEditable,
   lockEditableEvent,
   mapLayoutDbError,
@@ -64,7 +63,6 @@ export type VenueLayout = {
 
 export async function getVenueLayout(db: Db, actor: Actor, eventId: string): Promise<VenueLayout> {
   const event = await getEventOrThrow(db, eventId);
-  assertEventAccess(actor, event);
   const tables = await listEventTables(db, eventId);
   const used = await tablesInUse(
     db,
@@ -167,7 +165,6 @@ async function existingTableTypeIds(tx: Pick<Db, "select">, layout: TemplateLayo
 /** Etkinliğin mevcut masalarını ve dekorunu yeni bir şablon olarak kaydeder (sahibi işlemi yapan). */
 export async function saveAsTemplate(db: Db, actor: Actor, input: SaveAsTemplateInput) {
   const event = await getEventOrThrow(db, input.eventId);
-  assertEventAccess(actor, event);
   const tables = await db
     .select()
     .from(eventTables)

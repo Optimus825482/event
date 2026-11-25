@@ -275,8 +275,9 @@ describe("rol değişimi ve tek işlemli yazım", () => {
     await truncateAll();
   });
 
-  async function legacyUser(role: "staff" | "organizer", rows: ReturnType<typeof row>[] = []) {
-    const u = await insertUser(db, { role });
+  /** Departmanı atanmamış kullanıcı; satırlar doğrudan yazılır (eski içe aktarımdan kalmış gibi). */
+  async function unassignedUser(rows: ReturnType<typeof row>[] = []) {
+    const u = await insertUser(db, { role: "user" });
     if (rows.length > 0) await db.insert(userPermissions).values(rows.map((r) => ({ ...r, userId: u.id })));
     return u;
   }
@@ -311,9 +312,9 @@ describe("rol değişimi ve tek işlemli yazım", () => {
     expect(await db.select().from(userPermissions).where(eq(userPermissions.userId, other.id))).toHaveLength(1);
   });
 
-  it("eski rol→user: tavan dışı eski satırlar temizlenir, tavan içi kalır", async () => {
+  it("departmansız kullanıcıya departman verilince tavan dışı satırlar temizlenir, tavan içi kalır", async () => {
     const admin = await persistActor(db, adminActor());
-    const target = await legacyUser("staff", [row("reservations", "v---"), row("venues", "v---")]);
+    const target = await unassignedUser([row("reservations", "v---"), row("venues", "v---")]);
     await updateUser(db, admin, {
       id: target.id,
       role: "user",
@@ -323,9 +324,9 @@ describe("rol değişimi ve tek işlemli yazım", () => {
     expect(perms.map((p) => p.module)).toEqual(["venues"]);
   });
 
-  it("tavan dışı izinle güncelleme reddedilir; rol ve satırlar değişmez", async () => {
+  it("tavan dışı izinle güncelleme reddedilir; ad ve üyelikler değişmez", async () => {
     const admin = await persistActor(db, adminActor());
-    const target = await legacyUser("staff");
+    const target = await unassignedUser();
     await expect(
       updateUser(db, admin, {
         id: target.id,
@@ -336,16 +337,9 @@ describe("rol değişimi ve tek işlemli yazım", () => {
       }),
     ).rejects.toMatchObject({ code: "invalid", message: "Bu izin seçilen departmanların kapsamı dışında" });
     const [r] = await db.select().from(users).where(eq(users.id, target.id));
-    expect(r?.role).toBe("staff");
+    expect(r?.role).toBe("user");
     expect(r?.name).not.toBe("Yeni Ad");
     expect(await db.select().from(departmentMemberships).where(eq(departmentMemberships.userId, target.id))).toHaveLength(0);
-  });
-
-  it("eski rol hedefte tüm bayrakları kapalı kısıt satırı korunur", async () => {
-    const admin = await persistActor(db, adminActor());
-    const target = await legacyUser("staff");
-    await setUserPermissions(db, admin, { id: target.id, permissions: [row("reservations", "----")] });
-    expect(await db.select().from(userPermissions).where(eq(userPermissions.userId, target.id))).toHaveLength(1);
   });
 
   it("oluşturma yarıda düşerse kullanıcı ve hesap satırı kalmaz", async () => {

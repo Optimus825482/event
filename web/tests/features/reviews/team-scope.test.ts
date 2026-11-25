@@ -36,7 +36,7 @@ describe("F&B kullanıcısı yalnızca kendi ekibini görür (ownTeamOnly)", () 
   it("F&B yöneticisi ve asistanı tüm ekipleri görür", async () => {
     const w = await setupReviewWorld();
     const assistant = await makeActor(assistantActor("fnb"));
-    for (const actor of [w.organizer, assistant]) {
+    for (const actor of [w.fnbManager, assistant]) {
       expect(await scopedTeams(db, actor)).toHaveLength(2);
       expect((await getReviewBoard(db, actor, w.event.id)).teams).toHaveLength(2);
       const [event] = await listReviewableEvents(db, actor);

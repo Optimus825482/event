@@ -6,7 +6,6 @@ import { Search, Shield, UserCheck, UserPlus, UserX, Users } from "lucide-react"
 import { useMemo, useState, useTransition } from "react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
-import { ROLE_LABELS } from "@/components/layout/role-labels";
 import { StatCard } from "@/components/layout/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,11 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { ROLES } from "@/features/auth/roles";
 import { isAdmin } from "@/features/auth/scope";
 import { setUserActiveAction } from "../actions";
 import { countUsers, filterUsers, isDeletedAccount, type RoleFilter, type StatusFilter } from "../filter";
-import { accessSummary } from "../form-model";
+import { accessSummary, ROLE_CHOICES } from "../form-model";
 import type { UserDetail } from "../queries";
 import { CreateUserForm } from "./create-user-form";
 import { DeleteUserDialog } from "./delete-user-dialog";
@@ -119,9 +117,9 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
           className={`${SELECT_CLASS} sm:w-44`}
         >
           <option value="all">Tüm roller</option>
-          {ROLES.map((value) => (
+          {ROLE_CHOICES.map(({ value, label }) => (
             <option key={value} value={value}>
-              {ROLE_LABELS[value]}
+              {label}
             </option>
           ))}
         </select>

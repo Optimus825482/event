@@ -46,8 +46,8 @@ describe("GET /api/events/[eventId]/stream", () => {
 
   it("check_in:view ve reservations:view izni olmayan kullanıcı 403 alır", async () => {
     const event = await createEvent(db);
-    const owner = await loginAs("venue_owner");
-    expect((await connect(event.id, owner.cookie).response).status).toBe(403);
+    const outsider = await loginAs(memberActor("fnb", { venues: "vced" }));
+    expect((await connect(event.id, outsider.cookie).response).status).toBe(403);
 
     // Kullanıcıda iki modülün görüntüleme izni kapalıysa 403.
     const staff = await loginAs(memberActor("casino", { check_in: "----", reservations: "----" }));
@@ -55,21 +55,19 @@ describe("GET /api/events/[eventId]/stream", () => {
     expect(listenerCount()).toBe(0);
   });
 
-  it("başka organizatörün etkinliği, olmayan etkinlik ve geçersiz kimlik 404 olur", async () => {
-    const organizer = await loginAs("organizer");
-    const foreign = await createEvent(db);
-    expect((await connect(foreign.id, organizer.cookie).response).status).toBe(404);
-    expect((await connect(randomUUID(), organizer.cookie).response).status).toBe(404);
-    expect((await connect("uuid-degil", organizer.cookie).response).status).toBe(404);
+  it("olmayan etkinlik ve geçersiz kimlik 404 olur", async () => {
+    const door = await loginAs(memberActor("casino", { check_in: "v---" }));
+    expect((await connect(randomUUID(), door.cookie).response).status).toBe(404);
+    expect((await connect("uuid-degil", door.cookie).response).status).toBe(404);
     expect(listenerCount()).toBe(0);
   });
 
-  it("yetkili akış SSE başlıklarıyla açılır, kendi etkinliğinin olaylarını alır, başkasınınkini almaz", async () => {
-    const organizer = await loginAs("organizer");
-    const mine = await createEvent(db, { organizerId: organizer.id });
-    const other = await createEvent(db, { organizerId: organizer.id });
+  it("yetkili akış SSE başlıklarıyla açılır, bağlandığı etkinliğin olaylarını alır, diğerininkini almaz", async () => {
+    const door = await loginAs(memberActor("casino", { check_in: "v---" }));
+    const mine = await createEvent(db);
+    const other = await createEvent(db);
 
-    const res = await connect(mine.id, organizer.cookie).response;
+    const res = await connect(mine.id, door.cookie).response;
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
     expect(res.headers.get("cache-control")).toBe("no-store, no-transform");

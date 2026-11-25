@@ -7,7 +7,7 @@ import { FULL_RATINGS, expectForbidden, setupReviewWorld } from "./helpers";
 
 /**
  * Not: `permission_module` enum'unda henüz "reviews" yok, bu yüzden izin satırı veritabanına
- * yazılamıyor; satırlar (eylem kapısının `withPermissions` ile yaptığı gibi) aktöre eklenir.
+ * yazılamıyor; satırlar (oturum aktörünün taşıdığı gibi) doğrudan aktöre eklenir.
  */
 function withRow(actor: Actor, flags: { canCreate: boolean; canEdit: boolean }) {
   return { ...actor, permissions: [{ module: "reviews" as const, canView: true, canDelete: false, ...flags }] };

@@ -2,12 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEPARTMENTS, LEVEL_LABELS, type Department, type DepartmentLevel } from "@/features/auth/departments";
 import { NAV_GROUPS, NAV_ITEMS, visibleNavGroups, visibleNavItems } from "@/features/auth/nav";
 import { can, type PolicyActor } from "@/features/auth/policy";
-import { ROLES, type Role } from "@/features/auth/roles";
 import { adminActor, assistantActor, managerActor, memberActor, noAccessActor } from "../../helpers/actors";
-
-function legacy(role: Role, staffId: string | null = null): PolicyActor {
-  return { id: "u1", role, staffId, permissions: [] };
-}
 
 const hrefs = (actor: PolicyActor) => visibleNavItems(actor).map((item) => item.href);
 const groupKeys = (actor: PolicyActor) => visibleNavGroups(actor).map((group) => group.key);
@@ -146,45 +141,15 @@ describe("departman grupları", () => {
   });
 });
 
-describe("eski roller (Task 10'a kadar)", () => {
-  it("organizer departman kapsamına bakılmaksızın izinli grupları görür; yönetim yok", () => {
-    expect(groupKeys(legacy("organizer"))).toEqual(["entertainment", "fnb", "casino", "check_in", "general"]);
-  });
-
-  it("controller yalnızca check-in görür", () => {
-    expect(groupKeys(legacy("controller"))).toEqual(["check_in"]);
-  });
-
-  it("venue_owner yalnızca mekân öğelerini görür", () => {
-    expect(hrefs(legacy("venue_owner"))).toEqual(["/venues"]);
-  });
-
-  it("leader ekip öğelerini ve check-in'i görür", () => {
-    expect(hrefs(legacy("leader", "s1"))).toEqual([
-      "/leader",
-      "/leader/events",
-      "/leader/team",
-      "/leader/reviews",
-      "/leader/reports",
-      "/check-in",
-      "/notifications",
-    ]);
-  });
-
-  it("staff yalnızca rezervasyon, müşteri, misafir ve check-in öğelerini görür", () => {
-    expect(hrefs(legacy("staff"))).toEqual(["/reservations", "/customers", "/guests", "/check-in"]);
-  });
-
-  it("kullanıcıya özel görüntüleme yetkisi kaldırılan modül gizlenir", () => {
-    const a: PolicyActor = {
-      ...legacy("staff"),
-      permissions: [{ module: "customers", canView: false, canCreate: false, canEdit: false, canDelete: false }],
-    };
+describe("kullanıcı düzeyi izinleri", () => {
+  it("görüntüleme izni verilmeyen modül gizlenir", () => {
+    const a = memberActor("casino", { reservations: "v---", check_in: "vc--" });
     expect(hrefs(a)).toEqual(["/reservations", "/check-in"]);
   });
 
-  it("her rol için tanımlıdır", () => {
-    for (const role of ROLES) expect(Array.isArray(visibleNavItems(legacy(role)))).toBe(true);
+  it("üyeliksiz kullanıcı hiçbir öğe görmez; izin satırı tek başına öğe açmaz", () => {
+    expect(hrefs(noAccessActor())).toEqual([]);
+    expect(hrefs(noAccessActor({ permissions: [{ module: "events", canView: true, canCreate: true, canEdit: true, canDelete: true }] }))).toEqual([]);
   });
 });
 
@@ -205,7 +170,6 @@ describe("görünen her öğe erişilebilir bir sayfaya gider", () => {
       })),
     ),
     { name: "çok departman", actor: { ...managerActor("fnb"), memberships: [{ department: "fnb", level: "member" }, { department: "casino", level: "manager" }], permissions: [{ module: "venues", canView: true, canCreate: false, canEdit: false, canDelete: false }] } },
-    ...ROLES.filter((r) => r !== "admin" && r !== "user").map((role) => ({ name: `eski ${role}`, actor: legacy(role, "s1") })),
   ];
 
   for (const { name, actor } of actors) {

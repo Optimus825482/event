@@ -6,7 +6,6 @@ import { DEPARTMENTS } from "@/features/auth/departments";
 import type { PolicyActor } from "@/features/auth/policy";
 import { inDepartment, isAdmin } from "@/features/auth/scope";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { DomainError } from "@/lib/action";
 import type { Audience, CreateNotificationInput, ListNotificationsInput, MarkReadInput } from "./schemas";
 
@@ -19,7 +18,7 @@ const NOT_FOUND = "Bildirim bulunamadı";
 
 /**
  * Aktörün görebildiği hedef kitleler. Sistem Yöneticisi beşini de görür; diğerleri "herkes" ile
- * üyesi oldukları departmanları (düzeyden bağımsız) görür. Üyeliği olmayan (eski roller dahil)
+ * üyesi oldukları departmanları (düzeyden bağımsız) görür. Üyeliği olmayan kullanıcı
  * yalnızca "herkes" bildirimlerini görür. Liste, okunmamış sayısı, okundu işaretleme ve gerçek
  * zamanlı yayın aynı kuralı bu işlevden alır.
  */
@@ -50,11 +49,10 @@ export async function createNotification(
   authorize(actor, "notifications", "create");
   if (input.eventId) {
     const [event] = await executor
-      .select({ id: events.id, organizerId: events.organizerId })
+      .select({ id: events.id })
       .from(events)
       .where(eq(events.id, input.eventId));
-    // Organizatör yalnızca kendi etkinliğine bağlayabilir; başkasınınki "yok" gibi davranır.
-    if (!event || !canAccessEvent(actor, event)) {
+    if (!event) {
       throw new DomainError("not_found", "Etkinlik bulunamadı");
     }
   }

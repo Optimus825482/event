@@ -95,14 +95,18 @@ export async function signOut(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/login/);
 }
 
-/** Yönetici arayüzünden `Kontrolör` rolünde (check-in yetkili) ikinci bir kullanıcı oluşturur. Parola rastgele. */
+/** Yönetici arayüzünden yalnızca check-in izni olan ikinci bir Casino kullanıcısı oluşturur. Parola rastgele. */
 export async function createDoorUser(page: Page, username: string): Promise<string> {
   const password = `Kp-${randomBytes(12).toString("base64url")}`;
   await page.goto("/admin/users");
   await page.getByRole("button", { name: "Yeni kullanıcı" }).click();
   await page.getByLabel("Kullanıcı adı", { exact: true }).fill(username);
   await page.getByLabel("Ad soyad").fill("Kapı Görevlisi");
-  await page.getByLabel("Rol", { exact: true }).selectOption({ label: "Kontrolör" });
+  // Yalnızca check-in izni olan Casino kullanıcısı.
+  await page.getByLabel("Rol", { exact: true }).selectOption({ label: "Departman kullanıcısı" });
+  await page.getByLabel("Casino", { exact: true }).check();
+  await page.getByLabel("Check-in: Görüntüle", { exact: true }).check();
+  await page.getByLabel("Check-in: Oluştur", { exact: true }).check();
   await page.getByLabel("Parola", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Kullanıcı oluştur" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Kullanıcı oluşturuldu" })).toBeVisible();

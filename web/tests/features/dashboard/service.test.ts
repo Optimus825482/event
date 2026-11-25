@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { events, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { getAdminDashboard, getEventsDashboard } from "@/features/dashboard/service";
-import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -19,18 +19,18 @@ describe("dashboard service", () => {
   });
 
   describe("getEventsDashboard", () => {
-    it("organizatör yalnızca kendi etkinliklerini sayar", async () => {
-      const mine = await legacyActor(db, "organizer");
-      const other = await legacyActor(db, "organizer");
+    it("Entertainment yöneticisi kimin oluşturduğuna bakılmaksızın tüm etkinlikleri sayar", async () => {
+      const mine = await makeActor();
+      const other = await makeActor(adminActor());
       await f.createEvent(db, { organizerId: mine.id, startsAt: inDays(3) });
       await f.createEvent(db, { organizerId: mine.id, startsAt: inDays(-3), status: "completed" });
       await f.createEvent(db, { organizerId: other.id, startsAt: inDays(4) });
 
-      const own = await getEventsDashboard(db, mine);
-      expect(own.totalEvents).toBe(2);
-      expect(own.upcomingEvents).toBe(1);
-      expect(own.completedEvents).toBe(1);
-      expect(own.draftEvents).toBe(1);
+      const all = await getEventsDashboard(db, mine);
+      expect(all.totalEvents).toBe(3);
+      expect(all.upcomingEvents).toBe(2);
+      expect(all.completedEvents).toBe(1);
+      expect(all.draftEvents).toBe(2);
 
       const admin = await getEventsDashboard(db, await makeActor(adminActor()));
       expect(admin.totalEvents).toBe(3);

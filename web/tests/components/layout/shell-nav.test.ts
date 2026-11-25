@@ -80,7 +80,7 @@ describe("actorLabel", () => {
     expect(actorLabel(noAccessActor())).toBe("Kullanıcı");
   });
 
-  it("eski roller kendi adıyla görünür", () => {
-    expect(actorLabel({ id: "u1", role: "controller", staffId: null })).toBe("Kontrolör");
+  it("üyelik bilgisi admin etiketini değiştirmez", () => {
+    expect(actorLabel({ ...adminActor(), memberships: [{ department: "casino", level: "manager" }] })).toBe("Sistem Yöneticisi");
   });
 });

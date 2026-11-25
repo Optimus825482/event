@@ -16,7 +16,7 @@ import {
   totalCapacity,
   updateEvent,
 } from "@/features/events/service";
-import { adminActor, managerActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -43,7 +43,7 @@ describe("events service", () => {
   });
 
   describe("createEvent", () => {
-    it("taslak durumda, organizatör olarak oluşturur", async () => {
+    it("taslak durumda, oluşturan kullanıcı adına oluşturur", async () => {
       const actor = await makeActor();
       const ev = await createEvent(db, actor, { name: "Gala", startsAt: inDays(5), endsAt: inDays(6) });
       expect(ev.status).toBe("draft");
@@ -175,22 +175,25 @@ describe("events service", () => {
     });
   });
 
-  describe("sahiplik", () => {
-    it("organizatör başkasının etkinliğini göremez, değiştiremez, listede görmez", async () => {
-      const owner = await legacyActor(db, "organizer");
-      const other = await legacyActor(db, "organizer");
-      const ev = await f.createEvent(db, { organizerId: owner.id });
-      await expectDomain(getEvent(db, other, ev.id), "not_found");
-      await expectDomain(changeEventStatus(db, other, { id: ev.id, status: "published" }), "not_found");
-      await expectDomain(deleteEvent(db, other, { id: ev.id }), "not_found");
-      expect((await listEvents(db, other, {})).total).toBe(0);
-      expect((await listEvents(db, owner, {})).total).toBe(1);
+  describe("oluşturan kişi yetki kararına girmez", () => {
+    it("Entertainment yöneticisi başkasının oluşturduğu etkinliği görür ve düzenler", async () => {
+      const creator = await makeActor();
+      const other = await makeActor();
+      const ev = await f.createEvent(db, { organizerId: creator.id, name: "Başkasının" });
+      expect((await getEvent(db, other, ev.id)).name).toBe("Başkasının");
+      expect((await listEvents(db, other, {})).total).toBe(1);
+      const updated = await updateEvent(db, other, { id: ev.id, name: "Düzenlendi", startsAt: inDays(5) });
+      expect(updated.name).toBe("Düzenlendi");
+      expect(updated.organizerId).toBe(creator.id);
+      await expect(changeEventStatus(db, other, { id: ev.id, status: "published" })).resolves.toMatchObject({
+        status: "published",
+      });
     });
 
     it("admin tüm etkinlikleri görür", async () => {
-      const owner = await legacyActor(db, "organizer");
+      const creator = await makeActor();
       const admin = await makeActor(adminActor());
-      await f.createEvent(db, { organizerId: owner.id });
+      await f.createEvent(db, { organizerId: creator.id });
       expect((await listEvents(db, admin, {})).total).toBe(1);
     });
   });

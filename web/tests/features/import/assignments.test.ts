@@ -184,7 +184,7 @@ describe("personel atama içe aktarma", () => {
     expect(await snapshot(event.id)).toEqual(before);
   });
 
-  it("zorunlu başlık eksikse invalid; yetki, sahiplik ve tamamlanmış etkinlik", async () => {
+  it("zorunlu başlık eksikse invalid; yetki ve tamamlanmış etkinlik", async () => {
     const { owner, event } = await setup();
     const bytes = await xlsx([HEADER, ["S-001", null, "T1", null, null, null]]);
     await expectDomain(
@@ -193,7 +193,7 @@ describe("personel atama içe aktarma", () => {
       /Masa etiketleri veya Grup/,
     );
     await expect(importAssignments(db, await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" })), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
-    await expectDomain(importAssignments(db, await actorOf("organizer"), { eventId: event.id, bytes }), "not_found");
+    expect((await previewAssignmentImport(db, await actorOf(managerActor("fnb")), { eventId: event.id, bytes })).okCount).toBe(1);
     await db.update(events).set({ status: "completed" }).where(eq(events.id, event.id));
     await expectDomain(importAssignments(db, owner, { eventId: event.id, bytes }), "conflict");
     await expectDomain(previewAssignmentImport(db, owner, { eventId: event.id, bytes }), "conflict");

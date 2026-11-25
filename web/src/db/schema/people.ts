@@ -89,7 +89,8 @@ export const userPermissions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     module: permissionModule("module").notNull(),
-    canView: boolean("can_view").notNull().default(true),
+    // İzin satırı verilen yetkidir: varsayılan hiçbir bayrağı açmaz.
+    canView: boolean("can_view").notNull().default(false),
     canCreate: boolean("can_create").notNull().default(false),
     canEdit: boolean("can_edit").notNull().default(false),
     canDelete: boolean("can_delete").notNull().default(false),

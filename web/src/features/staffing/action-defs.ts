@@ -26,7 +26,7 @@ function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOption
 
 /**
  * `defineAction` seçenekleri. Gerçek action'lar `actions.ts` içinde bunlarla tanımlanır;
- * testler aynı tanımları oturumsuz `createAction` ile çalıştırır. Organizatör sahipliği ve
+ * testler aynı tanımları oturumsuz `createAction` ile çalıştırır. Etkinlik varlığı ve
  * etkinlik kilidi servis katmanındadır.
  */
 export const staffingActionDefs = {

@@ -32,19 +32,9 @@ export async function loadPermissions(userId: string): Promise<PermissionRow[]> 
   return rows;
 }
 
-/** Aktör artık üyelik ve izin satırlarını oturumdan taşır. */
-export type ActorWithPermissions = Actor;
-
-/** Geriye dönük uyumluluk: aktör izinleri zaten taşıdığından olduğu gibi döner. */
-export async function withPermissions(actor: Actor): Promise<ActorWithPermissions> {
-  return actor;
-}
-
 /**
  * Sayfa ve düzenler için: oturumdaki kullanıcı (üyelik + izin satırlarıyla). İstek başına bir kez
  * çözülür (`cache`), böylece düzen ve sayfa aynı sorguyu tekrarlamaz.
  * Oturum yoksa `UnauthenticatedError` fırlatır.
  */
-export const requirePolicyActor = cache(async (): Promise<ActorWithPermissions> => {
-  return withPermissions(await requireActor());
-});
+export const requirePolicyActor = cache(async (): Promise<Actor> => requireActor());

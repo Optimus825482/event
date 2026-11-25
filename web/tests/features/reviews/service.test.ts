@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { events, notifications, staffPerformanceReviews, teamMembers } from "@/db/schema";
 import { completeAllReviews, completeReview, saveReviewDraft } from "@/features/reviews/service";
 import { computeScore, type Ratings } from "@/features/reviews/score";
-import { memberActor, noAccessActor, legacyActor } from "../../helpers/actors";
+import { memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
@@ -135,7 +135,7 @@ describe("saveReviewDraft", () => {
 
   it("personelin başka etkinlikteki ekibi bu etkinlik için geçerli değil", async () => {
     const w = await setupReviewWorld();
-    const otherEvent = await f.createEvent(db, { organizerId: w.organizer.id, reviewEnabled: true });
+    const otherEvent = await f.createEvent(db, { organizerId: w.fnbManager.id, reviewEnabled: true });
     await expectDomain(
       saveReviewDraft(db, w.leader, {
         eventId: otherEvent.id,
@@ -164,7 +164,7 @@ describe("saveReviewDraft", () => {
     );
   });
 
-  it("staff ve controller rolleri değerlendiremez; admin ve kendi etkinliğinin organizatörü değerlendirir", async () => {
+  it("değerlendirme izni olmayanlar değerlendiremez; admin ve F&B yöneticisi değerlendirir", async () => {
     const w = await setupReviewWorld();
     const input = {
       eventId: w.event.id,
@@ -177,24 +177,8 @@ describe("saveReviewDraft", () => {
     await expectForbidden(saveReviewDraft(db, await makeActor(noAccessActor()), input));
     await expectForbidden(saveReviewDraft(db, await makeActor(memberActor("casino", { check_in: "vc--" })), input));
     await saveReviewDraft(db, w.admin, input);
-    await saveReviewDraft(db, w.organizer, input);
+    await saveReviewDraft(db, w.fnbManager, input);
     expect(await reviewRows(w.event.id)).toHaveLength(2);
-  });
-
-  it("başka organizatörün etkinliği not_found", async () => {
-    const w = await setupReviewWorld();
-    const stranger = await legacyActor(db, "organizer");
-    await expectDomain(
-      saveReviewDraft(db, stranger, {
-        eventId: w.event.id,
-        staffId: w.member1.id,
-        ratings: FULL_RATINGS,
-        strengths: [],
-        improvements: [],
-        recommendedTrainings: [],
-      }),
-      "not_found",
-    );
   });
 
   it("aynı anda 8 kayıt tek satır bırakır ve hata vermez", async () => {

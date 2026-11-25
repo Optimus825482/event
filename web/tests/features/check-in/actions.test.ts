@@ -6,7 +6,7 @@ import { createAction } from "@/lib/action";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createTable } from "../../helpers/factories";
 import { actorOf, bookedGuest, key } from "./fixtures";
-import { memberActor, legacyActor } from "../../helpers/actors";
+import { memberActor } from "../../helpers/actors";
 
 function as(actor: Actor | null) {
   return createAction({ getActor: async () => actor }).defineAction;
@@ -20,7 +20,7 @@ describe("check-in action'ları", () => {
     await truncateAll();
   });
 
-  it("kapı personeli (controller) ve lider check-in, walk-in ve kişi sayısı yapabilir; venue_owner yapamaz", async () => {
+  it("check-in yetkili kullanıcılar check-in, walk-in ve kişi sayısı yapabilir; check_in yetkisi olmayan yapamaz", async () => {
     const { event, reservation } = await bookedGuest();
     const free = await createTable(db, event.id, { capacity: 4 });
     const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
@@ -66,8 +66,8 @@ describe("check-in action'ları", () => {
     });
     expect(remaining.ok && remaining.data.map((t) => t.id)).toEqual([]);
 
-    const owner = await legacyActor(db, "venue_owner");
-    expect(await as(owner)(checkInActionDefs.stats)({ eventId: event.id })).toMatchObject({
+    const outsider = memberActor("fnb", { venues: "vced" });
+    expect(await as(outsider)(checkInActionDefs.stats)({ eventId: event.id })).toMatchObject({
       ok: false,
       code: "forbidden",
     });

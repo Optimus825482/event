@@ -4,7 +4,7 @@ import { eventStats } from "@/features/check-in/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createCustomer, createEvent, createReservation, createTable } from "../../helpers/factories";
 import { actorOf, expectDomain } from "./fixtures";
-import { managerActor, memberActor, persistActor, legacyActor } from "../../helpers/actors";
+import { managerActor, memberActor, persistActor } from "../../helpers/actors";
 
 describe("eventStats", () => {
   beforeAll(async () => {
@@ -65,7 +65,7 @@ describe("eventStats", () => {
     });
   });
 
-  it("boş etkinlik sıfır döner; olmayan veya başka organizatörün etkinliği not_found", async () => {
+  it("boş etkinlik sıfır döner; olmayan etkinlik not_found", async () => {
     const event = await createEvent(db, { status: "active" });
     const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     expect(await eventStats(db, door, event.id)).toMatchObject({
@@ -73,8 +73,6 @@ describe("eventStats", () => {
       remaining: 0,
       checkInPercentage: 0,
     });
-    const stranger = await legacyActor(db, "organizer");
-    await expectDomain(eventStats(db, stranger, event.id), "not_found", "Etkinlik bulunamadı");
     await expectDomain(eventStats(db, door, crypto.randomUUID()), "not_found", "Etkinlik bulunamadı");
   });
 });

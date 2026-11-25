@@ -1,6 +1,4 @@
-import { db } from "@/db/client";
 import { getActorFromHeaders } from "@/features/auth/session";
-import { withPermissions } from "@/features/auth/permissions";
 import { checkUploadAccess } from "@/features/uploads/access";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
 import { serveUpload } from "@/features/uploads/serve";
@@ -19,7 +17,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   const actor = await getActorFromHeaders(request.headers);
   if (!actor) return denied(401, "Oturum gerekli");
   const { path: segments } = await context.params;
-  const access = await checkUploadAccess(db, await withPermissions(actor), segments);
+  const access = checkUploadAccess(actor, segments);
   if (access === "forbidden") return denied(403, "Bu dosyaya erişim yetkiniz yok");
   if (access === "not_found") return denied(404, "Bulunamadı");
   return serveUpload(UPLOAD_ROOT, segments);

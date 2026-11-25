@@ -16,7 +16,7 @@ import {
 } from "@/features/invitations/templates";
 import { saveEventInvitation } from "@/features/invitations/event-invitation";
 import { createAction } from "@/lib/action";
-import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -100,8 +100,8 @@ describe("şablon sahipliği", () => {
   });
 
   async function setup() {
-    const a = await legacyActor(db, "organizer");
-    const b = await legacyActor(db, "organizer");
+    const a = await makeActor();
+    const b = await makeActor();
     const admin = await makeActor(adminActor());
     const mine = await createTemplate(db, a, { ...base, name: "A'nın", elements: [] });
     await ensureDefaultTemplate(db);
@@ -110,7 +110,7 @@ describe("şablon sahipliği", () => {
     return { a, b, admin, mine, system };
   }
 
-  it("başka organizatör güncelleyemez/silemez/göremez (not_found); yönetici ve sahibi yapabilir", async () => {
+  it("başka kullanıcının özel şablonu güncellenemez/silinemez/görünmez (not_found); yönetici ve sahibi yapabilir", async () => {
     const { a, b, admin, mine } = await setup();
     const input = { ...base, id: mine.id, name: "Ele geçirildi", elements: [] };
     await expect(updateTemplate(db, b, input)).rejects.toMatchObject({ code: "not_found" });
@@ -123,7 +123,7 @@ describe("şablon sahipliği", () => {
     await deleteTemplate(db, admin, { id: mine.id });
   });
 
-  it("organizatör sistem şablonunu görür ama değiştiremez; yönetici değiştirebilir", async () => {
+  it("Entertainment yöneticisi sistem şablonunu görür ama değiştiremez; yönetici değiştirebilir", async () => {
     const { b, admin, system } = await setup();
     expect((await listTemplates(db, b)).map((t) => t.id)).toContain(system.id);
     await expect(updateTemplate(db, b, { ...base, id: system.id, name: "X", elements: [] })).rejects.toMatchObject({ code: "conflict" });
@@ -164,10 +164,10 @@ describe("şablon action'ları", () => {
     };
   }
 
-  it("staff rolü şablon oluşturamaz; oturumsuz reddedilir", async () => {
-    const staff = await makeActor(noAccessActor());
+  it("üyeliksiz kullanıcı şablon oluşturamaz; oturumsuz reddedilir", async () => {
+    const outsider = await makeActor(noAccessActor());
     const payload = { ...base, name: "X", elements: [] };
-    expect(await actionsFor(staff).create(payload)).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await actionsFor(outsider).create(payload)).toMatchObject({ ok: false, code: "forbidden" });
     expect(await actionsFor(null).create(payload)).toMatchObject({ ok: false, code: "unauthenticated" });
     expect(await db.select().from(invitationTemplates)).toHaveLength(0);
   });
@@ -185,7 +185,7 @@ describe("şablon action'ları", () => {
     expect(await db.select().from(invitationTemplates)).toHaveLength(0);
   });
 
-  it("organizatör oluşturup silebilir", async () => {
+  it("Entertainment yöneticisi oluşturup silebilir", async () => {
     const organizer = await makeActor(managerActor("entertainment"));
     const res = await actionsFor(organizer).create({ ...base, name: "Benim", elements: [el] });
     expect(res.ok).toBe(true);

@@ -9,7 +9,7 @@ import { createReservation as bookReservation } from "@/features/reservations/se
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation, createTable } from "../../helpers/factories";
 import { actorOf, bookedGuest, checkInLog, customerRow, expectDomain, key, reservationRow, setEventStatus, setReservationStatus } from "./fixtures";
-import { adminActor, memberActor, legacyActor } from "../../helpers/actors";
+import { adminActor, memberActor } from "../../helpers/actors";
 
 describe("checkIn", () => {
   beforeAll(async () => {
@@ -307,21 +307,6 @@ describe("checkIn", () => {
       "conflict",
       "Bu istek anahtarı başka bir istek için kullanılmış",
     );
-  });
-
-  it("organizatör başka organizatörün etkinliğinde not_found alır", async () => {
-    const { event, reservation } = await bookedGuest();
-    const stranger = await legacyActor(db, "organizer");
-    await expectDomain(
-      checkIn(db, stranger, {
-        eventId: event.id,
-        idempotencyKey: key(),
-        token: reservation.qrToken,
-      }),
-      "not_found",
-      "Etkinlik bulunamadı",
-    );
-    expect((await reservationRow(reservation.id)).status).toBe("confirmed");
   });
 
   it("taslak veya iptal edilmiş etkinlikte check-in yapılamaz", async () => {

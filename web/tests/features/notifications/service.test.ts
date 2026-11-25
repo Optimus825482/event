@@ -14,7 +14,6 @@ import {
 import {
   adminActor,
   assistantActor,
-  legacyActor,
   managerActor,
   memberActor,
   noAccessActor,
@@ -94,15 +93,6 @@ describe("hedef kitle görünürlüğü", () => {
     await expectForbidden(listNotifications(db, actor, {}));
   });
 
-  it("eski rol aktörü çökmez ve yalnızca herkese giden bildirimi görür", async () => {
-    await seed("all");
-    await seed("admin");
-    await seed("fnb");
-    const legacy = await legacyActor(db, "leader");
-    expect(visibleAudiences(legacy)).toEqual(["all"]);
-    expect(await audiencesSeenBy(legacy)).toEqual(["all"]);
-  });
-
   it("etkin olmayan bildirim listelenmez", async () => {
     const n = await seed("all");
     await db.update(notifications).set({ isActive: false }).where(eq(notifications.id, n.id));
@@ -110,9 +100,9 @@ describe("hedef kitle görünürlüğü", () => {
     expect((await listNotifications(db, admin, {})).items).toHaveLength(0);
   });
 
-  it("izni olmayan ve eski staff/venue_owner aktörleri bildirim modülüne erişemez", async () => {
-    await expectForbidden(listNotifications(db, await makeActor("staff"), {}));
-    await expectForbidden(listNotifications(db, await makeActor("venue_owner"), {}));
+  it("bildirim izni olmayan kullanıcılar bildirim modülüne erişemez", async () => {
+    await expectForbidden(listNotifications(db, await makeActor(memberActor("casino", { reservations: "vced" })), {}));
+    await expectForbidden(listNotifications(db, await makeActor(memberActor("fnb", { venues: "vced" })), {}));
     await expectForbidden(listNotifications(db, await persistActor(db, noAccessActor()), {}));
   });
 });

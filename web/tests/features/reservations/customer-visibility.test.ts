@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { withPermissions } from "@/features/auth/permissions";
 import type { Actor } from "@/features/auth/session";
 import { getReservationDetail, listReservations } from "@/features/reservations/queries";
 import { createReservation } from "@/features/reservations/service";
@@ -62,7 +61,7 @@ describe("rezervasyon: müşteri verisi customers:view ister", () => {
 
   it("detay ve liste: customers:view yoksa müşteri bloğu ve müşteri adı dönmez, misafir bilgisi kalır", async () => {
     const staffActor = await staffWithoutCustomerView();
-    const staff = await withPermissions(staffActor);
+    const staff = staffActor;
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, {
       eventId: event.id,
@@ -81,7 +80,7 @@ describe("rezervasyon: müşteri verisi customers:view ister", () => {
     // Müşteri adına göre arama, varlığı sızdırmamak için yok sayılır.
     expect((await listReservations(db, staff, { eventId: event.id, q: customer.fullName })).total).toBe(0);
 
-    const admin = await withPermissions(await actorOf(adminActor()));
+    const admin = await actorOf(adminActor());
     expect((await getReservationDetail(db, admin, row.id))?.customer?.id).toBe(customer.id);
   });
 });

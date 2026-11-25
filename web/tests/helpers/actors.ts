@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { departmentMemberships, userPermissions, users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { userPermissions } from "@/db/schema";
 import type { Department, DepartmentLevel } from "@/features/auth/departments";
 import type { Module, PermissionRow } from "@/features/auth/policy";
 import type { Role } from "@/features/auth/roles";
@@ -87,25 +86,7 @@ export async function persistActor(ex: Executor, actor: Actor): Promise<Actor> {
 }
 
 /**
- * Eski rolle (`organizer`, `venue_owner`, `leader`...) aktör üretir; sahiplik ve bildirim hedef rolü
- * testleri için. Task 10'da eski roller kalkınca bu yardımcı ve çağrıları silinir.
- */
-export async function legacyActor(ex: Executor, role: Actor["role"], o: Partial<Actor> = {}): Promise<Actor> {
-  const user = await createUser(ex, { role, ...(o.staffId ? { staffId: o.staffId } : {}) });
-  return {
-    id: user.id,
-    username: user.username,
-    role: user.role,
-    staffId: user.staffId,
-    memberships: [],
-    permissions: [],
-  };
-}
-
-/**
- * Servis üzerinden parolalı hesap açar. `admin` ve `user` yeni yoldan (user: F&B kullanıcısı);
- * eski roller önce `user` olarak açılıp role çevrilir ve üyelikleri silinir. Task 10'da eski roller
- * kalkınca eski rol dalı silinir.
+ * Servis üzerinden parolalı hesap açar: `admin` ya da `user` (user: izinsiz F&B kullanıcısı).
  */
 export async function createLoginAccount(
   db: Parameters<typeof createLoginUser>[0],
@@ -114,14 +95,5 @@ export async function createLoginAccount(
   input: { username: string; password: string; email?: string; name?: string },
 ): Promise<UserSummary> {
   const memberships = role === "admin" ? [] : [{ department: "fnb" as const, level: "member" as const }];
-  const created = await createLoginUser(db, admin, {
-    ...input,
-    role: role === "admin" ? "admin" : "user",
-    memberships,
-    permissions: [],
-  });
-  if (role === "admin" || role === "user") return created;
-  await db.delete(departmentMemberships).where(eq(departmentMemberships.userId, created.id));
-  await db.update(users).set({ role }).where(eq(users.id, created.id));
-  return { ...created, role };
+  return createLoginUser(db, admin, { ...input, role, memberships, permissions: [] });
 }

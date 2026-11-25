@@ -51,7 +51,7 @@ describe("notifications actions", () => {
   });
 
   it("geçersiz hedef kitle invalid", async () => {
-    for (const audience of ["controller", "leader", "staff"]) {
+    for (const audience of ["staff", "user", "yonetici"]) {
       const res = await actionsFor(await makeActor("admin")).create({ ...valid, audience });
       expect(res).toMatchObject({ ok: false, code: "invalid" });
       if (!res.ok) expect(res.fieldErrors?.audience).toEqual(["Geçersiz hedef kitle"]);

@@ -9,7 +9,6 @@ import { applyOrganizationTemplate, createOrganizationTemplate } from "@/feature
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { expectDomain, setupEvent } from "./helpers";
-import { legacyActor } from "../../helpers/actors";
 
 async function point(eventId: string, name = "Bar 1", allowedRoles: string[] = []) {
   const [row] = await db.insert(servicePoints).values({ eventId, name, allowedRoles }).returning();
@@ -107,7 +106,7 @@ describe("servis noktası rolleri (saveOrganization)", () => {
     expect(await requirements(sp.id)).toEqual([{ role: "hostes", requiredCount: 1 }]);
   });
 
-  it("başka etkinliğin servis noktası conflict; başka organizatör not_found (yetki aynen)", async () => {
+  it("başka etkinliğin servis noktası conflict", async () => {
     const { actor, event } = await setupEvent();
     const other = await f.createEvent(db, { organizerId: actor.id });
     const foreign = await point(other.id);
@@ -115,15 +114,7 @@ describe("servis noktası rolleri (saveOrganization)", () => {
       saveOrganization(db, actor, { ...base(event.id), servicePointRoles: [{ servicePointId: foreign.id, roles: [] }] }),
       "conflict",
     );
-    const own = await point(event.id);
-    await expectDomain(
-      saveOrganization(db, await legacyActor(db, "organizer"), {
-        ...base(event.id),
-        servicePointRoles: [{ servicePointId: own.id, roles: [{ role: "garson", requiredCount: 1 }] }],
-      }),
-      "not_found",
-    );
-    expect(await requirements(own.id)).toEqual([]);
+    expect(await requirements(foreign.id)).toEqual([]);
   });
 
   it("şema: yinelenen rol, negatif ve kesirli sayı reddedilir", () => {

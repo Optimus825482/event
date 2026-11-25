@@ -13,7 +13,7 @@ import { getEventInvitationDetail, saveEventInvitation } from "@/features/invita
 import { createTemplate, ensureDefaultTemplate } from "@/features/invitations/templates";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
 import { createAction } from "@/lib/action";
-import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -65,22 +65,10 @@ describe("etkinlik davetiyesi", () => {
     ).rejects.toMatchObject({ code: "not_found" });
   });
 
-  it("organizatör başkasının etkinliğine erişemez", async () => {
-    const owner = await legacyActor(db, "organizer");
-    const other = await legacyActor(db, "organizer");
-    const event = await f.createEvent(db, { organizerId: owner.id });
-    await expect(getEventInvitationDetail(db, other, { eventId: event.id })).rejects.toMatchObject({ code: "not_found" });
-    await expect(
-      saveEventInvitation(db, other, { ...design, eventId: event.id, templateId: null, customElements: [text] }),
-    ).rejects.toMatchObject({ code: "not_found" });
-    expect(await db.select().from(eventInvitations)).toHaveLength(0);
-    await expect(getEventInvitationDetail(db, owner, { eventId: event.id })).resolves.toBeDefined();
-  });
-
-  it("staff rolü kaydedemez (action)", async () => {
-    const staff = await makeActor(noAccessActor());
+  it("üyeliksiz kullanıcı kaydedemez (action)", async () => {
+    const outsider = await makeActor(noAccessActor());
     const event = await f.createEvent(db);
-    const { defineAction } = createAction({ getActor: async () => staff });
+    const { defineAction } = createAction({ getActor: async () => outsider });
     const res = await defineAction(invitationActionDefs.saveEventInvitation)({ ...design, eventId: event.id, customElements: [text] });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
   });

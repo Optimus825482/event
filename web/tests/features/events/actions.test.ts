@@ -32,14 +32,14 @@ describe("events actions", () => {
     await truncateAll();
   });
 
-  it("staff rolü etkinlik oluşturamaz", async () => {
+  it("üyeliksiz kullanıcı etkinlik oluşturamaz", async () => {
     const actor = await makeActor(noAccessActor());
     const res = await actionsFor(actor).create({ name: "X", startsAt: inDays(3) });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
     expect(await db.select().from(events)).toHaveLength(0);
   });
 
-  it("organizatör oluşturur", async () => {
+  it("Entertainment yöneticisi oluşturur", async () => {
     const actor = await makeActor(managerActor("entertainment"));
     const res = await actionsFor(actor).create({ name: "X", startsAt: inDays(3).toISOString() });
     expect(res.ok).toBe(true);

@@ -5,7 +5,7 @@ import { eventTables, tableTypes, venueTemplates } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { venueActionDefs } from "@/features/venue/action-defs";
 import { createAction } from "@/lib/action";
-import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, memberActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -31,7 +31,7 @@ describe("venue actions", () => {
     await truncateAll();
   });
 
-  it("organizatör yerleşimi kaydeder", async () => {
+  it("F&B yöneticisi yerleşimi kaydeder", async () => {
     const actor = await makeActor(managerActor("fnb"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const res = await actionsFor(actor).saveLayout({
@@ -43,7 +43,7 @@ describe("venue actions", () => {
     if (res.ok) expect(res.data.totalCapacity).toBe(8);
   });
 
-  it("staff rolü yerleşim kaydedemez; satır yazılmaz", async () => {
+  it("mekân izni olmayan yerleşim kaydedemez; satır yazılmaz", async () => {
     const actor = await makeActor(noAccessActor());
     const event = await f.createEvent(db);
     const res = await actionsFor(actor).saveLayout({
@@ -84,8 +84,8 @@ describe("venue actions", () => {
     if (!res.ok) expect(res.message).toContain("VIP-7");
   });
 
-  it("mekân sahibi etkinlikten şablon alamaz", async () => {
-    const owner = await legacyActor(db, "venue_owner");
+  it("etkinlik görme izni olmayan kullanıcı etkinlikten şablon alamaz", async () => {
+    const owner = await makeActor(memberActor("fnb", { venues: "vced" }));
     const event = await f.createEvent(db);
     const res = await actionsFor(owner).saveAsTemplate({ eventId: event.id, name: "X" });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
@@ -101,7 +101,7 @@ describe("venue actions", () => {
     expect(await db.select().from(tableTypes)).toHaveLength(1);
   });
 
-  describe("mekân sahibi şablonları", () => {
+  describe("kullanıcının kendi şablonları", () => {
     async function template(createdById: string) {
       const [row] = await db
         .insert(venueTemplates)
@@ -112,7 +112,7 @@ describe("venue actions", () => {
     }
 
     it("kendi şablonunu günceller ve siler", async () => {
-      const owner = await legacyActor(db, "venue_owner");
+      const owner = await makeActor(managerActor("fnb"));
       const mine = await template(owner.id);
       const actions = actionsFor(owner);
       expect((await actions.updateTemplate({ id: mine.id, name: "Yeni" })).ok).toBe(true);
@@ -121,19 +121,19 @@ describe("venue actions", () => {
     });
 
     it("başkasının (herkese açık) şablonunu değiştiremez ve silemez", async () => {
-      const owner = await legacyActor(db, "venue_owner");
-      const other = await legacyActor(db, "venue_owner");
+      const owner = await makeActor(managerActor("fnb"));
+      const other = await makeActor(managerActor("fnb"));
       const theirs = await template(other.id);
       const actions = actionsFor(owner);
-      expect(await actions.updateTemplate({ id: theirs.id, name: "Ele geçir" })).toMatchObject({ ok: false, code: "forbidden" });
-      expect(await actions.deleteTemplate({ id: theirs.id })).toMatchObject({ ok: false, code: "forbidden" });
+      expect(await actions.updateTemplate({ id: theirs.id, name: "Ele geçir" })).toMatchObject({ ok: false, code: "conflict" });
+      expect(await actions.deleteTemplate({ id: theirs.id })).toMatchObject({ ok: false, code: "conflict" });
       expect(await db.select().from(venueTemplates).where(eq(venueTemplates.id, theirs.id))).toHaveLength(1);
     });
 
-    it("olmayan şablon, başkasınınkiyle aynı yanıtı verir (varlık sızmaz)", async () => {
-      const owner = await legacyActor(db, "venue_owner");
+    it("olmayan şablon not_found", async () => {
+      const owner = await makeActor(managerActor("fnb"));
       const res = await actionsFor(owner).deleteTemplate({ id: crypto.randomUUID() });
-      expect(res).toMatchObject({ ok: false, code: "forbidden" });
+      expect(res).toMatchObject({ ok: false, code: "not_found" });
       const admin = await makeActor(adminActor());
       expect(await actionsFor(admin).deleteTemplate({ id: crypto.randomUUID() })).toMatchObject({ ok: false, code: "not_found" });
     });

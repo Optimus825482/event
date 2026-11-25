@@ -6,12 +6,6 @@ import { landingFor, launcherModules } from "@/features/dashboard/modules";
 import { countdownParts } from "@/components/dashboard/countdown";
 import { adminActor, assistantActor, managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 
-const legacy = (role: PolicyActor["role"], staffId: string | null = null): PolicyActor => ({
-  id: "u1",
-  role,
-  staffId,
-  permissions: [],
-});
 const cards = (a: PolicyActor) => launcherModules(a, visibleNavGroups(a));
 const keys = (a: PolicyActor) => cards(a).map((m) => m.key);
 
@@ -55,11 +49,7 @@ describe("launcherModules", () => {
       adminActor(),
       noAccessActor(),
       ...DEPARTMENTS.flatMap((d) => [managerActor(d, { staffId: "s1" }), assistantActor(d, { staffId: "s1" }), memberActor(d, { events: "v---", reviews: "v---", reservations: "v---" }, { staffId: "s1" })]),
-      legacy("organizer"),
-      legacy("leader", "s1"),
-      legacy("staff"),
-      legacy("controller"),
-      legacy("venue_owner"),
+      memberActor("casino", { check_in: "vc--" }),
     ];
     for (const a of actors) {
       const groups = visibleNavGroups(a);
@@ -108,10 +98,8 @@ describe("landingFor", () => {
     expect(landingFor(a)).toBe("/");
   });
 
-  it("eski roller çalışma alanına gider", () => {
-    expect(landingFor(legacy("controller"))).toBe("/check-in");
-    expect(landingFor(legacy("venue_owner"))).toBe("/venues");
-    expect(landingFor(legacy("leader", "s1"))).toBe("/");
+  it("yalnızca check-in yetkili kullanıcı check-in sayfasına iner", () => {
+    expect(landingFor(memberActor("casino", { check_in: "vc--" }))).toBe("/check-in");
   });
 });
 

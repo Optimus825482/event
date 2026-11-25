@@ -3,22 +3,22 @@ import { notFound } from "next/navigation";
 import { db as defaultDb } from "@/db/client";
 import { customers, eventTables, events, reservations } from "@/db/schema";
 import { RESERVATION_STATUSES, type ReservationStatus } from "@/domain/reservation-status";
-import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
+import { requirePolicyActor } from "@/features/auth/permissions";
+import type { Actor } from "@/features/auth/session";
 import { authorize, can } from "@/features/auth/policy";
 import { listRecipients } from "@/features/invitations/event-invitation";
 import { searchCustomers } from "@/features/customers/queries";
 import { DomainError } from "@/lib/action";
 import { escapeLike, isUuid } from "@/lib/identifiers";
-import { canAccessEvent, MSG, type Executor } from "./internal";
+import { MSG, type Executor } from "./internal";
 import { getReservationPlan } from "./plan-service";
 import { availableTables } from "./read-service";
 import { listReservationsInput, type ListReservationsInput } from "./schemas";
-import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 
-async function accessibleEvent(db: Executor, actor: ActorWithPermissions, eventId: string) {
+async function accessibleEvent(db: Executor, actor: Actor, eventId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId));
-  if (!event || !canAccessEvent(actor, event)) throw new DomainError("not_found", MSG.eventNotFound);
+  if (!event) throw new DomainError("not_found", MSG.eventNotFound);
   return event;
 }
 
@@ -40,7 +40,7 @@ function searchCondition(q: string, withCustomer: boolean): SQL | undefined {
 }
 
 /** Etkinliğin rezervasyonları: ada/telefona/masaya göre arama, durum süzgeci, sayfalama, durum sayıları. */
-export async function listReservations(db: Executor, actor: ActorWithPermissions, raw: ListReservationsInput) {
+export async function listReservations(db: Executor, actor: Actor, raw: ListReservationsInput) {
   authorize(actor, "reservations", "view");
   const input = listReservationsInput.parse(raw);
   const event = await accessibleEvent(db, actor, input.eventId);
@@ -105,7 +105,7 @@ export async function listReservations(db: Executor, actor: ActorWithPermissions
  * (ad, iletişim, sayaçlar) yalnızca `customers:view` olanlara döner; `isBlacklisted` durum
  * işlemleri için herkese döner.
  */
-export async function getReservationDetail(db: Executor, actor: ActorWithPermissions, id: string) {
+export async function getReservationDetail(db: Executor, actor: Actor, id: string) {
   authorize(actor, "reservations", "view");
   if (!isUuid(id)) return null;
   const [row] = await db
@@ -129,7 +129,7 @@ export async function getReservationDetail(db: Executor, actor: ActorWithPermiss
     .innerJoin(customers, eq(customers.id, reservations.customerId))
     .innerJoin(events, eq(events.id, reservations.eventId))
     .where(eq(reservations.id, id));
-  if (!row || !canAccessEvent(actor, row.event)) return null;
+  if (!row) return null;
   const { customer, ...rest } = row;
   return { ...rest, isBlacklisted: customer.isBlacklisted, customer: can(actor, "customers", "view") ? customer : null };
 }
@@ -198,7 +198,7 @@ function istanbulDayStart(now: Date): Date {
 
 /**
  * Rezervasyon ana ekranı: bugünden itibaren (iptal edilmemiş) yaklaşan etkinlikler, en yakın önce.
- * Organizatör yalnızca kendi etkinliklerini görür; ilk etkinlik hero kartında gösterilir.
+ * İlk etkinlik hero kartında gösterilir.
  */
 export async function loadReservationDashboard(raw: { search?: string }) {
   const actor = await requirePolicyActor();
@@ -207,7 +207,6 @@ export async function loadReservationDashboard(raw: { search?: string }) {
   const dayStart = istanbulDayStart(new Date());
 
   const conditions: SQL[] = [gte(events.startsAt, dayStart), ne(events.status, "cancelled")];
-  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
   if (search) conditions.push(ilike(events.name, `%${escapeLike(search)}%`));
 
   const items = await defaultDb
@@ -232,7 +231,7 @@ export async function loadReservationDashboard(raw: { search?: string }) {
 }
 
 /** E-davetiye penceresi için alıcılar; yalnızca `invitations:view` olanlara döner, yoksa `null`. */
-export async function loadInvitationRecipients(actor: ActorWithPermissions, eventId: string) {
+export async function loadInvitationRecipients(actor: Actor, eventId: string) {
   if (!can(actor, "invitations", "view")) return null;
   return listRecipients(defaultDb, actor, { eventId });
 }

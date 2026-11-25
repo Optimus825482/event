@@ -23,7 +23,6 @@ export const PERMISSION_MODULES = [
 
 const id = z.uuid("Geçersiz kimlik");
 const role = z.enum(ROLES, "Geçersiz rol");
-const newUserRole = z.enum(["admin", "user"], "Geçersiz rol");
 
 const username = z
   .string()
@@ -72,7 +71,7 @@ const permissionRowsSchema = z
 export const createUserSchema = z.object({
   username,
   password,
-  role: newUserRole,
+  role,
   memberships: membershipsSchema,
   permissions: permissionRowsSchema,
   email: z.union([z.literal(""), email]).optional(),

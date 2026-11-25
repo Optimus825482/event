@@ -4,7 +4,6 @@ import { events, staff, staffPerformanceReviews, teamMembers, teams, users } fro
 import { authorize, can, type PolicyResource, type Verb } from "@/features/auth/policy";
 import { ownTeamOnly } from "@/features/auth/scope";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { insertNotification, type NotificationRow } from "@/features/notifications/service";
 import { DomainError } from "@/lib/action";
 import { REVIEW_MESSAGES } from "./labels";
@@ -21,15 +20,15 @@ function ownResource(actor: Actor): PolicyResource | undefined {
   return actor.staffId ? { teamLeaderStaffId: actor.staffId } : undefined;
 }
 
-/** Ekip bilinmeden önce rol kapısı: staff/controller/venue_owner ve ekipsiz lider elenir. */
+/** Ekip bilinmeden önce izin kapısı: değerlendirme izni olmayanlar ve ekipsiz lider elenir. */
 export function authorizeReviewsGate(actor: Actor, verb: Verb): void {
   authorize(actor, "reviews", verb, ownResource(actor));
 }
 
-/** Organizatör yalnızca kendi etkinliğini görür; başkasınınki "yok" gibi davranır. */
+/** Değerlendirilecek etkinlik; yoksa `not_found`. */
 export async function loadReviewEvent(executor: Executor, actor: Actor, eventId: string): Promise<EventRow> {
   const [event] = await executor.select().from(events).where(eq(events.id, eventId));
-  if (!event || !canAccessEvent(actor, event)) {
+  if (!event) {
     throw new DomainError("not_found", REVIEW_MESSAGES.eventNotFound);
   }
   return event;

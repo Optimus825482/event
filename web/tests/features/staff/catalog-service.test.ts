@@ -79,7 +79,7 @@ describe("bölüm / unvan / görev yeri", () => {
     await expectDomain(deleteDepartment(db, admin, { id: free.id }), "not_found");
   });
 
-  it("organizatör düzenleyebilir, personel ve kontrolör düzenleyemez", async () => {
+  it("F&B yöneticisi düzenleyebilir, Casino kullanıcıları düzenleyemez", async () => {
     await createDepartment(db, managerActor("fnb"), { ...base, name: "X", color: null });
     await expect(createDepartment(db, memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }), { ...base, name: "Y", color: null })).rejects.toBeInstanceOf(
       ForbiddenError,

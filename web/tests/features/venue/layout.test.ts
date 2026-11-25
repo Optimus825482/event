@@ -8,7 +8,7 @@ import type { TableInput } from "@/features/venue/schemas";
 import { getVenueLayout, saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
-import { adminActor, managerActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -225,11 +225,10 @@ describe("saveLayout", () => {
     }
   });
 
-  it("organizatör başkasının etkinliğini not_found görür; admin kaydedebilir", async () => {
+  it("başka bir F&B yöneticisi ve admin başkasının oluşturduğu etkinliğe kaydeder", async () => {
     const { event } = await setup();
-    const stranger = await legacyActor(db, "organizer");
-    const err = await caught(saveLayout(db, stranger, { eventId: event.id, tables: grid(1), decor }));
-    expect(err.code).toBe("not_found");
+    const other = await makeActor(managerActor("fnb"));
+    expect((await saveLayout(db, other, { eventId: event.id, tables: grid(1), decor })).tables).toHaveLength(1);
     const admin = await makeActor(adminActor());
     const res = await saveLayout(db, admin, { eventId: event.id, tables: grid(1), decor });
     expect(res.tables).toHaveLength(1);
@@ -365,9 +364,8 @@ describe("getVenueLayout", () => {
     expect(layout.decor.elements).toEqual([]);
   });
 
-  it("başkasının etkinliği not_found", async () => {
-    const { event } = await setup();
-    const stranger = await legacyActor(db, "organizer");
-    expect((await caught(getVenueLayout(db, stranger, event.id))).code).toBe("not_found");
+  it("olmayan etkinlik not_found", async () => {
+    const { actor } = await setup();
+    expect((await caught(getVenueLayout(db, actor, crypto.randomUUID()))).code).toBe("not_found");
   });
 });

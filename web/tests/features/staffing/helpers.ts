@@ -28,7 +28,7 @@ export async function expectDomain(promise: Promise<unknown>, code: "conflict" |
   return err as DomainError;
 }
 
-/** Organizatör + etkinlik + `tableCount` masa (M1, M2, ...) + `staffCount` personel. */
+/** F&B yöneticisi + etkinlik + `tableCount` masa (M1, M2, ...) + `staffCount` personel. */
 export async function setupEvent(opts: { tableCount?: number; staffCount?: number; actor?: Actor } = {}) {
   const actor = await makeActor(opts.actor);
   const event = await f.createEvent(db, { organizerId: actor.id });

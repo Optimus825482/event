@@ -10,7 +10,7 @@ import {
   listLeaderTeams,
 } from "@/features/reviews/leader-queries";
 import { canUseLeaderPanel } from "@/features/reviews/leader-scope";
-import { memberActor, noAccessActor, legacyActor } from "../../helpers/actors";
+import { managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
@@ -60,7 +60,7 @@ describe("lider paneli: kapsam", () => {
 
   it("başkasının etkinliği ve üyesi not_found; olmayan kayıt da aynı", async () => {
     const w = await setupReviewWorld();
-    const foreignEvent = await f.createEvent(db, { organizerId: w.organizer.id });
+    const foreignEvent = await f.createEvent(db, { organizerId: w.fnbManager.id });
     await expectDomain(getLeaderEventDetail(db, w.leader, foreignEvent.id), "not_found");
     await expectDomain(getMemberPerformance(db, w.leader, w.otherMember.id), "not_found");
     await expectDomain(getMemberPerformance(db, w.leader, w.leaderStaff.id), "not_found");
@@ -75,7 +75,7 @@ describe("lider paneli: kapsam", () => {
     expect(await listLeaderTeams(db, lone)).toEqual([]);
   });
 
-  it("rol kapısı: personel ve kontrolör reddedilir; bağlı personeli olmayan lider panel kullanamaz", async () => {
+  it("izin kapısı: değerlendirme izni olmayanlar reddedilir; bağlı personeli olmayan lider panel kullanamaz", async () => {
     const w = await setupReviewWorld();
     await expectForbidden(getLeaderDashboard(db, await makeActor(noAccessActor())));
     await expectForbidden(listLeaderTeams(db, await makeActor(memberActor("casino", { check_in: "vc--" }))));
@@ -85,12 +85,11 @@ describe("lider paneli: kapsam", () => {
     await expectForbidden(getLeaderReport(db, unlinked));
   });
 
-  it("organizatör başkasının etkinliğinin ekiplerini görmez", async () => {
+  it("F&B yöneticisi kimin oluşturduğuna bakılmaksızın tüm ekipleri görür", async () => {
     const w = await setupReviewWorld();
-    const stranger = await legacyActor(db, "organizer");
-    expect(await listLeaderTeams(db, stranger)).toEqual([]);
-    await expectDomain(getLeaderEventDetail(db, stranger, w.event.id), "not_found");
-    expect((await listLeaderTeams(db, w.organizer)).length).toBe(2);
+    const other = await makeActor(managerActor("fnb"));
+    expect((await listLeaderTeams(db, other)).length).toBe(2);
+    expect((await listLeaderTeams(db, w.fnbManager)).length).toBe(2);
   });
 });
 

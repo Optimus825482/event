@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, notInArray, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, notInArray, or, sql, type SQLWrapper } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import {
   eventStaffAssignments,
@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { authorize, can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
-import { isAdmin, seesOnlyOwnEvents } from "@/features/auth/scope";
+import { isAdmin } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -49,17 +49,11 @@ export type AdminDashboard = {
   settings: { smtpConfigured: boolean; emailNotifications: boolean };
 };
 
-/** Organizatör yalnızca kendi etkinliklerini görür; diğer roller kısıtsızdır (`canAccessEvent` ile aynı kural). */
-function eventScope(actor: Pick<Actor, "id" | "role">): SQL | undefined {
-  return seesOnlyOwnEvents(actor) ? eq(events.organizerId, actor.id) : undefined;
-}
-
 // Tamamlanan: durumu "completed" ya da başlangıcı geçmiş (iptaller hariç). Yaklaşan: başlangıcı gelecekte ve bitmemiş.
 const OPEN_STATUSES = ["draft", "published", "active"] as const;
 
 export async function getEventsDashboard(db: Executor, actor: Actor): Promise<EventsDashboard> {
   authorize(actor, "events", "view");
-  const scope = eventScope(actor);
 
   const [stats] = await db
     .select({
@@ -68,15 +62,14 @@ export async function getEventsDashboard(db: Executor, actor: Actor): Promise<Ev
       upcoming: sql<number>`count(*) filter (where ${events.startsAt} >= now() and ${events.status} in ('draft','published','active'))::int`,
       draft: sql<number>`count(*) filter (where ${events.status} = 'draft')::int`,
     })
-    .from(events)
-    .where(scope);
+    .from(events);
 
   const hasTables = sql<boolean>`exists (select 1 from ${eventTables} where ${eventTables.eventId} = ${events.id})`;
   const hasTeam = sql<boolean>`exists (select 1 from ${eventStaffAssignments} where ${eventStaffAssignments.eventId} = ${events.id})`;
   const upcoming = await db
     .select({ id: events.id, name: events.name, startsAt: events.startsAt, hasVenueLayout: hasTables, hasTeamAssignment: hasTeam })
     .from(events)
-    .where(and(scope, gte(events.startsAt, sql`now()`), inArray(events.status, [...OPEN_STATUSES]), hasTables, hasTeam))
+    .where(and(gte(events.startsAt, sql`now()`), inArray(events.status, [...OPEN_STATUSES]), hasTables, hasTeam))
     .orderBy(asc(events.startsAt))
     .limit(UPCOMING_LIMIT);
 

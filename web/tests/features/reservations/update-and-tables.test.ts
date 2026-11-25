@@ -13,7 +13,7 @@ import {
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
 import { actorOf, bookable, createTable, expectDomain, reservationRow, TABLE_TAKEN } from "./fixtures";
-import { adminActor, legacyActor } from "../../helpers/actors";
+import { adminActor } from "../../helpers/actors";
 
 describe("updateReservation", () => {
   let admin: Actor;
@@ -186,9 +186,4 @@ describe("availableTables (spec §13 madde 5)", () => {
     }
   });
 
-  it("organizatör başkasının etkinliğinde not_found", async () => {
-    const organizer = await legacyActor(db, "organizer");
-    const { event } = await bookable();
-    await expectDomain(availableTables(db, organizer, { eventId: event.id }), "not_found");
-  });
 });

@@ -4,7 +4,6 @@ import { events, staff, staffPerformanceReviews } from "@/db/schema";
 import { authorize, type PolicyActor } from "@/features/auth/policy";
 import { average } from "./leader-stats";
 import { ratingBand, type RatingBand } from "./score";
-import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -21,7 +20,7 @@ export type StaffReviewSummary = {
 
 /**
  * Personel sayfasındaki "Değerlendirmeler" sekmesi: kişi başına tamamlanmış değerlendirme özeti.
- * Lider bu genel görünümü göremez (kendi ekibi için lider paneli vardır); organizatör yalnızca kendi etkinliklerini.
+ * Lider bu genel görünümü göremez (kendi ekibi için lider paneli vardır).
  * Özel notlar ve yorumlar bu özete girmez.
  */
 export async function listStaffReviewSummaries(executor: Executor, actor: PolicyActor): Promise<StaffReviewSummary[]> {
@@ -34,14 +33,13 @@ export async function listStaffReviewSummaries(executor: Executor, actor: Policy
       color: staff.color,
       score: staffPerformanceReviews.score,
       updatedAt: staffPerformanceReviews.updatedAt,
-      organizerId: events.organizerId,
     })
     .from(staffPerformanceReviews)
     .innerJoin(staff, eq(staff.id, staffPerformanceReviews.staffId))
     .innerJoin(events, eq(events.id, staffPerformanceReviews.eventId))
     .where(eq(staffPerformanceReviews.isCompleted, true))
     .orderBy(desc(staffPerformanceReviews.updatedAt));
-  const visible = rows.filter((r) => !seesOnlyOwnEvents(actor) || r.organizerId === actor.id);
+  const visible = rows;
 
   const byStaff = new Map<string, typeof visible>();
   for (const row of visible) byStaff.set(row.staffId, [...(byStaff.get(row.staffId) ?? []), row]);
@@ -85,7 +83,6 @@ export async function listStaffReviewHistory(
     .select({
       eventId: events.id,
       eventName: events.name,
-      organizerId: events.organizerId,
       score: staffPerformanceReviews.score,
       updatedAt: staffPerformanceReviews.updatedAt,
     })
@@ -95,7 +92,6 @@ export async function listStaffReviewHistory(
     .orderBy(desc(staffPerformanceReviews.updatedAt))
     .limit(50);
   return rows
-    .filter((r) => !seesOnlyOwnEvents(actor) || r.organizerId === actor.id)
     .map((r) => ({
       eventId: r.eventId,
       eventName: r.eventName,

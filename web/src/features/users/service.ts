@@ -120,9 +120,9 @@ async function writeMemberships(tx: Db | Tx, userId: string, memberships: readon
 }
 
 /** İzin satırlarını değiştirir; yazılan satır sayısını döner. */
-async function writePermissions(tx: Db | Tx, userId: string, rows: readonly PermissionRow[], role: Role): Promise<number> {
+async function writePermissions(tx: Db | Tx, userId: string, rows: readonly PermissionRow[]): Promise<number> {
   await tx.delete(userPermissions).where(eq(userPermissions.userId, userId));
-  const kept = effectiveRows(rows, role);
+  const kept = effectiveRows(rows);
   if (kept.length > 0) await tx.insert(userPermissions).values(kept.map((p) => ({ ...p, userId })));
   return kept.length;
 }
@@ -179,7 +179,7 @@ export async function createUser(db: Db | Tx, actor: Actor, input: CreateUserInp
       .insert(accounts)
       .values({ userId: user.id, accountId: user.id, providerId: "credential", password: passwordHash });
     await writeMemberships(tx, user.id, input.memberships);
-    await writePermissions(tx, user.id, input.permissions, input.role);
+    await writePermissions(tx, user.id, input.permissions);
     return readSummary(tx, user.id);
   });
 }
@@ -216,7 +216,7 @@ export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInp
     } else {
       nextMemberships = memberships ?? (await readMemberships(tx, id));
       nextRows = permissions ?? (await readPermissions(tx, id));
-      if (role === "user" && permissions === undefined) nextRows = pruneToCeiling(nextRows, nextMemberships);
+      if (permissions === undefined) nextRows = pruneToCeiling(nextRows, nextMemberships);
       assertAccess(role, nextMemberships, nextRows);
     }
 
@@ -225,10 +225,10 @@ export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInp
 
     if (role === "admin") {
       await writeMemberships(tx, id, []);
-      await writePermissions(tx, id, [], role);
+      await writePermissions(tx, id, []);
     } else {
       if (memberships !== undefined) await writeMemberships(tx, id, memberships);
-      if (permissions !== undefined || role === "user") await writePermissions(tx, id, nextRows, role);
+      await writePermissions(tx, id, nextRows);
     }
     return readSummary(tx, id);
   });
@@ -297,7 +297,7 @@ export async function setUserPermissions(
     assertNotDeleted(target);
     const memberships = await readMemberships(tx, input.id);
     assertAccess(target.role, memberships, input.permissions);
-    written = await writePermissions(tx, input.id, input.permissions, target.role);
+    written = await writePermissions(tx, input.id, input.permissions);
   });
   return { id: input.id, count: written };
 }
@@ -316,10 +316,10 @@ export async function setUserMemberships(
     const target = await getTarget(tx, input.id);
     assertNotDeleted(target);
     const current = await readPermissions(tx, input.id);
-    const kept = target.role === "user" ? pruneToCeiling(current, input.memberships) : current;
+    const kept = pruneToCeiling(current, input.memberships);
     assertAccess(target.role, input.memberships, kept);
     await writeMemberships(tx, input.id, input.memberships);
-    if (kept.length !== current.length) await writePermissions(tx, input.id, kept, target.role);
+    if (kept.length !== current.length) await writePermissions(tx, input.id, kept);
   });
   return { id: input.id, count: input.memberships.length };
 }
@@ -371,7 +371,7 @@ export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInp
         email: `${target.id}${DELETED_EMAIL_SUFFIX}`,
         emailVerified: false,
         image: null,
-        role: "staff",
+        role: "user",
         isActive: false,
         staffId: null,
         color: null,

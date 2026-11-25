@@ -15,14 +15,14 @@ describe("customers queries", () => {
   });
 
   describe("yetki", () => {
-    it("controller rolü hiçbir sorguyu çalıştıramaz", async () => {
+    it("yalnızca check-in izni olan kullanıcı hiçbir sorguyu çalıştıramaz", async () => {
       const controller = memberActor("casino", { check_in: "vc--" }, { id: ADMIN.id });
 
       await expect(searchCustomers(db, controller, {})).rejects.toBeInstanceOf(ForbiddenError);
       await expect(getCustomerDetail(db, controller, ADMIN.id)).rejects.toBeInstanceOf(ForbiddenError);
     });
 
-    it("staff görüntüleyebilir; izin satırı customers.view kapatırsa göremez", async () => {
+    it("Casino kullanıcısı görüntüleyebilir; izin satırı customers.view kapatırsa göremez", async () => {
       await createCustomer(db, { fullName: "Gösterilen" });
       const staff = memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }, { id: ADMIN.id });
       expect((await searchCustomers(db, staff, {})).items).toHaveLength(1);

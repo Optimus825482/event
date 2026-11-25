@@ -14,7 +14,7 @@ import {
 } from "@/features/venue/templates-service";
 import type { TemplateLayout } from "@/features/venue/schemas";
 import { DomainError } from "@/lib/action";
-import { adminActor, managerActor, persistActor, legacyActor } from "../../helpers/actors";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -168,11 +168,9 @@ describe("saveAsTemplate", () => {
     ]);
   });
 
-  it("başkasının etkinliğinden şablon alınamaz", async () => {
-    const owner = await legacyActor(db, "organizer");
-    const stranger = await legacyActor(db, "organizer");
-    const event = await f.createEvent(db, { organizerId: owner.id });
-    expect((await caught(saveAsTemplate(db, stranger, { eventId: event.id, name: "X" }))).code).toBe("not_found");
+  it("olmayan etkinlikten şablon alınamaz", async () => {
+    const actor = await makeActor();
+    expect((await caught(saveAsTemplate(db, actor, { eventId: crypto.randomUUID(), name: "X" }))).code).toBe("not_found");
   });
 });
 
@@ -181,7 +179,7 @@ describe("şablon yönetimi", () => {
     await truncateAll();
   });
 
-  it("liste: organizatör kendi ve herkese açık şablonları görür; admin hepsini", async () => {
+  it("liste: kullanıcı kendi ve herkese açık şablonları görür; admin hepsini", async () => {
     const actor = await makeActor();
     const other = await makeActor();
     await insertTemplate(actor.id, { name: "Benim" });

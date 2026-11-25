@@ -2,7 +2,6 @@ import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventStaffAssignments, events, staff, teamMembers, teams } from "@/db/schema";
 import { authorize, type PolicyActor } from "@/features/auth/policy";
-import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 export type TeamCard = {
   id: string;
@@ -19,7 +18,7 @@ export type TeamCard = {
 
 /**
  * Personel sayfasındaki "Ekipler" sekmesi: tüm etkin ekipler, lideri, üye sayısı ve bağlı olduğu
- * etkinlik. Organizatör yalnızca kendi etkinliklerinin ekiplerini görür (genel ekipler yöneticiye özgüdür).
+ * etkinlik.
  */
 export async function listTeamCards(db: Db | Tx, actor: PolicyActor): Promise<TeamCard[]> {
   authorize(actor, "staff", "view");
@@ -33,14 +32,13 @@ export async function listTeamCards(db: Db | Tx, actor: PolicyActor): Promise<Te
       eventName: events.name,
       eventStartsAt: events.startsAt,
       eventStatus: events.status,
-      organizerId: events.organizerId,
     })
     .from(teams)
     .leftJoin(staff, eq(staff.id, teams.leaderStaffId))
     .leftJoin(events, eq(events.id, teams.eventId))
     .where(eq(teams.isActive, true))
     .orderBy(desc(events.startsAt), asc(teams.sortOrder), asc(teams.name));
-  const visible = rows.filter((r) => !seesOnlyOwnEvents(actor) || r.organizerId === actor.id);
+  const visible = rows;
   if (visible.length === 0) return [];
 
   const ids = visible.map((r) => r.id);

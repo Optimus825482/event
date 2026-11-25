@@ -2,7 +2,6 @@ import { asc, eq } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { events, tableGroups, tableGroupTables } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
-import { canAccessEvent } from "@/features/events/access";
 import { listEventTables } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import type { FloorPlanData, PlanTable } from "./plan-types";
@@ -27,15 +26,14 @@ export async function listTableGroupMembers(db: Db | Tx, eventId: string): Promi
 }
 
 /**
- * Etkinliğin salt okunur yerleşimi (alan planı çizimi için). Organizatör yalnızca kendi etkinliğini görür;
- * yoksa ya da erişilemiyorsa `not_found`. Rol/izin denetimi çağıranın işidir.
+ * Etkinliğin salt okunur yerleşimi (alan planı çizimi için). Etkinlik yoksa `not_found`. Rol/izin denetimi çağıranın işidir.
  */
 export async function getFloorPlan(db: Db | Tx, actor: Actor, eventId: string): Promise<{ eventName: string } & FloorPlanData> {
   const [event] = await db
-    .select({ name: events.name, organizerId: events.organizerId, layoutDecor: events.layoutDecor })
+    .select({ name: events.name, layoutDecor: events.layoutDecor })
     .from(events)
     .where(eq(events.id, eventId));
-  if (!event || !canAccessEvent(actor, event)) throw new DomainError("not_found", EVENT_NOT_FOUND);
+  if (!event) throw new DomainError("not_found", EVENT_NOT_FOUND);
   const [rows, types, memberships] = await Promise.all([
     listEventTables(db, eventId),
     listTableTypes(db),

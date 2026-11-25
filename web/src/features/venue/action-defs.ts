@@ -1,6 +1,5 @@
 import type { z } from "zod";
 import { db } from "@/db/client";
-import { withPermissions } from "@/features/auth/permissions";
 import { authorize } from "@/features/auth/policy";
 import type { ActionOptions } from "@/lib/action";
 import {
@@ -20,7 +19,6 @@ import {
   createBlankTemplate,
   deleteVenueTemplate,
   duplicateVenueTemplate,
-  templateOwnerResource,
   updateVenueTemplate,
 } from "./templates-service";
 
@@ -50,8 +48,8 @@ export const venueActionDefs = {
     verb: "create",
     input: saveAsTemplateSchema,
     handler: async ({ actor, input }) => {
-      // Kaynak etkinliği okuyabilmek de gerekir (örn. mekân sahibi rolü etkinlik göremez).
-      authorize(await withPermissions(actor), "events", "view");
+      // Kaynak etkinliği okuyabilmek de gerekir.
+      authorize(actor, "events", "view");
       const row = await saveAsTemplate(db, actor, input);
       return { id: row.id, name: row.name };
     },
@@ -60,7 +58,6 @@ export const venueActionDefs = {
     module: "venues",
     verb: "edit",
     input: updateTemplateSchema,
-    resource: ({ input }) => templateOwnerResource(db, input.id),
     handler: async ({ actor, input }) => {
       const row = await updateVenueTemplate(db, actor, input);
       return { id: row.id };
@@ -70,7 +67,6 @@ export const venueActionDefs = {
     module: "venues",
     verb: "delete",
     input: templateIdSchema,
-    resource: ({ input }) => templateOwnerResource(db, input.id),
     handler: async ({ actor, input }) => deleteVenueTemplate(db, actor, input),
   }),
   duplicateTemplate: def({

@@ -2,29 +2,22 @@ import { describe, expect, it } from "vitest";
 import type { Department, DepartmentLevel, Membership } from "@/features/auth/departments";
 import type { PolicyActor } from "@/features/auth/policy";
 import { ROLES, type Role } from "@/features/auth/roles";
-import { inDepartment, isAdmin, ownTeamOnly, seesOnlyOwnEvents } from "@/features/auth/scope";
+import { inDepartment, isAdmin, ownTeamOnly } from "@/features/auth/scope";
 
 const m = (department: Department, level: DepartmentLevel): Membership => ({ department, level });
 
-const actor = (role: Role, memberships?: Membership[]): PolicyActor => ({
+const actor = (role: Role, memberships: Membership[] = []): PolicyActor => ({
   id: "u1",
   role,
   staffId: null,
-  ...(memberships ? { memberships } : {}),
+  memberships,
+  permissions: [],
 });
 
 describe("isAdmin", () => {
   for (const role of ROLES) {
     it(`${role} -> ${role === "admin"}`, () => {
       expect(isAdmin({ role })).toBe(role === "admin");
-    });
-  }
-});
-
-describe("seesOnlyOwnEvents", () => {
-  for (const role of ROLES) {
-    it(`${role} -> ${role === "organizer"}`, () => {
-      expect(seesOnlyOwnEvents({ role })).toBe(role === "organizer");
     });
   }
 });
@@ -45,19 +38,15 @@ describe("inDepartment", () => {
     });
   }
 
-  it("üyelik alanı olmayan aktör hiçbir departmanda değildir", () => {
-    expect(inDepartment(actor("organizer"), "fnb")).toBe(false);
+  it("üyeliği olmayan aktör hiçbir departmanda değildir", () => {
+    expect(inDepartment(actor("user"), "fnb")).toBe(false);
+    expect(inDepartment(actor("admin"), "fnb")).toBe(false);
   });
 });
 
 describe("ownTeamOnly", () => {
   const CASES: [string, PolicyActor, boolean][] = [
-    ["leader", actor("leader"), true],
     ["admin", actor("admin"), false],
-    ["organizer", actor("organizer"), false],
-    ["staff", actor("staff"), false],
-    ["controller", actor("controller"), false],
-    ["venue_owner", actor("venue_owner"), false],
     ["F&B yöneticisi", actor("user", [m("fnb", "manager")]), false],
     ["F&B asistanı", actor("user", [m("fnb", "assistant")]), false],
     ["F&B kullanıcısı", actor("user", [m("fnb", "member")]), true],

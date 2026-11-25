@@ -1,4 +1,4 @@
-import { ROLE_LABELS } from "@/components/layout/role-labels";
+import { ADMIN_LABEL } from "@/components/layout/role-labels";
 import {
   DEPARTMENT_LABELS,
   grantableCeiling,
@@ -60,21 +60,20 @@ export function pruneGrants(grants: readonly PermissionRow[], memberships: reado
 
 /** Liste sütunu: "Sistem Yöneticisi" ya da "Departman · Düzey, …". */
 export function accessSummary(role: Role, memberships: readonly Membership[]): string {
-  if (role === "admin") return ROLE_LABELS.admin;
+  if (role === "admin") return ADMIN_LABEL;
   if (memberships.length > 0) {
     return memberships.map((m) => `${DEPARTMENT_LABELS[m.department]} · ${LEVEL_LABELS[m.level]}`).join(", ");
   }
-  // Eski roller (Task 10'da kalkar) departmansız olsa da kendi adıyla görünür.
-  return role === "user" ? "Departman atanmamış" : ROLE_LABELS[role];
+  return "Departman atanmamış";
 }
 
 /** Rol seçimi: yeni model yalnızca iki seçenek sunar. */
 export const ROLE_CHOICES = [
-  { value: "admin", label: ROLE_LABELS.admin },
+  { value: "admin", label: ADMIN_LABEL },
   { value: "user", label: "Departman kullanıcısı" },
 ] as const;
 
-/** Rolün departman ve izin alanları var mı? (Sistem yöneticisi ve eski roller için gizlenir.) */
+/** Rolün departman ve izin alanları var mı? (Sistem yöneticisi için gizlenir.) */
 export function usesDepartments(role: Role): boolean {
   return role === "user";
 }

@@ -9,14 +9,15 @@ import { ToastProvider } from "@/components/ui/toast";
 import { db } from "@/db/client";
 import { UnauthenticatedError } from "@/features/auth/errors";
 import { visibleNavGroups } from "@/features/auth/nav";
-import { requirePolicyActor, type ActorWithPermissions } from "@/features/auth/permissions";
+import { requirePolicyActor } from "@/features/auth/permissions";
+import type { Actor } from "@/features/auth/session";
 import { can } from "@/features/auth/policy";
 import { countUnread } from "@/features/notifications/service";
 import { currentSessionExpiry } from "@/features/users/current-session";
 import { getOwnAvatar } from "@/features/users/profile";
 import { isAdmin } from "@/features/auth/scope";
 
-async function currentActorOrLogin(): Promise<ActorWithPermissions> {
+async function currentActorOrLogin(): Promise<Actor> {
   try {
     return await requirePolicyActor();
   } catch (error) {
