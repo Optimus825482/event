@@ -226,17 +226,39 @@ export async function reviewableStaff(
   actor: PolicyActor,
   eventId: string,
 ): Promise<Map<string, ReviewBasis[]>> {
+  return (await reviewableStaffByEvent(ex, actor, [eventId])).get(eventId) ?? new Map();
+}
+
+/**
+ * `reviewableStaff`'ın toplu biçimi: her etkinlik için aynı sonuç, tek toplu hiyerarşi yüklemesiyle
+ * (etkinlik sayısından bağımsız en fazla 6 sorgu; değerlendiremeyen aktör için hiç sorgu yok).
+ * Dönen haritada istenen her etkinlik vardır (değerlendirilebilir kimse yoksa boş harita).
+ */
+export async function reviewableStaffByEvent(
+  ex: Executor,
+  actor: PolicyActor,
+  eventIds: readonly string[],
+): Promise<Map<string, Map<string, ReviewBasis[]>>> {
+  const ids = [...new Set(eventIds)];
+  const result = new Map<string, Map<string, ReviewBasis[]>>(ids.map((id) => [id, new Map()]));
+  if (ids.length === 0) return result;
   if (seesWholeEvent(actor)) {
-    const map = new Map<string, ReviewBasis[]>();
-    for (const id of await eventStaffIds(ex, eventId)) {
-      if (id !== actor.staffId) map.set(id, ["manager"]);
+    const hierarchies = await loadHierarchies(ex, ids);
+    for (const id of ids) {
+      const map = new Map<string, ReviewBasis[]>();
+      for (const staffId of staffOf(hierarchies.get(id) ?? emptyHierarchy())) {
+        if (staffId !== actor.staffId) map.set(staffId, ["manager"]);
+      }
+      result.set(id, map);
     }
-    return map;
+    return result;
   }
-  if (!ownTeamOnly(actor)) return new Map();
+  if (!ownTeamOnly(actor)) return result;
   const reviewerId = hierarchyReviewerId(actor);
-  if (reviewerId === null) return new Map();
-  return reviewableBy(await loadHierarchy(ex, eventId), reviewerId);
+  if (reviewerId === null) return result;
+  const hierarchies = await loadHierarchies(ex, ids);
+  for (const id of ids) result.set(id, reviewableBy(hierarchies.get(id) ?? emptyHierarchy(), reviewerId));
+  return result;
 }
 
 /** X'i etkinlikte bir dayanakla değerlendirebilen personel kimlikleri (tekil, sıralı; X hariç). */

@@ -12,6 +12,7 @@ import {
   eventStaffIds,
   reviewEventIds,
   reviewableStaff,
+  reviewableStaffByEvent,
   reviewerStaffIdsFor,
   type ReviewBasis,
 } from "@/features/reviews/authority";
@@ -19,6 +20,8 @@ import { assistantActor, managerActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { addTeamMember, assignStaffToTables, createSectionHead, createTeam } from "../../helpers/fnb";
+import { scopedTeams } from "@/features/reviews/leader-scope";
+import { listReviewableEvents } from "@/features/reviews/queries";
 import { expectDomain, expectForbidden, makeActor, makeLeader } from "./helpers";
 
 /**
@@ -272,5 +275,94 @@ describe("hiyerarşik değerlendirme yetkisi", () => {
     const W5 = await f.createStaff(db);
     await f.createAssignment(db, { eventId: e.id, staffId: W5.id, isActive: false });
     expect(await reviewEventIds(db, w.manager)).toEqual([w.event.id, w.event2.id]);
+  });
+});
+
+describe("toplu değerlendirilebilir personel (reviewableStaffByEvent)", () => {
+  let w: World;
+
+  beforeEach(async () => {
+    await truncateAll();
+    w = await setupHierarchy();
+  });
+
+  /** Toplu sonuç, etkinlik başına `reviewableStaff` ile birebir aynı olmalı. */
+  async function expectEquivalent(actor: Actor, eventIds: string[]) {
+    const batched = await reviewableStaffByEvent(db, actor, eventIds);
+    expect([...batched.keys()].sort()).toEqual([...new Set(eventIds)].sort());
+    for (const id of eventIds) {
+      const single = Object.fromEntries(await reviewableStaff(db, actor, id));
+      expect(Object.fromEntries(batched.get(id) ?? new Map())).toEqual(single);
+    }
+    return batched;
+  }
+
+  it("yönetici, kaptan, loca süpervizörü ve kısım sorumlusu için etkinlik başına sonuçla aynı", async () => {
+    // E2'de loca grubu: süpervizör L, loca masası L1'e atanmış W6; E'de L kısım sorumlusu değil.
+    const L = await f.createStaff(db, { fullName: "Loca Süpervizörü L" });
+    const W6 = await f.createStaff(db, { fullName: "Garson W6" });
+    const L1 = await f.createTable(db, w.event2.id, { label: "L1", isLoca: true });
+    const LG = await f.createTableGroup(db, w.event2.id, { name: "Loca L1", supervisorStaffId: L.id, groupType: "loca" });
+    await db.insert(tableGroupTables).values({ eventId: w.event2.id, tableGroupId: LG.id, tableId: L1.id });
+    await assignStaffToTables(db, { eventId: w.event2.id, staffId: W6.id, tableIds: [L1.id] });
+    // H, E2'de de kısım sorumlusu; S3'ün E'deki grubu E2'nin ekibine bağlı (etkinlikler arası bağ dayanak üretmez).
+    await createSectionHead(db, { eventId: w.event2.id, staffId: w.H.id });
+    const S3 = await f.createStaff(db, { fullName: "Süpervizör S3" });
+    await f.createTableGroup(db, w.event.id, { name: "G3", supervisorStaffId: S3.id, teamId: w.T2.id });
+    await createSectionHead(db, { eventId: w.event2.id, staffId: S3.id });
+
+    const events = [w.event.id, w.event2.id];
+    const loca = await makeLeader(L.id);
+    const s3 = await makeLeader(S3.id);
+    await expectEquivalent(w.manager, events);
+    await expectEquivalent(w.actors.C, events);
+    await expectEquivalent(w.actors.S, events);
+    await expectEquivalent(w.actors.H, events);
+    const forLoca = await expectEquivalent(loca, events);
+    expect(Object.fromEntries(forLoca.get(w.event2.id) ?? new Map())).toEqual({ [W6.id]: ["supervisor"] });
+    expect(forLoca.get(w.event.id)?.size).toBe(0);
+    const forS3 = await expectEquivalent(s3, events);
+    expect(forS3.get(w.event.id)?.size).toBe(0);
+    expect(forS3.get(w.event2.id)?.has(w.W9.id)).toBe(true);
+  });
+
+  it("izinsiz ve staffId'siz aktör için her etkinlik boş; boş liste boş harita", async () => {
+    const events = [w.event.id, w.event2.id];
+    for (const actor of [managerActor("casino", { staffId: w.S.id }), await makeLeader(null)]) {
+      const batched = await expectEquivalent(actor, events);
+      expect([...batched.values()].every((m) => m.size === 0)).toBe(true);
+    }
+    expect((await reviewableStaffByEvent(db, w.manager, [])).size).toBe(0);
+  });
+
+  it("scopedTeams ve listReviewableEvents sorgu sayısı etkinlik sayısıyla artmaz", async () => {
+    let queries = 0;
+    const counted = drizzle(pool, { schema, logger: { logQuery: () => void queries++ } }) as unknown as Db;
+    const countFor = async (actor: Actor) => {
+      queries = 0;
+      const teams = await scopedTeams(counted, actor);
+      const scopeQueries = queries;
+      queries = 0;
+      const listed = await listReviewableEvents(counted, actor);
+      return { teams: teams.length, events: listed.length, scopeQueries, listQueries: queries };
+    };
+    const before = { C: await countFor(w.actors.C), manager: await countFor(w.manager) };
+    expect(before.C.events).toBe(2);
+    expect(before.manager.events).toBe(2);
+
+    for (let i = 0; i < 4; i += 1) {
+      const e = await f.createEvent(db, { organizerId: w.manager.id });
+      const worker = await f.createStaff(db);
+      const team = await createTeam(db, { eventId: e.id, leaderStaffId: w.C.id });
+      await addTeamMember(db, team.id, worker.id);
+    }
+    const after = { C: await countFor(w.actors.C), manager: await countFor(w.manager) };
+    expect(after.C.events).toBe(6);
+    expect(after.manager.events).toBe(6);
+    expect(after.C.teams).toBe(before.C.teams + 4);
+    for (const who of ["C", "manager"] as const) {
+      expect(after[who].scopeQueries).toBe(before[who].scopeQueries);
+      expect(after[who].listQueries).toBe(before[who].listQueries);
+    }
   });
 });

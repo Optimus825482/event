@@ -3,7 +3,7 @@ import type { Db, Tx } from "@/db/client";
 import { events, staff, teamMembers, teams } from "@/db/schema";
 import { can, type PolicyActor } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
-import { reviewEventIds, reviewableStaff, type ReviewBasis } from "./authority";
+import { reviewEventIds, reviewableStaffByEvent, type ReviewBasis } from "./authority";
 import { authorizeReviewsGate } from "./service";
 
 type Executor = Db | Tx;
@@ -36,17 +36,14 @@ export function canUseLeaderPanel(actor: PolicyActor): boolean {
 
 /**
  * Aktörün verilen etkinliklerde değerlendirebildiği personel (etkinlik → personel → dayanaklar).
- * Etkinlik başına `reviewableStaff` çağrılır (her biri en fazla 6 sorgu); tek yerde toplanmıştır ki
- * toplu bir yetki çekirdeği işlevine geçiş yalnızca burayı değiştirsin.
+ * Tek toplu hiyerarşi yüklemesi: sorgu sayısı etkinlik sayısından bağımsızdır.
  */
 export async function reviewableByEvent(
   executor: Executor,
   actor: PolicyActor,
   eventIds: readonly string[],
 ): Promise<Map<string, Map<string, ReviewBasis[]>>> {
-  const result = new Map<string, Map<string, ReviewBasis[]>>();
-  for (const eventId of eventIds) result.set(eventId, await reviewableStaff(executor, actor, eventId));
-  return result;
+  return reviewableStaffByEvent(executor, actor, eventIds);
 }
 
 /**
