@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { assignmentTables, eventStaffAssignments, tableGroupTables, tableGroups, teams } from "@/db/schema";
+import { assignmentTables, eventStaffAssignments, eventTables, tableGroupTables, tableGroups, teams } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
@@ -36,6 +36,33 @@ function groupValues(eventId: string, group: GroupInput, index: number) {
   };
 }
 
+/** Loca grubu yalnızca loca masalarını, standart grup yalnızca loca olmayanları içerir (istek başına, hiçbir şey yazılmadan). */
+async function assertGroupTypesMatchTables(tx: Tx, eventId: string, input: GroupInput[]) {
+  const ids = unique(input.flatMap((g) => g.tableIds));
+  if (ids.length === 0) return;
+  const rows = await tx
+    .select({ id: eventTables.id, label: eventTables.label, isLoca: eventTables.isLoca })
+    .from(eventTables)
+    .where(and(eq(eventTables.eventId, eventId), inArray(eventTables.id, ids)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const notLoca = new Set<string>();
+  const loca = new Set<string>();
+  for (const group of input) {
+    for (const tableId of group.tableIds) {
+      const table = byId.get(tableId);
+      if (!table) continue;
+      if (group.groupType === "loca" && !table.isLoca) notLoca.add(table.label);
+      if (group.groupType !== "loca" && table.isLoca) loca.add(table.label);
+    }
+  }
+  if (notLoca.size > 0) {
+    throw new DomainError("conflict", `Loca grubuna yalnızca loca masaları eklenebilir: ${[...notLoca].sort().join(", ")}`);
+  }
+  if (loca.size > 0) {
+    throw new DomainError("conflict", `Loca masaları yalnızca loca grubuna eklenebilir: ${[...loca].sort().join(", ")}`);
+  }
+}
+
 /**
  * Etkinliğin masa gruplarını istenen duruma getirir (transaction içinde çağrılır).
  * Bir masa yalnızca tek gruba ait olabilir (spec §13.10): istek içinde ikinci kez görülen
@@ -55,6 +82,7 @@ export async function applyGroups(tx: Tx, eventId: string, input: GroupInput[]):
     eventId,
     input.map((g) => g.teamId),
   );
+  await assertGroupTypesMatchTables(tx, eventId, input);
 
   const existing = await tx.select({ id: tableGroups.id }).from(tableGroups).where(eq(tableGroups.eventId, eventId));
   const { keep, deleteIds } = splitKept(input, existing);

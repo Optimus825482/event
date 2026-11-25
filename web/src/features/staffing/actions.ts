@@ -6,6 +6,7 @@ import { staffingActionDefs } from "./action-defs";
 export const saveTeamsAction = defineAction(staffingActionDefs.saveTeams);
 export const saveTableGroupsAction = defineAction(staffingActionDefs.saveTableGroups);
 export const assignTeamToGroupAction = defineAction(staffingActionDefs.assignTeamToGroup);
+export const groupUngroupedLocasAction = defineAction(staffingActionDefs.groupUngroupedLocas);
 export const saveAssignmentsAction = defineAction(staffingActionDefs.saveAssignments);
 export const autoAssignAction = defineAction(staffingActionDefs.autoAssign);
 export const saveExtraStaffAction = defineAction(staffingActionDefs.saveExtraStaff);
