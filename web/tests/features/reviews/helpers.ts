@@ -5,10 +5,28 @@ import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { ForbiddenError } from "@/features/auth/errors";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
-export async function makeActor(role: Role, staffId?: string | null): Promise<Actor> {
-  const u = await f.createUser(db, { role, ...(staffId ? { staffId } : {}) });
+/** Departman aktörü ya da eski rol adı (bildirim testleri hedef rol için eski rolleri kullanır). */
+export async function makeActor(who: Actor | Role, staffId?: string | null): Promise<Actor> {
+  if (typeof who !== "string") return persistActor(db, who);
+  const u = await f.createUser(db, { role: who, ...(staffId ? { staffId } : {}) });
+  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
+}
+
+/**
+ * Ekip lideri: eski `leader` rolü. Kapsam (yalnızca kendi ekibi) kaynak kodda hâlâ role bağlı;
+ * Task 5'te `memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }, { staffId })` olur.
+ */
+export async function makeLeader(staffId: string | null = null): Promise<Actor> {
+  const u = await f.createUser(db, { role: "leader", ...(staffId ? { staffId } : {}) });
+  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
+}
+
+/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
+export async function makeLegacy(role: Role): Promise<Actor> {
+  const u = await f.createUser(db, { role });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
@@ -46,16 +64,16 @@ export const FULL_RATINGS = {
  * ayrıca başka liderin ekibi ve üyesi.
  */
 export async function setupReviewWorld(opts: { reviewEnabled?: boolean } = {}) {
-  const organizer = await makeActor("organizer");
+  const organizer = await makeActor(managerActor("fnb"));
   const event = await f.createEvent(db, {
     organizerId: organizer.id,
     reviewEnabled: opts.reviewEnabled ?? true,
   });
 
   const leaderStaff = await f.createStaff(db, { fullName: "Lider Bir" });
-  const leader = await makeActor("leader", leaderStaff.id);
+  const leader = await makeLeader(leaderStaff.id);
   const otherLeaderStaff = await f.createStaff(db, { fullName: "Lider İki" });
-  const otherLeader = await makeActor("leader", otherLeaderStaff.id);
+  const otherLeader = await makeLeader(otherLeaderStaff.id);
 
   const [team] = await db
     .insert(teams)
@@ -78,6 +96,6 @@ export async function setupReviewWorld(opts: { reviewEnabled?: boolean } = {}) {
     { teamId: otherTeam.id, staffId: otherMember.id },
   ]);
 
-  const admin = await makeActor("admin");
+  const admin = await makeActor(adminActor());
   return { organizer, event, leader, leaderStaff, otherLeader, team, otherTeam, member1, member2, otherMember, admin };
 }

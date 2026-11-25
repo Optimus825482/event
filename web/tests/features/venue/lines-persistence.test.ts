@@ -7,12 +7,12 @@ import { getFloorPlan } from "@/features/venue/plan-service";
 import { applyVenueTemplate, getVenueLayout, saveAsTemplate, saveLayout } from "@/features/venue/service";
 import { parseTemplateLayout } from "@/features/venue/template-layout";
 import { DomainError } from "@/lib/action";
+import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(): Promise<Actor> {
-  const u = await f.createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
+  return persistActor(db, managerActor("entertainment"));
 }
 
 const lines = [

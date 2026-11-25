@@ -6,7 +6,9 @@ import { GET } from "@/app/api/uploads/[...path]/route";
 import { db } from "@/db/client";
 import { eventInvitations, invitationTemplates, systemSettings } from "@/db/schema";
 import type { Role } from "@/features/auth/roles";
+import type { Actor } from "@/features/auth/session";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
+import { managerActor, memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createEvent } from "../../helpers/factories";
 import { loginAs } from "../realtime/helpers";
@@ -48,15 +50,15 @@ describe("GET /api/uploads: kategoriye göre yetki (M4)", () => {
     await truncateAll();
   });
 
-  const login = (role: Role) => loginAs(role);
+  const login = (who: Role | Actor) => loginAs(who);
 
   it("logo: yalnızca ayarlar ya da davetiye görüntüleyebilen roller okur", async () => {
     await db.insert(systemSettings).values({ logo: `logo/${ids.logo}.webp` });
     const admin = await login("admin");
-    const organizer = await login("organizer");
-    const controller = await login("controller");
+    const organizer = await login(managerActor("entertainment"));
+    const controller = await login(memberActor("casino", { check_in: "vc--" }));
     const venueOwner = await login("venue_owner");
-    const staff = await login("staff");
+    const staff = await login(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
 
     expect(await fetchAs(admin.cookie, "logo", `${ids.logo}.webp`)).toBe(200);
     expect(await fetchAs(organizer.cookie, "logo", `${ids.logo}.webp`)).toBe(200);
@@ -66,8 +68,14 @@ describe("GET /api/uploads: kategoriye göre yetki (M4)", () => {
   });
 
   it("invitation: davetiye yetkisi olmayan roller okuyamaz", async () => {
-    for (const role of ["controller", "venue_owner", "staff", "leader"] as const) {
-      const actor = await login(role);
+    const denied = [
+      memberActor("casino", { check_in: "vc--" }),
+      "venue_owner",
+      memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }),
+      memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }),
+    ] as const;
+    for (const who of denied) {
+      const actor = await login(who);
       expect(await fetchAs(actor.cookie, "invitation", `${ids.mineBg}.webp`)).toBe(403);
     }
   });

@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET } from "@/app/api/events/[eventId]/stream/route";
 import { db } from "@/db/client";
-import { userPermissions } from "@/db/schema";
 import { listenerCount } from "@/features/realtime/hub";
 import { closeRealtime } from "@/features/realtime/listener";
 import { publish } from "@/features/realtime/publish";
 import { MAX_STREAMS_PER_USER } from "@/features/realtime/stream";
+import { memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createEvent } from "../../helpers/factories";
 import { loginAs, sseReader, waitFor } from "./helpers";
@@ -49,12 +49,8 @@ describe("GET /api/events/[eventId]/stream", () => {
     const owner = await loginAs("venue_owner");
     expect((await connect(event.id, owner.cookie).response).status).toBe(403);
 
-    // Personel rolünde iki modülün görüntüleme izni kaldırılırsa da 403.
-    const staff = await loginAs("staff");
-    await db.insert(userPermissions).values([
-      { userId: staff.id, module: "check_in", canView: false },
-      { userId: staff.id, module: "reservations", canView: false },
-    ]);
+    // Kullanıcıda iki modülün görüntüleme izni kapalıysa 403.
+    const staff = await loginAs(memberActor("casino", { check_in: "----", reservations: "----" }));
     expect((await connect(event.id, staff.cookie).response).status).toBe(403);
     expect(listenerCount()).toBe(0);
   });
@@ -92,7 +88,7 @@ describe("GET /api/events/[eventId]/stream", () => {
   });
 
   it("istek iptal edilince dinleyici kaldırılır; okuyucu iptali de kaldırır", async () => {
-    const staff = await loginAs("staff");
+    const staff = await loginAs(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const event = await createEvent(db);
 
     const first = connect(event.id, staff.cookie);
@@ -110,7 +106,7 @@ describe("GET /api/events/[eventId]/stream", () => {
   });
 
   it(`kullanıcı başına en çok ${MAX_STREAMS_PER_USER} eşzamanlı akış; fazlası 429`, async () => {
-    const staff = await loginAs("staff");
+    const staff = await loginAs(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const event = await createEvent(db);
 
     const streams = [];

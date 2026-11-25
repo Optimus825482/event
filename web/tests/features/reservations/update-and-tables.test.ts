@@ -12,14 +12,15 @@ import {
 } from "@/features/reservations/service";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
-import { actorOf, bookable, createTable, expectDomain, reservationRow, TABLE_TAKEN } from "./fixtures";
+import { actorOf, legacyActorOf, bookable, createTable, expectDomain, reservationRow, TABLE_TAKEN } from "./fixtures";
+import { adminActor } from "../../helpers/actors";
 
 describe("updateReservation", () => {
   let admin: Actor;
 
   beforeEach(async () => {
     await truncateAll();
-    admin = await actorOf("admin");
+    admin = await actorOf(adminActor());
   });
 
   it("masa ve kişi sayısı değişir; QR belirteci aynı kalır", async () => {
@@ -99,7 +100,7 @@ describe("QR doğrulama (spec §13 madde 7)", () => {
 
   beforeEach(async () => {
     await truncateAll();
-    admin = await actorOf("admin");
+    admin = await actorOf(adminActor());
   });
 
   it("masa değişince aynı QR yeni masayı döndürür", async () => {
@@ -138,7 +139,7 @@ describe("availableTables (spec §13 madde 5)", () => {
 
   beforeEach(async () => {
     await truncateAll();
-    admin = await actorOf("admin");
+    admin = await actorOf(adminActor());
   });
 
   it("etiket ve kapasite event_tables'tan gelir; aktif rezervasyonlu masa müsait değildir", async () => {
@@ -186,7 +187,7 @@ describe("availableTables (spec §13 madde 5)", () => {
   });
 
   it("organizatör başkasının etkinliğinde not_found", async () => {
-    const organizer = await actorOf("organizer");
+    const organizer = await legacyActorOf("organizer");
     const { event } = await bookable();
     await expectDomain(availableTables(db, organizer, { eventId: event.id }), "not_found");
   });

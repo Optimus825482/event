@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { departments, positions, staffRoles, workLocations, workShifts } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
-import type { Role } from "@/features/auth/roles";
-import type { Actor } from "@/features/auth/session";
 import {
   createDepartment,
   createPosition,
@@ -22,13 +20,11 @@ import {
 } from "@/features/staff/role-shift-service";
 import { shiftInputSchema, staffRoleInputSchema } from "@/features/staff/schemas";
 import { DomainError } from "@/lib/action";
+import { adminActor, managerActor, memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createAssignment, createEvent, createShift as makeShift, createStaff } from "../../helpers/factories";
 
-function actorOf(role: Role): Actor {
-  return { id: "00000000-0000-4000-8000-000000000001", username: "t", role, staffId: null, memberships: [], permissions: [] };
-}
-const admin = actorOf("admin");
+const admin = adminActor({ id: "00000000-0000-4000-8000-000000000001" });
 
 async function expectDomain(promise: Promise<unknown>, code: "conflict" | "not_found") {
   const err = await promise.then(
@@ -84,11 +80,11 @@ describe("bölüm / unvan / görev yeri", () => {
   });
 
   it("organizatör düzenleyebilir, personel ve kontrolör düzenleyemez", async () => {
-    await createDepartment(db, actorOf("organizer"), { ...base, name: "X", color: null });
-    await expect(createDepartment(db, actorOf("staff"), { ...base, name: "Y", color: null })).rejects.toBeInstanceOf(
+    await createDepartment(db, managerActor("fnb"), { ...base, name: "X", color: null });
+    await expect(createDepartment(db, memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }), { ...base, name: "Y", color: null })).rejects.toBeInstanceOf(
       ForbiddenError,
     );
-    await expect(createPosition(db, actorOf("controller"), { ...base, name: "Y" })).rejects.toBeInstanceOf(
+    await expect(createPosition(db, memberActor("casino", { check_in: "vc--" }), { ...base, name: "Y" })).rejects.toBeInstanceOf(
       ForbiddenError,
     );
   });

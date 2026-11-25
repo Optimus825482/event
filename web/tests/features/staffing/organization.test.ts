@@ -8,9 +8,10 @@ import { saveExtraStaff } from "@/features/staffing/extra-staff-service";
 import { getOrganization, saveOrganization } from "@/features/staffing/organization-service";
 import { saveTableGroups } from "@/features/staffing/groups-service";
 import { createAction } from "@/lib/action";
+import { noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { expectDomain, makeActor, setupEvent, snapshot, tablesOfGroup } from "./helpers";
+import { expectDomain, makeActor, setupEvent, snapshot, tablesOfGroup, makeLegacy } from "./helpers";
 
 describe("saveExtraStaff", () => {
   beforeEach(async () => {
@@ -119,8 +120,8 @@ describe("saveOrganization (tüm sihirbaz tek transaction)", () => {
 
   it("getOrganization başkasının etkinliğinde not_found, staff rolü forbidden", async () => {
     const { event } = await setupEvent();
-    await expectDomain(getOrganization(db, await makeActor("organizer"), event.id), "not_found");
-    await expect(getOrganization(db, await makeActor("staff"), event.id)).rejects.toThrow();
+    await expectDomain(getOrganization(db, await makeLegacy("organizer"), event.id), "not_found");
+    await expect(getOrganization(db, await makeActor(noAccessActor()), event.id)).rejects.toThrow();
   });
 });
 
@@ -156,7 +157,7 @@ describe("staffing action'ları", () => {
 
   it("staff rolü forbidden; organizatör kaydeder", async () => {
     const { actor, event, tables } = await setupEvent();
-    const staffActor = await makeActor("staff");
+    const staffActor = await makeActor(noAccessActor());
     const payload = { eventId: event.id, groups: [{ name: "A", tableIds: [tables[0]!.id] }] };
     expect(await actionsFor(staffActor).saveGroups(payload)).toMatchObject({ ok: false, code: "forbidden" });
     const ok = await actionsFor(actor).saveGroups(payload);

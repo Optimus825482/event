@@ -9,10 +9,16 @@ import type { TableInput } from "@/features/venue/schemas";
 import { getVenueLayout, saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role = "organizer"): Promise<Actor> {
+async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
+async function makeLegacy(role: Role): Promise<Actor> {
   const u = await f.createUser(db, { role });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
@@ -41,8 +47,8 @@ const decor = {
   elements: [{ id: "stage-1", kind: "stage" as const, x: 10, y: 10, width: 300, height: 80, label: "Sahne" }],
 };
 
-async function setup(role: Role = "organizer") {
-  const actor = await makeActor(role);
+async function setup(actor?: Actor) {
+  actor = await makeActor(actor);
   const event = await f.createEvent(db, { organizerId: actor.id });
   return { actor, event };
 }
@@ -228,10 +234,10 @@ describe("saveLayout", () => {
 
   it("organizatör başkasının etkinliğini not_found görür; admin kaydedebilir", async () => {
     const { event } = await setup();
-    const stranger = await makeActor("organizer");
+    const stranger = await makeLegacy("organizer");
     const err = await caught(saveLayout(db, stranger, { eventId: event.id, tables: grid(1), decor }));
     expect(err.code).toBe("not_found");
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const res = await saveLayout(db, admin, { eventId: event.id, tables: grid(1), decor });
     expect(res.tables).toHaveLength(1);
   });
@@ -368,7 +374,7 @@ describe("getVenueLayout", () => {
 
   it("başkasının etkinliği not_found", async () => {
     const { event } = await setup();
-    const stranger = await makeActor("organizer");
+    const stranger = await makeLegacy("organizer");
     expect((await caught(getVenueLayout(db, stranger, event.id))).code).toBe("not_found");
   });
 });

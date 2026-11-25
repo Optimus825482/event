@@ -4,7 +4,8 @@ import { withPermissions } from "@/features/auth/permissions";
 import { getReservationPlan } from "@/features/reservations/plan-service";
 import { truncateAll } from "../../helpers/db";
 import { createReservation } from "../../helpers/factories";
-import { actorOf, bookable } from "./fixtures";
+import { actorOf, legacyActorOf, bookable } from "./fixtures";
+import { memberActor } from "../../helpers/actors";
 
 describe("getReservationPlan", () => {
   beforeEach(async () => {
@@ -12,7 +13,7 @@ describe("getReservationPlan", () => {
   });
 
   it("masa durumlarını aktif rezervasyondan türetir (iptal masayı boş bırakır)", async () => {
-    const staff = await withPermissions(await actorOf("staff"));
+    const staff = await withPermissions(await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" })));
     const { event, table, customer } = await bookable();
     await createReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id, status: "cancelled" });
     const before = await getReservationPlan(db, staff, event.id);
@@ -25,8 +26,8 @@ describe("getReservationPlan", () => {
   });
 
   it("organizatör başkasının etkinliğinin haritasını göremez; kendisininkini görür", async () => {
-    const owner = await actorOf("organizer");
-    const other = await withPermissions(await actorOf("organizer"));
+    const owner = await legacyActorOf("organizer");
+    const other = await withPermissions(await legacyActorOf("organizer"));
     const { event } = await bookable(owner.id);
     await expect(getReservationPlan(db, other, event.id)).rejects.toMatchObject({ code: "not_found" });
     await expect(getReservationPlan(db, await withPermissions(owner), event.id)).resolves.toMatchObject({ reservations: [] });

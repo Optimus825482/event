@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { invitationTemplates } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { invitationActionDefs } from "@/features/invitations/action-defs";
 import { DEFAULT_TEMPLATE_ELEMENTS, smartFixElements } from "@/features/invitations/elements";
@@ -17,11 +16,17 @@ import {
 } from "@/features/invitations/templates";
 import { saveEventInvitation } from "@/features/invitations/event-invitation";
 import { createAction } from "@/lib/action";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
+async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi kayıtlarını görür). */
+async function makeOrganizer(): Promise<Actor> {
+  const u = await f.createUser(db, { role: "organizer" });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
@@ -42,7 +47,7 @@ describe("şablonlar", () => {
   });
 
   it("oluşturur, günceller, listeler", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const created = await createTemplate(db, admin, { ...base, name: "Düğün", elements: [el] });
     expect(created).toMatchObject({ name: "Düğün", isSystemTemplate: false, isDefault: false, createdById: admin.id });
     const updated = await updateTemplate(db, admin, { ...base, id: created.id, name: "Düğün 2", elements: [] });
@@ -53,7 +58,7 @@ describe("şablonlar", () => {
   });
 
   it("sistem şablonu silinemez; varsayılan silinince sistem şablonu varsayılan olur", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     await ensureDefaultTemplate(db);
     const [system] = await db.select().from(invitationTemplates);
     if (!system) throw new Error("sistem şablonu yok");
@@ -74,7 +79,7 @@ describe("şablonlar", () => {
   });
 
   it("kaydederken öğeleri tuval sınırlarına düzeltir", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const wild = { ...el, x: -50, y: 900, width: 10, height: 10, fontSize: 500 };
     const row = await createTemplate(db, admin, { ...base, name: "Taşan", elements: [wild] });
     const [saved] = row.elements as { x: number; y: number; width: number; height: number; fontSize: number }[];
@@ -85,7 +90,7 @@ describe("şablonlar", () => {
   });
 
   it("ayar kapalıysa yönetim işlemleri reddedilir", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const { systemSettings } = await import("@/db/schema");
     await db.insert(systemSettings).values({ invitationSystemEnabled: false });
     await expect(createTemplate(db, admin, { ...base, name: "X", elements: [] })).rejects.toMatchObject({
@@ -101,9 +106,9 @@ describe("şablon sahipliği", () => {
   });
 
   async function setup() {
-    const a = await makeActor("organizer");
-    const b = await makeActor("organizer");
-    const admin = await makeActor("admin");
+    const a = await makeOrganizer();
+    const b = await makeOrganizer();
+    const admin = await makeActor(adminActor());
     const mine = await createTemplate(db, a, { ...base, name: "A'nın", elements: [] });
     await ensureDefaultTemplate(db);
     const [system] = await db.select().from(invitationTemplates).where(eq(invitationTemplates.isSystemTemplate, true));
@@ -166,7 +171,7 @@ describe("şablon action'ları", () => {
   }
 
   it("staff rolü şablon oluşturamaz; oturumsuz reddedilir", async () => {
-    const staff = await makeActor("staff");
+    const staff = await makeActor(noAccessActor());
     const payload = { ...base, name: "X", elements: [] };
     expect(await actionsFor(staff).create(payload)).toMatchObject({ ok: false, code: "forbidden" });
     expect(await actionsFor(null).create(payload)).toMatchObject({ ok: false, code: "unauthenticated" });
@@ -174,7 +179,7 @@ describe("şablon action'ları", () => {
   });
 
   it("zararlı renk/görüntü yolu reddedilir (invalid)", async () => {
-    const organizer = await makeActor("organizer");
+    const organizer = await makeActor(managerActor("entertainment"));
     const res = await actionsFor(organizer).create({
       ...base,
       name: "X",
@@ -187,7 +192,7 @@ describe("şablon action'ları", () => {
   });
 
   it("organizatör oluşturup silebilir", async () => {
-    const organizer = await makeActor("organizer");
+    const organizer = await makeActor(managerActor("entertainment"));
     const res = await actionsFor(organizer).create({ ...base, name: "Benim", elements: [el] });
     expect(res.ok).toBe(true);
     if (!res.ok) return;

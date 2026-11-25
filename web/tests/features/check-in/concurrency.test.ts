@@ -5,6 +5,7 @@ import { customers, reservations } from "@/db/schema";
 import { checkIn } from "@/features/check-in/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { actorOf, bookedGuest, checkInLog, customerRow, key, reservationRow } from "./fixtures";
+import { memberActor } from "../../helpers/actors";
 
 const N = 10;
 
@@ -19,7 +20,7 @@ describe("spec §13 madde 2: aynı QR ile eşzamanlı check-in", () => {
 
   it(`${N} eşzamanlı istek, farklı anahtarlar: tek 'checked_in', ${N - 1} 'already_checked_in', sayaç +1`, async () => {
     const { event, customer, reservation } = await bookedGuest();
-    const doors = await Promise.all(Array.from({ length: N }, () => actorOf("controller")));
+    const doors = await Promise.all(Array.from({ length: N }, () => actorOf(memberActor("casino", { check_in: "vc--" }))));
 
     const results = await Promise.all(
       doors.map((door) =>
@@ -48,7 +49,7 @@ describe("spec §13 madde 2: aynı QR ile eşzamanlı check-in", () => {
 
   it(`${N} eşzamanlı istek, aynı anahtar (çevrimdışı kuyruk tekrarı): birebir aynı yanıt, sayaç +1, tek kayıt`, async () => {
     const { event, customer, reservation } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const idempotencyKey = key();
 
     const results = await Promise.all(
@@ -79,7 +80,7 @@ describe("spec §13 madde 2: aynı QR ile eşzamanlı check-in", () => {
     const { event, customer, reservation } = await bookedGuest();
     await db.update(reservations).set({ status: "no_show" }).where(eq(reservations.id, reservation.id));
     await db.update(customers).set({ noShowCount: 2 }).where(eq(customers.id, customer.id));
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     const results = await Promise.all(
       Array.from({ length: N }, () =>

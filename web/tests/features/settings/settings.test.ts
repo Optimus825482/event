@@ -8,15 +8,14 @@ import type { Actor } from "@/features/auth/session";
 import { decryptSecret } from "@/features/settings/crypto";
 import { updateSettingsSchema } from "@/features/settings/schemas";
 import { getSettings, updateSettings } from "@/features/settings/service";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { createUser } from "../../helpers/factories";
 
 const key = randomBytes(32);
 const PLAIN = "SmtpParolasi-Cok-Gizli-123";
 
-async function actorOf(role: Actor["role"]): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
+async function actorOf(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 describe("sistem ayarları", () => {
@@ -25,7 +24,7 @@ describe("sistem ayarları", () => {
   });
 
   it("ilk okumada varsayılan satırı oluşturur; eşzamanlı okumalar tek satır bırakır", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const results = await Promise.all(Array.from({ length: 8 }, () => getSettings(db, admin)));
     expect(new Set(results.map((r) => r.id)).size).toBe(1);
     expect(await db.select().from(systemSettings)).toHaveLength(1);
@@ -34,7 +33,7 @@ describe("sistem ayarları", () => {
   });
 
   it("SMTP parolası getSettings çıktısında yok; yalnızca smtpPasswordSet var", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     await updateSettings(db, admin, { smtpHost: "smtp.example.com", smtpPassword: PLAIN }, key);
 
     const out = await getSettings(db, admin);
@@ -47,7 +46,7 @@ describe("sistem ayarları", () => {
   });
 
   it("updateSettings yanıtında da parola yok; veritabanında şifreli saklanır", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const out = await updateSettings(db, admin, { smtpPassword: PLAIN }, key);
     expect(JSON.stringify(out)).not.toContain(PLAIN);
 
@@ -58,7 +57,7 @@ describe("sistem ayarları", () => {
   });
 
   it("parola alanı verilmezse mevcut parola korunur; null ile silinir", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     await updateSettings(db, admin, { smtpPassword: PLAIN }, key);
     await updateSettings(db, admin, { companyName: "Yeni Ad" }, key);
     const [kept] = await db.select().from(systemSettings);
@@ -72,7 +71,7 @@ describe("sistem ayarları", () => {
   });
 
   it("anahtar yapılandırılmamışsa parola kaydetmeyi açık hatayla reddeder, düz metin yazmaz", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const original = process.env.SETTINGS_ENCRYPTION_KEY;
     delete process.env.SETTINGS_ENCRYPTION_KEY;
     try {
@@ -85,7 +84,7 @@ describe("sistem ayarları", () => {
   });
 
   it("admin olmayan kullanıcı okuyamaz ve güncelleyemez", async () => {
-    const organizer = await actorOf("organizer");
+    const organizer = await actorOf(managerActor("entertainment"));
     await expect(getSettings(db, organizer)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(updateSettings(db, organizer, { companyName: "X" }, key)).rejects.toBeInstanceOf(ForbiddenError);
   });

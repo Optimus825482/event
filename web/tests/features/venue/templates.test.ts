@@ -15,13 +15,20 @@ import {
 } from "@/features/venue/templates-service";
 import type { TemplateLayout } from "@/features/venue/schemas";
 import { DomainError } from "@/lib/action";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role = "organizer"): Promise<Actor> {
+async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik testleri: eski organizatör rolü (bu görevde dokunulmaz). */
+async function makeLegacy(role: Role): Promise<Actor> {
   const u = await f.createUser(db, { role });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
+
 
 async function caught(promise: Promise<unknown>): Promise<DomainError> {
   const err = await promise.then(
@@ -169,8 +176,8 @@ describe("saveAsTemplate", () => {
   });
 
   it("başkasının etkinliğinden şablon alınamaz", async () => {
-    const owner = await makeActor();
-    const stranger = await makeActor();
+    const owner = await makeLegacy("organizer");
+    const stranger = await makeLegacy("organizer");
     const event = await f.createEvent(db, { organizerId: owner.id });
     expect((await caught(saveAsTemplate(db, stranger, { eventId: event.id, name: "X" }))).code).toBe("not_found");
   });
@@ -191,7 +198,7 @@ describe("şablon yönetimi", () => {
     expect(mine.map((t) => t.name).sort()).toEqual(["Açık", "Benim"]);
     expect(mine.find((t) => t.name === "Benim")).toMatchObject({ canManage: true, tableCount: 3, capacity: 20 });
     expect(mine.find((t) => t.name === "Açık")?.canManage).toBe(false);
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     expect(await listVenueTemplates(db, admin)).toHaveLength(3);
   });
 
@@ -203,7 +210,7 @@ describe("şablon yönetimi", () => {
     expect((await caught(deleteVenueTemplate(db, other, { id: tpl.id }))).code).toBe("conflict");
     const updated = await updateVenueTemplate(db, owner, { id: tpl.id, name: "Yeni", isPublic: false });
     expect(updated).toMatchObject({ name: "Yeni", isPublic: false });
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     await deleteVenueTemplate(db, admin, { id: tpl.id });
     expect(await db.select().from(venueTemplates)).toHaveLength(0);
   });

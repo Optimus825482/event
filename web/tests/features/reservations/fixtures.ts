@@ -4,11 +4,17 @@ import { customers, reservations } from "@/db/schema";
 import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
+import { persistActor } from "../../helpers/actors";
 import { createCustomer, createEvent, createTable, createUser } from "../../helpers/factories";
 
 export const TABLE_TAKEN = "Bu masa için aktif bir rezervasyon var";
 
-export async function actorOf(role: Role): Promise<Actor> {
+export async function actorOf(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
+export async function legacyActorOf(role: Role): Promise<Actor> {
   const u = await createUser(db, { role });
   return { id: u.id, username: u.username, role, staffId: null, memberships: [], permissions: [] };
 }

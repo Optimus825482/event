@@ -4,9 +4,10 @@ import { db } from "@/db/client";
 import { eventStaffAssignments, events, tableGroups, teamMembers, teams } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
 import { saveTeams } from "@/features/staffing/teams-service";
+import { adminActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { expectDomain, makeActor, setupEvent, snapshot } from "./helpers";
+import { expectDomain, makeActor, setupEvent, snapshot, makeLegacy } from "./helpers";
 
 describe("saveTeams", () => {
   beforeEach(async () => {
@@ -128,13 +129,13 @@ describe("saveTeams", () => {
 
   it("başka organizatörün etkinliği not_found", async () => {
     const { event } = await setupEvent();
-    const stranger = await makeActor("organizer");
+    const stranger = await makeLegacy("organizer");
     await expectDomain(saveTeams(db, stranger, { eventId: event.id, teams: [] }), "not_found");
   });
 
   it("admin başkasının etkinliğinde çalışır", async () => {
     const { event } = await setupEvent();
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const r = await saveTeams(db, admin, { eventId: event.id, teams: [{ name: "A", members: [] }] });
     expect(r.teams).toHaveLength(1);
   });
@@ -149,7 +150,7 @@ describe("saveTeams", () => {
 
   it("staff rolü forbidden", async () => {
     const { event } = await setupEvent();
-    const actor = await makeActor("staff");
+    const actor = await makeActor(noAccessActor());
     await expect(saveTeams(db, actor, { eventId: event.id, teams: [] })).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

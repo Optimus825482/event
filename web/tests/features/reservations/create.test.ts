@@ -9,7 +9,7 @@ import { createReservation } from "@/features/reservations/service";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createEvent, pgErrorCode } from "../../helpers/factories";
 import {
-  actorOf,
+  actorOf, legacyActorOf,
   bookable,
   createTable,
   customerRow,
@@ -18,13 +18,14 @@ import {
   reservationRow,
   TABLE_TAKEN,
 } from "./fixtures";
+import { adminActor, managerActor, memberActor } from "../../helpers/actors";
 
 describe("createReservation", () => {
   let admin: Actor;
 
   beforeEach(async () => {
     await truncateAll();
-    admin = await actorOf("admin");
+    admin = await actorOf(adminActor());
   });
 
   it("onaylı rezervasyon yazar, imzalı QR belirtecini aynı satırda saklar, müşteri sayacını artırır", async () => {
@@ -185,7 +186,7 @@ describe("createReservation", () => {
     });
 
     it("organizatör başkasının etkinliğini not_found görür; kendi etkinliğinde yapabilir", async () => {
-      const organizer = await actorOf("organizer");
+      const organizer = await legacyActorOf("organizer");
       const foreign = await bookable();
       await expectDomain(
         createReservation(db, organizer, {
@@ -219,7 +220,7 @@ describe("createReservation", () => {
     });
 
     it.each(["organizer", "staff"] as const)("%s overrideBlacklist ile aşamaz", async (role) => {
-      const actor = await actorOf(role);
+      const actor = await actorOf(role === "organizer" ? managerActor("casino") : memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
       const { event, table } = await bookable(role === "organizer" ? actor.id : undefined);
       const banned = await createCustomer(db, { isBlacklisted: true });
       await expectDomain(

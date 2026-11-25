@@ -22,6 +22,7 @@ import {
   setUserPermissions,
   updateUser,
 } from "@/features/users/service";
+import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD, signedInCookie, signIn } from "../auth/helpers";
@@ -150,7 +151,7 @@ describe("pasifleştirme ve son admin", () => {
   });
 
   it("admin olmayan kullanıcı pasifleştiremez", async () => {
-    const organizer = await actorOf("organizer");
+    const organizer = await persistActor(db, managerActor("entertainment"));
     const target = await actorOf("staff");
     await expect(setUserActive(db, organizer, { id: target.id, active: false })).rejects.toBeInstanceOf(
       ForbiddenError,
@@ -198,7 +199,7 @@ describe("kullanıcı güncelleme", () => {
   });
 
   it("admin olmayan güncelleyemez", async () => {
-    const organizer = await actorOf("organizer");
+    const organizer = await persistActor(db, managerActor("entertainment"));
     const target = await actorOf("staff");
     await expect(updateUser(db, organizer, { id: target.id, role: "admin" })).rejects.toBeInstanceOf(ForbiddenError);
   });
@@ -240,7 +241,7 @@ describe("parola sıfırlama", () => {
   });
 
   it("yalnızca admin sıfırlayabilir", async () => {
-    const organizer = await actorOf("organizer");
+    const organizer = await persistActor(db, managerActor("entertainment"));
     const target = await actorOf("staff");
     await expect(
       resetUserPassword(db, organizer, { id: target.id, password: NEW_PASSWORD }),
@@ -259,6 +260,7 @@ describe("modül izinleri", () => {
 
   it("izin satırlarını değiştirir; baseline'ı daraltır", async () => {
     const admin = await actorOf("admin");
+    // İzin satırı semantiği (kısıt -> verilen yetki) Task 6'da yeniden yazılır; şimdilik eski rol.
     const organizer = await actorOf("organizer");
 
     await setUserPermissions(db, admin, {
@@ -292,7 +294,7 @@ describe("modül izinleri", () => {
   });
 
   it("admin olmayan izin değiştiremez", async () => {
-    const organizer = await actorOf("organizer");
+    const organizer = await persistActor(db, managerActor("entertainment"));
     await expect(setUserPermissions(db, organizer, { id: organizer.id, permissions: [] })).rejects.toBeInstanceOf(
       ForbiddenError,
     );
@@ -313,7 +315,7 @@ describe("sorgular", () => {
     expect(json).not.toContain("$2");
     expect(json).not.toContain("password");
 
-    await expect(listUsers(db, await actorOf("organizer"))).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(listUsers(db, await persistActor(db, managerActor("entertainment")))).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("getUserDetail izin satırlarını içerir; olmayan kullanıcı null döner", async () => {

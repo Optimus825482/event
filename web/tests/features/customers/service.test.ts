@@ -6,19 +6,14 @@ import type { Actor } from "@/features/auth/session";
 import { addNote, addTag, deleteNote, removeTag, updateNote } from "@/features/customers/notes-service";
 import { createCustomerInput, updateCustomerInput } from "@/features/customers/schemas";
 import { createCustomer, deleteCustomer, setBlacklist, updateCustomer } from "@/features/customers/service";
+import { adminActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import {
-  createBookingParents,
-  createCustomer as seedCustomer,
-  createReservation,
-  createUser,
-} from "../../helpers/factories";
+import { createBookingParents, createCustomer as seedCustomer, createReservation } from "../../helpers/factories";
 
 const MISSING_ID = "00000000-0000-4000-8000-000000000000";
 
-async function adminActor(): Promise<Actor> {
-  const u = await createUser(db, { role: "admin" });
-  return { id: u.id, username: u.username, role: "admin", staffId: null, memberships: [], permissions: [] };
+async function savedAdmin(): Promise<Actor> {
+  return persistActor(db, adminActor());
 }
 
 describe("customers service", () => {
@@ -26,7 +21,7 @@ describe("customers service", () => {
 
   beforeEach(async () => {
     await truncateAll();
-    actor = await adminActor();
+    actor = await savedAdmin();
   });
 
   describe("createCustomer", () => {

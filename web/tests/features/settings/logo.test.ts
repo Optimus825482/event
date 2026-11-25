@@ -9,8 +9,8 @@ import type { Actor } from "@/features/auth/session";
 import { replaceLogo } from "@/features/settings/logo";
 import { getSettings } from "@/features/settings/service";
 import { ImageRejectedError } from "@/features/uploads/images";
+import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { createUser } from "../../helpers/factories";
 
 sharp.cache(false);
 let root: string;
@@ -22,9 +22,8 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-async function actorOf(role: Actor["role"]): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
+async function actorOf(actor: Actor): Promise<Actor> {
+  return persistActor(db, actor);
 }
 
 async function pngFile(): Promise<File> {
@@ -40,7 +39,7 @@ describe("replaceLogo", () => {
   });
 
   it("logoyu kaydeder, ayara yazar ve önceki dosyayı siler", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const first = await replaceLogo(db, admin, await pngFile(), root);
     expect(first.logo).toMatch(/^logo\/.+\.webp$/);
     expect(existsSync(path.join(root, first.logo ?? ""))).toBe(true);
@@ -52,7 +51,7 @@ describe("replaceLogo", () => {
   });
 
   it("geçersiz dosyayı reddeder ve mevcut logoyu korur", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const saved = await replaceLogo(db, admin, await pngFile(), root);
     const html = new File(["<html></html>"], "logo.png", { type: "image/png" });
     await expect(replaceLogo(db, admin, html, root)).rejects.toBeInstanceOf(ImageRejectedError);
@@ -60,7 +59,7 @@ describe("replaceLogo", () => {
   });
 
   it("admin olmayan kullanıcı logo değiştiremez", async () => {
-    const organizer = await actorOf("organizer");
+    const organizer = await actorOf(managerActor("entertainment"));
     await expect(replaceLogo(db, organizer, await pngFile(), root)).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

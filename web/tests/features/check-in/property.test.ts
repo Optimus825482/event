@@ -14,6 +14,7 @@ import { guestCountProblem, toEventStats } from "@/features/check-in/stats";
 import { setupTestDb } from "../../helpers/db";
 import { createCustomer, createEvent, createReservation, createTable } from "../../helpers/factories";
 import { actorOf, bookedGuest, expectDomain, reservationRow } from "./fixtures";
+import { adminActor, memberActor } from "../../helpers/actors";
 
 const statusArb = fc.constantFrom(...RESERVATION_STATUSES);
 
@@ -51,7 +52,7 @@ describe("Property 8: Etkinlik istatistikleri", () => {
   });
 
   it("veritabanı: rastgele rezervasyon kümesinde eventStats durum sayılarına ve kişi toplamlarına eşittir", async () => {
-    const door = await actorOf("admin");
+    const door = await actorOf(adminActor());
     const customer = await createCustomer(db);
     await fc.assert(
       fc.asyncProperty(
@@ -166,7 +167,7 @@ describe("Property 12: Walk-in kaydı doğrulaması", () => {
   });
 
   it("veritabanı: başarılı walk-in 'checked_in' ve oluşturma anındaki giriş zamanıyla yazılır; dolu masa reddedilir", async () => {
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await fc.assert(
       fc.asyncProperty(nameArb, fc.integer({ min: 1, max: 10 }), async (guestName, guestCount) => {
         const { event, table } = await bookedGuest();
@@ -219,7 +220,7 @@ describe("Property 13: Kişi sayısı / masa kapasitesi", () => {
   });
 
   it("veritabanı: updateGuestCount servis kararı saf kuralla aynıdır ve reddedilen değer yazılmaz", async () => {
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 1, max: 12 }),

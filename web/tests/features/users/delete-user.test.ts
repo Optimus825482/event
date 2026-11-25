@@ -8,6 +8,7 @@ import { createAction } from "@/lib/action";
 import { userActionDefs } from "@/features/users/action-defs";
 import { isDeletedAccount } from "@/features/users/filter";
 import { createUser, deleteUser, resetUserPassword, setUserActive, setUserPermissions, updateUser } from "@/features/users/service";
+import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createEvent, createStaff, createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD, signedInCookie, signIn } from "../auth/helpers";
@@ -150,7 +151,7 @@ describe("kullanıcı silme", () => {
   it("action: oturumsuz unauthenticated, yetkisiz forbidden, geçersiz kimlik invalid", async () => {
     const admin = await actorOf("admin");
     const target = await actorOf("staff");
-    const organizer = await actorOf("organizer");
+    const organizer = await persistActor(db, managerActor("entertainment"));
 
     const anon = createAction({ getActor: async () => null }).defineAction(userActionDefs.deleteUser);
     expect(await anon({ id: target.id })).toMatchObject({ ok: false, code: "unauthenticated" });

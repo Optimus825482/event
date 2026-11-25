@@ -7,6 +7,7 @@ import { importAssignments, previewAssignmentImport } from "@/features/import/as
 import { saveAssignments } from "@/features/staffing/assignments-service";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { memberActor } from "../../helpers/actors";
 import { actorOf, expectDomain, xlsx, type Cell } from "./helpers";
 
 const HEADER: Cell[] = ["Sicil no", "Personel adı", "Masa etiketleri", "Grup", "Vardiya", "Görev"];
@@ -191,7 +192,7 @@ describe("personel atama içe aktarma", () => {
       "invalid",
       /Masa etiketleri veya Grup/,
     );
-    await expect(importAssignments(db, await actorOf("staff"), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(importAssignments(db, await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" })), { eventId: event.id, bytes })).rejects.toBeInstanceOf(ForbiddenError);
     await expectDomain(importAssignments(db, await actorOf("organizer"), { eventId: event.id, bytes }), "not_found");
     await db.update(events).set({ status: "completed" }).where(eq(events.id, event.id));
     await expectDomain(importAssignments(db, owner, { eventId: event.id, bytes }), "conflict");

@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { ForbiddenError } from "@/features/auth/errors";
-import type { PolicyActor } from "@/features/auth/policy";
 import {
   getOrganizationCatalogs,
   getStaffDetail,
   getStaffFormOptions,
   listStaff,
 } from "@/features/staff/queries";
+import { adminActor, memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createAssignment, createEvent, createStaff } from "../../helpers/factories";
 
-const admin: PolicyActor = { id: "u1", role: "admin", staffId: null };
-const controller: PolicyActor = { id: "u2", role: "controller", staffId: null };
+const admin = adminActor({ id: "u1" });
+const controller = memberActor("casino", { check_in: "vc--" }, { id: "u2" });
 
 describe("personel sorguları", () => {
   beforeEach(truncateAll);

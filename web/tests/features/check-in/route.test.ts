@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/check-in/route";
-import { db } from "@/db/client";
-import { userPermissions } from "@/db/schema";
+import { memberActor } from "../../helpers/actors";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { loginAs } from "../realtime/helpers";
 import { bookedGuest, customerRow, key, reservationRow, setReservationStatus } from "./fixtures";
@@ -65,13 +64,8 @@ describe("POST /api/check-in", () => {
     };
     const owner = await loginAs("venue_owner");
     expect((await post(body, { cookie: owner.cookie })).status).toBe(403);
-    const staff = await loginAs("staff");
-    await db.insert(userPermissions).values({
-      userId: staff.id,
-      module: "check_in",
-      canView: true,
-      canCreate: false,
-    });
+    // Yalnızca görüntüleme izni var, oluşturma yok.
+    const staff = await loginAs(memberActor("casino", { check_in: "v---" }));
     const res = await post(body, { cookie: staff.cookie });
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ ok: false, code: "forbidden" });
@@ -79,7 +73,7 @@ describe("POST /api/check-in", () => {
   });
 
   it("JSON olmayan içerik 415, başka kaynaktan istek 403, bozuk gövde ve 50'den büyük toplu istek 400", async () => {
-    const door = await loginAs("controller");
+    const door = await loginAs(memberActor("casino", { check_in: "vc--" }));
     const item = { eventId: randomUUID(), idempotencyKey: key(), token: "x" };
     expect(
       (
@@ -119,7 +113,7 @@ describe("POST /api/check-in", () => {
 
   it("toplu istek: ownerId oturumdaki kullanıcıyla uyuşmazsa 401 alır ve hiçbir şey işlenmez", async () => {
     const { event, reservation } = await bookedGuest();
-    const door = await loginAs("controller");
+    const door = await loginAs(memberActor("casino", { check_in: "vc--" }));
     const item = { eventId: event.id, idempotencyKey: key(), token: reservation.qrToken };
 
     const foreign = await post({ ownerId: randomUUID(), items: [item] }, { cookie: door.cookie });
@@ -134,7 +128,7 @@ describe("POST /api/check-in", () => {
 
   it("tek öğe: 200 ve action ile aynı sonuç biçimi; aynı anahtarla tekrar aynı yanıt", async () => {
     const { event, customer, reservation } = await bookedGuest();
-    const door = await loginAs("controller");
+    const door = await loginAs(memberActor("casino", { check_in: "vc--" }));
     const body = {
       eventId: event.id,
       idempotencyKey: key(),
@@ -163,7 +157,7 @@ describe("POST /api/check-in", () => {
   it("toplu istek: her öğe bağımsız, kendi sonucuyla ve aynı sırayla döner", async () => {
     const a = await bookedGuest();
     const b = await bookedGuest();
-    const door = await loginAs("controller");
+    const door = await loginAs(memberActor("casino", { check_in: "vc--" }));
     const cancelled = await bookedGuest();
     await setReservationStatus(cancelled.reservation.id, "cancelled");
     const sharedKey = key();

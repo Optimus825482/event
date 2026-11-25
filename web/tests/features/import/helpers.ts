@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
+import { persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
 export type Cell = string | number | null | { formula: string; result: string | number };
@@ -20,8 +21,13 @@ export async function xlsx(rows: Cell[][], extraSheetRows?: Cell[][]): Promise<U
   return new Uint8Array(await workbook.xlsx.writeBuffer());
 }
 
-export async function actorOf(role: Role = "organizer"): Promise<Actor> {
-  const u = await f.createUser(db, { role });
+/**
+ * Test aktörü: departman aktörü (`memberActor(...)`) ya da eski rol adı. Etkinlik sahibi olan
+ * "organizer" hem rezervasyon hem atama içe aktarır (tek departmanda karşılığı yok); Task 5'te taşınır.
+ */
+export async function actorOf(who: Role | Actor = "organizer"): Promise<Actor> {
+  if (typeof who !== "string") return persistActor(db, who);
+  const u = await f.createUser(db, { role: who });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 

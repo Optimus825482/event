@@ -4,9 +4,10 @@ import { db } from "@/db/client";
 import { events, notifications, staffPerformanceReviews, teamMembers } from "@/db/schema";
 import { completeAllReviews, completeReview, saveReviewDraft } from "@/features/reviews/service";
 import { computeScore, type Ratings } from "@/features/reviews/score";
+import { memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld } from "./helpers";
+import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader, makeLegacy } from "./helpers";
 
 async function reviewRows(eventId: string) {
   return db.select().from(staffPerformanceReviews).where(eq(staffPerformanceReviews.eventId, eventId));
@@ -173,8 +174,8 @@ describe("saveReviewDraft", () => {
       improvements: [],
       recommendedTrainings: [],
     };
-    await expectForbidden(saveReviewDraft(db, await makeActor("staff"), input));
-    await expectForbidden(saveReviewDraft(db, await makeActor("controller"), input));
+    await expectForbidden(saveReviewDraft(db, await makeActor(noAccessActor()), input));
+    await expectForbidden(saveReviewDraft(db, await makeActor(memberActor("casino", { check_in: "vc--" })), input));
     await saveReviewDraft(db, w.admin, input);
     await saveReviewDraft(db, w.organizer, input);
     expect(await reviewRows(w.event.id)).toHaveLength(2);
@@ -182,7 +183,7 @@ describe("saveReviewDraft", () => {
 
   it("başka organizatörün etkinliği not_found", async () => {
     const w = await setupReviewWorld();
-    const stranger = await makeActor("organizer");
+    const stranger = await makeLegacy("organizer");
     await expectDomain(
       saveReviewDraft(db, stranger, {
         eventId: w.event.id,
@@ -332,7 +333,7 @@ describe("completeAllReviews", () => {
   it("ekibi olmayan lider forbidden", async () => {
     const w = await setupReviewWorld();
     const lonelyStaff = await f.createStaff(db);
-    const lonely = await makeActor("leader", lonelyStaff.id);
+    const lonely = await makeLeader(lonelyStaff.id);
     await expectForbidden(completeAllReviews(db, lonely, { eventId: w.event.id }));
   });
 });

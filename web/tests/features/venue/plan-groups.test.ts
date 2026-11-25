@@ -4,12 +4,12 @@ import { systemSettings, tableGroupTables } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { getFloorPlan, listTableGroupMembers } from "@/features/venue/plan-service";
 import { getEditorViewSettings } from "@/features/venue/view-settings-service";
+import { adminActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { createEvent, createTable, createTableGroup, createUser } from "../../helpers/factories";
+import { createEvent, createTable, createTableGroup } from "../../helpers/factories";
 
 async function admin(): Promise<Actor> {
-  const u = await createUser(db, { role: "admin" });
-  return { id: u.id, username: u.username, role: "admin", staffId: null, memberships: [], permissions: [] };
+  return persistActor(db, adminActor());
 }
 
 describe("planda masa grupları", () => {

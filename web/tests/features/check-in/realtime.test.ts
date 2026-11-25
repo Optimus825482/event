@@ -8,6 +8,7 @@ import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createTable } from "../../helpers/factories";
 import { waitFor } from "../realtime/helpers";
 import { actorOf, bookedGuest, expectDomain, key, setReservationStatus } from "./fixtures";
+import { memberActor } from "../../helpers/actors";
 
 /** Etkinliğin olaylarını toplar; `settle` bir işaretçi olay yayıp onun gelmesini bekler (commit sırası). */
 function collect(eventId: string) {
@@ -35,7 +36,7 @@ describe("check-in canlı yayınları", () => {
 
   it("başarılı check-in commit ile guest.checked_in + stats.updated yayar; 'zaten yapıldı' yaymaz", async () => {
     const { event, reservation } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const sub = collect(event.id);
     try {
       await checkIn(db, door, {
@@ -65,7 +66,7 @@ describe("check-in canlı yayınları", () => {
 
   it("reddedilen check-in (iptal) ve geri alınan walk-in hiçbir olay yaymaz", async () => {
     const { event, table, reservation } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const sub = collect(event.id);
     try {
       await setReservationStatus(reservation.id, "cancelled");
@@ -105,7 +106,7 @@ describe("check-in canlı yayınları", () => {
   it("walk-in ve kişi sayısı değişikliği rezervasyon ve istatistik olayları yayar", async () => {
     const { event, reservation } = await bookedGuest();
     const free = await createTable(db, event.id, { capacity: 4 });
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const sub = collect(event.id);
     try {
       const walkIn = await registerWalkIn(db, door, {

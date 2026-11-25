@@ -2,8 +2,9 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eventStats } from "@/features/check-in/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
-import { createCustomer, createEvent, createReservation, createTable, createUser } from "../../helpers/factories";
-import { actorOf, expectDomain } from "./fixtures";
+import { createCustomer, createEvent, createReservation, createTable } from "../../helpers/factories";
+import { actorOf, legacyActorOf, expectDomain } from "./fixtures";
+import { managerActor, memberActor, persistActor } from "../../helpers/actors";
 
 describe("eventStats", () => {
   beforeAll(async () => {
@@ -14,7 +15,7 @@ describe("eventStats", () => {
   });
 
   it("beklenen = bekleyen + onaylı + giriş yaptı; kalan = bekleyen + onaylı; kişi toplamları", async () => {
-    const organizer = await createUser(db, { role: "organizer" });
+    const organizer = await persistActor(db, managerActor("casino"));
     const event = await createEvent(db, {
       status: "active",
       organizerId: organizer.id,
@@ -49,7 +50,7 @@ describe("eventStats", () => {
       status: "checked_in",
     });
 
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     expect(await eventStats(db, door, event.id)).toEqual({
       pending: 1,
       confirmed: 2,
@@ -66,13 +67,13 @@ describe("eventStats", () => {
 
   it("boş etkinlik sıfır döner; olmayan veya başka organizatörün etkinliği not_found", async () => {
     const event = await createEvent(db, { status: "active" });
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     expect(await eventStats(db, door, event.id)).toMatchObject({
       totalExpected: 0,
       remaining: 0,
       checkInPercentage: 0,
     });
-    const stranger = await actorOf("organizer");
+    const stranger = await legacyActorOf("organizer");
     await expectDomain(eventStats(db, stranger, event.id), "not_found", "Etkinlik bulunamadı");
     await expectDomain(eventStats(db, door, crypto.randomUUID()), "not_found", "Etkinlik bulunamadı");
   });

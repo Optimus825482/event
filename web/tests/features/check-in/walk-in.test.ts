@@ -16,6 +16,7 @@ import {
   reservationRow,
   setReservationStatus,
 } from "./fixtures";
+import { memberActor } from "../../helpers/actors";
 
 describe("registerWalkIn", () => {
   beforeAll(async () => {
@@ -28,7 +29,7 @@ describe("registerWalkIn", () => {
   it("müşteri + boş masada rezervasyon + giriş tek seferde; sayaçlar 1", async () => {
     const { event } = await bookedGuest();
     const table = await createTable(db, event.id, { capacity: 6, label: "K7" });
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     const result = await registerWalkIn(db, door, {
       eventId: event.id,
@@ -61,7 +62,7 @@ describe("registerWalkIn", () => {
   it("M6: havuzda yalnızca tek boş bağlantı varken bile tamamlanır (transaction içinde ikinci bağlantı alınmaz)", async () => {
     const { event } = await bookedGuest();
     const table = await createTable(db, event.id, { capacity: 6, label: "K8" });
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const held: PoolClient[] = [];
     try {
       for (let i = 0; i < (pool.options.max ?? 10) - 1; i += 1) held.push(await pool.connect());
@@ -82,7 +83,7 @@ describe("registerWalkIn", () => {
 
   it("dolu masada conflict verir ve hiçbir şey yazılmaz (müşteri dahil)", async () => {
     const { event, table } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const customersBefore = (await db.select().from(customers)).length;
 
     await expectDomain(
@@ -103,7 +104,7 @@ describe("registerWalkIn", () => {
   it("kapasiteyi aşan walk-in conflict verir", async () => {
     const { event } = await bookedGuest();
     const table = await createTable(db, event.id, { capacity: 2, label: "K2" });
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await expectDomain(
       registerWalkIn(db, door, {
         eventId: event.id,
@@ -120,7 +121,7 @@ describe("registerWalkIn", () => {
   it("iptal edilmiş rezervasyonun masası walk-in için kullanılabilir", async () => {
     const { event, table, reservation } = await bookedGuest();
     await setReservationStatus(reservation.id, "cancelled");
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const result = await registerWalkIn(db, door, {
       eventId: event.id,
       tableId: table.id,
@@ -141,7 +142,7 @@ describe("updateGuestCount", () => {
 
   it("kapasiteye kadar kabul eder, aşımı reddeder", async () => {
     const { event, reservation } = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
 
     expect(
       await updateGuestCount(db, door, {
@@ -168,7 +169,7 @@ describe("updateGuestCount", () => {
   it("giriş yapmış misafirin kişi sayısı da değişebilir", async () => {
     const { event, reservation } = await bookedGuest();
     await db.update(reservations).set({ status: "checked_in" }).where(eq(reservations.id, reservation.id));
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const result = await updateGuestCount(db, door, {
       eventId: event.id,
       reservationId: reservation.id,
@@ -180,7 +181,7 @@ describe("updateGuestCount", () => {
   it("başka etkinliğin rezervasyonu not_found", async () => {
     const a = await bookedGuest();
     const b = await bookedGuest();
-    const door = await actorOf("controller");
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
     await expectDomain(
       updateGuestCount(db, door, {
         eventId: b.event.id,

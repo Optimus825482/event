@@ -5,6 +5,7 @@ import { importActionDefs } from "@/features/import/action-defs";
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { memberActor } from "../../helpers/actors";
 import { actorOf, bookableEvent, xlsx, type Cell } from "./helpers";
 
 const HEADER: Cell[] = ["Masa etiketi", "Misafir adı", "Telefon", "E-posta", "Kişi sayısı", "Not"];
@@ -53,13 +54,13 @@ describe("içe aktarma action'ları", () => {
   it("yetkisiz rol forbidden, oturumsuz unauthenticated; atama içe aktarma events.edit ister", async () => {
     const { owner, event } = await bookableEvent({ A1: 4 });
     const bytes = await xlsx([HEADER, ["A1", "Ali", null, null, 2, null]]);
-    const controller = createAction({ getActor: async () => actorOf("controller") });
+    const controller = createAction({ getActor: async () => actorOf(memberActor("casino", { check_in: "vc--" })) });
     expect(await controller.defineAction(importActionDefs.importReservations)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
 
     const anon = createAction({ getActor: async () => null });
     expect(await anon.defineAction(importActionDefs.previewReservations)(form(event.id, bytes))).toMatchObject({ ok: false, code: "unauthenticated" });
 
-    const staffer = createAction({ getActor: async () => actorOf("staff") });
+    const staffer = createAction({ getActor: async () => actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" })) });
     expect(await staffer.defineAction(importActionDefs.importAssignments)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
 
     const own = createAction({ getActor: async () => owner });

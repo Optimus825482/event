@@ -9,7 +9,7 @@ import { applyOrganizationTemplate } from "@/features/staffing/templates-service
 import { organizationTemplates } from "@/db/schema";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { expectDomain, makeActor, setupEvent } from "./helpers";
+import { expectDomain, setupEvent, makeLegacy } from "./helpers";
 
 const rowsOf = (eventId: string) => db.select().from(eventStaffAssignments).where(eq(eventStaffAssignments.eventId, eventId));
 
@@ -104,7 +104,7 @@ describe("kişiye özel saat (Özel saat)", () => {
   it("yetki aynen: başka organizatör özel saat yazamaz", async () => {
     const { event, people } = await setupEvent();
     await expectDomain(
-      saveAssignments(db, await makeActor("organizer"), {
+      saveAssignments(db, await makeLegacy("organizer"), {
         eventId: event.id,
         assignments: [{ staffId: people[0]!.id, shiftStart: "19:00", shiftEnd: "23:00", assignmentType: "table", tableIds: [] }],
       }),

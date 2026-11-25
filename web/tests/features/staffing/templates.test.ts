@@ -11,9 +11,10 @@ import {
   deleteOrganizationTemplate,
   listOrganizationTemplates,
 } from "@/features/staffing/templates-service";
+import { adminActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { expectDomain, makeActor, setupEvent, snapshot, tablesOfAssignment, tablesOfGroup } from "./helpers";
+import { expectDomain, makeActor, setupEvent, snapshot, tablesOfAssignment, tablesOfGroup, makeLegacy } from "./helpers";
 
 /** Kaynak etkinlikte ekip + grup + masa ataması + özel görev kurar ve şablona çevirir. */
 async function sourceTemplate() {
@@ -47,7 +48,7 @@ describe("organizasyon şablonu sahipliği", () => {
   it("başka organizatör listeleyemez, uygulayamaz (not_found) ve silemez; yönetici ve sahibi yapabilir", async () => {
     const { src, template } = await sourceTemplate();
     const other = await setupEvent({ tableCount: 1, staffCount: 0 });
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
 
     expect(await listOrganizationTemplates(db, other.actor)).toEqual([]);
     await expectDomain(applyOrganizationTemplate(db, other.actor, { eventId: other.event.id, templateId: template.id }), "not_found");
@@ -64,7 +65,7 @@ describe("organizasyon şablonu sahipliği", () => {
   it("görünür ama sahibi olunmayan (varsayılan) şablon silinemez", async () => {
     const { template } = await sourceTemplate();
     await db.update(organizationTemplates).set({ isDefault: true }).where(eq(organizationTemplates.id, template.id));
-    const other = await makeActor("organizer");
+    const other = await makeLegacy("organizer");
     const [listed] = await listOrganizationTemplates(db, other);
     expect(listed).toMatchObject({ id: template.id, canManage: false });
     await expectDomain(deleteOrganizationTemplate(db, other, { id: template.id }), "conflict");
@@ -179,7 +180,7 @@ describe("organizasyon şablonları (spec §13.11)", () => {
       applyOrganizationTemplate(db, actor, { eventId: event.id, templateId: crypto.randomUUID() }),
       "not_found",
     );
-    const stranger = await makeActor("organizer");
+    const stranger = await makeLegacy("organizer");
     await expectDomain(
       applyOrganizationTemplate(db, stranger, { eventId: event.id, templateId: template.id }),
       "not_found",

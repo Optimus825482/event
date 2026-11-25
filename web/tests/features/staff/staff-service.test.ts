@@ -3,8 +3,6 @@ import { db } from "@/db/client";
 import { departments, eventStaffAssignments, staff } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { ForbiddenError } from "@/features/auth/errors";
-import type { Role } from "@/features/auth/roles";
-import type { Actor } from "@/features/auth/session";
 import { setStaffStatusSchema, staffInputSchema } from "@/features/staff/schemas";
 import {
   createStaff,
@@ -15,13 +13,11 @@ import {
   updateStaff,
 } from "@/features/staff/service";
 import { DomainError } from "@/lib/action";
+import { adminActor, memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createAssignment, createEvent, createStaff as makeStaff } from "../../helpers/factories";
 
-function actorOf(role: Role): Actor {
-  return { id: "00000000-0000-4000-8000-000000000001", username: "t", role, staffId: null, memberships: [], permissions: [] };
-}
-const admin = actorOf("admin");
+const admin = adminActor({ id: "00000000-0000-4000-8000-000000000001" });
 
 function st(v: Record<string, unknown>) {
   return setStaffStatus(db, admin, setStaffStatusSchema.parse(v));
@@ -130,8 +126,8 @@ describe("personel servisi", () => {
   });
 
   it("yetkisiz rol servis düzeyinde de reddedilir", async () => {
-    await expect(createStaff(db, actorOf("controller"), input())).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(createStaff(db, actorOf("staff"), input())).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(createStaff(db, memberActor("casino", { check_in: "vc--" }), input())).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(createStaff(db, memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }), input())).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
 

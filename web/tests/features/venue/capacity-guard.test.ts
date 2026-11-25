@@ -2,17 +2,16 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eventTables, venueTemplates } from "@/db/schema";
-import type { Actor } from "@/features/auth/session";
 import { applyVenueTemplate, saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
+import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 const decor = { width: 1200, height: 800, elements: [] };
 
 async function setup() {
-  const u = await f.createUser(db, { role: "organizer" });
-  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
+  const actor = await persistActor(db, managerActor("entertainment"));
   const event = await f.createEvent(db, { organizerId: actor.id });
   const big = await f.createTable(db, event.id, { label: "A1", capacity: 8, x: 0, y: 0 });
   const other = await f.createTable(db, event.id, { label: "A2", capacity: 6, x: 60, y: 0 });

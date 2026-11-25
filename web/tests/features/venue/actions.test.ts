@@ -6,10 +6,16 @@ import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { venueActionDefs } from "@/features/venue/action-defs";
 import { createAction } from "@/lib/action";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role): Promise<Actor> {
+async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
+async function makeLegacy(role: Role): Promise<Actor> {
   const u = await f.createUser(db, { role });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
@@ -33,7 +39,7 @@ describe("venue actions", () => {
   });
 
   it("organizatör yerleşimi kaydeder", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -45,7 +51,7 @@ describe("venue actions", () => {
   });
 
   it("staff rolü yerleşim kaydedemez; satır yazılmaz", async () => {
-    const actor = await makeActor("staff");
+    const actor = await makeActor(noAccessActor());
     const event = await f.createEvent(db);
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -57,7 +63,7 @@ describe("venue actions", () => {
   });
 
   it("kapasite 0 ve yinelenen etiket alan hatası olarak döner", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -75,7 +81,7 @@ describe("venue actions", () => {
   });
 
   it("rezervasyonlu masa silme conflict ve etiketi mesajda", async () => {
-    const actor = await makeActor("organizer");
+    const actor = await makeActor(managerActor("entertainment"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const table = await f.createTable(db, event.id, { label: "VIP-7" });
     const customer = await f.createCustomer(db);
@@ -86,7 +92,7 @@ describe("venue actions", () => {
   });
 
   it("mekân sahibi etkinlikten şablon alamaz", async () => {
-    const owner = await makeActor("venue_owner");
+    const owner = await makeLegacy("venue_owner");
     const event = await f.createEvent(db);
     const res = await actionsFor(owner).saveAsTemplate({ eventId: event.id, name: "X" });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
@@ -95,9 +101,9 @@ describe("venue actions", () => {
 
   it("masa tipini yalnızca ayar yetkisi olan oluşturur", async () => {
     const input = { name: "VIP", color: "#ffaa00", shape: "round", capacity: "12", basePrice: "0" };
-    const organizer = await makeActor("organizer");
+    const organizer = await makeActor(managerActor("entertainment"));
     expect(await actionsFor(organizer).createTableType(input)).toMatchObject({ ok: false, code: "forbidden" });
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     expect((await actionsFor(admin).createTableType(input)).ok).toBe(true);
     expect(await db.select().from(tableTypes)).toHaveLength(1);
   });
@@ -113,7 +119,7 @@ describe("venue actions", () => {
     }
 
     it("kendi şablonunu günceller ve siler", async () => {
-      const owner = await makeActor("venue_owner");
+      const owner = await makeLegacy("venue_owner");
       const mine = await template(owner.id);
       const actions = actionsFor(owner);
       expect((await actions.updateTemplate({ id: mine.id, name: "Yeni" })).ok).toBe(true);
@@ -122,8 +128,8 @@ describe("venue actions", () => {
     });
 
     it("başkasının (herkese açık) şablonunu değiştiremez ve silemez", async () => {
-      const owner = await makeActor("venue_owner");
-      const other = await makeActor("venue_owner");
+      const owner = await makeLegacy("venue_owner");
+      const other = await makeLegacy("venue_owner");
       const theirs = await template(other.id);
       const actions = actionsFor(owner);
       expect(await actions.updateTemplate({ id: theirs.id, name: "Ele geçir" })).toMatchObject({ ok: false, code: "forbidden" });
@@ -132,10 +138,10 @@ describe("venue actions", () => {
     });
 
     it("olmayan şablon, başkasınınkiyle aynı yanıtı verir (varlık sızmaz)", async () => {
-      const owner = await makeActor("venue_owner");
+      const owner = await makeLegacy("venue_owner");
       const res = await actionsFor(owner).deleteTemplate({ id: crypto.randomUUID() });
       expect(res).toMatchObject({ ok: false, code: "forbidden" });
-      const admin = await makeActor("admin");
+      const admin = await makeActor(adminActor());
       expect(await actionsFor(admin).deleteTemplate({ id: crypto.randomUUID() })).toMatchObject({ ok: false, code: "not_found" });
     });
   });

@@ -2,13 +2,13 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { customers, systemSettings } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { buildWhatsAppUrl, sendInvitationEmail, getWhatsAppLink, type MailMessage, type TransportFactory } from "@/features/invitations/delivery";
 import { listRecipients } from "@/features/invitations/event-invitation";
 import { parseInvitationToken, verifyInvitationMac } from "@/features/invitations/token";
 import { encryptSecret } from "@/features/settings/crypto";
 import { getSmtpConfig } from "@/features/settings/smtp";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -23,8 +23,13 @@ afterAll(() => {
   else process.env.SETTINGS_ENCRYPTION_KEY = previousKey;
 });
 
-async function makeActor(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
+async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi kayıtlarını görür). */
+async function makeOrganizer(): Promise<Actor> {
+  const u = await f.createUser(db, { role: "organizer" });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
@@ -100,7 +105,7 @@ describe("e-posta gönderimi", () => {
   });
 
   it("SMTP yapılandırılmamışsa anlaşılır hata verir ve taşıyıcı oluşturmaz", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const { reservation } = await seed();
     const mail = recorder();
     await expect(sendInvitationEmail(db, admin, { reservationId: reservation.id }, mail.factory)).rejects.toMatchObject({
@@ -112,7 +117,7 @@ describe("e-posta gönderimi", () => {
 
   it("e-postayı gönderir: alıcı, bağlantı, QR eki; HTML kaçırılır", async () => {
     await configureSmtp();
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const { reservation, event, customer } = await seed();
     await db.update(customers).set({ fullName: "<b>Ayşe</b>" });
     const mail = recorder();
@@ -135,7 +140,7 @@ describe("e-posta gönderimi", () => {
 
   it("e-posta adresi yoksa reddeder; taşıyıcı hata verirse ayrıntı sızdırmadan conflict", async () => {
     await configureSmtp();
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const noMail = await seed(undefined, { phone: "0532 111 22 33" });
     const mail = recorder();
     await expect(sendInvitationEmail(db, admin, { reservationId: noMail.reservation.id }, mail.factory)).rejects.toMatchObject({
@@ -155,12 +160,12 @@ describe("e-posta gönderimi", () => {
 
   it("organizatör başkasının etkinliği için gönderemez; staff rolü yetkisizdir", async () => {
     await configureSmtp();
-    const owner = await makeActor("organizer");
-    const other = await makeActor("organizer");
+    const owner = await makeOrganizer();
+    const other = await makeOrganizer();
     const { reservation } = await seed(owner.id);
     const mail = recorder();
     await expect(sendInvitationEmail(db, other, { reservationId: reservation.id }, mail.factory)).rejects.toMatchObject({ code: "not_found" });
-    await expect(sendInvitationEmail(db, await makeActor("staff"), { reservationId: reservation.id }, mail.factory)).rejects.toThrow();
+    await expect(sendInvitationEmail(db, await makeActor(noAccessActor()), { reservationId: reservation.id }, mail.factory)).rejects.toThrow();
     expect(mail.sent).toHaveLength(0);
     await expect(sendInvitationEmail(db, owner, { reservationId: reservation.id }, mail.factory)).resolves.toBeDefined();
   });
@@ -180,7 +185,7 @@ describe("WhatsApp bağlantısı", () => {
   });
 
   it("mesaj imzalı davetiye bağlantısını içerir", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const { reservation, event } = await seed();
     const res = await getWhatsAppLink(db, admin, { reservationId: reservation.id });
     expect(res.hasPhone).toBe(true);
@@ -191,7 +196,7 @@ describe("WhatsApp bağlantısı", () => {
   });
 
   it("telefon yoksa numarasız bağlantı", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const { reservation } = await seed(undefined, { email: "a@example.com" });
     const res = await getWhatsAppLink(db, admin, { reservationId: reservation.id });
     expect(res.hasPhone).toBe(false);
@@ -205,7 +210,7 @@ describe("alıcı listesi", () => {
   });
 
   it("iletişim bilgisini değil yalnızca var olup olmadığını döner", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const { event } = await seed();
     const rows = await listRecipients(db, admin, { eventId: event.id });
     expect(rows).toHaveLength(1);
@@ -216,8 +221,8 @@ describe("alıcı listesi", () => {
   });
 
   it("organizatör başkasının etkinliğinin alıcılarını göremez", async () => {
-    const owner = await makeActor("organizer");
-    const other = await makeActor("organizer");
+    const owner = await makeOrganizer();
+    const other = await makeOrganizer();
     const { event } = await seed(owner.id);
     await expect(listRecipients(db, other, { eventId: event.id })).rejects.toMatchObject({ code: "not_found" });
   });

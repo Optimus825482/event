@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { reservations, userPermissions } from "@/db/schema";
-import { loadPermissions, withPermissions } from "@/features/auth/permissions";
+import { reservations } from "@/db/schema";
+import { withPermissions } from "@/features/auth/permissions";
 import { ForbiddenError } from "@/features/auth/errors";
 import type { Actor } from "@/features/auth/session";
 import { reservationActionDefs } from "@/features/reservations/action-defs";
@@ -10,7 +10,8 @@ import { getReservationDetail, listReservations } from "@/features/reservations/
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
-import { actorOf, bookable, createTable, rejection, TABLE_TAKEN } from "./fixtures";
+import { actorOf, legacyActorOf, bookable, createTable, rejection, TABLE_TAKEN } from "./fixtures";
+import { adminActor, memberActor } from "../../helpers/actors";
 
 function actionsFor(actor: Actor | null) {
   const { defineAction } = createAction({ getActor: async () => actor });
@@ -28,7 +29,7 @@ describe("rezervasyon action'ları", () => {
   });
 
   it("staff form verisiyle oluşturur; dolu masada Türkçe conflict döner", async () => {
-    const staff = await actorOf("staff");
+    const staff = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const { event, table } = await bookable();
     const form = { eventId: event.id, tableId: table.id, guestCount: "2", guestName: "Ali Veli", guestPhone: "05321234567" };
     const first = await actionsFor(staff).create(form);
@@ -38,7 +39,7 @@ describe("rezervasyon action'ları", () => {
   });
 
   it("geçersiz girdi alan hatalarıyla invalid döner", async () => {
-    const admin = await actorOf("admin");
+    const admin = await actorOf(adminActor());
     const { event, table } = await bookable();
     const res = await actionsFor(admin).create({ eventId: event.id, tableId: table.id, guestCount: "0" });
     expect(res).toMatchObject({ ok: false, code: "invalid" });
@@ -48,7 +49,7 @@ describe("rezervasyon action'ları", () => {
   });
 
   it("controller oluşturamaz (forbidden), oturumsuz unauthenticated; satır yazılmaz", async () => {
-    const controller = await actorOf("controller");
+    const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
     const { event, table, customer } = await bookable();
     const input = { eventId: event.id, tableId: table.id, guestCount: 2, customerId: customer.id };
     expect(await actionsFor(controller).create(input)).toMatchObject({ ok: false, code: "forbidden" });
@@ -57,7 +58,7 @@ describe("rezervasyon action'ları", () => {
   });
 
   it("iptal ve masa değişikliği action üzerinden çalışır", async () => {
-    const staff = await actorOf("staff");
+    const staff = await actorOf(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
     const t2 = await createTable(db, event.id, { capacity: 4 });
@@ -76,18 +77,16 @@ describe("rezervasyon sorguları", () => {
 
   it("controller listeleyemez; izin satırı canView=false olan staff listeleyemez", async () => {
     const { event } = await bookable();
-    const controller = await withPermissions(await actorOf("controller"));
+    const controller = await withPermissions(await actorOf(memberActor("casino", { check_in: "vc--" })));
     const error = await rejection(listReservations(db, controller, { eventId: event.id }));
     expect(error).toBeInstanceOf(ForbiddenError);
 
-    const staffActor = await actorOf("staff");
-    await db.insert(userPermissions).values({ userId: staffActor.id, module: "reservations", canView: false });
-    const staff = await withPermissions({ ...staffActor, permissions: await loadPermissions(staffActor.id) });
+    const staff = await actorOf(memberActor("casino", { reservations: "----", customers: "v---", check_in: "vc--" }));
     expect(await rejection(listReservations(db, staff, { eventId: event.id }))).toBeInstanceOf(ForbiddenError);
   });
 
   it("arama (ad, telefon, masa), durum süzgeci, masa etiketi event_tables'tan, durum sayıları", async () => {
-    const admin = await withPermissions(await actorOf("admin"));
+    const admin = await withPermissions(await actorOf(adminActor()));
     const { event, table, customer } = await bookable();
     const t2 = await createTable(db, event.id, { label: "VIP-1" });
     const other = await createCustomer(db, { fullName: "Zeynep Kaya", phoneNormalized: "+905551112233" });
@@ -116,14 +115,14 @@ describe("rezervasyon sorguları", () => {
   });
 
   it("organizatör başkasının etkinliğini not_found görür; detay null", async () => {
-    const organizer = await withPermissions(await actorOf("organizer"));
+    const organizer = await withPermissions(await legacyActorOf("organizer"));
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
     const error = await rejection(listReservations(db, organizer, { eventId: event.id }));
     expect(error).toMatchObject({ code: "not_found" });
     expect(await getReservationDetail(db, organizer, row.id)).toBeNull();
 
-    const admin = await withPermissions(await actorOf("admin"));
+    const admin = await withPermissions(await actorOf(adminActor()));
     const detail = await getReservationDetail(db, admin, row.id);
     expect(detail).toMatchObject({ tableLabel: "A1", customer: { id: customer.id } });
     expect(await getReservationDetail(db, admin, "not-a-uuid")).toBeNull();

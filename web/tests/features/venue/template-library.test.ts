@@ -9,10 +9,16 @@ import { buildTemplatePreview, tableRadius } from "@/features/venue/components/t
 import { parseTemplateLayout } from "@/features/venue/template-layout";
 import { createBlankTemplate, listVenueTemplates } from "@/features/venue/templates-service";
 import { createAction } from "@/lib/action";
+import { managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(role: Role = "organizer"): Promise<Actor> {
+async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
+async function makeLegacy(role: Role): Promise<Actor> {
   const u = await f.createUser(db, { role });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
@@ -23,7 +29,7 @@ describe("createBlankTemplate", () => {
   });
 
   it("masasız şablonu işlemi yapanın adına yazar ve varsayılan özel olur", async () => {
-    const actor = await makeActor("venue_owner");
+    const actor = await makeLegacy("venue_owner");
     const row = await createBlankTemplate(db, actor, { name: "  Boş Salon ", description: " not " });
     expect(row).toMatchObject({ name: "Boş Salon", description: "not", isPublic: false, createdById: actor.id });
     const layout = parseTemplateLayout(row.layoutData);
@@ -38,7 +44,7 @@ describe("createBlankTemplate", () => {
       const { defineAction } = createAction({ getActor: async () => actor });
       return defineAction(venueActionDefs.createBlankTemplate)(input);
     };
-    const owner = await makeActor("venue_owner");
+    const owner = await makeLegacy("venue_owner");
     const ok = await run(owner, { name: "Salon", description: "", isPublic: true });
     expect(ok.ok).toBe(true);
     const [row] = await db.select().from(venueTemplates);
@@ -48,14 +54,14 @@ describe("createBlankTemplate", () => {
     expect(bad).toMatchObject({ ok: false, code: "invalid" });
     if (!bad.ok) expect(bad.fieldErrors?.name?.length).toBeGreaterThan(0);
 
-    const staff = await makeActor("staff");
+    const staff = await makeActor(noAccessActor());
     expect(await run(staff, { name: "X" })).toMatchObject({ ok: false, code: "forbidden" });
     expect(await db.select().from(venueTemplates)).toHaveLength(1);
   });
 
   it("başka kullanıcıya ait özel şablon listede görünmez", async () => {
-    const a = await makeActor("organizer");
-    const b = await makeActor("organizer");
+    const a = await makeLegacy("organizer");
+    const b = await makeLegacy("organizer");
     await createBlankTemplate(db, a, { name: "A özel" });
     await createBlankTemplate(db, a, { name: "A açık", isPublic: true });
     expect((await listVenueTemplates(db, b)).map((t) => t.name)).toEqual(["A açık"]);

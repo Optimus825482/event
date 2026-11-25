@@ -6,7 +6,6 @@ import sharp from "sharp";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eventInvitations } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { invitationActionDefs } from "@/features/invitations/action-defs";
 import { DEFAULT_TEMPLATE_ELEMENTS } from "@/features/invitations/elements";
@@ -14,13 +13,19 @@ import { getEventInvitationDetail, saveEventInvitation } from "@/features/invita
 import { createTemplate, ensureDefaultTemplate } from "@/features/invitations/templates";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
 import { createAction } from "@/lib/action";
+import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 sharp.cache(false);
 
-async function makeActor(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
+async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+  return persistActor(db, actor);
+}
+
+/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi kayıtlarını görür). */
+async function makeOrganizer(): Promise<Actor> {
+  const u = await f.createUser(db, { role: "organizer" });
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
@@ -33,7 +38,7 @@ describe("etkinlik davetiyesi", () => {
   });
 
   it("kayıt yokken varsayılan şablonu gösterir", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     await ensureDefaultTemplate(db);
     const event = await f.createEvent(db);
     const detail = await getEventInvitationDetail(db, admin, { eventId: event.id });
@@ -42,7 +47,7 @@ describe("etkinlik davetiyesi", () => {
   });
 
   it("kaydeder, ikinci kayıtta aynı satırı günceller (eşzamanlı çağrılarda da tek satır)", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const event = await f.createEvent(db);
     const input = { ...design, eventId: event.id, templateId: null, customElements: [text] };
     await Promise.all([saveEventInvitation(db, admin, input), saveEventInvitation(db, admin, input), saveEventInvitation(db, admin, input)]);
@@ -55,7 +60,7 @@ describe("etkinlik davetiyesi", () => {
   });
 
   it("şablon seçilince şablon düzeni kullanılır; silinmiş şablon reddedilir", async () => {
-    const admin = await makeActor("admin");
+    const admin = await makeActor(adminActor());
     const event = await f.createEvent(db);
     const template = await createTemplate(db, admin, { ...design, name: "Özel", description: undefined, elements: [text] });
     await saveEventInvitation(db, admin, { ...design, eventId: event.id, templateId: template.id, customElements: null });
@@ -67,8 +72,8 @@ describe("etkinlik davetiyesi", () => {
   });
 
   it("organizatör başkasının etkinliğine erişemez", async () => {
-    const owner = await makeActor("organizer");
-    const other = await makeActor("organizer");
+    const owner = await makeOrganizer();
+    const other = await makeOrganizer();
     const event = await f.createEvent(db, { organizerId: owner.id });
     await expect(getEventInvitationDetail(db, other, { eventId: event.id })).rejects.toMatchObject({ code: "not_found" });
     await expect(
@@ -79,7 +84,7 @@ describe("etkinlik davetiyesi", () => {
   });
 
   it("staff rolü kaydedemez (action)", async () => {
-    const staff = await makeActor("staff");
+    const staff = await makeActor(noAccessActor());
     const event = await f.createEvent(db);
     const { defineAction } = createAction({ getActor: async () => staff });
     const res = await defineAction(invitationActionDefs.saveEventInvitation)({ ...design, eventId: event.id, customElements: [text] });
@@ -98,7 +103,7 @@ describe("davetiye görselleri (action)", () => {
   });
 
   it("yükler, listeye ekler ve kaldırınca dosyayı siler; reddedilen dosya conflict", async () => {
-    const organizer = await makeActor("organizer");
+    const organizer = await makeActor(managerActor("entertainment"));
     const event = await f.createEvent(db, { organizerId: organizer.id });
     const { defineAction } = createAction({ getActor: async () => organizer });
     const upload = defineAction(invitationActionDefs.uploadImage);
