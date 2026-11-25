@@ -7,6 +7,7 @@ export const systemSettings = pgTable("system_settings", {
   id: pk(),
   companyName: text("company_name").notNull().default("EventFlow"),
   logo: text("logo"),
+  // Kullanılmıyor: uygulama yalnızca APP_TIME_ZONE kullanır; sütun sonraki bir temizliğe kadar duruyor.
   timezone: text("timezone").notNull().default("Asia/Famagusta"),
   language: text("language").notNull().default("tr"),
   defaultGridSize: integer("default_grid_size").notNull().default(20),

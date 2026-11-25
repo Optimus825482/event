@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APP_TIME_ZONE, dateToZonedWallClock } from "@/lib/time-zone";
 import { decorSchema, tableInputSchema } from "../schemas";
 import { linesForSave } from "./lines";
 import type { DraftContent, EditorTable } from "./types";
@@ -124,17 +125,19 @@ export function clearDraft(storage: DraftStorage | null, eventId: string, userId
   }
 }
 
-/** "14:32" (saat:dakika, iki haneli). */
+/** "14:32" (saat:dakika, iki haneli; Kıbrıs saati). */
 export function formatDraftTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return dateToZonedWallClock(d, APP_TIME_ZONE).slice(11);
 }
 
-/** "22.11.2026 14:32:05". */
+/** "22.11.2026 14:32:05" (Kıbrıs saati). */
 export function formatDraftStamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  const wall = dateToZonedWallClock(d, APP_TIME_ZONE);
+  const [y, m, day] = wall.slice(0, 10).split("-");
+  // Bölge ofsetleri tam dakikadır; saniye UTC ile aynıdır.
+  return `${day}.${m}.${y} ${wall.slice(11)}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
 }

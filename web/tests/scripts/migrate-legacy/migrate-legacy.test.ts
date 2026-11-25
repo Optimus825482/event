@@ -168,6 +168,7 @@ describe("rapor kategorileri", () => {
       ]),
     );
     expect(c.information.some((f) => f.table === "users" && f.id === IDS.users.admin)).toBe(false);
+    expect(c.skippedRows.some((f) => f.table === "system_settings" && f.field === "timezone")).toBe(true);
     const skippedPerms = c.skippedRows.filter((f) => f.table === "user_permissions");
     expect(skippedPerms).toHaveLength(2);
     expect(skippedPerms.every((f) => f.userId === IDS.users.organizer)).toBe(true);
@@ -406,6 +407,9 @@ describe("hedef durum", () => {
       expect(perms.rowCount).toBe(0);
       const settings = await c.query<{ smtp_password_encrypted: string | null }>("SELECT smtp_password_encrypted FROM system_settings");
       expect(settings.rows).toEqual([{ smtp_password_encrypted: null }]);
+      // Eski saat dilimi kopyalanmaz: sütun varsayılanında (Asia/Famagusta) kalır.
+      const zone = await c.query<{ timezone: string }>("SELECT timezone FROM system_settings");
+      expect(zone.rows).toEqual([{ timezone: "Asia/Famagusta" }]);
     });
   });
 });

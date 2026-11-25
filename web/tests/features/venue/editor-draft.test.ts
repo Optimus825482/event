@@ -101,9 +101,13 @@ describe("yerleşim taslağı", () => {
   });
 
   it("zaman biçimleri", () => {
-    const iso = new Date(2026, 10, 22, 9, 5, 7).toISOString();
-    expect(formatDraftTime(iso)).toBe("09:05");
-    expect(formatDraftStamp(iso)).toBe("22.11.2026 09:05:07");
+    // Kıbrıs saati, tarayıcı/sunucu dilimine bakılmaksızın: kış (UTC+2) ve yaz (UTC+3).
+    const winter = "2026-11-22T07:05:07.000Z";
+    expect(formatDraftTime(winter)).toBe("09:05");
+    expect(formatDraftStamp(winter)).toBe("22.11.2026 09:05:07");
+    const summer = "2026-07-22T06:05:07.000Z";
+    expect(formatDraftTime(summer)).toBe("09:05");
+    expect(formatDraftStamp(summer)).toBe("22.07.2026 09:05:07");
     expect(formatDraftTime("geçersiz")).toBe("");
   });
 

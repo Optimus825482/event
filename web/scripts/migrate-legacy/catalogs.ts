@@ -170,11 +170,14 @@ async function migrateSettings(ctx: Ctx): Promise<void> {
       if (r.trimmed("smtpPassword") !== null) {
         ctx.add("skippedRows", { table: "system_settings", id: r.id, field: "smtpPassword", detail: "SMTP parolası taşınmadı; ayarlardan yeniden girilmeli" });
       }
+      const legacyZone = r.trimmed("timezone");
+      if (legacyZone !== null && legacyZone !== APP_TIME_ZONE) {
+        ctx.add("skippedRows", { table: "system_settings", id: r.id, field: "timezone", detail: `Saat dilimi (${legacyZone}) taşınmadı; uygulama yalnızca Kıbrıs saatini (Asia/Famagusta) kullanır` });
+      }
       return {
         id: r.id,
         companyName: r.text("companyName", "EventFlow"),
         logo: r.str("logo"),
-        timezone: r.text("timezone", APP_TIME_ZONE),
         language: r.text("language", "tr"),
         defaultGridSize: r.int("defaultGridSize") ?? 20,
         snapToGrid: r.bool("snapToGrid", true),
