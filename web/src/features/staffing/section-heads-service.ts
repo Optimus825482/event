@@ -4,7 +4,7 @@ import type { Db, Tx } from "@/db/client";
 import { eventSectionHeads, staff } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
-import { ensureStaffingAccess, withEventWrite } from "./access";
+import { getReadableEvent, withEventWrite } from "./access";
 
 export type SectionHead = { staffId: string; fullName: string; sicilNo: string };
 
@@ -31,9 +31,9 @@ async function readSectionHeads(ex: Db | Tx, eventId: string): Promise<SectionHe
     .orderBy(asc(staff.fullName), asc(staff.id));
 }
 
-/** Etkinliğin kısım sorumluları (`staff:view`). */
+/** Etkinliğin kısım sorumluları (`staff:view`). Etkinlik yoksa `not_found`, diğer okumalarla aynı biçimde. */
 export async function listSectionHeads(ex: Db | Tx, actor: Actor, eventId: string): Promise<SectionHead[]> {
-  ensureStaffingAccess(actor, "view");
+  await getReadableEvent(ex, actor, eventId);
   return readSectionHeads(ex, eventId);
 }
 

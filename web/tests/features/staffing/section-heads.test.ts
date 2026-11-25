@@ -11,6 +11,7 @@ import { assistantActor, managerActor, memberActor } from "../../helpers/actors"
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { createSectionHead } from "../../helpers/fnb";
+import { initialSectionHeadSelection, sectionHeadRows } from "@/features/staffing/components/section-heads-card";
 import { expectDomain, makeActor } from "./helpers";
 
 function setFor(actor: Actor) {
@@ -115,6 +116,26 @@ describe("etkinlik kısım sorumluları", () => {
 
     await expect(setSectionHeads(db, actor, { eventId: event.id, staffIds: [a.id] })).rejects.toBeInstanceOf(ForbiddenError);
     expect(await setFor(actor)({ eventId: event.id, staffIds: [a.id] })).toMatchObject({ ok: false, code: "forbidden" });
+    // Reddedilen yazma hiçbir satır bırakmaz.
+    expect(await staffIdsOf(event.id)).toEqual([]);
+  });
+
+  it("başarısız değiştirme (pasif personel) boş olmayan mevcut kümeyi değiştirmez", async () => {
+    const actor = await makeActor(managerActor("fnb"));
+    const event = await f.createEvent(db, { organizerId: actor.id });
+    const mevcut = await f.createStaff(db);
+    const yeni = await f.createStaff(db);
+    const pasif = await f.createStaff(db, { status: "inactive" });
+    await setSectionHeads(db, actor, { eventId: event.id, staffIds: [mevcut.id] });
+
+    const err = await domainErrorOf(setSectionHeads(db, actor, { eventId: event.id, staffIds: [yeni.id, pasif.id] }));
+    expect(err.code).toBe("invalid");
+    expect(await staffIdsOf(event.id)).toEqual([mevcut.id]);
+  });
+
+  it("bilinmeyen etkinlikte liste not_found döner (boş liste değil)", async () => {
+    const actor = await makeActor(managerActor("fnb"));
+    await expectDomain(listSectionHeads(db, actor, crypto.randomUUID()), "not_found");
   });
 
   it("F&B asistanı atar ve kaldırır (kaldırma bir düzenlemedir)", async () => {
@@ -140,5 +161,24 @@ describe("etkinlik kısım sorumluları", () => {
 
     await expectDomain(setSectionHeads(db, actor, { eventId: event.id, staffIds: [a.id] }), "conflict");
     expect(await staffIdsOf(event.id)).toEqual([]);
+  });
+});
+
+describe("kısım sorumlusu satırları (saf)", () => {
+  const ali = { staffId: "11111111-1111-4111-8111-111111111111", fullName: "Ali Demir", sicilNo: "S-1" };
+  const zeynep = { staffId: "22222222-2222-4222-8222-222222222222", fullName: "Zeynep Yılmaz", sicilNo: "S-2" };
+
+  it("aday olmayan (pasif) mevcut sorumlu satırda kalır ve seçili başlar", () => {
+    const rows = sectionHeadRows([ali], [{ staffId: zeynep.staffId, fullName: zeynep.fullName }]);
+    expect(rows).toEqual([
+      { staffId: zeynep.staffId, fullName: zeynep.fullName, active: true },
+      { staffId: ali.staffId, fullName: ali.fullName, active: false },
+    ]);
+    expect(initialSectionHeadSelection([ali])).toContain(ali.staffId);
+  });
+
+  it("sorumlu aynı zamanda aday ise tek satır üretilir (tekrar yok)", () => {
+    const rows = sectionHeadRows([ali], [{ staffId: ali.staffId, fullName: ali.fullName }]);
+    expect(rows).toEqual([{ staffId: ali.staffId, fullName: ali.fullName, active: true }]);
   });
 });
