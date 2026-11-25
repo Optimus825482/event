@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { setSectionHeadsAction } from "../section-heads-actions";
@@ -45,6 +45,7 @@ type Props = {
 /** Etkinlik kısım sorumluları: personel listesinden çoklu seçim, "Kaydet" ile kümeyi değiştirir. */
 export function SectionHeadsCard({ eventId, heads, candidates, canEdit }: Props) {
   const router = useRouter();
+  const noteId = useId();
   const guard = draftWriteBlock(useOrganization((s) => s.dirty));
   const [selected, setSelected] = useState<string[]>(() => initialSectionHeadSelection(heads));
   const [message, setMessage] = useState<{ error: boolean; lines: string[] } | null>(null);
@@ -64,7 +65,8 @@ export function SectionHeadsCard({ eventId, heads, candidates, canEdit }: Props)
     );
   };
 
-  const save = () =>
+  const save = () => {
+    if (guard.blocked) return;
     startTransition(async () => {
       setMessage(null);
       const res = await setSectionHeadsAction({ eventId, staffIds: selected });
@@ -75,6 +77,7 @@ export function SectionHeadsCard({ eventId, heads, candidates, canEdit }: Props)
       setMessage({ error: false, lines: ["Kısım sorumluları kaydedildi."] });
       router.refresh();
     });
+  };
 
   return (
     <Section title="Kısım sorumluları">
@@ -113,10 +116,12 @@ export function SectionHeadsCard({ eventId, heads, candidates, canEdit }: Props)
             })}
           </fieldset>
           <div className="flex items-start gap-3">
-            <Button type="button" onClick={save} disabled={pending || !dirty || guard.blocked}>
+            <Button type="button" onClick={save} disabled={pending || !dirty || guard.blocked}
+              aria-describedby={guard.blocked ? noteId : undefined}
+            >
               Kaydet
             </Button>
-            {guard.note ? <p role="note" className="text-sm text-amber-400">{guard.note}</p> : null}
+            {guard.note ? <p id={noteId} role="note" className="text-sm text-amber-400">{guard.note}</p> : null}
             {message ? (
               <div role="status" className={message.error ? "text-sm text-red-400" : "text-sm text-emerald-400"}>
                 {message.lines.map((line) => (

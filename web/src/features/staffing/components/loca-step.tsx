@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { groupUngroupedLocasAction } from "../actions";
@@ -16,9 +16,11 @@ export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingView[];
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const guard = draftWriteBlock(useOrganization((s) => s.dirty));
+  const noteId = useId();
   const ungrouped = rows.filter((r) => r.groupId === null).length;
 
-  const group = () =>
+  const group = () => {
+    if (guard.blocked) return;
     startTransition(async () => {
       setMessage(null);
       const res = await groupUngroupedLocasAction({ eventId });
@@ -29,6 +31,7 @@ export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingView[];
         setMessage({ kind: "error", text: res.message });
       }
     });
+  };
 
   return (
     <Section title="Loca personeli">
@@ -70,10 +73,12 @@ export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingView[];
       )}
       {canEdit && (
         <div className="mt-3 flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={group} disabled={pending || ungrouped === 0 || guard.blocked}>
+          <Button type="button" variant="outline" onClick={group} disabled={pending || ungrouped === 0 || guard.blocked}
+            aria-describedby={guard.blocked ? noteId : undefined}
+          >
             Grupsuz locaları gruplandır
           </Button>
-          {guard.note && <span role="note" className="text-sm text-amber-400">{guard.note}</span>}
+          {guard.note && <span id={noteId} role="note" className="text-sm text-amber-400">{guard.note}</span>}
           {message && (
             <span className={message.kind === "ok" ? "text-sm text-slate-400" : "text-sm text-red-400"}>
               {message.text}
