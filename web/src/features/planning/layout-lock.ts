@@ -25,7 +25,15 @@ export const reservationCommitments: CommitmentSource = async (ex, eventId) => {
   return rows.map((r) => ({ tableId: r.tableId, reason: "reservation" as const, seats: r.seats }));
 };
 
-/** Faz 4 `casino_allocation`, Faz 6 `ticket` kaynağını bu diziye ekler; başka değişiklik gerekmez. */
+/**
+ * Taahhüt kaynakları. Faz 4 `casino_allocation`, Faz 6 `ticket` kaynağını bu diziye ekler.
+ *
+ * SÖZLEŞME: taahhüt satırı yazan her yeni yazıcı, yazmadan önce etkinlik satırını `FOR SHARE`
+ * kilitlemelidir (`lockEvent`, bkz. `reservations/internal.ts`). `saveLayout` etkinliği `FOR UPDATE`
+ * tutar ama taahhütleri düz READ COMMITTED sorgusuyla okur; yarış yalnızca bu kilit sayesinde
+ * kapanır. Kilidi atlayan bir yazıcı, kilidin dondurmaya çalıştığı masanın kaydedilen düzenle
+ * eşzamanlı taşınmasına yol açar. Kaynağı diziye eklemek tek başına yetmez.
+ */
 export const COMMITMENT_SOURCES: readonly CommitmentSource[] = [reservationCommitments];
 
 export type TableCommitment = { tableId: string; reasons: CommitmentReason[]; minCapacity: number };
