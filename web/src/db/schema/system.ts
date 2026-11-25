@@ -53,6 +53,10 @@ export const notificationType = pgEnum("notification_type", [
   "table_group_changed",
   "new_staff_added",
   "system_announcement",
+  "planning_stage_advanced",
+  "planning_stage_reverted",
+  "sales_opened",
+  "sales_closed",
 ]);
 export const notificationPriority = pgEnum("notification_priority", ["low", "medium", "high", "urgent"]);
 export const notificationAudience = pgEnum("notification_audience", ["all", "admin", "entertainment", "fnb", "casino"]);

@@ -16,11 +16,13 @@ import {
 } from "drizzle-orm/pg-core";
 // drizzle-kit tsconfig yol takma adlarını çözmeyebilir; göreli içe aktarım.
 import { EVENT_STATUSES } from "../../domain/event-status";
+import { PLANNING_STAGES } from "../../domain/planning-stage";
 import { users } from "./auth";
 import { tableTypes } from "./catalog";
 import { pk, timestamps, tstz } from "./columns";
 
 export const eventStatus = pgEnum("event_status", EVENT_STATUSES);
+export const planningStage = pgEnum("planning_stage", PLANNING_STAGES);
 
 export const venueTemplates = pgTable(
   "venue_templates",
@@ -59,6 +61,10 @@ export const events = pgTable(
     reviewEnabled: boolean("review_enabled").notNull().default(false),
     reviewHistoryVisible: boolean("review_history_visible").notNull().default(false),
     reservationEnabled: boolean("reservation_enabled").notNull().default(true),
+    planningStage: planningStage("planning_stage").notNull().default("defined"),
+    stageChangedAt: tstz("stage_changed_at"),
+    /** Serbest metin sanatçı adı; sanatçı kaydı gelince ilişkiye çevrilecek. */
+    artistName: text("artist_name"),
     ...timestamps(),
   },
   (t) => [
