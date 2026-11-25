@@ -4,6 +4,7 @@ import { events, staff, staffPerformanceReviews, teamMembers, teams } from "@/db
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { authorizeReviewsGate, loadReviewEvent, type ReviewRow } from "./service";
+import type { ReviewFormKind } from "./form-kinds";
 import { RATING_KEYS, type RatingBand, type RatingKey } from "./score";
 import { ownTeamOnly } from "@/features/auth/scope";
 
@@ -11,6 +12,8 @@ type Executor = Db | Tx;
 
 export type ReviewView = {
   id: string;
+  formKind: ReviewFormKind;
+  overallRating: number | null;
   score: number;
   band: RatingBand;
   ratings: Record<RatingKey, number | null>;
@@ -45,6 +48,8 @@ export type ReviewableEvent = {
 function toView(row: ReviewRow): ReviewView {
   return {
     id: row.id,
+    formKind: row.formKind as ReviewFormKind,
+    overallRating: row.overallRating,
     score: row.score,
     band: row.rating,
     ratings: Object.fromEntries(RATING_KEYS.map((key) => [key, row[key]])) as Record<RatingKey, number | null>,
