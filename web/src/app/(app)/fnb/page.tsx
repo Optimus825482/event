@@ -7,8 +7,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { db } from "@/db/client";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
-import { listEventsForFnb } from "@/features/events/fnb-list";
+import { FNB_LIST_LIMIT, listEventsForFnb } from "@/features/events/fnb-list";
 import { canOpenTeamOrganization } from "@/features/staffing/team-organization-access";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Etkinlikler | EventFlow" };
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Etkinlikler | EventFlow" };
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 const linkClass = cn(buttonVariants({ variant: "outline", size: "sm" }), "border-slate-600 bg-transparent");
@@ -24,7 +25,7 @@ const linkClass = cn(buttonVariants({ variant: "outline", size: "sm" }), "border
 /** F&B etkinlik listesi: her etkinlik için salon yerleşimi ve ekip organizasyonu bağlantıları. */
 export default async function FnbEventsPage() {
   const actor = await requirePolicyActor();
-  const events = await listEventsForFnb(db, actor);
+  const { rows: events, truncated } = await listEventsForFnb(db, actor);
   // Hedef sayfalar `events:view` ister (ekip organizasyonu ayrıca `staff:view`); izni olmayana bağlantı verilmez.
   const canLayout = can(actor, "events", "view");
   const canTeams = canOpenTeamOrganization(actor);
@@ -78,6 +79,7 @@ export default async function FnbEventsPage() {
           ))}
         </ul>
       )}
+      {truncated ? <p className="mt-3 text-sm text-slate-400">İlk {FNB_LIST_LIMIT} etkinlik gösteriliyor.</p> : null}
     </div>
   );
 }
