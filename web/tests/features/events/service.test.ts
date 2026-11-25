@@ -16,18 +16,12 @@ import {
   totalCapacity,
   updateEvent,
 } from "@/features/events/service";
-import { adminActor, managerActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi etkinliğini görür). */
-async function makeOrganizer(): Promise<Actor> {
-  const u = await f.createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 function inDays(days: number): Date {
@@ -183,8 +177,8 @@ describe("events service", () => {
 
   describe("sahiplik", () => {
     it("organizatör başkasının etkinliğini göremez, değiştiremez, listede görmez", async () => {
-      const owner = await makeOrganizer();
-      const other = await makeOrganizer();
+      const owner = await legacyActor(db, "organizer");
+      const other = await legacyActor(db, "organizer");
       const ev = await f.createEvent(db, { organizerId: owner.id });
       await expectDomain(getEvent(db, other, ev.id), "not_found");
       await expectDomain(changeEventStatus(db, other, { id: ev.id, status: "published" }), "not_found");
@@ -194,7 +188,7 @@ describe("events service", () => {
     });
 
     it("admin tüm etkinlikleri görür", async () => {
-      const owner = await makeOrganizer();
+      const owner = await legacyActor(db, "organizer");
       const admin = await makeActor(adminActor());
       await f.createEvent(db, { organizerId: owner.id });
       expect((await listEvents(db, admin, {})).total).toBe(1);

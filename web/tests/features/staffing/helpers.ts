@@ -9,7 +9,6 @@ import {
   teamMembers,
   teams,
 } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { managerActor, persistActor } from "../../helpers/actors";
@@ -17,12 +16,6 @@ import * as f from "../../helpers/factories";
 
 export async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
-export async function makeLegacy(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 export async function expectDomain(promise: Promise<unknown>, code: "conflict" | "not_found"): Promise<DomainError> {

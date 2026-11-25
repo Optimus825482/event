@@ -1,21 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { events, reservations } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { getAdminDashboard, getEventsDashboard } from "@/features/dashboard/service";
-import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
-async function makeLegacy(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 const inDays = (days: number) => new Date(Date.now() + days * 86_400_000);
@@ -27,8 +20,8 @@ describe("dashboard service", () => {
 
   describe("getEventsDashboard", () => {
     it("organizatör yalnızca kendi etkinliklerini sayar", async () => {
-      const mine = await makeLegacy("organizer");
-      const other = await makeLegacy("organizer");
+      const mine = await legacyActor(db, "organizer");
+      const other = await legacyActor(db, "organizer");
       await f.createEvent(db, { organizerId: mine.id, startsAt: inDays(3) });
       await f.createEvent(db, { organizerId: mine.id, startsAt: inDays(-3), status: "completed" });
       await f.createEvent(db, { organizerId: other.id, startsAt: inDays(4) });

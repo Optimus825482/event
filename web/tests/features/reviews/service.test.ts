@@ -4,10 +4,10 @@ import { db } from "@/db/client";
 import { events, notifications, staffPerformanceReviews, teamMembers } from "@/db/schema";
 import { completeAllReviews, completeReview, saveReviewDraft } from "@/features/reviews/service";
 import { computeScore, type Ratings } from "@/features/reviews/score";
-import { memberActor, noAccessActor } from "../../helpers/actors";
+import { memberActor, noAccessActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader, makeLegacy } from "./helpers";
+import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
 
 async function reviewRows(eventId: string) {
   return db.select().from(staffPerformanceReviews).where(eq(staffPerformanceReviews.eventId, eventId));
@@ -183,7 +183,7 @@ describe("saveReviewDraft", () => {
 
   it("başka organizatörün etkinliği not_found", async () => {
     const w = await setupReviewWorld();
-    const stranger = await makeLegacy("organizer");
+    const stranger = await legacyActor(db, "organizer");
     await expectDomain(
       saveReviewDraft(db, stranger, {
         eventId: w.event.id,

@@ -8,17 +8,8 @@ import { createReservationInput } from "@/features/reservations/schemas";
 import { createReservation } from "@/features/reservations/service";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createEvent, pgErrorCode } from "../../helpers/factories";
-import {
-  actorOf, legacyActorOf,
-  bookable,
-  createTable,
-  customerRow,
-  expectDomain,
-  rejection,
-  reservationRow,
-  TABLE_TAKEN,
-} from "./fixtures";
-import { adminActor, managerActor, memberActor } from "../../helpers/actors";
+import { actorOf, bookable, createTable, customerRow, expectDomain, rejection, reservationRow, TABLE_TAKEN } from "./fixtures";
+import { adminActor, managerActor, memberActor, legacyActor } from "../../helpers/actors";
 
 describe("createReservation", () => {
   let admin: Actor;
@@ -186,7 +177,7 @@ describe("createReservation", () => {
     });
 
     it("organizatör başkasının etkinliğini not_found görür; kendi etkinliğinde yapabilir", async () => {
-      const organizer = await legacyActorOf("organizer");
+      const organizer = await legacyActor(db, "organizer");
       const foreign = await bookable();
       await expectDomain(
         createReservation(db, organizer, {

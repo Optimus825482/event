@@ -4,15 +4,13 @@ import { db } from "@/db/client";
 import { events } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { getFloorPlan } from "@/features/venue/plan-service";
-import { adminActor, persistActor } from "../../helpers/actors";
+import { adminActor, legacyActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { createEvent, createTable, createUser } from "../../helpers/factories";
+import { createEvent, createTable } from "../../helpers/factories";
 
 async function actorOf(role: "admin" | "organizer"): Promise<Actor> {
   if (role === "admin") return persistActor(db, adminActor());
-  // Sahiplik testi: eski organizatör rolü (bu görevde dokunulmaz).
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null, memberships: [], permissions: [] };
+  return legacyActor(db, role);
 }
 
 describe("getFloorPlan", () => {

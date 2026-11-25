@@ -2,25 +2,18 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { assignmentTables, eventTables, events, tableGroupTables, tableTypes } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { listEventTables, totalCapacity } from "@/features/events/service";
 import type { TableInput } from "@/features/venue/schemas";
 import { getVenueLayout, saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
-import { adminActor, managerActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
-async function makeLegacy(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 async function caught(promise: Promise<unknown>): Promise<DomainError> {
@@ -234,7 +227,7 @@ describe("saveLayout", () => {
 
   it("organizatör başkasının etkinliğini not_found görür; admin kaydedebilir", async () => {
     const { event } = await setup();
-    const stranger = await makeLegacy("organizer");
+    const stranger = await legacyActor(db, "organizer");
     const err = await caught(saveLayout(db, stranger, { eventId: event.id, tables: grid(1), decor }));
     expect(err.code).toBe("not_found");
     const admin = await makeActor(adminActor());
@@ -374,7 +367,7 @@ describe("getVenueLayout", () => {
 
   it("başkasının etkinliği not_found", async () => {
     const { event } = await setup();
-    const stranger = await makeLegacy("organizer");
+    const stranger = await legacyActor(db, "organizer");
     expect((await caught(getVenueLayout(db, stranger, event.id))).code).toBe("not_found");
   });
 });

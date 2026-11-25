@@ -6,10 +6,10 @@ import { reviewActionDefs } from "@/features/reviews/action-defs";
 import { getReviewBoard, listReviewableEvents } from "@/features/reviews/queries";
 import { saveReviewDraft } from "@/features/reviews/service";
 import { createAction } from "@/lib/action";
-import { memberActor, noAccessActor } from "../../helpers/actors";
+import { memberActor, noAccessActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { FULL_RATINGS, expectForbidden, makeActor, setupReviewWorld, makeLeader, makeLegacy } from "./helpers";
+import { FULL_RATINGS, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
 import { eq } from "drizzle-orm";
 
 function actionsFor(actor: Actor | null) {
@@ -122,7 +122,7 @@ describe("review queries", () => {
     const w = await setupReviewWorld();
     expect((await getReviewBoard(db, w.admin, w.event.id)).teams).toHaveLength(2);
     expect((await getReviewBoard(db, w.organizer, w.event.id)).teams).toHaveLength(2);
-    await expect(getReviewBoard(db, await makeLegacy("organizer"), w.event.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(getReviewBoard(db, await legacyActor(db, "organizer"), w.event.id)).rejects.toMatchObject({ code: "not_found" });
   });
 
   it("ekibi olmayan lider etkinlik panosunu göremez; staff yetkisiz", async () => {
@@ -146,7 +146,7 @@ describe("review queries", () => {
     expect(list[0]).toMatchObject({ id: w.event.id, teamCount: 1, memberCount: 2, completedCount: 1, reviewEnabled: true });
 
     expect(await listReviewableEvents(db, w.admin)).toHaveLength(2);
-    expect(await listReviewableEvents(db, await makeLegacy("organizer"))).toHaveLength(0);
+    expect(await listReviewableEvents(db, await legacyActor(db, "organizer"))).toHaveLength(0);
   });
 
   it("eylem sonucu board'a yansır: tamamlanan görünüm kilitli işaretlidir", async () => {

@@ -13,7 +13,7 @@ import { getEventInvitationDetail, saveEventInvitation } from "@/features/invita
 import { createTemplate, ensureDefaultTemplate } from "@/features/invitations/templates";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
 import { createAction } from "@/lib/action";
-import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -21,12 +21,6 @@ sharp.cache(false);
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi kayıtlarını görür). */
-async function makeOrganizer(): Promise<Actor> {
-  const u = await f.createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 const design = { size: "A5" as const, width: 559, height: 794, backgroundColor: "#FFFFFF", backgroundImage: null, backgroundGradient: null, companyLogo: null };
@@ -72,8 +66,8 @@ describe("etkinlik davetiyesi", () => {
   });
 
   it("organizatör başkasının etkinliğine erişemez", async () => {
-    const owner = await makeOrganizer();
-    const other = await makeOrganizer();
+    const owner = await legacyActor(db, "organizer");
+    const other = await legacyActor(db, "organizer");
     const event = await f.createEvent(db, { organizerId: owner.id });
     await expect(getEventInvitationDetail(db, other, { eventId: event.id })).rejects.toMatchObject({ code: "not_found" });
     await expect(

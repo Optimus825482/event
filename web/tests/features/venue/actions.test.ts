@@ -2,22 +2,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eq } from "drizzle-orm";
 import { eventTables, tableTypes, venueTemplates } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { venueActionDefs } from "@/features/venue/action-defs";
 import { createAction } from "@/lib/action";
-import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
-async function makeLegacy(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 function actionsFor(actor: Actor | null) {
@@ -92,7 +85,7 @@ describe("venue actions", () => {
   });
 
   it("mekân sahibi etkinlikten şablon alamaz", async () => {
-    const owner = await makeLegacy("venue_owner");
+    const owner = await legacyActor(db, "venue_owner");
     const event = await f.createEvent(db);
     const res = await actionsFor(owner).saveAsTemplate({ eventId: event.id, name: "X" });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
@@ -119,7 +112,7 @@ describe("venue actions", () => {
     }
 
     it("kendi şablonunu günceller ve siler", async () => {
-      const owner = await makeLegacy("venue_owner");
+      const owner = await legacyActor(db, "venue_owner");
       const mine = await template(owner.id);
       const actions = actionsFor(owner);
       expect((await actions.updateTemplate({ id: mine.id, name: "Yeni" })).ok).toBe(true);
@@ -128,8 +121,8 @@ describe("venue actions", () => {
     });
 
     it("başkasının (herkese açık) şablonunu değiştiremez ve silemez", async () => {
-      const owner = await makeLegacy("venue_owner");
-      const other = await makeLegacy("venue_owner");
+      const owner = await legacyActor(db, "venue_owner");
+      const other = await legacyActor(db, "venue_owner");
       const theirs = await template(other.id);
       const actions = actionsFor(owner);
       expect(await actions.updateTemplate({ id: theirs.id, name: "Ele geçir" })).toMatchObject({ ok: false, code: "forbidden" });
@@ -138,7 +131,7 @@ describe("venue actions", () => {
     });
 
     it("olmayan şablon, başkasınınkiyle aynı yanıtı verir (varlık sızmaz)", async () => {
-      const owner = await makeLegacy("venue_owner");
+      const owner = await legacyActor(db, "venue_owner");
       const res = await actionsFor(owner).deleteTemplate({ id: crypto.randomUUID() });
       expect(res).toMatchObject({ ok: false, code: "forbidden" });
       const admin = await makeActor(adminActor());

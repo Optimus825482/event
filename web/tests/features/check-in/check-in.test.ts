@@ -8,18 +8,8 @@ import { signQrToken } from "@/features/reservations/qr-token";
 import { createReservation as bookReservation } from "@/features/reservations/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation, createTable } from "../../helpers/factories";
-import {
-  actorOf, legacyActorOf,
-  bookedGuest,
-  checkInLog,
-  customerRow,
-  expectDomain,
-  key,
-  reservationRow,
-  setEventStatus,
-  setReservationStatus,
-} from "./fixtures";
-import { adminActor, memberActor } from "../../helpers/actors";
+import { actorOf, bookedGuest, checkInLog, customerRow, expectDomain, key, reservationRow, setEventStatus, setReservationStatus } from "./fixtures";
+import { adminActor, memberActor, legacyActor } from "../../helpers/actors";
 
 describe("checkIn", () => {
   beforeAll(async () => {
@@ -321,7 +311,7 @@ describe("checkIn", () => {
 
   it("organizatör başka organizatörün etkinliğinde not_found alır", async () => {
     const { event, reservation } = await bookedGuest();
-    const stranger = await legacyActorOf("organizer");
+    const stranger = await legacyActor(db, "organizer");
     await expectDomain(
       checkIn(db, stranger, {
         eventId: event.id,

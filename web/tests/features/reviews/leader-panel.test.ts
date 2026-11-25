@@ -10,10 +10,10 @@ import {
   listLeaderTeams,
 } from "@/features/reviews/leader-queries";
 import { canUseLeaderPanel } from "@/features/reviews/leader-scope";
-import { memberActor, noAccessActor } from "../../helpers/actors";
+import { memberActor, noAccessActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader, makeLegacy } from "./helpers";
+import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld, makeLeader } from "./helpers";
 
 async function completedReview(w: Awaited<ReturnType<typeof setupReviewWorld>>, staffId: string, score: number) {
   await db.insert(staffPerformanceReviews).values({
@@ -87,7 +87,7 @@ describe("lider paneli: kapsam", () => {
 
   it("organizatör başkasının etkinliğinin ekiplerini görmez", async () => {
     const w = await setupReviewWorld();
-    const stranger = await makeLegacy("organizer");
+    const stranger = await legacyActor(db, "organizer");
     expect(await listLeaderTeams(db, stranger)).toEqual([]);
     await expectDomain(getLeaderEventDetail(db, stranger, w.event.id), "not_found");
     expect((await listLeaderTeams(db, w.organizer)).length).toBe(2);

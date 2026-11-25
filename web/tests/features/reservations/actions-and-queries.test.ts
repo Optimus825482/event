@@ -10,8 +10,8 @@ import { getReservationDetail, listReservations } from "@/features/reservations/
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
-import { actorOf, legacyActorOf, bookable, createTable, rejection, TABLE_TAKEN } from "./fixtures";
-import { adminActor, memberActor } from "../../helpers/actors";
+import { actorOf, bookable, createTable, rejection, TABLE_TAKEN } from "./fixtures";
+import { adminActor, memberActor, legacyActor } from "../../helpers/actors";
 
 function actionsFor(actor: Actor | null) {
   const { defineAction } = createAction({ getActor: async () => actor });
@@ -115,7 +115,7 @@ describe("rezervasyon sorguları", () => {
   });
 
   it("organizatör başkasının etkinliğini not_found görür; detay null", async () => {
-    const organizer = await withPermissions(await legacyActorOf("organizer"));
+    const organizer = await withPermissions(await legacyActor(db, "organizer"));
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
     const error = await rejection(listReservations(db, organizer, { eventId: event.id }));

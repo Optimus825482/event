@@ -81,3 +81,19 @@ export async function persistActor(ex: Executor, actor: Actor): Promise<Actor> {
   await grantActor(ex, user.id, actor);
   return { ...actor, id: user.id, username: user.username };
 }
+
+/**
+ * Eski rolle (`organizer`, `venue_owner`, `leader`...) aktör üretir; sahiplik ve bildirim hedef rolü
+ * testleri için. Task 10'da eski roller kalkınca bu yardımcı ve çağrıları silinir.
+ */
+export async function legacyActor(ex: Executor, role: Actor["role"], o: Partial<Actor> = {}): Promise<Actor> {
+  const user = await createUser(ex, { role, ...(o.staffId ? { staffId: o.staffId } : {}) });
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    staffId: user.staffId,
+    memberships: [],
+    permissions: [],
+  };
+}

@@ -5,8 +5,8 @@ import { db } from "@/db/client";
 import { checkInEvents } from "@/db/schema";
 import { checkIn } from "@/features/check-in/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
-import { actorOf, legacyActorOf, bookedGuest, expectDomain, key } from "./fixtures";
-import { managerActor, memberActor, persistActor } from "../../helpers/actors";
+import { actorOf, bookedGuest, expectDomain, key } from "./fixtures";
+import { managerActor, memberActor, persistActor, legacyActor } from "../../helpers/actors";
 
 describe("checkIn: idempotent tekrar ve erişim (M1)", () => {
   beforeAll(async () => {
@@ -24,7 +24,7 @@ describe("checkIn: idempotent tekrar ve erişim (M1)", () => {
     expect(first.outcome).toBe("checked_in");
 
     // Etkinliğe erişimi olmayan, check_in yetkili başka bir organizatör: aynı anahtar + aynı istek.
-    const stranger = await legacyActorOf("organizer");
+    const stranger = await legacyActor(db, "organizer");
     const leak = await expectDomain(
       checkIn(db, stranger, { eventId: event.id, idempotencyKey: k, token: reservation.qrToken }),
       "not_found",

@@ -5,18 +5,12 @@ import { checkInEvents, customers, events, reservations } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { createReservation as bookReservation } from "@/features/reservations/service";
 import { managerActor, persistActor } from "../../helpers/actors";
-import { createCustomer, createEvent, createTable, createUser } from "../../helpers/factories";
+import { createCustomer, createEvent, createTable } from "../../helpers/factories";
 
 export { expectDomain, rejection } from "../reservations/fixtures";
 
 export async function actorOf(actor: Actor): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
-export async function legacyActorOf(role: Actor["role"]): Promise<Actor> {
-  const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null, memberships: [], permissions: [] };
 }
 
 /**

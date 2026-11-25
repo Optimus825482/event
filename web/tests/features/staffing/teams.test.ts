@@ -4,10 +4,10 @@ import { db } from "@/db/client";
 import { eventStaffAssignments, events, tableGroups, teamMembers, teams } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
 import { saveTeams } from "@/features/staffing/teams-service";
-import { adminActor, noAccessActor } from "../../helpers/actors";
+import { adminActor, noAccessActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { expectDomain, makeActor, setupEvent, snapshot, makeLegacy } from "./helpers";
+import { expectDomain, makeActor, setupEvent, snapshot } from "./helpers";
 
 describe("saveTeams", () => {
   beforeEach(async () => {
@@ -129,7 +129,7 @@ describe("saveTeams", () => {
 
   it("başka organizatörün etkinliği not_found", async () => {
     const { event } = await setupEvent();
-    const stranger = await makeLegacy("organizer");
+    const stranger = await legacyActor(db, "organizer");
     await expectDomain(saveTeams(db, stranger, { eventId: event.id, teams: [] }), "not_found");
   });
 

@@ -5,25 +5,18 @@ import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { ForbiddenError } from "@/features/auth/errors";
-import { adminActor, managerActor, memberActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, memberActor, persistActor, legacyActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
 /** Departman aktörü ya da eski rol adı (bildirim testleri hedef rol için eski rolleri kullanır). */
 export async function makeActor(who: Actor | Role, staffId?: string | null): Promise<Actor> {
   if (typeof who !== "string") return persistActor(db, who);
-  const u = await f.createUser(db, { role: who, ...(staffId ? { staffId } : {}) });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
+  return legacyActor(db, who, { staffId: staffId ?? null });
 }
 
 /** Ekip lideri: F&B kullanıcı düzeyi; yalnızca kendi ekibini görür (`ownTeamOnly`). */
 export async function makeLeader(staffId: string | null = null): Promise<Actor> {
   return persistActor(db, memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }, { staffId }));
-}
-
-/** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */
-export async function makeLegacy(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 export async function expectDomain(promise: Promise<unknown>, code: "conflict" | "not_found" | "invalid") {

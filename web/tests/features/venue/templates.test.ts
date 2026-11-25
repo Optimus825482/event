@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { events, tableTypes, venueTemplates } from "@/db/schema";
-import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { listEventTables } from "@/features/events/service";
 import { applyVenueTemplate, saveAsTemplate, saveLayout } from "@/features/venue/service";
@@ -15,18 +14,12 @@ import {
 } from "@/features/venue/templates-service";
 import type { TemplateLayout } from "@/features/venue/schemas";
 import { DomainError } from "@/lib/action";
-import { adminActor, managerActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik testleri: eski organizatör rolü (bu görevde dokunulmaz). */
-async function makeLegacy(role: Role): Promise<Actor> {
-  const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 
@@ -176,8 +169,8 @@ describe("saveAsTemplate", () => {
   });
 
   it("başkasının etkinliğinden şablon alınamaz", async () => {
-    const owner = await makeLegacy("organizer");
-    const stranger = await makeLegacy("organizer");
+    const owner = await legacyActor(db, "organizer");
+    const stranger = await legacyActor(db, "organizer");
     const event = await f.createEvent(db, { organizerId: owner.id });
     expect((await caught(saveAsTemplate(db, stranger, { eventId: event.id, name: "X" }))).code).toBe("not_found");
   });

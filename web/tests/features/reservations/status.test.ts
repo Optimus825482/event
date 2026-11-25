@@ -11,8 +11,8 @@ import {
 } from "@/features/reservations/service";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
-import { actorOf, legacyActorOf, bookable, createTable, customerRow, expectDomain, reservationRow, TABLE_TAKEN } from "./fixtures";
-import { adminActor } from "../../helpers/actors";
+import { actorOf, bookable, createTable, customerRow, expectDomain, reservationRow, TABLE_TAKEN } from "./fixtures";
+import { adminActor, legacyActor } from "../../helpers/actors";
 
 describe("rezervasyon durumları", () => {
   let admin: Actor;
@@ -73,7 +73,7 @@ describe("rezervasyon durumları", () => {
       "not_found",
       "Rezervasyon bulunamadı",
     );
-    const organizer = await legacyActorOf("organizer");
+    const organizer = await legacyActor(db, "organizer");
     const { event, table, customer } = await bookable();
     const row = await seedReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
     await expectDomain(cancelReservation(db, organizer, { id: row.id }), "not_found", "Rezervasyon bulunamadı");
@@ -204,7 +204,7 @@ describe("markNoShows (spec §13 madde 9)", () => {
   });
 
   it("organizatör başkasının etkinliğinde not_found", async () => {
-    const organizer = await legacyActorOf("organizer");
+    const organizer = await legacyActor(db, "organizer");
     const { event } = await scenario();
     await db.update(events).set({ status: "completed" }).where(eq(events.id, event.id));
     await expectDomain(markNoShows(db, organizer, { eventId: event.id }), "not_found");

@@ -7,8 +7,8 @@ import { cancelReservations } from "@/features/reservations/service";
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import { createCustomer, createReservation as seedReservation } from "../../helpers/factories";
-import { actorOf, legacyActorOf, bookable, createTable, customerRow, expectDomain, reservationRow } from "./fixtures";
-import { adminActor, memberActor } from "../../helpers/actors";
+import { actorOf, bookable, createTable, customerRow, expectDomain, reservationRow } from "./fixtures";
+import { adminActor, memberActor, legacyActor } from "../../helpers/actors";
 
 function bulkFor(actor: Actor | null) {
   const { defineAction } = createAction({ getActor: async () => actor });
@@ -58,7 +58,7 @@ describe("toplu iptal", () => {
   });
 
   it("organizatör başkasının rezervasyonunu iptal edemez; hiçbiri değişmez", async () => {
-    const organizer = await legacyActorOf("organizer");
+    const organizer = await legacyActor(db, "organizer");
     const own = await bookable(organizer.id);
     const mine = await seedReservation(db, { eventId: own.event.id, tableId: own.table.id, customerId: own.customer.id });
     const { a } = await twoReservations();

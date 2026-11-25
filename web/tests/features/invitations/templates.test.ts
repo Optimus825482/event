@@ -16,18 +16,12 @@ import {
 } from "@/features/invitations/templates";
 import { saveEventInvitation } from "@/features/invitations/event-invitation";
 import { createAction } from "@/lib/action";
-import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi kayıtlarını görür). */
-async function makeOrganizer(): Promise<Actor> {
-  const u = await f.createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 const base = { size: "A5" as const, width: 559, height: 794, backgroundColor: null, backgroundImage: null, backgroundGradient: null };
@@ -106,8 +100,8 @@ describe("şablon sahipliği", () => {
   });
 
   async function setup() {
-    const a = await makeOrganizer();
-    const b = await makeOrganizer();
+    const a = await legacyActor(db, "organizer");
+    const b = await legacyActor(db, "organizer");
     const admin = await makeActor(adminActor());
     const mine = await createTemplate(db, a, { ...base, name: "A'nın", elements: [] });
     await ensureDefaultTemplate(db);

@@ -5,8 +5,8 @@ import { checkInActionDefs } from "@/features/check-in/action-defs";
 import { createAction } from "@/lib/action";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createTable } from "../../helpers/factories";
-import { actorOf, legacyActorOf, bookedGuest, key } from "./fixtures";
-import { memberActor } from "../../helpers/actors";
+import { actorOf, bookedGuest, key } from "./fixtures";
+import { memberActor, legacyActor } from "../../helpers/actors";
 
 function as(actor: Actor | null) {
   return createAction({ getActor: async () => actor }).defineAction;
@@ -66,7 +66,7 @@ describe("check-in action'ları", () => {
     });
     expect(remaining.ok && remaining.data.map((t) => t.id)).toEqual([]);
 
-    const owner = await legacyActorOf("venue_owner");
+    const owner = await legacyActor(db, "venue_owner");
     expect(await as(owner)(checkInActionDefs.stats)({ eventId: event.id })).toMatchObject({
       ok: false,
       code: "forbidden",

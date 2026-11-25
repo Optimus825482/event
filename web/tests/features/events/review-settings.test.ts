@@ -4,18 +4,12 @@ import type { Actor } from "@/features/auth/session";
 import { eventActionDefs } from "@/features/events/action-defs";
 import { getEvent, getEventOrThrow, listEventBoard, setReviewSettings } from "@/features/events/service";
 import { createAction } from "@/lib/action";
-import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi etkinliğini görür). */
-async function makeOrganizer(): Promise<Actor> {
-  const u = await f.createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 function reviewAction(actor: Actor | null) {
@@ -49,8 +43,8 @@ describe("setReviewSettings", () => {
   });
 
   it("başkasının etkinliği organizatör için not_found; kayıt değişmez", async () => {
-    const owner = await makeOrganizer();
-    const other = await makeOrganizer();
+    const owner = await legacyActor(db, "organizer");
+    const other = await legacyActor(db, "organizer");
     const ev = await f.createEvent(db, { organizerId: owner.id });
     await expect(setReviewSettings(db, other, { id: ev.id, reviewEnabled: true })).rejects.toMatchObject({
       code: "not_found",
@@ -59,7 +53,7 @@ describe("setReviewSettings", () => {
   });
 
   it("admin her etkinlikte değiştirebilir", async () => {
-    const owner = await makeOrganizer();
+    const owner = await legacyActor(db, "organizer");
     const admin = await makeActor(adminActor());
     const ev = await f.createEvent(db, { organizerId: owner.id });
     const row = await setReviewSettings(db, admin, { id: ev.id, reviewHistoryVisible: true });
@@ -87,8 +81,8 @@ describe("setEventReviewSettingsAction", () => {
   });
 
   it("başkasının etkinliği not_found, kayıt değişmez", async () => {
-    const owner = await makeOrganizer();
-    const other = await makeOrganizer();
+    const owner = await legacyActor(db, "organizer");
+    const other = await legacyActor(db, "organizer");
     const ev = await f.createEvent(db, { organizerId: owner.id });
     const res = await reviewAction(other)({ id: ev.id, reviewEnabled: true });
     expect(res).toMatchObject({ ok: false, code: "not_found" });
@@ -114,8 +108,8 @@ describe("listEventBoard / getEvent hazırlık sayaçları", () => {
   });
 
   it("masa ve atama sayılarını verir; organizatör yalnızca kendini görür", async () => {
-    const actor = await makeOrganizer();
-    const other = await makeOrganizer();
+    const actor = await legacyActor(db, "organizer");
+    const other = await legacyActor(db, "organizer");
     const ready = await f.createEvent(db, { organizerId: actor.id, name: "Hazır Gece" });
     const bare = await f.createEvent(db, { organizerId: actor.id, name: "Boş Gece" });
     await f.createEvent(db, { organizerId: other.id, name: "Başkasının" });

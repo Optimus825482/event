@@ -3,8 +3,8 @@ import { db } from "@/db/client";
 import { eventStats } from "@/features/check-in/service";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createCustomer, createEvent, createReservation, createTable } from "../../helpers/factories";
-import { actorOf, legacyActorOf, expectDomain } from "./fixtures";
-import { managerActor, memberActor, persistActor } from "../../helpers/actors";
+import { actorOf, expectDomain } from "./fixtures";
+import { managerActor, memberActor, persistActor, legacyActor } from "../../helpers/actors";
 
 describe("eventStats", () => {
   beforeAll(async () => {
@@ -73,7 +73,7 @@ describe("eventStats", () => {
       remaining: 0,
       checkInPercentage: 0,
     });
-    const stranger = await legacyActorOf("organizer");
+    const stranger = await legacyActor(db, "organizer");
     await expectDomain(eventStats(db, stranger, event.id), "not_found", "Etkinlik bulunamadı");
     await expectDomain(eventStats(db, door, crypto.randomUUID()), "not_found", "Etkinlik bulunamadı");
   });

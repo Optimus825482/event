@@ -8,7 +8,7 @@ import { listRecipients } from "@/features/invitations/event-invitation";
 import { parseInvitationToken, verifyInvitationMac } from "@/features/invitations/token";
 import { encryptSecret } from "@/features/settings/crypto";
 import { getSmtpConfig } from "@/features/settings/smtp";
-import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, noAccessActor, persistActor, legacyActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -25,12 +25,6 @@ afterAll(() => {
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
   return persistActor(db, actor);
-}
-
-/** Sahiplik testleri: eski organizatör rolü (yalnızca kendi kayıtlarını görür). */
-async function makeOrganizer(): Promise<Actor> {
-  const u = await f.createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 async function seed(organizerId?: string, contact: { email?: string; phone?: string } = { email: "misafir@example.com", phone: "0532 111 22 33" }) {
@@ -160,8 +154,8 @@ describe("e-posta gönderimi", () => {
 
   it("organizatör başkasının etkinliği için gönderemez; staff rolü yetkisizdir", async () => {
     await configureSmtp();
-    const owner = await makeOrganizer();
-    const other = await makeOrganizer();
+    const owner = await legacyActor(db, "organizer");
+    const other = await legacyActor(db, "organizer");
     const { reservation } = await seed(owner.id);
     const mail = recorder();
     await expect(sendInvitationEmail(db, other, { reservationId: reservation.id }, mail.factory)).rejects.toMatchObject({ code: "not_found" });
@@ -221,8 +215,8 @@ describe("alıcı listesi", () => {
   });
 
   it("organizatör başkasının etkinliğinin alıcılarını göremez", async () => {
-    const owner = await makeOrganizer();
-    const other = await makeOrganizer();
+    const owner = await legacyActor(db, "organizer");
+    const other = await legacyActor(db, "organizer");
     const { event } = await seed(owner.id);
     await expect(listRecipients(db, other, { eventId: event.id })).rejects.toMatchObject({ code: "not_found" });
   });

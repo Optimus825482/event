@@ -4,8 +4,8 @@ import { withPermissions } from "@/features/auth/permissions";
 import { getReservationPlan } from "@/features/reservations/plan-service";
 import { truncateAll } from "../../helpers/db";
 import { createReservation } from "../../helpers/factories";
-import { actorOf, legacyActorOf, bookable } from "./fixtures";
-import { memberActor } from "../../helpers/actors";
+import { actorOf, bookable } from "./fixtures";
+import { memberActor, legacyActor } from "../../helpers/actors";
 
 describe("getReservationPlan", () => {
   beforeEach(async () => {
@@ -26,8 +26,8 @@ describe("getReservationPlan", () => {
   });
 
   it("organizatör başkasının etkinliğinin haritasını göremez; kendisininkini görür", async () => {
-    const owner = await legacyActorOf("organizer");
-    const other = await withPermissions(await legacyActorOf("organizer"));
+    const owner = await legacyActor(db, "organizer");
+    const other = await withPermissions(await legacyActor(db, "organizer"));
     const { event } = await bookable(owner.id);
     await expect(getReservationPlan(db, other, event.id)).rejects.toMatchObject({ code: "not_found" });
     await expect(getReservationPlan(db, await withPermissions(owner), event.id)).resolves.toMatchObject({ reservations: [] });

@@ -8,7 +8,8 @@ import { saveOrganizationSchema } from "@/features/staffing/schemas";
 import { applyOrganizationTemplate, createOrganizationTemplate } from "@/features/staffing/templates-service";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { expectDomain, setupEvent, makeLegacy } from "./helpers";
+import { expectDomain, setupEvent } from "./helpers";
+import { legacyActor } from "../../helpers/actors";
 
 async function point(eventId: string, name = "Bar 1", allowedRoles: string[] = []) {
   const [row] = await db.insert(servicePoints).values({ eventId, name, allowedRoles }).returning();
@@ -116,7 +117,7 @@ describe("servis noktası rolleri (saveOrganization)", () => {
     );
     const own = await point(event.id);
     await expectDomain(
-      saveOrganization(db, await makeLegacy("organizer"), {
+      saveOrganization(db, await legacyActor(db, "organizer"), {
         ...base(event.id),
         servicePointRoles: [{ servicePointId: own.id, roles: [{ role: "garson", requiredCount: 1 }] }],
       }),
