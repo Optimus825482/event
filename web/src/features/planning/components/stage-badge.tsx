@@ -1,4 +1,6 @@
 import { STAGE_LABELS, type PlanningStage } from "@/domain/planning-stage";
+import type { EventStatus } from "@/domain/event-status";
+import { isStageFrozen } from "@/features/planning/allowed";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -13,10 +15,29 @@ const TONES: Record<PlanningStage, string> = {
   sales_closed: "border-slate-500/30 bg-slate-500/20 text-slate-300",
 };
 
-/** Liste satırlarında planlama aşaması rozeti. */
-export function StageBadge({ stage, className }: { stage: PlanningStage; className?: string }) {
+const MUTED_TONE = "border-slate-600/30 bg-slate-700/20 text-slate-500";
+
+/**
+ * Liste satırlarında planlama aşaması rozeti. Tamamlanmış/iptal edilmiş etkinlikte aşama artık
+ * ilerlemez; canlı görünmesin diye soluk çizilir (etiket aynı kalır).
+ */
+export function StageBadge({
+  stage,
+  status,
+  className,
+}: {
+  stage: PlanningStage;
+  status?: EventStatus;
+  className?: string;
+}) {
+  const muted = status !== undefined && isStageFrozen(status);
   return (
-    <Badge variant="outline" data-testid="stage-badge" className={cn(TONES[stage], className)}>
+    <Badge
+      variant="outline"
+      data-testid="stage-badge"
+      {...(muted ? { "data-muted": "true" } : {})}
+      className={cn(muted ? MUTED_TONE : TONES[stage], className)}
+    >
       {STAGE_LABELS[stage]}
     </Badge>
   );

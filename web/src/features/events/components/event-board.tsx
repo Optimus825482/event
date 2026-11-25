@@ -156,7 +156,7 @@ function BoardRow({
           {event.name}
         </Link>
         <p className="mt-0.5 text-xs text-slate-500">{event.reservationCount} rezervasyon</p>
-        <StageBadge stage={event.planningStage} className="mt-1" />
+        <StageBadge stage={event.planningStage} status={event.status} className="mt-1" />
       </div>
       <div className="col-span-2 flex justify-center">
         <Badge variant="outline" className={type.color}>

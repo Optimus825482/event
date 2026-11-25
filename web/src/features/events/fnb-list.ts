@@ -2,6 +2,7 @@ import { asc, gte, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, events, teams } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
+import type { EventStatus } from "@/domain/event-status";
 import type { PlanningStage } from "@/domain/planning-stage";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 import type { Actor } from "@/features/auth/session";
@@ -19,6 +20,7 @@ export type FnbEventRow = {
   /** Etkinlikteki masa sayısı (liste satırında "N masa"; aşama etiketleriyle karışmaz). */
   tableCount: number;
   planningStage: PlanningStage;
+  status: EventStatus;
   teamCount: number;
 };
 
@@ -40,7 +42,7 @@ export async function listEventsForFnb(db: Executor, actor: Actor): Promise<FnbE
   const teamCount = sql<number>`(select count(*)::int from ${teams} where ${teams.eventId} = "events"."id")`;
 
   const rows = await db
-    .select({ id: events.id, name: events.name, startsAt: events.startsAt, planningStage: events.planningStage, tableCount, teamCount })
+    .select({ id: events.id, name: events.name, startsAt: events.startsAt, planningStage: events.planningStage, status: events.status, tableCount, teamCount })
     .from(events)
     .where(gte(events.startsAt, dayStart))
     .orderBy(asc(events.startsAt), asc(events.id))

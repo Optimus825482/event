@@ -58,7 +58,7 @@ export default async function FnbEventsPage() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="truncate font-medium text-white">{event.name}</h2>
-                  <StageBadge stage={event.planningStage} />
+                  <StageBadge stage={event.planningStage} status={event.status} />
                 </div>
                 <p className="text-sm text-slate-400">{dateFormat.format(event.startsAt)}</p>
                 <p className="mt-1 text-xs text-slate-500">
