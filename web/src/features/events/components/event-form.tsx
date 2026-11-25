@@ -16,6 +16,8 @@ export type EventFormValues = {
   startsAt: string;
   endsAt: string | null;
   eventType: string | null;
+  /** Verilmezse (çağıran bilmiyorsa) kayıtta sanatçı adına dokunulmaz. */
+  artistName?: string | null;
   reservationEnabled: boolean;
 };
 
@@ -87,6 +89,8 @@ export function EventForm({ event, onSaved, onCancel, submitLabel, idPrefix = ""
       startsAt: toIso(form.get("startsAt")),
       endsAt: toIso(form.get("endsAt")),
       eventType: String(form.get("eventType") ?? ""),
+      // Düzenlemede çağıran sanatçı adını bilmiyorsa alan gönderilmez; aksi halde boş alan onu siler.
+      artistName: event && event.artistName === undefined ? undefined : String(form.get("artistName") ?? ""),
       reservationEnabled: form.get("reservationEnabled") === "on",
     };
     setPending(true);
@@ -163,6 +167,15 @@ export function EventForm({ event, onSaved, onCancel, submitLabel, idPrefix = ""
             <option key={type} value={type} />
           ))}
         </datalist>
+      </Field>
+      <Field label="Sanatçı" name={id("artistName")} errors={fieldErrors.artistName}>
+        <input
+          id={id("artistName")}
+          name="artistName"
+          placeholder="Örn. Sanatçı veya grup adı"
+          defaultValue={event?.artistName ?? ""}
+          className={eventInputClass}
+        />
       </Field>
       <label className="flex items-center gap-2 text-sm text-slate-300">
         <input type="checkbox" name="reservationEnabled" defaultChecked={event?.reservationEnabled ?? true} />
