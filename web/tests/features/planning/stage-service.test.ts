@@ -58,6 +58,23 @@ describe("transitionStage", () => {
     ent = await persistActor(db, managerActor("entertainment"));
   });
 
+  it("ileri ve yeniden açma geçişlerinde gelen not saklanmaz; yalnızca geri almada saklanır", async () => {
+    const event = await eventWithTable();
+    await transitionStage(db, fnb, { eventId: event.id, expected: "defined", kind: "advance", note: "gizli not" });
+    expect((await listTransitions(db, event.id))[0]?.note).toBeNull();
+
+    const closed = await eventWithTable({ status: "published" });
+    await setStage(db, closed.id, "sales_closed");
+    await transitionStage(db, ent, { eventId: closed.id, expected: "sales_closed", kind: "reopen", note: "gizli not" });
+    expect((await listTransitions(db, closed.id))[0]?.note).toBeNull();
+    const [notification] = await notificationsOf(closed.id);
+    expect(notification?.message).not.toContain("gizli not");
+
+    await setStage(db, event.id, "staffing_ready");
+    await transitionStage(db, fnb, { eventId: event.id, expected: "staffing_ready", kind: "revert", note: "Masa sayısı değişti" });
+    expect((await listTransitions(db, event.id))[0]?.note).toBe("Masa sayısı değişti");
+  });
+
   it("F&B yöneticisi yerleşimi hazır işaretler; tek geçmiş satırı ve F&B kitleli tek bildirim", async () => {
     const event = await eventWithTable();
     const result = await transitionStage(db, fnb, { eventId: event.id, expected: "defined", kind: "advance" });

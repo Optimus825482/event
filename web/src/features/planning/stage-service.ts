@@ -61,7 +61,8 @@ export async function transitionStage(
       .set({ planningStage: to, stageChangedAt: now, updatedAt: now })
       .where(eq(events.id, event.id));
 
-    const note = input.note ? input.note : undefined;
+    // Not yalnızca geri almada anlamlıdır (gerekçe); ileri/yeniden açmada gelen not saklanmaz.
+    const note = input.kind === "revert" && input.note ? input.note : undefined;
     await tx.insert(eventStageTransitions).values({
       eventId: event.id,
       fromStage: from,
