@@ -344,7 +344,7 @@ async function hasRestrictingReferences(tx: Tx, userId: string): Promise<boolean
  * - Hiçbir `restrict` başvurusu yoksa satır kalıcı silinir; oturum, parola hesabı ve izinler
  *   `cascade`, diğer başvurular (`created_by_id` vb.) `set null` olur.
  * - Etkinlik sahibi ya da değerlendiren olarak anılıyorsa satır kalır ama anonimleştirilir:
- *   pasif, kişisel alanlar boş, kullanıcı adı/e-posta yer tutucu, rol `staff`, parola hesabı,
+ *   pasif, kişisel alanlar boş, kullanıcı adı/e-posta yer tutucu, rol `user`, parola hesabı,
  *   izinleri, üyelikleri ve tüm oturumları silinir (giriş yapamaz; geçmiş kayıtlar bozulmaz).
  */
 export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInput): Promise<DeleteUserResult> {

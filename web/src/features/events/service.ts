@@ -28,11 +28,6 @@ export async function getEventOrThrow(db: Executor, id: string): Promise<EventRo
   return row;
 }
 
-async function getAccessibleEvent(db: Executor, actor: Actor, id: string): Promise<EventRow> {
-  const event = await getEventOrThrow(db, id);
-  return event;
-}
-
 export async function listEventTables(db: Executor, eventId: string) {
   return db.select().from(eventTables).where(eq(eventTables.eventId, eventId)).orderBy(asc(eventTables.label));
 }
@@ -190,7 +185,7 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
 }
 
 export async function getEvent(db: Executor, actor: Actor, id: string) {
-  const event = await getAccessibleEvent(db, actor, id);
+  const event = await getEventOrThrow(db, id);
   const [tables, capacity, reserved, assigned] = await Promise.all([
     db.select({ n: count() }).from(eventTables).where(eq(eventTables.eventId, id)),
     totalCapacity(db, id),
