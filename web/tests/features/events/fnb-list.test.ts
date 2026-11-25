@@ -65,11 +65,13 @@ describe("listEventsForFnb", () => {
     expect(rows[0]).toMatchObject({
       id: bare.id,
       hasLayout: false,
+      tableCount: 0,
       teamCount: 0,
     });
     expect(rows[1]).toMatchObject({
       id: withLayout.id,
       hasLayout: true,
+      tableCount: 1,
       teamCount: 2,
     });
     expect(rows[1]?.startsAt).toBeInstanceOf(Date);

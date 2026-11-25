@@ -62,7 +62,7 @@ export default async function FnbEventsPage() {
                 </div>
                 <p className="text-sm text-slate-400">{dateFormat.format(event.startsAt)}</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {event.hasLayout ? "Yerleşim hazır" : "Yerleşim yok"} · {event.teamCount} ekip
+                  {event.hasLayout ? `${event.tableCount} masa` : "Masa yok"} · {event.teamCount} ekip
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
