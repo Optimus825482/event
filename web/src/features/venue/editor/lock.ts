@@ -7,7 +7,7 @@ import type { VenueLayout } from "../service";
 export type EditorLock = { locked: boolean; frozen: ReadonlySet<string> };
 
 /** Donmuş masanın imleç ipucu ve panel notu. */
-export const FROZEN_TABLE_TITLE = "Satılmış ya da rezerve masa: konumu ve etiketi değiştirilemez";
+export const FROZEN_TABLE_TITLE = "Taahhütlü (rezervasyonlu) masa: konumu ve etiketi değiştirilemez";
 
 export const NO_LOCK: EditorLock = { locked: false, frozen: new Set() };
 

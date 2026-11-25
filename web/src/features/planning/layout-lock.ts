@@ -170,7 +170,7 @@ export async function assertLayoutChangeAllowed(
   const labels = [...new Set(changes.map((c) => c.label))].sort(compareLabels).join(", ");
   throw new DomainError(
     "conflict",
-    `Satış başladı; bileti satılmış, rezervasyonu yapılmış ya da Casino'ya ayrılmış masalar değiştirilemez: ${labels}. Hiçbir değişiklik kaydedilmedi.`,
+    `Satış başladı; taahhütlü (rezervasyonlu) masalar değiştirilemez: ${labels}. Hiçbir değişiklik kaydedilmedi.`,
   );
 }
 

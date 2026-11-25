@@ -37,8 +37,8 @@ export type ActionButton = {
 };
 
 const CONFIRMS: Partial<Record<PlanningStage, string>> = {
-  on_sale: "Satış açılınca rezervasyonlu masaların yerleşimi kilitlenir. Devam edilsin mi?",
-  sales_closed: "Online satış kapatılsın mı?",
+  on_sale: "Satış açılınca taahhütlü (rezervasyonlu) masaların yerleşimi kilitlenir. Devam edilsin mi?",
+  sales_closed: "Satış kapatılsın mı?",
 };
 
 function labelFor(kind: StageTransitionKind, to: PlanningStage): string {

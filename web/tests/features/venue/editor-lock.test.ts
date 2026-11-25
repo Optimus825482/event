@@ -51,7 +51,7 @@ describe("editör kilidi", () => {
     store.getState().selectAll();
     runDelete(store, notify, lockA);
     expect(store.getState().tables.map((t) => t.label)).toEqual(["A1"]);
-    expect(notify).toHaveBeenCalledWith("error", "Satılmış ya da rezerve masalar silinemez: A1");
+    expect(notify).toHaveBeenCalledWith("error", "Taahhütlü (rezervasyonlu) masalar silinemez: A1");
   });
 
   it("silme komutu kilit yokken eskisi gibi çalışır", () => {

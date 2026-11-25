@@ -188,7 +188,7 @@ test.describe("Planlama aşamaları", () => {
 
     const fnb = await sessionFor(browser, FNB);
     await fnb.goto(`/events/${eventId}/venue`);
-    await expect(fnb.getByRole("status").filter({ hasText: "rezervasyonlu masalar kilitli" })).toBeVisible();
+    await expect(fnb.getByRole("status").filter({ hasText: "taahhütlü (rezervasyonlu) masalar kilitli" })).toBeVisible();
 
     // Kilitli masa taşınamaz; taahhütsüz masa taşınır.
     await expect.poll(async () => (await tableBoxes(fnb)).length).toBe(2);

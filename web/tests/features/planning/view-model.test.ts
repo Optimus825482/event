@@ -48,7 +48,7 @@ describe("actionButtons", () => {
         kind: "advance",
         to: "on_sale",
         label: "Satışı aç",
-        confirm: "Satış açılınca rezervasyonlu masaların yerleşimi kilitlenir. Devam edilsin mi?",
+        confirm: "Satış açılınca taahhütlü (rezervasyonlu) masaların yerleşimi kilitlenir. Devam edilsin mi?",
         needsNote: false,
       },
       { kind: "revert", to: "casino_allocated", label: "Geri al", confirm: null, needsNote: true },
@@ -62,7 +62,7 @@ describe("actionButtons", () => {
 
   it("satışı kapat ve yeniden aç", () => {
     const closed = actionButtons(state({ allowed: [{ kind: "advance", to: "sales_closed" }] }));
-    expect(closed[0]).toMatchObject({ label: "Satışı kapat", confirm: "Online satış kapatılsın mı?" });
+    expect(closed[0]).toMatchObject({ label: "Satışı kapat", confirm: "Satış kapatılsın mı?" });
     const reopen = actionButtons(state({ allowed: [{ kind: "reopen", to: "on_sale" }] }));
     expect(reopen[0]).toMatchObject({ label: "Satışı yeniden aç", needsNote: false });
   });

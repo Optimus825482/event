@@ -78,7 +78,7 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
 
     expect(err.code).toBe("conflict");
     expect(err.message).toBe(
-      "Satış başladı; bileti satılmış, rezervasyonu yapılmış ya da Casino'ya ayrılmış masalar değiştirilemez: A1. Hiçbir değişiklik kaydedilmedi.",
+      "Satış başladı; taahhütlü (rezervasyonlu) masalar değiştirilemez: A1. Hiçbir değişiklik kaydedilmedi.",
     );
     const after = await listEventTables(db, event.id);
     expect(after.find((t) => t.id === a1.id)?.x).toBe(a1.x);

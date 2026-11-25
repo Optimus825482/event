@@ -91,7 +91,7 @@ export function runToggleVip(store: EditorStore, keys: readonly string[], notify
 export function runDelete(store: EditorStore, notify: Notify, lock: EditorLock): void {
   const { blocked, frozen } = store.getState().deleteSelection(lock.frozen);
   const parts = [
-    ...(frozen.length > 0 ? [`Satılmış ya da rezerve masalar silinemez: ${frozen.join(", ")}`] : []),
+    ...(frozen.length > 0 ? [`Taahhütlü (rezervasyonlu) masalar silinemez: ${frozen.join(", ")}`] : []),
     ...(blocked.length > 0 ? [`Rezervasyonu veya ataması olan masalar silinemez: ${blocked.join(", ")}`] : []),
   ];
   if (parts.length > 0) notify("error", parts.join(" "));
