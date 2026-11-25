@@ -1,5 +1,7 @@
 import * as schema from "@/db/schema";
+import type { GroupType } from "@/features/staffing/group-types";
 import { timestamps } from "./catalogs";
+import { normalizeGroupType } from "@/features/staffing/template-snapshot";
 import { type Ctx, isRecord } from "./context";
 import { asUuid, byCreatedThenId, type Row, stableId, toTime } from "./values";
 
@@ -102,9 +104,30 @@ async function migrateTableGroups(ctx: Ctx, teamIdMap: Map<string, string>): Pro
   /** `${eventId}:${tableId}` → grup kimliği ve grubun ekibi. */
   const owner = new Map<string, { groupId: string; teamId: string | null }>();
 
-  const link = (eventId: string, groupId: string, teamId: string | null, ref: string, source: string, sourceId: string) => {
+  const link = (
+    eventId: string,
+    groupId: string,
+    teamId: string | null,
+    groupType: GroupType,
+    ref: string,
+    source: string,
+    sourceId: string,
+  ) => {
     const tableId = ctx.linkTable(eventId, ref, source, sourceId);
     if (tableId === null) return;
+    // Yeni kural: loca grubu yalnızca loca masalarını, standart grup yalnızca loca olmayanları içerir.
+    // Masanın loca durumu fiziksel gerçektir; çelişen bağlantı atlanır (masa grupsuz kalır), rapora yazılır.
+    const tableIsLoca = ctx.tableIndex(eventId).locaIds.has(tableId);
+    if (tableIsLoca !== (groupType === "loca")) {
+      ctx.add("invalidValues", {
+        table: source,
+        id: sourceId,
+        field: "tableIds",
+        from: `${ref} (${groupType === "loca" ? "loca olmayan masa, loca grubunda" : "loca masası, standart grupta"})`,
+        to: "bağlantı taşınmadı; masa grupsuz kaldı",
+      });
+      return;
+    }
     const key = `${eventId}:${tableId}`;
     const prev = owner.get(key);
     if (prev) {
@@ -128,6 +151,11 @@ async function migrateTableGroups(ctx: Ctx, teamIdMap: Map<string, string>): Pro
     if (rawSupervisor && supervisorStaffId === null) {
       ctx.add("unresolvedStaffReferences", { table: "table_groups", id: r.id, field: "assignedSupervisorId", ref: rawSupervisor });
     }
+    const legacyType = r.text("groupType", "standard");
+    const groupType = normalizeGroupType(legacyType);
+    if (groupType !== legacyType) {
+      ctx.add("invalidValues", { table: "table_groups", id: r.id, field: "groupType", from: legacyType, to: groupType });
+    }
     groups.push({
       id: r.id,
       eventId,
@@ -135,13 +163,13 @@ async function migrateTableGroups(ctx: Ctx, teamIdMap: Map<string, string>): Pro
       color: r.text("color", "#3b82f6"),
       teamId,
       supervisorStaffId,
-      groupType: r.text("groupType", "standard"),
+      groupType,
       sortOrder: r.int("sortOrder") ?? 0,
       notes: r.str("notes"),
       ...timestamps(r),
     });
     ctx.tableGroups.set(r.id, eventId);
-    for (const ref of r.strings("tableIds")) link(eventId, r.id, teamId, ref, "table_groups", r.id);
+    for (const ref of r.strings("tableIds")) link(eventId, r.id, teamId, groupType, ref, "table_groups", r.id);
   }
 
   // service_teams.tableIds: gruba girmemiş masalar için ekibe bağlı yeni grup.
@@ -156,7 +184,7 @@ async function migrateTableGroups(ctx: Ctx, teamIdMap: Map<string, string>): Pro
     }
     const groupId = stableId("team-table-group", r.id);
     const before = links.length;
-    for (const ref of refs) link(eventId, groupId, teamId, ref, "service_teams", r.id);
+    for (const ref of refs) link(eventId, groupId, teamId, "standard", ref, "service_teams", r.id);
     if (links.length > before) {
       groups.push({ id: groupId, eventId, name: r.text("name"), color: r.text("color", "#3b82f6"), teamId, ...timestamps(r) });
       ctx.tableGroups.set(groupId, eventId);

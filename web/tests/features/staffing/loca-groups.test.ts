@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eventTables, organizationTemplates, tableGroups } from "@/db/schema";
 import { saveTableGroups } from "@/features/staffing/groups-service";
+import { saveOrganization } from "@/features/staffing/organization-service";
 import { saveTableGroupsSchema } from "@/features/staffing/schemas";
 import { applyOrganizationTemplate } from "@/features/staffing/templates-service";
 import { saveLayout } from "@/features/venue/service";
@@ -104,5 +105,54 @@ describe("loca grupları tutarlılığı", () => {
     await saveLayout(db, actor, layout(false));
     const [after] = await db.select().from(eventTables).where(eq(eventTables.id, loca.id));
     expect(after?.isLoca).toBe(false);
+  });
+  it("şablon uygulamada loca grubundaki loca olmayan masa reddedilir", async () => {
+    const { actor, event, normal } = await setup();
+    const [template] = await db
+      .insert(organizationTemplates)
+      .values({
+        name: "Kötü",
+        createdById: actor.id,
+        tableGroups: [{ name: "G", color: "#3b82f6", groupType: "loca", tables: [{ id: normal.id, label: "A1" }] }],
+      })
+      .returning();
+    const err = await expectDomain(
+      applyOrganizationTemplate(db, actor, { eventId: event.id, templateId: template!.id }),
+      "conflict",
+    );
+    expect(err.message).toBe("Loca grubuna yalnızca loca masaları eklenebilir: A1");
+    expect(await db.select().from(tableGroups).where(eq(tableGroups.eventId, event.id))).toHaveLength(0);
+  });
+
+  it("standart gruptaki masa yerleşimde loca yapılamaz", async () => {
+    const { actor, event, normal, loca } = await setup();
+    await saveTableGroups(db, actor, { eventId: event.id, groups: [{ name: "Std", tableIds: [normal.id] }] });
+    const err = await expectDomain(
+      saveLayout(db, actor, {
+        eventId: event.id,
+        decor,
+        tables: [
+          { id: normal.id, label: "A1", capacity: 8, x: 0, y: 0, isLoca: true },
+          { id: loca.id, label: "L1", capacity: 8, x: 50, y: 0, isLoca: true },
+        ],
+      }),
+      "conflict",
+    );
+    expect(err.message).toBe("Gruptaki masanın loca durumu değiştirilemez; önce masayı gruptan çıkarın: A1");
+  });
+
+  it("organizasyon kaydı da aynı kuralı uygular ve hiçbir şey yazmaz", async () => {
+    const { actor, event, loca } = await setup();
+    const err = await expectDomain(
+      saveOrganization(db, actor, {
+        eventId: event.id,
+        teams: [],
+        groups: [{ name: "Std", tableIds: [loca.id] }],
+        assignments: [],
+      }),
+      "conflict",
+    );
+    expect(err.message).toBe("Loca masaları yalnızca loca grubuna eklenebilir: L1");
+    expect(await db.select().from(tableGroups).where(eq(tableGroups.eventId, event.id))).toHaveLength(0);
   });
 });

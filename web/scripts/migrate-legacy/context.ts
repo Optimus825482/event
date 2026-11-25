@@ -10,6 +10,8 @@ export type EventTableIndex = {
   byLabel: Map<string, string>;
   takenLabels: Set<string>;
   ids: Set<string>;
+  /** Loca olan masaların yeni kimlikleri (masa grubu tipi tutarlılığı için). */
+  locaIds: Set<string>;
 };
 
 export type MigrationOptions = {
@@ -49,7 +51,7 @@ export class Ctx {
   tableIndex(eventId: string): EventTableIndex {
     let index = this.tables.get(eventId);
     if (!index) {
-      index = { byLegacyId: new Map(), byLabel: new Map(), takenLabels: new Set(), ids: new Set() };
+      index = { byLegacyId: new Map(), byLabel: new Map(), takenLabels: new Set(), ids: new Set(), locaIds: new Set() };
       this.tables.set(eventId, index);
     }
     return index;

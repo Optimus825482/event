@@ -123,6 +123,7 @@ export async function migrateEvents(ctx: Ctx): Promise<void> {
       });
       index.byLegacyId.set(t.legacyId, id);
       index.ids.add(id);
+      if (t.isLoca) index.locaIds.add(id);
       index.takenLabels.add(normalizeLabel(t.label));
       for (const alias of [t.label, ...t.aliases]) {
         const key = normalizeLabel(alias);
