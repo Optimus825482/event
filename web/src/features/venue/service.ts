@@ -65,7 +65,10 @@ export type VenueLayout = {
   event: { id: string; name: string; status: (typeof events.$inferSelect)["status"]; venueTemplateId: string | null };
   tables: EventTableRow[];
   decor: Decor;
-  /** Silinemeyen (rezervasyonu/ataması olan) masalar. */
+  /**
+   * Silinemeyen (rezervasyonu/ataması olan) masalar: "kullanımda" anlamındadır, satış kilidi değildir.
+   * Satış kilidi `layoutLocked` / `frozenTableIds` ile ayrıca taşınır (ad, planın gereği korundu).
+   */
   lockedTableIds: string[];
   /** Satış başladığı için yerleşim kilidi etkin (`on_sale`/`sales_closed`). */
   layoutLocked: boolean;
