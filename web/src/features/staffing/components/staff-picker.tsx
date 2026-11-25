@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Availability, StaffPick } from "../group-staff";
+import type { ReviewHint } from "../review-hints";
 import type { RoleRequirement } from "../service-point-roles";
 import { NativeSelect, hhmm, orNull } from "./bits";
 import { CustomTimeField } from "./custom-time-field";
@@ -25,11 +26,14 @@ export function StaffPicker({
   onPick,
   defaultRole = "",
   roles = NO_ROLES,
+  hints,
 }: {
   availability: (pick: Pick<StaffPick, "staffId" | "shiftId">) => Availability;
   onPick: (pick: StaffPick) => void;
   defaultRole?: string;
   roles?: readonly RoleRequirement[];
+  /** Geçmiş değerlendirme ipuçları (yalnızca yetkili aktör ve açık anahtar için dolu gelir). */
+  hints?: Record<string, ReviewHint>;
 }) {
   const { staff, shifts } = useOrganization((s) => s.reference);
   const [query, setQuery] = useState("");
@@ -72,11 +76,20 @@ export function StaffPicker({
         <ul className="max-h-64 space-y-1 overflow-y-auto" aria-label="Eklenebilecek personel">
           {matches.slice(0, MAX_LISTED).map((p) => {
             const a = availability({ staffId: p.id, shiftId: shiftId || null });
+            const hint = hints?.[p.id];
             return (
               <li key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-700/50">
                 <span className="flex-1 text-slate-200">
                   {p.fullName} <span className="text-xs text-slate-500">({p.sicilNo})</span>
                 </span>
+                {hint ? (
+                  <span
+                    className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300"
+                    title={hintTitle(hint)}
+                  >
+                    {`Ort. ${hint.averageScore} · ${hint.reviewCount} değ.`}
+                  </span>
+                ) : null}
                 {a.ok ? null : <span className="text-xs text-slate-400">{a.reason}</span>}
                 <Button
                   size="sm"
@@ -107,6 +120,13 @@ export function StaffPicker({
       )}
     </div>
   );
+}
+
+/** Rozetin açıklaması: son etkinlik adı ve doluysa sonraki etkinlik notu. */
+function hintTitle(hint: ReviewHint): string {
+  const last = `Son etkinlik: ${hint.lastEventName}`;
+  return hint.lastNextEventNotes ? `${last}
+Sonraki etkinlik notu: ${hint.lastNextEventNotes}` : last;
 }
 
 /** Atanmış personel satırı: ad, vardiya, düzenlenebilir görev, özel saat ve çıkarma düğmesi. */

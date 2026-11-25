@@ -22,6 +22,7 @@ import { applyExtraStaff, type SavedExtraStaff } from "./extra-staff-service";
 import { applyGroups, type SavedGroup } from "./groups-service";
 import type { SaveOrganizationInput } from "./schemas";
 import { applyServicePointRoles, loadServicePointRoles } from "./service-point-roles-service";
+import { listReviewHints } from "./review-hints";
 import { applyTeams, type SavedTeam } from "./teams-service";
 
 /**
@@ -129,6 +130,13 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
   const tablesByExtra = groupBy(extraTableLinks, (l) => l.extraStaffId);
   const groupsByExtra = groupBy(extraGroupLinks, (l) => l.extraStaffId);
 
+  const reviewHints = await listReviewHints(
+    db,
+    actor,
+    { id: event.id, reviewHistoryVisible: event.reviewHistoryVisible },
+    activeStaff.map((s) => s.id),
+  );
+
   return {
     event: { id: event.id, name: event.name, status: event.status, startsAt: event.startsAt },
     editable: event.status !== "completed" && event.status !== "cancelled",
@@ -196,6 +204,8 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
     servicePointRoles: points.map((p) => ({ servicePointId: p.id, roles: pointRoles.get(p.id)?.roles ?? [] })),
     shifts,
     staff: activeStaff.map((s) => ({ id: s.id, fullName: s.fullName, sicilNo: s.sicilNo, color: s.color })),
+    /** Personel kimliği → geçmiş değerlendirme ipucu (anahtar kapalı ya da izin yoksa boş). */
+    reviewHints,
   };
 }
 
