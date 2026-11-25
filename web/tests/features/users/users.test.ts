@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { accounts, sessions, userPermissions, users } from "@/db/schema";
 import { MIN_PASSWORD_LENGTH } from "@/features/auth/auth";
 import { ForbiddenError } from "@/features/auth/errors";
-import { loadPermissions } from "@/features/auth/permissions";
+import { loadMemberships, loadPermissions } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { getActorFromHeaders, type Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
@@ -27,6 +27,13 @@ import { truncateAll } from "../../helpers/db";
 import { createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD, signedInCookie, signIn } from "../auth/helpers";
 
+/** Yeni kullanıcı için geçerli en küçük erişim: `user` rolü + tek departman üyeliği, izinsiz. */
+const USER_ACCESS = {
+  role: "user" as const,
+  memberships: [{ department: "fnb" as const, level: "member" as const }],
+  permissions: [],
+};
+
 const NEW_PASSWORD = "YepYeniParola!2025";
 
 async function actorOf(role: Actor["role"], extra: Partial<typeof users.$inferInsert> = {}): Promise<Actor> {
@@ -34,7 +41,7 @@ async function actorOf(role: Actor["role"], extra: Partial<typeof users.$inferIn
   return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
-const validCreate = { username: "ayse", password: PASSWORD, role: "staff" as const };
+const validCreate = { username: "ayse", password: PASSWORD, ...USER_ACCESS };
 
 async function sessionCount(userId: string): Promise<number> {
   return (await db.select().from(sessions).where(eq(sessions.userId, userId))).length;
@@ -49,7 +56,7 @@ describe("kullanıcı oluşturma", () => {
     const admin = await actorOf("admin");
     const created = await createUser(db, admin, { ...validCreate, email: "Ayse@Example.com" });
 
-    expect(created).toMatchObject({ username: "ayse", role: "staff", email: "ayse@example.com", isActive: true });
+    expect(created).toMatchObject({ username: "ayse", role: "user", email: "ayse@example.com", isActive: true });
     expect(JSON.stringify(created)).not.toContain(PASSWORD);
 
     const [account] = await db.select().from(accounts).where(eq(accounts.userId, created.id));
@@ -109,7 +116,7 @@ describe("pasifleştirme ve son admin", () => {
     const stale = await actorOf("admin", { isActive: false });
     await expect(setUserActive(db, stale, { id: lastAdmin.id, active: false })).rejects.toMatchObject({
       code: "conflict",
-      message: expect.stringContaining("son") as string,
+      message: expect.stringContaining("Son sistem") as string,
     });
     const [row] = await db.select().from(users).where(eq(users.id, lastAdmin.id));
     expect(row?.isActive).toBe(true);
@@ -258,29 +265,39 @@ describe("modül izinleri", () => {
     await truncateAll();
   });
 
-  it("izin satırlarını değiştirir; baseline'ı daraltır", async () => {
+  it("izin satırlarını değiştirir; verilen yetki olarak okunur", async () => {
     const admin = await actorOf("admin");
-    // İzin satırı semantiği (kısıt -> verilen yetki) Task 6'da yeniden yazılır; şimdilik eski rol.
-    const organizer = await actorOf("organizer");
-
-    await setUserPermissions(db, admin, {
-      id: organizer.id,
-      permissions: [{ module: "events", canView: true, canCreate: false, canEdit: false, canDelete: false }],
+    const created = await createUser(db, admin, {
+      username: "uye",
+      password: PASSWORD,
+      role: "user",
+      memberships: [
+        { department: "fnb", level: "member" },
+        { department: "casino", level: "member" },
+      ],
+      permissions: [],
     });
-    const rows = await loadPermissions(organizer.id);
-    expect(rows).toHaveLength(1);
-    expect(can({ ...organizer, permissions: rows }, "events", "create")).toBe(false);
-    expect(can({ ...organizer, permissions: rows }, "events", "view")).toBe(true);
+    const member = { ...admin, id: created.id, role: "user" as const };
 
     await setUserPermissions(db, admin, {
-      id: organizer.id,
+      id: created.id,
+      permissions: [{ module: "venues", canView: true, canCreate: false, canEdit: false, canDelete: false }],
+    });
+    const rows = await loadPermissions(created.id);
+    expect(rows).toHaveLength(1);
+    const actor = { ...member, memberships: await loadMemberships(created.id), permissions: rows };
+    expect(can(actor, "venues", "view")).toBe(true);
+    expect(can(actor, "venues", "create")).toBe(false);
+
+    await setUserPermissions(db, admin, {
+      id: created.id,
       permissions: [{ module: "customers", canView: true, canCreate: true, canEdit: true, canDelete: false }],
     });
-    const after = await db.select().from(userPermissions).where(eq(userPermissions.userId, organizer.id));
+    const after = await db.select().from(userPermissions).where(eq(userPermissions.userId, created.id));
     expect(after.map((r) => r.module)).toEqual(["customers"]);
 
-    await setUserPermissions(db, admin, { id: organizer.id, permissions: [] });
-    expect(await loadPermissions(organizer.id)).toHaveLength(0);
+    await setUserPermissions(db, admin, { id: created.id, permissions: [] });
+    expect(await loadPermissions(created.id)).toHaveLength(0);
   });
 
   it("şema: yinelenen ve bilinmeyen modül reddedilir", () => {
@@ -290,7 +307,10 @@ describe("modül izinleri", () => {
       setPermissionsSchema.safeParse({ id, permissions: [{ module: "events", ...row }, { module: "events", ...row }] })
         .success,
     ).toBe(false);
-    expect(setPermissionsSchema.safeParse({ id, permissions: [{ module: "reviews", ...row }] }).success).toBe(false);
+    for (const mod of ["users", "settings"]) {
+      expect(setPermissionsSchema.safeParse({ id, permissions: [{ module: mod, ...row }] }).success).toBe(false);
+    }
+    expect(setPermissionsSchema.safeParse({ id, permissions: [{ module: "reviews", ...row }] }).success).toBe(true);
   });
 
   it("admin olmayan izin değiştiremez", async () => {
@@ -320,13 +340,18 @@ describe("sorgular", () => {
 
   it("getUserDetail izin satırlarını içerir; olmayan kullanıcı null döner", async () => {
     const admin = await actorOf("admin");
-    const target = await actorOf("organizer");
+    const target = await createUser(db, admin, {
+      ...validCreate,
+      memberships: [{ department: "entertainment", level: "member" }],
+      permissions: [],
+    });
     await setUserPermissions(db, admin, {
       id: target.id,
       permissions: [{ module: "events", canView: true, canCreate: true, canEdit: false, canDelete: false }],
     });
     const detail = await getUserDetail(db, admin, target.id);
     expect(detail?.permissions).toHaveLength(1);
+    expect(detail?.memberships).toEqual([{ department: "entertainment", level: "member" }]);
     expect(await getUserDetail(db, admin, "00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });

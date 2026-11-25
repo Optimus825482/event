@@ -15,10 +15,9 @@ const MODULE_LABELS: Record<(typeof PERMISSION_MODULES)[number], string> = {
   staff: "Personel",
   customers: "Müşteriler",
   venues: "Mekânlar",
-  settings: "Ayarlar",
-  users: "Kullanıcılar",
   invitations: "Davetiyeler",
   notifications: "Bildirimler",
+  reviews: "Değerlendirmeler",
 };
 
 const VERBS = [

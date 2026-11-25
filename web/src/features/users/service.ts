@@ -1,20 +1,31 @@
 import { and, count, eq, ne, or, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { accounts, events, sessions, staffPerformanceReviews, userPermissions, users } from "@/db/schema";
+import {
+  accounts,
+  departmentMemberships,
+  events,
+  sessions,
+  staffPerformanceReviews,
+  userPermissions,
+  users,
+} from "@/db/schema";
 import { auth, hashPassword } from "@/features/auth/auth";
 import { deactivateUser, reactivateUser } from "@/features/auth/admin";
 import { ForbiddenError } from "@/features/auth/errors";
-import { authorize } from "@/features/auth/policy";
+import type { Membership } from "@/features/auth/departments";
+import { authorize, type PermissionRow } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import type {
   CreateUserInput,
   DeleteUserInput,
   ResetPasswordInput,
+  SetMembershipsInput,
   SetPermissionsInput,
   SetUserActiveInput,
   UpdateUserInput,
 } from "./schemas";
+import { checkAccess, effectiveRows, withinCeiling } from "./access-rules";
 import { DELETED_EMAIL_SUFFIX, isDeletedAccount } from "./filter";
 import { USER_COLUMNS, type UserSummary } from "./types";
 import { isAdmin } from "@/features/auth/scope";
@@ -27,11 +38,9 @@ const MESSAGES = {
   usernameTaken: "Bu kullanıcı adı zaten kayıtlı",
   emailTaken: "Bu e-posta adresi zaten kayıtlı",
   selfDeactivate: "Kendi hesabınızı pasifleştiremezsiniz",
-  lastAdminDeactivate: "Sistemdeki son aktif yönetici pasifleştirilemez",
-  lastAdminDemote: "Sistemdeki son aktif yöneticinin rolü değiştirilemez",
+  lastAdmin: "Son sistem yöneticisi kaldırılamaz",
   selfDelete: "Kendi hesabınızı silemezsiniz",
   deletedReactivate: "Silinmiş hesap yeniden etkinleştirilemez",
-  lastAdminDelete: "Sistemdeki son yönetici silinemez",
   deletedImmutable: "Silinmiş hesap değiştirilemez",
   reservedEmail: "Bu e-posta adresi kullanılamaz",
   reservedUsername: "Bu kullanıcı adı kullanılamaz",
@@ -97,9 +106,45 @@ async function assertUnique(db: Db | Tx, username: string | undefined, email: st
   if (rows.length > 0) throw new DomainError("conflict", MESSAGES.emailTaken);
 }
 
-/** Kullanıcı + parola hesabı oluşturur (Better Auth iç bağdaştırıcısı; bcrypt aynı maliyetle). */
+function assertAccess(role: Parameters<typeof checkAccess>[0], memberships: Membership[], rows: PermissionRow[]) {
+  const problem = checkAccess(role, memberships, rows);
+  if (problem !== null) throw new DomainError("invalid", problem);
+}
+
+async function writeMemberships(tx: Db | Tx, userId: string, memberships: readonly Membership[]) {
+  await tx.delete(departmentMemberships).where(eq(departmentMemberships.userId, userId));
+  if (memberships.length > 0) {
+    await tx.insert(departmentMemberships).values(memberships.map((m) => ({ ...m, userId })));
+  }
+}
+
+async function writePermissions(tx: Db | Tx, userId: string, rows: readonly PermissionRow[]) {
+  await tx.delete(userPermissions).where(eq(userPermissions.userId, userId));
+  const kept = effectiveRows(rows);
+  if (kept.length > 0) await tx.insert(userPermissions).values(kept.map((p) => ({ ...p, userId })));
+}
+
+async function readPermissions(tx: Db | Tx, userId: string): Promise<PermissionRow[]> {
+  return tx
+    .select({
+      module: userPermissions.module,
+      canView: userPermissions.canView,
+      canCreate: userPermissions.canCreate,
+      canEdit: userPermissions.canEdit,
+      canDelete: userPermissions.canDelete,
+    })
+    .from(userPermissions)
+    .where(eq(userPermissions.userId, userId));
+}
+
+/**
+ * Kullanıcı + parola hesabı + üyelikler + izin satırlarını oluşturur (Better Auth iç bağdaştırıcısı;
+ * bcrypt aynı maliyetle). Üyelik/izin tutarlılığı kullanıcı yazılmadan önce denetlenir; sonraki
+ * yazımlardan biri düşerse kullanıcı geri silinir (cascade ile hiçbir satır kalmaz).
+ */
 export async function createUser(db: Db | Tx, actor: Actor, input: CreateUserInput): Promise<UserSummary> {
   authorize(actor, "users", "create");
+  assertAccess(input.role, input.memberships, input.permissions);
   const email = (input.email || `${input.username}@${PLACEHOLDER_EMAIL_DOMAIN}`).toLowerCase();
   assertNotReserved(input.username, email);
   await assertUnique(db, input.username, email);
@@ -125,8 +170,12 @@ export async function createUser(db: Db | Tx, actor: Actor, input: CreateUserInp
       providerId: "credential",
       password: passwordHash,
     });
+    await db.transaction(async (tx) => {
+      await writeMemberships(tx, user.id, input.memberships);
+      await writePermissions(tx, user.id, input.permissions);
+    });
   } catch (error) {
-    // Parolasız (giriş yapamayan) yetim kullanıcı bırakma.
+    // Yarım kalmış (parolasız ya da üyeliksiz) yetim kullanıcı bırakma.
     await ctx.internalAdapter.deleteUser(user.id);
     throw error;
   }
@@ -146,12 +195,17 @@ export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInp
     assertNotDeleted(target);
     const demoting = input.role !== undefined && input.role !== "admin" && isAdmin(target);
     if (demoting && target.isActive && (await otherActiveAdmins(tx, id)) === 0) {
-      throw new DomainError("conflict", MESSAGES.lastAdminDemote);
+      throw new DomainError("conflict", MESSAGES.lastAdmin);
     }
     await assertUnique(tx, undefined, values.email, id);
 
     const defined = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined));
     if (Object.keys(defined).length > 0) await tx.update(users).set(defined).where(eq(users.id, id));
+    if (input.role === "admin" && !isAdmin(target)) {
+      // Sistem yöneticisine departman ya da izin atanmaz: yükseltmede eski satırlar temizlenir.
+      await writeMemberships(tx, id, []);
+      await writePermissions(tx, id, []);
+    }
     return readSummary(tx, id);
   });
 }
@@ -167,7 +221,7 @@ export async function setUserActive(db: Db | Tx, actor: Actor, input: SetUserAct
     if (!input.active) {
       if (target.id === actor.id) throw new DomainError("conflict", MESSAGES.selfDeactivate);
       if (isAdmin(target) && target.isActive && (await otherActiveAdmins(tx, target.id)) === 0) {
-        throw new DomainError("conflict", MESSAGES.lastAdminDeactivate);
+        throw new DomainError("conflict", MESSAGES.lastAdmin);
       }
       await deactivateUser(target.id);
     } else {
@@ -203,7 +257,10 @@ export async function resetUserPassword(
   return { id: input.id };
 }
 
-/** Kullanıcının modül izin satırlarını verilen listeyle değiştirir (boş liste = hepsini kaldır). */
+/**
+ * Kullanıcının modül izin satırlarını verilen listeyle değiştirir (boş liste = hepsini kaldır).
+ * Satırlar verilen yetkidir ve kullanıcının üyeliklerinden gelen tavanı aşamaz.
+ */
 export async function setUserPermissions(
   db: Db | Tx,
   actor: Actor,
@@ -211,13 +268,38 @@ export async function setUserPermissions(
 ): Promise<{ id: string; count: number }> {
   authorize(actor, "users", "edit");
   await withAdminLock(db, async (tx) => {
-    assertNotDeleted(await getTarget(tx, input.id));
-    await tx.delete(userPermissions).where(eq(userPermissions.userId, input.id));
-    if (input.permissions.length > 0) {
-      await tx.insert(userPermissions).values(input.permissions.map((p) => ({ ...p, userId: input.id })));
-    }
+    const target = await getTarget(tx, input.id);
+    assertNotDeleted(target);
+    const memberships = await tx
+      .select({ department: departmentMemberships.department, level: departmentMemberships.level })
+      .from(departmentMemberships)
+      .where(eq(departmentMemberships.userId, input.id));
+    assertAccess(target.role, memberships, input.permissions);
+    await writePermissions(tx, input.id, input.permissions);
   });
-  return { id: input.id, count: input.permissions.length };
+  return { id: input.id, count: effectiveRows(input.permissions).length };
+}
+
+/**
+ * Kullanıcının departman üyeliklerini verilen listeyle değiştirir. Artık tavan dışında kalan izin
+ * satırları aynı işlemde silinir; kalanlarla birlikte tutarlılık yeniden denetlenir.
+ */
+export async function setUserMemberships(
+  db: Db | Tx,
+  actor: Actor,
+  input: SetMembershipsInput,
+): Promise<{ id: string; count: number }> {
+  authorize(actor, "users", "edit");
+  await withAdminLock(db, async (tx) => {
+    const target = await getTarget(tx, input.id);
+    assertNotDeleted(target);
+    const current = await readPermissions(tx, input.id);
+    const kept = target.role === "user" ? current.filter((row) => withinCeiling(row, input.memberships)) : current;
+    assertAccess(target.role, input.memberships, kept);
+    await writeMemberships(tx, input.id, input.memberships);
+    if (kept.length !== current.length) await writePermissions(tx, input.id, kept);
+  });
+  return { id: input.id, count: input.memberships.length };
 }
 
 export const DELETED_USER_NAME = "Silinmiş kullanıcı";
@@ -241,7 +323,7 @@ async function hasRestrictingReferences(tx: Tx, userId: string): Promise<boolean
  *   `cascade`, diğer başvurular (`created_by_id` vb.) `set null` olur.
  * - Etkinlik sahibi ya da değerlendiren olarak anılıyorsa satır kalır ama anonimleştirilir:
  *   pasif, kişisel alanlar boş, kullanıcı adı/e-posta yer tutucu, rol `staff`, parola hesabı,
- *   izinleri ve tüm oturumları silinir (giriş yapamaz; geçmiş kayıtlar bozulmaz).
+ *   izinleri, üyelikleri ve tüm oturumları silinir (giriş yapamaz; geçmiş kayıtlar bozulmaz).
  */
 export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInput): Promise<DeleteUserResult> {
   authorize(actor, "users", "delete");
@@ -251,7 +333,7 @@ export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInp
     const target = await getTarget(tx, input.id);
     if (target.id === actor.id) throw new DomainError("conflict", MESSAGES.selfDelete);
     if (isAdmin(target) && (await otherActiveAdmins(tx, target.id)) === 0) {
-      throw new DomainError("conflict", MESSAGES.lastAdminDelete);
+      throw new DomainError("conflict", MESSAGES.lastAdmin);
     }
 
     if (!(await hasRestrictingReferences(tx, target.id))) {
@@ -278,6 +360,7 @@ export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInp
     await tx.delete(sessions).where(eq(sessions.userId, target.id));
     await tx.delete(accounts).where(eq(accounts.userId, target.id));
     await tx.delete(userPermissions).where(eq(userPermissions.userId, target.id));
+    await tx.delete(departmentMemberships).where(eq(departmentMemberships.userId, target.id));
     return { id: target.id, mode: "anonymized" };
   });
 }

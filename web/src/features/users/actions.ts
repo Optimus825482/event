@@ -47,6 +47,8 @@ export const setPermissionsAction = defineAction({
   handler: ({ actor, input, db }) => setUserPermissions(db, actor, input),
 });
 
+export const setUserMembershipsAction = defineAction(userActionDefs.setUserMemberships);
+
 export const deleteUserAction = defineAction(userActionDefs.deleteUser);
 
 export const setOwnAvatarAction = defineSelfAction(selfActionDefs.setOwnAvatar);

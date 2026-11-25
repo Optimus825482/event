@@ -12,6 +12,13 @@ import { truncateAll } from "../../helpers/db";
 import { createUser as insertUser } from "../../helpers/factories";
 import { PASSWORD, sessionCookie, signIn } from "../auth/helpers";
 
+/** Yeni kullanıcı için geçerli en küçük erişim: `user` rolü + tek departman üyeliği, izinsiz. */
+const USER_ACCESS = {
+  role: "user" as const,
+  memberships: [{ department: "fnb" as const, level: "member" as const }],
+  permissions: [],
+};
+
 const NEW_PASSWORD = "YepYeniParola!2025";
 const WRONG = "YanlisParola!2024";
 const TOO_MANY = { message: expect.stringContaining("Çok fazla") as string };
@@ -19,7 +26,7 @@ const TOO_MANY = { message: expect.stringContaining("Çok fazla") as string };
 async function makeUser(username: string, active = true): Promise<Actor> {
   const admin = await insertUser(db, { role: "admin" });
   const adminActor: Actor = { id: admin.id, username: admin.username, role: "admin", staffId: null, memberships: [], permissions: [] };
-  const created = await createUser(db, adminActor, { username, password: PASSWORD, role: "staff" });
+  const created = await createUser(db, adminActor, { username, password: PASSWORD, ...USER_ACCESS });
   if (!active) await db.update(users).set({ isActive: false }).where(eq(users.id, created.id));
   return { id: created.id, username, role: "staff", staffId: null, memberships: [], permissions: [] };
 }

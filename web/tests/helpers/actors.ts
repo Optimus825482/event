@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { userPermissions } from "@/db/schema";
+import { departmentMemberships, userPermissions, users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import type { Department, DepartmentLevel } from "@/features/auth/departments";
 import type { Module, PermissionRow } from "@/features/auth/policy";
+import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
+import { createUser as createLoginUser } from "@/features/users/service";
+import type { UserSummary } from "@/features/users/types";
 import { createMembership, createUser, type Executor } from "./factories";
 
 type Grants = Partial<Record<Module, string>>;
@@ -96,4 +100,28 @@ export async function legacyActor(ex: Executor, role: Actor["role"], o: Partial<
     memberships: [],
     permissions: [],
   };
+}
+
+/**
+ * Servis üzerinden parolalı hesap açar. `admin` ve `user` yeni yoldan (user: F&B kullanıcısı);
+ * eski roller önce `user` olarak açılıp role çevrilir ve üyelikleri silinir. Task 10'da eski roller
+ * kalkınca eski rol dalı silinir.
+ */
+export async function createLoginAccount(
+  db: Parameters<typeof createLoginUser>[0],
+  admin: Actor,
+  role: Role,
+  input: { username: string; password: string; email?: string; name?: string },
+): Promise<UserSummary> {
+  const memberships = role === "admin" ? [] : [{ department: "fnb" as const, level: "member" as const }];
+  const created = await createLoginUser(db, admin, {
+    ...input,
+    role: role === "admin" ? "admin" : "user",
+    memberships,
+    permissions: [],
+  });
+  if (role === "admin" || role === "user") return created;
+  await db.delete(departmentMemberships).where(eq(departmentMemberships.userId, created.id));
+  await db.update(users).set({ role }).where(eq(users.id, created.id));
+  return { ...created, role };
 }

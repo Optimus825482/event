@@ -7,6 +7,13 @@ import { truncateAll } from "../../helpers/db";
 import { createUser as insertUser } from "../../helpers/factories";
 import { call, hasSessionCookie, PASSWORD, sessionCookie, sessionSetCookie } from "./helpers";
 
+/** Yeni kullanıcı için geçerli en küçük erişim: `user` rolü + tek departman üyeliği, izinsiz. */
+const USER_ACCESS = {
+  role: "user" as const,
+  memberships: [{ department: "fnb" as const, level: "member" as const }],
+  permissions: [],
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function seedUser(username: string): Promise<string> {
@@ -14,7 +21,7 @@ async function seedUser(username: string): Promise<string> {
   const user = await createUser(db, { id: admin.id, username: admin.username, role: "admin", staffId: null, memberships: [], permissions: [] }, {
     username,
     password: PASSWORD,
-    role: "staff",
+    ...USER_ACCESS,
   });
   return user.id;
 }

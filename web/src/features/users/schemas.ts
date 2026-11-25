@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEPARTMENT_LEVELS, DEPARTMENTS } from "@/features/auth/departments";
 import { ROLES } from "@/features/auth/roles";
 import { isValidUsername } from "@/features/auth/username";
 import { checkAvatarDataUrl } from "./avatar";
@@ -7,22 +8,22 @@ import { checkAvatarDataUrl } from "./avatar";
 export const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 200;
 
-/** `permission_module` enum'u (db/schema/people.ts) ile aynı 10 modül. */
+/** `permission_module` enum'unun, departman tavanında yer alabilen alt kümesi (`users` ve `settings` yalnızca admin). */
 export const PERMISSION_MODULES = [
   "events",
-  "reservations",
-  "check_in",
-  "staff",
-  "customers",
-  "venues",
-  "settings",
-  "users",
   "invitations",
   "notifications",
+  "venues",
+  "staff",
+  "reviews",
+  "reservations",
+  "customers",
+  "check_in",
 ] as const;
 
 const id = z.uuid("Geçersiz kimlik");
 const role = z.enum(ROLES, "Geçersiz rol");
+const newUserRole = z.enum(["admin", "user"], "Geçersiz rol");
 
 const username = z
   .string()
@@ -44,10 +45,36 @@ const clearableText = (max: number) =>
     .nullable()
     .transform((v) => (v === null || v === "" ? null : v));
 
+export const membershipSchema = z.object({
+  department: z.enum(DEPARTMENTS, "Geçersiz departman"),
+  level: z.enum(DEPARTMENT_LEVELS, "Geçersiz düzey"),
+});
+
+const membershipsSchema = z
+  .array(membershipSchema)
+  .refine(
+    (rows) => new Set(rows.map((r) => r.department)).size === rows.length,
+    "Her departman en fazla bir kez seçilebilir",
+  );
+
+export const permissionRowSchema = z.object({
+  module: z.enum(PERMISSION_MODULES, "Geçersiz modül"),
+  canView: z.boolean(),
+  canCreate: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
+});
+
+const permissionRowsSchema = z
+  .array(permissionRowSchema)
+  .refine((rows) => new Set(rows.map((r) => r.module)).size === rows.length, "Her modül en fazla bir kez verilebilir");
+
 export const createUserSchema = z.object({
   username,
   password,
-  role,
+  role: newUserRole,
+  memberships: membershipsSchema,
+  permissions: permissionRowsSchema,
   email: z.union([z.literal(""), email]).optional(),
   name: z.string().trim().max(255).optional(),
   staffId: id.nullable().optional(),
@@ -72,22 +99,11 @@ export type SetUserActiveInput = z.infer<typeof setUserActiveSchema>;
 export const resetPasswordSchema = z.object({ id, password });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
-export const permissionRowSchema = z.object({
-  module: z.enum(PERMISSION_MODULES, "Geçersiz modül"),
-  canView: z.boolean(),
-  canCreate: z.boolean(),
-  canEdit: z.boolean(),
-  canDelete: z.boolean(),
-});
-
-export const setPermissionsSchema = z.object({
-  id,
-  permissions: z.array(permissionRowSchema).refine(
-    (rows) => new Set(rows.map((r) => r.module)).size === rows.length,
-    "Her modül en fazla bir kez verilebilir",
-  ),
-});
+export const setPermissionsSchema = z.object({ id, permissions: permissionRowsSchema });
 export type SetPermissionsInput = z.infer<typeof setPermissionsSchema>;
+
+export const setMembershipsSchema = z.object({ id, memberships: membershipsSchema });
+export type SetMembershipsInput = z.infer<typeof setMembershipsSchema>;
 
 export const deleteUserSchema = z.object({ id });
 export type DeleteUserInput = z.infer<typeof deleteUserSchema>;
