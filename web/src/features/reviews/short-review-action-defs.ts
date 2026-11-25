@@ -9,8 +9,8 @@ function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOption
   return options;
 }
 
-/** `action-defs.ts` ile aynı kapı kaynağı: aktörün kendi ekibi; asıl denetim serviste (`assertCanReview`). */
-const RESOURCE = ({ actor }: { actor: Actor }) => (actor.staffId ? { teamLeaderStaffId: actor.staffId } : {});
+/** `action-defs.ts` ile aynı kapı kaynağı: aktörün kendisi değerlendirici olarak verilir; asıl denetim serviste (`assertCanReview`). */
+const RESOURCE = ({ actor }: { actor: Actor }) => (actor.staffId ? { reviewerStaffIds: [actor.staffId] } : {});
 
 export const shortReviewActionDefs = {
   save: def({

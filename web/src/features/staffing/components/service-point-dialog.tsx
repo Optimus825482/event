@@ -21,6 +21,7 @@ function useServicePoints() {
 /** Eski "servis noktası personeli" penceresi: noktaya servis noktası ataması ekler / çıkarır. */
 export function ServicePointStaffDialog({ point, readOnly }: { point: ServicePoint; readOnly: boolean }) {
   const assignments = useOrganization((s) => s.assignments);
+  const reviewHints = useOrganization((s) => s.reference.reviewHints);
   const addStaff = useOrganization((s) => s.addServicePointStaff);
   const remove = useOrganization((s) => s.removeAssignment);
   const roles = usePointRoles(point.id);
@@ -70,6 +71,7 @@ export function ServicePointStaffDialog({ point, readOnly }: { point: ServicePoi
           <section className="space-y-2">
             <h3 className="text-sm font-medium text-white">Personel ekle</h3>
             <StaffPicker
+              hints={reviewHints}
               roles={roles}
               availability={(pick) => servicePointAvailability(assignments, pick, point.id)}
               onPick={(pick) => addStaff(point.id, pick)}

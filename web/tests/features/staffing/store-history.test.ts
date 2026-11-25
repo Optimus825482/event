@@ -24,6 +24,8 @@ function fakeOrganization(): Organization {
     shifts: [],
     staff: [{ id: P1, fullName: "Ali Veli", sicilNo: "001", color: null }],
     reviewHints: {},
+    locaStaffing: [],
+    sectionHeads: [],
   };
 }
 

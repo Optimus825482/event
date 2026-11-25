@@ -27,6 +27,8 @@ function fakeOrganization(): Organization {
     shifts: [],
     staff: [],
     reviewHints: {},
+    locaStaffing: [],
+    sectionHeads: [],
   };
 }
 

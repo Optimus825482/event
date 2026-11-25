@@ -15,6 +15,7 @@ import { useOrganization, type DraftGroup } from "./store";
 export function GroupStaffDialog({ group, readOnly }: { group: DraftGroup; readOnly: boolean }) {
   const assignments = useOrganization((s) => s.assignments);
   const tables = useOrganization((s) => s.reference.tables);
+  const reviewHints = useOrganization((s) => s.reference.reviewHints);
   const extraStaff = useOrganization((s) => s.extraStaff);
   const addGroupStaff = useOrganization((s) => s.addGroupStaff);
   const removeGroupStaff = useOrganization((s) => s.removeGroupStaff);
@@ -73,6 +74,7 @@ export function GroupStaffDialog({ group, readOnly }: { group: DraftGroup; readO
           <section className="space-y-2">
             <h3 className="text-sm font-medium text-white">Personel ekle</h3>
             <StaffPicker
+              hints={reviewHints}
               defaultRole="Garson"
               availability={(pick) => groupStaffAvailability(assignments, pick, group)}
               onPick={(pick) => addGroupStaff(group.id, pick)}

@@ -176,7 +176,7 @@ describe("görünen her öğe erişilebilir bir sayfaya gider", () => {
     it(`${name}: her görünür öğe için görüntüleme izni vardır ve grup kapsamı uyar`, () => {
       for (const group of visibleNavGroups(actor)) {
         for (const item of group.items) {
-          const resource = item.module === "reviews" && actor.staffId ? { teamLeaderStaffId: actor.staffId } : undefined;
+          const resource = item.module === "reviews" && actor.staffId ? { reviewerStaffIds: [actor.staffId] } : undefined;
           expect(can(actor, item.module, "view", resource), `${item.href}`).toBe(true);
           if (item.alsoRequires) expect(can(actor, item.alsoRequires, "view"), `${item.href} ek izin`).toBe(true);
           if (group.departments !== null && actor.role === "user") {

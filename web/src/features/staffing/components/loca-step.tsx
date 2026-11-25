@@ -5,11 +5,11 @@ import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { groupUngroupedLocasAction } from "../actions";
-import type { LocaStaffingRow } from "../loca-plan";
+import type { LocaStaffingView } from "../organization-service";
 import { Section } from "./bits";
 
 /** Loca personel planı: her loca için grup, süpervizör ve atanan personel; grupsuz locaları tek tıkla gruplar. */
-export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingRow[]; eventId: string; canEdit: boolean }) {
+export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingView[]; eventId: string; canEdit: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -50,9 +50,7 @@ export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingRow[]; 
                   <td className="py-2 pr-3">{row.floor}</td>
                   <td className="py-2 pr-3">{row.groupName ?? "—"}</td>
                   <td className="py-2 pr-3">
-                    {row.supervisorStaffId
-                      ? (row.staff.find((s) => s.staffId === row.supervisorStaffId)?.fullName ?? "Atanmış")
-                      : "—"}
+                    {row.supervisorStaffId ? (row.supervisorName ?? "Atanmış") : "—"}
                   </td>
                   <td className="py-2">
                     {row.staff.length === 0 ? (

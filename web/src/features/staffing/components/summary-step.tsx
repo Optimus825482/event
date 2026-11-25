@@ -6,7 +6,9 @@ import { AlertTriangle, Layers, Save, UserCog, UserPlus, Users } from "lucide-re
 import { StatCard } from "@/components/layout/stat-card";
 import { Button } from "@/components/ui/button";
 import { saveOrganizationAction } from "../actions";
+import type { SectionHead } from "../section-heads-service";
 import { Section } from "./bits";
+import { SectionHeadsCard } from "./section-heads-card";
 import { toSavePayload, useOrganization, useOrganizationStoreApi } from "./store";
 
 type Status = { kind: "ok" | "error"; message: string; details?: string[] } | null;
@@ -17,7 +19,8 @@ function detailsOf(fieldErrors: Record<string, string[]> | undefined): string[] 
 }
 
 /** Adım 5: kontrol listesi ve tek transaction'lık kayıt. */
-export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: boolean }) {
+export function SummaryStep({ eventId, readOnly, sectionHeads }: { eventId: string; readOnly: boolean; sectionHeads: SectionHead[] }) {
+  const staff = useOrganization((s) => s.reference.staff);
   const router = useRouter();
   const store = useOrganizationStoreApi();
   const teams = useOrganization((s) => s.teams);
@@ -78,6 +81,13 @@ export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: 
           <p className="text-sm text-muted-foreground">Uyarı yok.</p>
         )}
       </Section>
+
+      <SectionHeadsCard
+        eventId={eventId}
+        heads={sectionHeads}
+        candidates={staff.map((p) => ({ staffId: p.id, fullName: p.fullName }))}
+        canEdit={!readOnly}
+      />
 
       {readOnly ? (
         <p className="text-sm text-muted-foreground">Bu etkinlikte değişiklik yapılamaz (yetki ya da etkinlik durumu).</p>

@@ -8,6 +8,7 @@ import {
   eventStaffAssignments,
   eventTables,
   servicePoints,
+  staff as staffTable,
   tableGroupTables,
   tableGroups,
   teamMembers,
@@ -22,7 +23,9 @@ import { applyExtraStaff, type SavedExtraStaff } from "./extra-staff-service";
 import { applyGroups, type SavedGroup } from "./groups-service";
 import type { SaveOrganizationInput } from "./schemas";
 import { applyServicePointRoles, loadServicePointRoles } from "./service-point-roles-service";
+import { listLocaStaffing, type LocaStaffingRow } from "./loca-plan";
 import { listReviewHints } from "./review-hints";
+import { listSectionHeads } from "./section-heads-service";
 import { applyTeams, type SavedTeam } from "./teams-service";
 
 /**
@@ -43,6 +46,19 @@ export async function saveOrganization(
     const extraStaff = await applyExtraStaff(tx, input.eventId, input.extraStaff ?? []);
     return { teams: savedTeams, groups, assignments, extraStaff };
   });
+}
+
+/** Loca satırı + süpervizörün adı (süpervizör o locada atanmış olmasa da gösterilir). */
+export type LocaStaffingView = LocaStaffingRow & { supervisorName: string | null };
+
+async function withSupervisorNames(db: Db | Tx, rows: LocaStaffingRow[]): Promise<LocaStaffingView[]> {
+  const ids = [...new Set(rows.flatMap((r) => (r.supervisorStaffId ? [r.supervisorStaffId] : [])))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const found = await db.select({ id: staffTable.id, fullName: staffTable.fullName }).from(staffTable).where(inArray(staffTable.id, ids));
+    for (const r of found) names.set(r.id, r.fullName);
+  }
+  return rows.map((r) => ({ ...r, supervisorName: r.supervisorStaffId ? (names.get(r.supervisorStaffId) ?? null) : null }));
 }
 
 function groupBy<T, K extends string>(rows: T[], key: (row: T) => K): Map<K, T[]> {
@@ -137,6 +153,9 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
     activeStaff.map((s) => s.id),
   );
 
+  const [locaRows, sectionHeads] = await Promise.all([listLocaStaffing(db, actor, eventId), listSectionHeads(db, actor, eventId)]);
+  const locaStaffing = await withSupervisorNames(db, locaRows);
+
   return {
     event: { id: event.id, name: event.name, status: event.status, startsAt: event.startsAt },
     editable: event.status !== "completed" && event.status !== "cancelled",
@@ -206,6 +225,10 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
     staff: activeStaff.map((s) => ({ id: s.id, fullName: s.fullName, sicilNo: s.sicilNo, color: s.color })),
     /** Personel kimliği → geçmiş değerlendirme ipucu (anahtar kapalı ya da izin yoksa boş). */
     reviewHints,
+    /** "Localar" adımı: loca masaları, grupları, süpervizörleri ve personeli. */
+    locaStaffing,
+    /** Etkinlik kısım sorumluları ("Özet" adımındaki kart). */
+    sectionHeads,
   };
 }
 
