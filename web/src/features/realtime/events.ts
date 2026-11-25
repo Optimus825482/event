@@ -24,9 +24,9 @@ export const REALTIME_EVENT_TYPES = [
 
 export type RealtimeEventType = (typeof REALTIME_EVENT_TYPES)[number];
 
-/** `notifications.target_role` ile aynı değerler. */
-export const NOTIFICATION_TARGET_ROLES = ["all", "admin", "leader", "staff"] as const;
-export type NotificationTargetRole = (typeof NOTIFICATION_TARGET_ROLES)[number];
+/** `notifications.audience` ile aynı değerler. */
+export const NOTIFICATION_AUDIENCES = ["all", "admin", "entertainment", "fnb", "casino"] as const;
+export type NotificationAudience = (typeof NOTIFICATION_AUDIENCES)[number];
 
 // Kimlik: yalnızca harf, rakam, "-" ve "_" (e-posta, telefon, ad gibi değerler bu kalıba uymaz).
 const recordId = z.string().regex(/^[A-Za-z0-9_-]+$/, "kimlik yalnızca harf, rakam, - ve _ içerebilir");
@@ -43,16 +43,16 @@ export const realtimeEventSchema = z.union([
   z.strictObject({ type: z.literal("notification.created"), eventId: z.uuid(), id: recordId.optional(), at }),
   z.strictObject({
     type: z.literal("notification.created"),
-    targetRole: z.enum(NOTIFICATION_TARGET_ROLES),
+    audience: z.enum(NOTIFICATION_AUDIENCES),
     id: recordId.optional(),
     at,
   }),
 ]);
 
 /**
- * Yayılan olay. `notification.created` ya bir etkinliğe (`eventId`) ya da bir role
- * (`targetRole`) yöneliktir; role yönelik olay, abonenin rolü eşleşen (veya
- * `targetRole: "all"`) tüm akışlara gider (bkz. hub.ts).
+ * Yayılan olay. `notification.created` ya bir etkinliğe (`eventId`) ya da bir hedef
+ * kitleye (`audience`) yöneliktir; kitleye yönelik olay, abonenin görebildiği kitleler arasında
+ * olan (veya `audience: "all"`) akışlara gider (bkz. hub.ts).
  */
 export type RealtimeEvent = z.infer<typeof realtimeEventSchema>;
 

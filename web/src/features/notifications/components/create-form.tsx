@@ -6,8 +6,8 @@ import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { createNotificationAction } from "../actions";
-import { PRIORITY_LABELS, TARGET_ROLE_LABELS } from "../labels";
-import { PRIORITIES, TARGET_ROLES } from "../schemas";
+import { PRIORITY_LABELS, AUDIENCE_LABELS } from "../labels";
+import { PRIORITIES, AUDIENCES } from "../schemas";
 
 const inputClass =
   "w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500";
@@ -38,7 +38,7 @@ function Field({
   );
 }
 
-/** Hedef role duyuru gönderir. */
+/** Hedef kitleye (herkes, yöneticiler ya da bir departman) duyuru gönderir. */
 export function CreateNotificationForm() {
   const router = useRouter();
   const toast = useToast();
@@ -61,7 +61,7 @@ export function CreateNotificationForm() {
         title: text("title"),
         message: text("message"),
         priority: text("priority"),
-        targetRole: text("targetRole"),
+        audience: text("audience"),
         actionUrl: text("actionUrl"),
       });
       if (!res.ok) {
@@ -93,11 +93,11 @@ export function CreateNotificationForm() {
         <textarea id="message" name="message" required rows={3} maxLength={2000} className={inputClass} />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Hedef rol" name="targetRole" errors={errors.targetRole}>
-          <select id="targetRole" name="targetRole" defaultValue="all" className={inputClass}>
-            {TARGET_ROLES.map((role) => (
-              <option key={role} value={role}>
-                {TARGET_ROLE_LABELS[role]}
+        <Field label="Hedef kitle" name="audience" errors={errors.audience}>
+          <select id="audience" name="audience" defaultValue="all" className={inputClass}>
+            {AUDIENCES.map((audience) => (
+              <option key={audience} value={audience}>
+                {AUDIENCE_LABELS[audience]}
               </option>
             ))}
           </select>

@@ -80,7 +80,7 @@ export async function migrateContent(ctx: Ctx): Promise<void> {
       title: r.text("title"),
       message: r.text("message"),
       priority: r.text("priority", "medium") as (typeof schema.notificationPriority.enumValues)[number],
-      targetRole: r.text("targetRole", "all") as (typeof schema.notificationTargetRole.enumValues)[number],
+      audience: r.text("targetRole", "all") as (typeof schema.notificationAudience.enumValues)[number],
       eventId: ctx.resolveEvent(r.str("eventId")),
       createdById: ctx.resolveUser(r.str("createdById")),
       metadata: r.json("metadata"),

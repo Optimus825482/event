@@ -6,7 +6,7 @@ import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { expectDomain, makeActor } from "../reviews/helpers";
 
-const base = { title: "Duyuru", message: "Metin", priority: "medium", targetRole: "all" } as const;
+const base = { title: "Duyuru", message: "Metin", priority: "medium", audience: "all" } as const;
 const parse = (actionUrl: string) => createNotificationSchema.safeParse({ ...base, actionUrl });
 
 describe("actionUrl doğrulaması (açık yönlendirme)", () => {

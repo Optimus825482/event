@@ -1,6 +1,5 @@
-import type { Role } from "@/features/auth/roles";
 import { logError } from "@/lib/log";
-import type { RealtimeEvent } from "./events";
+import type { NotificationAudience, RealtimeEvent } from "./events";
 
 /**
  * Süreç içi dağıtıcı: LISTEN bağlantısından gelen olayları etkinlik kimliğine göre
@@ -10,9 +9,10 @@ import type { RealtimeEvent } from "./events";
 
 export type StreamMessage = { kind: "event"; event: RealtimeEvent } | { kind: "resync" };
 export type StreamListener = (message: StreamMessage) => void;
-export type SubscribeOptions = { role?: Role };
+/** `audiences`: aboneliğin sahibinin görebildiği bildirim kitleleri (verilmezse yalnızca "all"). */
+export type SubscribeOptions = { audiences?: readonly NotificationAudience[] };
 
-type Subscription = { eventId: string; role: Role | undefined; listener: StreamListener };
+type Subscription = { eventId: string; audiences: readonly NotificationAudience[]; listener: StreamListener };
 
 type HubState = { byEvent: Map<string, Set<Subscription>> };
 
@@ -28,7 +28,7 @@ function state(): HubState {
 /** Etkinliğe abone olur; dönen işlev aboneliği kaldırır (birden çok çağrı güvenlidir). */
 export function subscribe(eventId: string, listener: StreamListener, options: SubscribeOptions = {}): () => void {
   const { byEvent } = state();
-  const subscription: Subscription = { eventId, role: options.role, listener };
+  const subscription: Subscription = { eventId, audiences: options.audiences ?? ["all"], listener };
   let set = byEvent.get(eventId);
   if (!set) {
     set = new Set();
@@ -66,7 +66,7 @@ function allSubscriptions(): Subscription[] {
 
 /**
  * Olayı ilgili aboneliklere iletir. `eventId` taşıyan olay yalnızca o etkinliğin
- * akışlarına gider; `targetRole` taşıyan bildirim, rolü eşleşen akışlara
+ * akışlarına gider; `audience` taşıyan bildirim, kitleyi görebilen akışlara
  * (`"all"` ise tüm akışlara) gider.
  */
 export function dispatch(event: RealtimeEvent): void {
@@ -77,7 +77,7 @@ export function dispatch(event: RealtimeEvent): void {
     return;
   }
   for (const subscription of allSubscriptions()) {
-    if (event.targetRole === "all" || subscription.role === event.targetRole) {
+    if (event.audience === "all" || subscription.audiences.includes(event.audience)) {
       deliver(subscription, { kind: "event", event });
     }
   }

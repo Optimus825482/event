@@ -87,6 +87,27 @@ describe("GET /api/events/[eventId]/stream", () => {
     expect(JSON.parse(frames[0]?.data ?? "{}")).toMatchObject({ type: "guest.checked_in", eventId: mine.id, id: "benim" });
   });
 
+  it("akış bildirimi yalnızca kitlesi aktörün üyeliğiyle eşleşen bağlantıya iletir", async () => {
+    const event = await createEvent(db);
+    const casino = await loginAs(memberActor("casino", { check_in: "v---", notifications: "v---" }));
+    const fnb = await loginAs(memberActor("fnb", { check_in: "v---", notifications: "v---" }));
+    const casinoStream = await connect(event.id, casino.cookie).response;
+    const fnbStream = await connect(event.id, fnb.cookie).response;
+    if (!casinoStream.body || !fnbStream.body) throw new Error("gövde yok");
+    const casinoSse = sseReader(casinoStream.body);
+    const fnbSse = sseReader(fnbStream.body);
+    await casinoSse.first();
+    await fnbSse.first();
+
+    await publish(db, { type: "notification.created", audience: "casino", id: "yalniz-casino" });
+    await publish(db, { type: "notification.created", audience: "all", id: "herkese" });
+
+    const casinoFrames = await casinoSse.until((f) => f.data.includes("herkese"));
+    const fnbFrames = await fnbSse.until((f) => f.data.includes("herkese"));
+    expect(casinoFrames.map((f) => JSON.parse(f.data).id)).toEqual(["yalniz-casino", "herkese"]);
+    expect(fnbFrames.map((f) => JSON.parse(f.data).id)).toEqual(["herkese"]);
+  });
+
   it("istek iptal edilince dinleyici kaldırılır; okuyucu iptali de kaldırır", async () => {
     const staff = await loginAs(memberActor("casino", { reservations: "vce-", customers: "v---", check_in: "vc--" }));
     const event = await createEvent(db);

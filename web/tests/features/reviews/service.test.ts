@@ -231,7 +231,7 @@ describe("completeReview", () => {
     await draft(w, w.member1.id);
     const done = await completeReview(db, w.leader, { eventId: w.event.id, staffId: w.member1.id });
     expect(done.review.isCompleted).toBe(true);
-    expect(done.notification).toMatchObject({ type: "staff_review_completed", targetRole: "admin", eventId: w.event.id });
+    expect(done.notification).toMatchObject({ type: "staff_review_completed", audience: "admin", eventId: w.event.id });
     const rows = await db.select().from(notifications);
     expect(rows).toHaveLength(1);
   });
@@ -314,7 +314,7 @@ describe("completeAllReviews", () => {
 
     const res = await completeAllReviews(db, w.leader, { eventId: w.event.id });
     expect(res).toMatchObject({ completed: 1, incomplete: 1 });
-    expect(res.notification).toMatchObject({ type: "staff_review_completed", targetRole: "admin" });
+    expect(res.notification).toMatchObject({ type: "staff_review_completed", audience: "admin" });
 
     const rows = await reviewRows(w.event.id);
     const byStaff = new Map(rows.map((r) => [r.staffId, r.isCompleted]));

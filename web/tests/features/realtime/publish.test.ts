@@ -6,11 +6,14 @@ import { MAX_PAYLOAD_BYTES, RealtimePayloadError, type RealtimeEvent } from "@/f
 import { listenerCount, subscribe, type StreamMessage } from "@/features/realtime/hub";
 import { closeRealtime, ensureListening } from "@/features/realtime/listener";
 import { publish } from "@/features/realtime/publish";
+import type { Audience } from "@/features/notifications/schemas";
+import { visibleAudiences } from "@/features/notifications/service";
+import { adminActor, managerActor, memberActor } from "../../helpers/actors";
 import { waitFor } from "./helpers";
 
-function collect(eventId: string, role?: "admin" | "staff" | "leader") {
+function collect(eventId: string, audiences?: readonly Audience[]) {
   const messages: StreamMessage[] = [];
-  const unsubscribe = subscribe(eventId, (message) => messages.push(message), { role });
+  const unsubscribe = subscribe(eventId, (message) => messages.push(message), { audiences });
   const ids = () => messages.flatMap((m) => (m.kind === "event" && m.event.id ? [m.event.id] : []));
   return { messages, unsubscribe, ids };
 }
@@ -71,21 +74,32 @@ describe("publish + paylaşımlı LISTEN bağlantısı", () => {
     expect(subB.ids()).toEqual(["b-masasi"]);
   });
 
-  it("targetRole bildirimleri rolü eşleşen (veya 'all') aboneliklere gider", async () => {
-    const eventId = randomUUID();
-    const staffSub = collect(eventId, "staff");
-    const leaderSub = collect(randomUUID(), "leader");
+  it("hub: fnb hedefli olay yalnızca fnb üyesi ve admin abonelere ulaşır", async () => {
+    const multi = memberActor("fnb", {}, {
+      memberships: [
+        { department: "casino", level: "member" },
+        { department: "fnb", level: "member" },
+      ],
+    });
+    const fnbSub = collect(randomUUID(), visibleAudiences(managerActor("fnb")));
+    const adminSub = collect(randomUUID(), visibleAudiences(adminActor()));
+    const casinoSub = collect(randomUUID(), visibleAudiences(managerActor("casino")));
+    const multiSub = collect(randomUUID(), visibleAudiences(multi));
     const anonymousSub = collect(randomUUID());
-    cleanups.push(staffSub.unsubscribe, leaderSub.unsubscribe, anonymousSub.unsubscribe);
+    cleanups.push(fnbSub.unsubscribe, adminSub.unsubscribe, casinoSub.unsubscribe, multiSub.unsubscribe, anonymousSub.unsubscribe);
 
-    await publish(db, { type: "notification.created", targetRole: "staff", id: "yalniz-personel" });
-    await publish(db, { type: "notification.created", targetRole: "all", id: "herkese" });
+    await publish(db, { type: "notification.created", audience: "fnb", id: "yalniz-fnb" });
+    await publish(db, { type: "notification.created", audience: "admin", id: "yalniz-admin" });
+    await publish(db, { type: "notification.created", audience: "all", id: "herkese" });
 
-    await waitFor(() => leaderSub.ids().includes("herkese"), 5000, "herkese bildirimi");
-    await waitFor(() => staffSub.ids().includes("herkese"), 5000, "personel bildirimi");
-    expect(staffSub.ids()).toEqual(["yalniz-personel", "herkese"]);
-    expect(leaderSub.ids()).toEqual(["herkese"]);
-    // Rolü bilinmeyen abonelik yalnızca "all" bildirimini alır.
+    for (const sub of [fnbSub, adminSub, casinoSub, multiSub, anonymousSub]) {
+      await waitFor(() => sub.ids().includes("herkese"), 5000, "herkese bildirimi");
+    }
+    expect(fnbSub.ids()).toEqual(["yalniz-fnb", "herkese"]);
+    expect(adminSub.ids()).toEqual(["yalniz-fnb", "yalniz-admin", "herkese"]);
+    expect(casinoSub.ids()).toEqual(["herkese"]);
+    expect(multiSub.ids()).toEqual(["yalniz-fnb", "herkese"]);
+    // Kitlesi bilinmeyen abonelik yalnızca "all" bildirimini alır.
     expect(anonymousSub.ids()).toEqual(["herkese"]);
   });
 

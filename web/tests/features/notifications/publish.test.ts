@@ -4,6 +4,8 @@ import { subscribe, type StreamMessage } from "@/features/realtime/hub";
 import { closeRealtime, ensureListening } from "@/features/realtime/listener";
 import type { NotificationRow } from "@/features/notifications/service";
 import { publishNotifications } from "@/features/notifications/publish";
+import { visibleAudiences } from "@/features/notifications/service";
+import { managerActor, noAccessActor } from "../../helpers/actors";
 import { waitFor } from "../realtime/helpers";
 
 function row(overrides: Partial<NotificationRow>): NotificationRow {
@@ -13,7 +15,7 @@ function row(overrides: Partial<NotificationRow>): NotificationRow {
     title: "Duyuru",
     message: "Metin",
     priority: "medium",
-    targetRole: "all",
+    audience: "all",
     eventId: null,
     createdAt: new Date(),
     ...overrides,
@@ -34,28 +36,28 @@ describe("publishNotifications", () => {
     await closeRealtime();
   });
 
-  it("bildirimi hedef role uygun akışlara iletir, diğer rollere iletmez", async () => {
-    const staffMessages: StreamMessage[] = [];
-    const leaderMessages: StreamMessage[] = [];
+  it("bildirimi hedef kitleye uygun akışlara iletir, diğerlerine iletmez", async () => {
+    const casinoMessages: StreamMessage[] = [];
+    const fnbMessages: StreamMessage[] = [];
     const eventId = randomUUID();
-    cleanups.push(subscribe(eventId, (m) => staffMessages.push(m), { role: "staff" }));
-    cleanups.push(subscribe(eventId, (m) => leaderMessages.push(m), { role: "leader" }));
+    cleanups.push(subscribe(eventId, (m) => casinoMessages.push(m), { audiences: visibleAudiences(managerActor("casino")) }));
+    cleanups.push(subscribe(eventId, (m) => fnbMessages.push(m), { audiences: visibleAudiences(managerActor("fnb")) }));
 
-    const staffRow = row({ targetRole: "staff" });
-    await publishNotifications([staffRow]);
-    await waitFor(() => staffMessages.length > 0, 5000, "staff olayı");
+    const casinoRow = row({ audience: "casino" });
+    await publishNotifications([casinoRow]);
+    await waitFor(() => casinoMessages.length > 0, 5000, "casino olayı");
 
-    expect(staffMessages[0]).toMatchObject({
+    expect(casinoMessages[0]).toMatchObject({
       kind: "event",
-      event: { type: "notification.created", targetRole: "staff", id: staffRow.id },
+      event: { type: "notification.created", audience: "casino", id: casinoRow.id },
     });
-    expect(leaderMessages).toEqual([]);
+    expect(fnbMessages).toEqual([]);
   });
 
-  it("hedefi herkes olan bildirim tüm rollere gider", async () => {
+  it("hedefi herkes olan bildirim tüm kitlelere gider", async () => {
     const messages: StreamMessage[] = [];
-    cleanups.push(subscribe(randomUUID(), (m) => messages.push(m), { role: "leader" }));
-    await publishNotifications([row({ targetRole: "all" })]);
+    cleanups.push(subscribe(randomUUID(), (m) => messages.push(m), { audiences: visibleAudiences(noAccessActor()) }));
+    await publishNotifications([row({ audience: "all" })]);
     await waitFor(() => messages.length > 0, 5000, "herkes olayı");
   });
 });
