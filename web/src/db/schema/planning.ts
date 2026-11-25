@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { users } from "./auth";
-import { createdOnly, pk } from "./columns";
+import { pk, tstz } from "./columns";
 import { events, planningStage } from "./events";
 
 /** Planlama aşaması geçiş geçmişi (ileri, geri, yeniden açma). */
@@ -17,7 +17,8 @@ export const eventStageTransitions = pgTable(
     kind: text("kind").notNull(),
     actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
     note: text("note"),
-    ...createdOnly(),
+    // clock_timestamp(): now() işlem başlangıcını verir, tek işlemdeki geçişlerin sırası belirsiz kalırdı.
+    createdAt: tstz("created_at").notNull().default(sql`clock_timestamp()`),
   },
   (t) => [
     check("event_stage_transitions_kind_valid", sql`${t.kind} IN ('advance','revert','reopen')`),

@@ -35,6 +35,35 @@ describe("planlama aşaması şeması", () => {
     });
   });
 
+  it("revert ve reopen türleri kabul edilir", async () => {
+    await inRollback(async (tx) => {
+      const e = await createEvent(tx);
+      await tx
+        .insert(eventStageTransitions)
+        .values({ eventId: e.id, fromStage: "layout_ready", toStage: "defined", kind: "revert" });
+      await tx
+        .insert(eventStageTransitions)
+        .values({ eventId: e.id, fromStage: "sales_closed", toStage: "on_sale", kind: "reopen" });
+      expect(await listTransitions(tx, e.id)).toHaveLength(2);
+    });
+  });
+
+  it("aynı işlemdeki geçişler en yeni önce sıralanır", async () => {
+    await inRollback(async (tx) => {
+      const e = await createEvent(tx);
+      const steps = [
+        ["defined", "layout_ready"],
+        ["layout_ready", "staffing_ready"],
+        ["staffing_ready", "tables_classified"],
+      ] as const;
+      for (const [fromStage, toStage] of steps) {
+        await tx.insert(eventStageTransitions).values({ eventId: e.id, fromStage, toStage, kind: "advance" });
+      }
+      const rows = await listTransitions(tx, e.id);
+      expect(rows.map((r) => r.toStage)).toEqual(["tables_classified", "staffing_ready", "layout_ready"]);
+    });
+  });
+
   it("etkinlik silinince geçiş geçmişi de silinir", async () => {
     await inRollback(async (tx) => {
       const e = await createEvent(tx);
