@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "@/db/client";
-import { tableGroups, tableGroupTables } from "@/db/schema";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { db, pool, type Db } from "@/db/client";
+import * as schema from "@/db/schema";
+import { eventStaffAssignments, tableGroups, tableGroupTables } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { REVIEW_MESSAGES } from "@/features/reviews/labels";
 import {
@@ -63,7 +65,7 @@ async function setupHierarchy() {
     S: await makeLeader(S.id),
     H: await makeLeader(H.id),
   };
-  return { manager, event, event2, C, W1, W2, S, W3, H, W8, W9, T, G, actors };
+  return { manager, event, event2, C, W1, W2, S, W3, H, W8, W9, T, P, T2, G, A2, actors };
 }
 
 type World = Awaited<ReturnType<typeof setupHierarchy>>;
@@ -181,9 +183,82 @@ describe("hiyerarşik değerlendirme yetkisi", () => {
     expect(await mapOf(w, casino)).toEqual({});
   });
 
-  it("reviewEventIds: C için [E]; H için [E]; yönetici için [E, E2]", async () => {
+  it("reviewEventIds: C için [E, E2]; H için [E]; yönetici için [E, E2]", async () => {
     expect(await reviewEventIds(db, w.actors.C)).toEqual([w.event.id, w.event2.id]);
     expect(await reviewEventIds(db, w.actors.H)).toEqual([w.event.id]);
+    expect(await reviewEventIds(db, w.manager)).toEqual([w.event.id, w.event2.id]);
+  });
+
+  it("reviewEventIds: tek personeli yöneticinin kendisi olan etkinlik yöneticiye dönmez", async () => {
+    const own = await f.createStaff(db, { fullName: "Yönetici Personeli" });
+    const lonely = await f.createEvent(db, { organizerId: w.manager.id, startsAt: new Date("2027-03-10T18:00:00Z") });
+    await createSectionHead(db, { eventId: lonely.id, staffId: own.id });
+    // Yetki aktör alanlarından okunur; kalıcılaştırmaya gerek yok.
+    const managerWithStaff = managerActor("fnb", { staffId: own.id });
+    expect(await reviewEventIds(db, managerWithStaff)).toEqual([w.event.id, w.event2.id]);
+    expect(await reviewEventIds(db, w.manager)).toEqual([w.event.id, w.event2.id, lonely.id]);
+  });
+
+  it("reviewEventIds sorgu sayısı etkinlik sayısıyla artmaz", async () => {
+    let queries = 0;
+    const counted = drizzle(pool, { schema, logger: { logQuery: () => void queries++ } }) as unknown as Db;
+    const countFor = async (actor: Actor) => {
+      queries = 0;
+      const ids = await reviewEventIds(counted, actor);
+      return { ids: ids.length, queries };
+    };
+    const before = { C: await countFor(w.actors.C), manager: await countFor(w.manager) };
+    expect(before.C.ids).toBe(2);
+    expect(before.manager.ids).toBe(2);
+    expect(before.manager.queries).toBe(1);
+
+    for (let i = 0; i < 4; i += 1) {
+      const e = await f.createEvent(db, { organizerId: w.manager.id });
+      const worker = await f.createStaff(db);
+      const team = await createTeam(db, { eventId: e.id, leaderStaffId: w.C.id });
+      await addTeamMember(db, team.id, worker.id);
+    }
+    const after = { C: await countFor(w.actors.C), manager: await countFor(w.manager) };
+    expect(after.C.ids).toBe(6);
+    expect(after.manager.ids).toBe(6);
+    expect(after.C.queries).toBe(before.C.queries);
+    expect(after.manager.queries).toBe(before.manager.queries);
+  });
+
+  it("pasif ekibe bağlı grup süpervizöre dayanak üretmez", async () => {
+    const S2 = await f.createStaff(db, { fullName: "Süpervizör S2" });
+    await f.createTableGroup(db, w.event.id, { name: "G2", supervisorStaffId: S2.id, teamId: w.P.id });
+    const s2 = await makeLeader(S2.id);
+    expect(await mapOf(w, s2)).toEqual({});
+    expect(await reviewerStaffIdsFor(db, w.event.id, w.C.id)).toEqual([w.H.id, w.S.id].sort());
+    expect(await reviewEventIds(db, s2)).toEqual([]);
+  });
+
+  it("başka etkinliğin ekibine bağlı grup süpervizöre dayanak üretmez", async () => {
+    const S3 = await f.createStaff(db, { fullName: "Süpervizör S3" });
+    await f.createTableGroup(db, w.event.id, { name: "G3", supervisorStaffId: S3.id, teamId: w.T2.id });
+    const s3 = await makeLeader(S3.id);
+    expect(await mapOf(w, s3)).toEqual({});
+    expect(await reviewerStaffIdsFor(db, w.event.id, w.C.id)).toEqual([w.H.id, w.S.id].sort());
+    expect(await reviewerStaffIdsFor(db, w.event2.id, w.W9.id)).toEqual([w.C.id]);
+    await expectDomain(assertCanReview(db, s3, w.event.id, w.W9.id, "edit"), "not_found");
+  });
+
+  it("pasif atama etkinlik personeli saymaz ve dayanak üretmez", async () => {
+    const W4 = await f.createStaff(db, { fullName: "Garson W4" });
+    const { assignmentId } = await assignStaffToTables(db, { eventId: w.event.id, staffId: W4.id, tableIds: [w.A2.id] });
+    await db.update(eventStaffAssignments).set({ isActive: false }).where(eq(eventStaffAssignments.id, assignmentId));
+    expect((await eventStaffIds(db, w.event.id)).has(W4.id)).toBe(false);
+    expect((await mapOf(w, w.actors.S))[W4.id]).toBeUndefined();
+    expect((await mapOf(w, w.manager))[W4.id]).toBeUndefined();
+    expect(await reviewerStaffIdsFor(db, w.event.id, W4.id)).toEqual([]);
+    await expectDomain(assertCanReview(db, w.manager, w.event.id, W4.id, "edit"), "not_found");
+  });
+
+  it("yalnızca pasif ataması olan etkinlik yöneticiye dönmez", async () => {
+    const e = await f.createEvent(db, { organizerId: w.manager.id });
+    const W5 = await f.createStaff(db);
+    await f.createAssignment(db, { eventId: e.id, staffId: W5.id, isActive: false });
     expect(await reviewEventIds(db, w.manager)).toEqual([w.event.id, w.event2.id]);
   });
 });

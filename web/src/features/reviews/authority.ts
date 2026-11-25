@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { Db, Tx } from "@/db/client";
 import {
   assignmentTables,
@@ -46,11 +47,22 @@ type EventHierarchy = {
   assignedStaffIds: string[];
 };
 
-async function loadHierarchy(ex: Executor, eventId: string): Promise<EventHierarchy> {
+const emptyHierarchy = (): EventHierarchy => ({ teams: [], groups: [], sectionHeadIds: [], assignedStaffIds: [] });
+
+/**
+ * Verilen etkinliklerin hiyerarşilerini toplu yükler: etkinlik sayısından bağımsız olarak en fazla 6 sorgu.
+ * Dönen haritada istenen her etkinlik vardır (personeli yoksa boş hiyerarşi).
+ */
+async function loadHierarchies(ex: Executor, eventIds: readonly string[]): Promise<Map<string, EventHierarchy>> {
+  const result = new Map<string, EventHierarchy>(eventIds.map((id) => [id, emptyHierarchy()]));
+  if (eventIds.length === 0) return result;
+  const ids = [...eventIds];
+  const of = (eventId: string | null) => (eventId === null ? undefined : result.get(eventId));
+
   const teamRows = await ex
-    .select({ id: teams.id, leaderStaffId: teams.leaderStaffId })
+    .select({ id: teams.id, eventId: teams.eventId, leaderStaffId: teams.leaderStaffId })
     .from(teams)
-    .where(and(eq(teams.eventId, eventId), eq(teams.isActive, true)));
+    .where(and(inArray(teams.eventId, ids), eq(teams.isActive, true)));
   const memberRows =
     teamRows.length === 0
       ? []
@@ -63,15 +75,27 @@ async function loadHierarchy(ex: Executor, eventId: string): Promise<EventHierar
               teamRows.map((t) => t.id),
             ),
           );
-  const teamById = new Map<string, HierarchyTeam>(
-    teamRows.map((t) => [t.id, { leaderStaffId: t.leaderStaffId, memberIds: [] }]),
-  );
+  // Ekip, etkinliğiyle birlikte anahtarlanır: başka etkinliğin ekibine bağlı grup ona ulaşamaz.
+  const teamKey = (eventId: string | null, teamId: string) => `${eventId}:${teamId}`;
+  const teamByKey = new Map<string, HierarchyTeam>();
+  const teamById = new Map<string, HierarchyTeam>();
+  for (const t of teamRows) {
+    const team: HierarchyTeam = { leaderStaffId: t.leaderStaffId, memberIds: [] };
+    teamByKey.set(teamKey(t.eventId, t.id), team);
+    teamById.set(t.id, team);
+    of(t.eventId)?.teams.push(team);
+  }
   for (const m of memberRows) teamById.get(m.teamId)?.memberIds.push(m.staffId);
 
   const groupRows = await ex
-    .select({ id: tableGroups.id, teamId: tableGroups.teamId, supervisorStaffId: tableGroups.supervisorStaffId })
+    .select({
+      id: tableGroups.id,
+      eventId: tableGroups.eventId,
+      teamId: tableGroups.teamId,
+      supervisorStaffId: tableGroups.supervisorStaffId,
+    })
     .from(tableGroups)
-    .where(and(eq(tableGroups.eventId, eventId), isNotNull(tableGroups.supervisorStaffId)));
+    .where(and(inArray(tableGroups.eventId, ids), isNotNull(tableGroups.supervisorStaffId)));
   const tableStaffRows =
     groupRows.length === 0
       ? []
@@ -89,30 +113,40 @@ async function loadHierarchy(ex: Executor, eventId: string): Promise<EventHierar
               eq(eventStaffAssignments.id, assignmentTables.assignmentId),
             ),
           )
-          .where(and(eq(tableGroupTables.eventId, eventId), eq(eventStaffAssignments.isActive, true)));
-  const groups: HierarchyGroup[] = groupRows.map((g) => ({
-    // Sorguda NULL süpervizörler elendi.
-    supervisorStaffId: g.supervisorStaffId as string,
-    // Pasif ya da başka etkinliğin ekibi dayanak üretmez.
-    team: g.teamId ? (teamById.get(g.teamId) ?? null) : null,
-    tableStaffIds: tableStaffRows.filter((r) => r.groupId === g.id).map((r) => r.staffId),
-  }));
+          .where(and(inArray(tableGroupTables.eventId, ids), eq(eventStaffAssignments.isActive, true)));
+  const tableStaffByGroup = new Map<string, string[]>();
+  for (const r of tableStaffRows) {
+    const list = tableStaffByGroup.get(r.groupId);
+    if (list) list.push(r.staffId);
+    else tableStaffByGroup.set(r.groupId, [r.staffId]);
+  }
+  for (const g of groupRows) {
+    of(g.eventId)?.groups.push({
+      // Sorguda NULL süpervizörler elendi.
+      supervisorStaffId: g.supervisorStaffId as string,
+      // Pasif ya da başka etkinliğin ekibi dayanak üretmez.
+      team: g.teamId ? (teamByKey.get(teamKey(g.eventId, g.teamId)) ?? null) : null,
+      tableStaffIds: tableStaffByGroup.get(g.id) ?? [],
+    });
+  }
 
   const headRows = await ex
-    .select({ staffId: eventSectionHeads.staffId })
+    .select({ eventId: eventSectionHeads.eventId, staffId: eventSectionHeads.staffId })
     .from(eventSectionHeads)
-    .where(eq(eventSectionHeads.eventId, eventId));
-  const assignmentRows = await ex
-    .select({ staffId: eventStaffAssignments.staffId })
-    .from(eventStaffAssignments)
-    .where(and(eq(eventStaffAssignments.eventId, eventId), eq(eventStaffAssignments.isActive, true)));
+    .where(inArray(eventSectionHeads.eventId, ids));
+  for (const r of headRows) of(r.eventId)?.sectionHeadIds.push(r.staffId);
 
-  return {
-    teams: [...teamById.values()],
-    groups,
-    sectionHeadIds: headRows.map((r) => r.staffId),
-    assignedStaffIds: assignmentRows.map((r) => r.staffId),
-  };
+  const assignmentRows = await ex
+    .select({ eventId: eventStaffAssignments.eventId, staffId: eventStaffAssignments.staffId })
+    .from(eventStaffAssignments)
+    .where(and(inArray(eventStaffAssignments.eventId, ids), eq(eventStaffAssignments.isActive, true)));
+  for (const r of assignmentRows) of(r.eventId)?.assignedStaffIds.push(r.staffId);
+
+  return result;
+}
+
+async function loadHierarchy(ex: Executor, eventId: string): Promise<EventHierarchy> {
+  return (await loadHierarchies(ex, [eventId])).get(eventId) ?? emptyHierarchy();
 }
 
 function staffOf(h: EventHierarchy): Set<string> {
@@ -245,8 +279,8 @@ export async function assertCanReview(
       throw new DomainError("conflict", REVIEW_MESSAGES.self);
     }
   }
+  // Kendini hedefleyen aktör buraya yalnızca izinsizse gelir: küme onu içermediği için authorize reddeder.
   authorize(actor, "reviews", verb, { reviewerStaffIds: reviewersOf(h, staffId) });
-  if (actor.staffId === staffId) throw new DomainError("conflict", REVIEW_MESSAGES.self);
   if (seesWholeEvent(actor)) return ["manager"];
   const reviewerId = hierarchyReviewerId(actor);
   const bases = reviewerId === null ? undefined : reviewableBy(h, reviewerId).get(staffId);
@@ -257,67 +291,109 @@ export async function assertCanReview(
 
 /**
  * Aktörün en az bir değerlendirilebilir personeli olan etkinlikler, başlangıca göre sıralı.
- * Yönetici/admin için en az bir etkinlik personeli olan tüm etkinlikler.
+ * Yönetici/admin için aktörün kendisi dışında en az bir etkinlik personeli olan tüm etkinlikler.
+ * Sorgu sayısı etkinlik sayısından bağımsızdır (yönetici: 1; hiyerarşi: aday sorgusu + en fazla 6).
  */
 export async function reviewEventIds(ex: Executor, actor: PolicyActor): Promise<string[]> {
-  const whole = seesWholeEvent(actor);
-  const reviewerId = whole || !ownTeamOnly(actor) ? null : hierarchyReviewerId(actor);
-  if (!whole && reviewerId === null) return [];
+  if (seesWholeEvent(actor)) return wholeEventIds(ex, actor.staffId);
+  if (!ownTeamOnly(actor)) return [];
+  const reviewerId = hierarchyReviewerId(actor);
+  if (reviewerId === null) return [];
 
-  const candidates = new Set<string>();
-  const add = (rows: { eventId: string | null }[]) => {
-    for (const r of rows) if (r.eventId) candidates.add(r.eventId);
-  };
-  if (whole) {
-    add(await ex.selectDistinct({ eventId: teams.eventId }).from(teams).where(eq(teams.isActive, true)));
-    add(
-      await ex
-        .selectDistinct({ eventId: tableGroups.eventId })
-        .from(tableGroups)
-        .where(isNotNull(tableGroups.supervisorStaffId)),
-    );
-    add(
-      await ex
-        .selectDistinct({ eventId: eventStaffAssignments.eventId })
-        .from(eventStaffAssignments)
-        .where(eq(eventStaffAssignments.isActive, true)),
-    );
-    add(await ex.selectDistinct({ eventId: eventSectionHeads.eventId }).from(eventSectionHeads));
-  } else if (reviewerId !== null) {
-    add(
-      await ex
-        .selectDistinct({ eventId: teams.eventId })
-        .from(teams)
-        .where(and(eq(teams.isActive, true), eq(teams.leaderStaffId, reviewerId))),
-    );
-    add(
-      await ex
-        .selectDistinct({ eventId: tableGroups.eventId })
-        .from(tableGroups)
-        .where(eq(tableGroups.supervisorStaffId, reviewerId)),
-    );
-    add(
-      await ex
-        .selectDistinct({ eventId: eventSectionHeads.eventId })
-        .from(eventSectionHeads)
-        .where(eq(eventSectionHeads.staffId, reviewerId)),
-    );
-  }
-  if (candidates.size === 0) return [];
-
-  const ordered = await ex
+  // Aday etkinlikler: aktörün etkin ekip liderliği, süpervizörlüğü ya da kısım sorumluluğu olanlar.
+  const one = sql`1`;
+  const candidates = await ex
     .select({ id: events.id })
     .from(events)
-    .where(inArray(events.id, [...candidates]))
+    .where(
+      or(
+        exists(
+          ex
+            .select({ one })
+            .from(teams)
+            .where(and(eq(teams.eventId, events.id), eq(teams.isActive, true), eq(teams.leaderStaffId, reviewerId))),
+        ),
+        exists(
+          ex
+            .select({ one })
+            .from(tableGroups)
+            .where(and(eq(tableGroups.eventId, events.id), eq(tableGroups.supervisorStaffId, reviewerId))),
+        ),
+        exists(
+          ex
+            .select({ one })
+            .from(eventSectionHeads)
+            .where(and(eq(eventSectionHeads.eventId, events.id), eq(eventSectionHeads.staffId, reviewerId))),
+        ),
+      ),
+    )
     .orderBy(asc(events.startsAt), asc(events.id));
-  const result: string[] = [];
-  for (const { id } of ordered) {
-    const h = await loadHierarchy(ex, id);
-    const reviewable =
-      reviewerId === null
-        ? [...staffOf(h)].some((s) => s !== actor.staffId)
-        : reviewableBy(h, reviewerId).size > 0;
-    if (reviewable) result.push(id);
-  }
-  return result;
+  const ids = candidates.map((e) => e.id);
+  const hierarchies = await loadHierarchies(ex, ids);
+  return ids.filter((id) => reviewableBy(hierarchies.get(id) ?? emptyHierarchy(), reviewerId).size > 0);
+}
+
+/** Tek sorgu: `staffOf` kaynaklarından birinde aktörden başka personel bulunan etkinlikler. */
+async function wholeEventIds(ex: Executor, selfStaffId: string | null): Promise<string[]> {
+  const notSelf = (column: AnyPgColumn) => (selfStaffId === null ? sql`true` : ne(column, selfStaffId));
+  const one = sql`1`;
+  const rows = await ex
+    .select({ id: events.id })
+    .from(events)
+    .where(
+      or(
+        exists(
+          ex
+            .select({ one })
+            .from(teams)
+            .where(
+              and(
+                eq(teams.eventId, events.id),
+                eq(teams.isActive, true),
+                isNotNull(teams.leaderStaffId),
+                notSelf(teams.leaderStaffId),
+              ),
+            ),
+        ),
+        exists(
+          ex
+            .select({ one })
+            .from(teamMembers)
+            .innerJoin(teams, eq(teams.id, teamMembers.teamId))
+            .where(and(eq(teams.eventId, events.id), eq(teams.isActive, true), notSelf(teamMembers.staffId))),
+        ),
+        exists(
+          ex
+            .select({ one })
+            .from(tableGroups)
+            .where(
+              and(
+                eq(tableGroups.eventId, events.id),
+                isNotNull(tableGroups.supervisorStaffId),
+                notSelf(tableGroups.supervisorStaffId),
+              ),
+            ),
+        ),
+        exists(
+          ex
+            .select({ one })
+            .from(eventStaffAssignments)
+            .where(
+              and(
+                eq(eventStaffAssignments.eventId, events.id),
+                eq(eventStaffAssignments.isActive, true),
+                notSelf(eventStaffAssignments.staffId),
+              ),
+            ),
+        ),
+        exists(
+          ex
+            .select({ one })
+            .from(eventSectionHeads)
+            .where(and(eq(eventSectionHeads.eventId, events.id), notSelf(eventSectionHeads.staffId))),
+        ),
+      ),
+    )
+    .orderBy(asc(events.startsAt), asc(events.id));
+  return rows.map((r) => r.id);
 }
