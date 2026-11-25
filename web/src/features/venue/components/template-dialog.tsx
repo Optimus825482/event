@@ -8,6 +8,8 @@ import type { ActionResult } from "@/lib/action";
 import { applyVenueTemplateAction, saveAsTemplateAction } from "../actions";
 import type { ApplyTemplateResult } from "../service";
 
+const LOCKED_TEMPLATE_HINT = "Satış başladıktan sonra şablon uygulanamaz";
+
 export type TemplateOption = { id: string; name: string; tableCount: number; isPublic: boolean };
 
 type Props = {
@@ -16,6 +18,8 @@ type Props = {
   eventId: string;
   templates: readonly TemplateOption[];
   canApply: boolean;
+  /** Satış başladı: şablon uygulanamaz (sunucu da reddeder). */
+  layoutLocked?: boolean;
   canSave: boolean;
   dirty: boolean;
   onApplied: (result: ApplyTemplateResult) => void;
@@ -25,7 +29,7 @@ type Props = {
 const fieldClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-export function TemplateDialog({ open, onOpenChange, eventId, templates, canApply, canSave, dirty, onApplied, onMessage }: Props) {
+export function TemplateDialog({ open, onOpenChange, eventId, templates, canApply, layoutLocked = false, canSave, dirty, onApplied, onMessage }: Props) {
   const ids = useId();
   const [selected, setSelected] = useState<string>("");
   const [pending, setPending] = useState(false);
@@ -111,7 +115,8 @@ export function TemplateDialog({ open, onOpenChange, eventId, templates, canAppl
             <Button
               type="button"
               size="sm"
-              disabled={pending || selected === ""}
+              disabled={pending || selected === "" || layoutLocked}
+              title={layoutLocked ? LOCKED_TEMPLATE_HINT : undefined}
               onClick={() =>
                 void run(
                   () => applyVenueTemplateAction({ eventId, templateId: selected }),
@@ -127,6 +132,7 @@ export function TemplateDialog({ open, onOpenChange, eventId, templates, canAppl
             >
               Uygula
             </Button>
+            {layoutLocked ? <p className="text-sm text-muted-foreground">{LOCKED_TEMPLATE_HINT}</p> : null}
           </section>
         ) : null}
 

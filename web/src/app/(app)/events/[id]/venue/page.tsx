@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
+import { editorLock } from "@/features/venue/editor/lock";
 import { VenueEditor } from "@/features/venue/components/venue-editor";
 import { loadVenueEditor } from "@/features/venue/queries";
 
@@ -55,6 +56,7 @@ export default async function EventVenuePage({ params }: { params: Promise<{ id:
         }}
         tableTypes={data.tableTypes}
         templates={data.templates}
+        lock={editorLock(layout)}
         canEdit={data.canEdit}
         canSaveTemplate={data.canSaveTemplate}
       />

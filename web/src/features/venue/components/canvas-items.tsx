@@ -4,6 +4,7 @@ import type Konva from "konva";
 import { memo } from "react";
 import { Circle, Group, Path, Rect, Text } from "react-konva";
 import { effectiveTableSize } from "../editor/geometry";
+import { FROZEN_TABLE_TITLE } from "../editor/lock";
 import type { EditorTable } from "../editor/store";
 import type { DecorElement } from "../schemas";
 import { GroupRing } from "./group-ring";
@@ -33,9 +34,12 @@ type TableNodeProps = ItemHandlers & {
   selected: boolean;
   /** Masa bir ekip grubundaysa halka rengi. */
   groupColor?: string | undefined;
+  /** Satış kilidi: satılmış/rezerve masa; konumu ve etiketi değiştirilemez. */
+  frozen?: boolean;
 };
 
-export const TableNode = memo(function TableNode({ table, type, selected, groupColor, muted = false, ...h }: TableNodeProps) {
+
+export const TableNode = memo(function TableNode({ table, type, selected, groupColor, muted = false, frozen = false, ...h }: TableNodeProps) {
   const shape = tableShapeOf(type);
   const size = effectiveTableSize({ size: table.size, capacity: table.capacity, isLoca: table.isLoca });
   const { width, height } = tableDims(shape, table.isLoca, size);
@@ -52,6 +56,10 @@ export const TableNode = memo(function TableNode({ table, type, selected, groupC
     shadowBlur: selected ? 8 : table.isVip ? 6 : 2,
     shadowOpacity: table.isVip ? 0.6 : 0.35,
   };
+  const setTitle = (e: Konva.KonvaEventObject<MouseEvent>, title: string) => {
+    const container = e.target.getStage()?.container();
+    if (container) container.title = title;
+  };
   const labelPx = size <= 28 ? 8 : size <= 40 ? 11 : 13;
   const showCapacity = !table.isLoca && size >= 44;
   return (
@@ -66,6 +74,8 @@ export const TableNode = memo(function TableNode({ table, type, selected, groupC
       draggable={h.draggable}
       onMouseDown={(e) => h.onSelect(table.key, e)}
       onTap={(e) => h.onSelect(table.key, e)}
+      onMouseEnter={frozen ? (e) => setTitle(e, FROZEN_TABLE_TITLE) : undefined}
+      onMouseLeave={frozen ? (e) => setTitle(e, "") : undefined}
       onDragStart={() => h.onDragStart(table.key)}
       onDragMove={(e) => h.onDragMove(table.key, e.target)}
       onDragEnd={h.onDragEnd}
@@ -103,7 +113,7 @@ export const TableNode = memo(function TableNode({ table, type, selected, groupC
           listening={false}
         />
       ) : null}
-      <TableBadges width={width} height={height} isVip={table.isVip} isPinned={table.isPinned} floor={table.floor} />
+      <TableBadges width={width} height={height} isVip={table.isVip} isPinned={table.isPinned || frozen} floor={table.floor} />
     </Group>
   );
 });

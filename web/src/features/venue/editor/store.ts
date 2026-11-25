@@ -100,9 +100,11 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
       const s = get();
       set({ ...next, history: record(s.history, snapshot(s)), dirty: true });
     };
-    const ctx = (): ToolCtx => {
+    const frozenKeysOf = (ids: ReadonlySet<string>): ReadonlySet<string> =>
+      new Set(get().tables.filter((t) => t.id !== null && ids.has(t.id)).map((t) => t.key));
+    const ctx = (frozen?: ReadonlySet<string>): ToolCtx => {
       const s = get();
-      return { ...s, shapeOf: shapeResolver(s) };
+      return { ...s, shapeOf: shapeResolver(s), frozenKeys: frozenKeysOf(frozen ?? s.frozenIds) };
     };
     const commitMove = (outcome: MoveOutcome): MoveResult => {
       if (!outcome.ok) return outcome.reason === "collision" ? { ok: false, reason: "collision", keys: outcome.keys } : { ok: false, reason: "nothing" };
@@ -132,6 +134,7 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
       tool: "select",
       activeFloor: null,
       tableShapes: {},
+      frozenIds: new Set(initial.frozenTableIds ?? []),
       ...createLineActions(get, change, () => uid("l-")),
 
       load: (layout) =>
@@ -237,13 +240,14 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
         return { added: added.length, requested: opts.count, keys };
       },
 
-      autoAlign: () => {
-        const out = autoAlignTables(ctx());
+      autoAlign: (frozen) => {
+        const out = autoAlignTables(ctx(frozen));
         return { ...arranged(out), scoped: out.scoped };
       },
-      snapToCells: () => arranged(snapTablesToCells(ctx())),
-      setSpacing: (gap) => arranged(spaceTables(ctx(), gap)),
-      centerHorizontally: (keys) => commitMove(centreSelectionHorizontally(keys ? { ...ctx(), selection: keys } : ctx())),
+      snapToCells: (frozen) => arranged(snapTablesToCells(ctx(frozen))),
+      setSpacing: (gap, frozen) => arranged(spaceTables(ctx(frozen), gap)),
+      centerHorizontally: (keys, frozen) =>
+        commitMove(centreSelectionHorizontally(keys ? { ...ctx(frozen), selection: keys } : ctx(frozen))),
 
       setPinned: (keys, pinned) => {
         const wanted = new Set(keys);
@@ -270,17 +274,20 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
         set({ canvas: draft.canvas });
       },
 
-      deleteSelection: () => {
+      deleteSelection: (frozenOverride) => {
         const s = get();
         const selected = new Set(s.selection);
-        const blocked = s.tables.filter((t) => selected.has(t.key) && t.locked).map((t) => t.label);
-        const tables = s.tables.filter((t) => !selected.has(t.key) || t.locked);
+        const frozenKeys = frozenKeysOf(frozenOverride ?? s.frozenIds);
+        const isFrozenTable = (t: EditorTable) => frozenKeys.has(t.key);
+        const frozen = s.tables.filter((t) => selected.has(t.key) && isFrozenTable(t)).map((t) => t.label);
+        const blocked = s.tables.filter((t) => selected.has(t.key) && t.locked && !isFrozenTable(t)).map((t) => t.label);
+        const tables = s.tables.filter((t) => !selected.has(t.key) || t.locked || isFrozenTable(t));
         const elements = s.elements.filter((e) => !selected.has(decorKey(e.id)));
         const lines = s.lines.filter((l) => !selected.has(lineKey(l.id)));
         if (tables.length !== s.tables.length || elements.length !== s.elements.length || lines.length !== s.lines.length) {
           change({ tables, elements, lines, selection: s.selection.filter((k) => tables.some((t) => t.key === k)) });
         }
-        return { blocked };
+        return { blocked, frozen };
       },
 
       duplicateSelection: () => {

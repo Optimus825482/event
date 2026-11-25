@@ -8,7 +8,13 @@ import { ChoiceButton, fieldClass } from "./commit-field";
 import { useEditorStore } from "./editor-context";
 import { equalizeTargets, FLOOR_OPTIONS, floorLabel, SIZE_PRESETS, SIZE_SLIDER_MAX, SIZE_SLIDER_MIN } from "./table-visual";
 
-type Props = { tables: readonly EditorTable[]; allTables: readonly EditorTable[]; readOnly: boolean };
+type Props = {
+  tables: readonly EditorTable[];
+  allTables: readonly EditorTable[];
+  readOnly: boolean;
+  /** Seçimde donmuş masa var: kat salt-okunur (`frozenFieldNames`). */
+  floorLocked?: boolean;
+};
 
 const sizeOf = (t: EditorTable) => effectiveTableSize({ size: t.size, capacity: t.capacity, isLoca: t.isLoca });
 
@@ -44,7 +50,7 @@ function SizeSlider({ value, disabled, onCommit }: { value: number; disabled: bo
 }
 
 /** VIP, sabitleme, kat ve boyut denetimleri (tek ya da çoklu masa seçimi). */
-export function TableAttributesSection({ tables, allTables, readOnly }: Props) {
+export function TableAttributesSection({ tables, allTables, readOnly, floorLocked = false }: Props) {
   const store = useEditorStore();
   const floorId = useId();
   const [notice, setNotice] = useState("");
@@ -102,7 +108,7 @@ export function TableAttributesSection({ tables, allTables, readOnly }: Props) {
         <select
           id={floorId}
           className={fieldClass}
-          disabled={readOnly}
+          disabled={readOnly || floorLocked}
           value={floorValue}
           onChange={(e) => {
             const value = Number(e.currentTarget.value);

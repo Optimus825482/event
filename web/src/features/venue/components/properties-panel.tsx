@@ -2,12 +2,13 @@
 
 import { useId } from "react";
 import { Label } from "@/components/ui/label";
+import { FROZEN_TABLE_TITLE, isFrozen } from "../editor/lock";
 import { lineKey } from "../editor/lines";
 import { isDecorKey, decorKey } from "../editor/store";
 import { LABEL_MAX, MAX_TABLE_CAPACITY } from "../schemas";
 import { CommitField, fieldClass, toInt } from "./commit-field";
 import { DecorStyleSection } from "./decor-style-section";
-import { useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
+import { useEditor, useEditorLock, useEditorStore, type TableTypeOption } from "./editor-context";
 import { LayoutStats } from "./layout-stats";
 import { LineStyleSection } from "./line-style-section";
 import { TableAttributesSection } from "./table-attributes-section";
@@ -21,6 +22,7 @@ type Props = {
 
 export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
   const store = useEditorStore();
+  const lock = useEditorLock();
   const selection = useEditor((s) => s.selection);
   const tables = useEditor((s) => s.tables);
   const elements = useEditor((s) => s.elements);
@@ -30,6 +32,7 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
   const selectedDecor = elements.filter((e) => selection.includes(decorKey(e.id)));
   const selectedLines = lines.filter((l) => selection.includes(lineKey(l.id)));
   const keys = selectedTables.map((t) => t.key);
+  const anyFrozen = selectedTables.some((t) => t.id !== null && isFrozen(lock, t.id));
   const first = selectedTables[0];
   const single = selectedTables.length === 1 && selectedDecor.length === 0 ? first : undefined;
   const decor = selectedDecor.length === 1 && selectedTables.length === 0 ? selectedDecor[0] : undefined;
@@ -62,11 +65,12 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
       {single ? (
         <section className="space-y-3" aria-label="Masa özellikleri">
           <h2 className="font-medium">Masa {single.locked ? "(rezervasyonlu, silinemez)" : ""}</h2>
+          {anyFrozen ? <p className="text-xs text-muted-foreground">{FROZEN_TABLE_TITLE}</p> : null}
           <CommitField
             label="Etiket"
             value={single.label}
             maxLength={LABEL_MAX}
-            disabled={readOnly}
+            disabled={readOnly || anyFrozen}
             onCommit={(v) => v.trim() && update(keys, { label: v.trim() })}
           />
           <CommitField
@@ -82,7 +86,7 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
             label="Dönüş (°)"
             type="number"
             value={single.rotation}
-            disabled={readOnly}
+            disabled={readOnly || anyFrozen}
             onCommit={(v) => update(keys, { rotation: toInt(v, single.rotation) })}
           />
         </section>
@@ -110,7 +114,7 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
             <select
               id={typeId}
               className={fieldClass}
-              disabled={readOnly}
+              disabled={readOnly || anyFrozen}
               value={selectedTables.every((t) => t.tableTypeId === first?.tableTypeId) ? (first?.tableTypeId ?? "") : "__mixed"}
               onChange={(e) => {
                 const value = e.currentTarget.value;
@@ -143,7 +147,7 @@ export function PropertiesPanel({ readOnly, tableTypes, errors }: Props) {
       ) : null}
 
       {selectedTables.length > 0 && selectedDecor.length === 0 ? (
-        <TableAttributesSection tables={selectedTables} allTables={tables} readOnly={readOnly} />
+        <TableAttributesSection tables={selectedTables} allTables={tables} readOnly={readOnly} floorLocked={anyFrozen} />
       ) : null}
 
       {decor ? <DecorStyleSection element={decor} readOnly={readOnly} /> : null}

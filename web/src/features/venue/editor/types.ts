@@ -36,6 +36,8 @@ export type InitialLayout = {
   tables: Array<Omit<EditorTable, "key" | "locked"> & { id: string }>;
   decor: Decor;
   lockedTableIds: readonly string[];
+  /** Satış kilidi altında konumu/etiketi değiştirilemeyen masa kimlikleri (editörde fiilen sabitlenmiş sayılır). */
+  frozenTableIds?: readonly string[];
 };
 
 export type Placement = { key: string; x: number; y: number; rotation?: number; width?: number; height?: number };
@@ -54,6 +56,8 @@ export type EditorState = Snapshot & {
   activeFloor: ActiveFloor;
   /** Masa tipi kimliği → biçim (çakışma ve yerleşim hesapları için). */
   tableShapes: Readonly<Record<string, TableShape>>;
+  /** Donmuş (satılmış/rezerve) masa kimlikleri; taşıma, döndürme, hizalama ve silme bunları atlar. */
+  frozenIds: ReadonlySet<string>;
 };
 
 /** Taşıma sonucu: `ok: false` ise hiçbir şey değişmedi (çakışma ya da taşınacak öğe yok). */
@@ -78,15 +82,16 @@ export type EditorActions = LineActions & {
   commitPlacements: (placements: readonly Placement[]) => MoveResult;
   nudge: (dx: number, dy: number) => MoveResult;
   addTablesBatch: (opts: BulkAddOptions) => BulkAddReport;
-  autoAlign: () => ArrangeReport & { scoped: boolean };
-  snapToCells: () => ArrangeReport;
-  setSpacing: (gap: number) => ArrangeReport;
-  centerHorizontally: (keys?: readonly string[]) => MoveResult;
+  autoAlign: (frozen?: ReadonlySet<string>) => ArrangeReport & { scoped: boolean };
+  snapToCells: (frozen?: ReadonlySet<string>) => ArrangeReport;
+  setSpacing: (gap: number, frozen?: ReadonlySet<string>) => ArrangeReport;
+  centerHorizontally: (keys?: readonly string[], frozen?: ReadonlySet<string>) => MoveResult;
   setPinned: (keys: readonly string[], pinned: boolean) => void;
   setVip: (keys: readonly string[], vip: boolean) => void;
   setTableShapes: (shapes: Readonly<Record<string, TableShape>>) => void;
   restoreDraft: (draft: DraftContent) => void;
-  deleteSelection: () => { blocked: string[] };
+  /** `frozen` verilirse durumdaki donmuş kümenin yerine geçer. `blocked`: rezervasyonlu/atamalı, `frozen`: donmuş masa etiketleri. */
+  deleteSelection: (frozen?: ReadonlySet<string>) => { blocked: string[]; frozen: string[] };
   duplicateSelection: () => void;
   select: (keys: readonly string[], mode?: "replace" | "toggle" | "add") => void;
   selectAll: () => void;
