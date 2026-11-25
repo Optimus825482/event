@@ -37,7 +37,11 @@ export type PolicyActor = {
   permissions: readonly PermissionRow[];
 };
 
-export type PolicyResource = { teamLeaderStaffId?: string };
+/**
+ * `reviews` kaynağı: `reviewerStaffIds` personeli değerlendirebilecek kişilerin personel kimlikleridir
+ * (bkz. features/reviews/authority.ts). `teamLeaderStaffId` geçiş alanıdır (Task 10'da kaldırılır).
+ */
+export type PolicyResource = { teamLeaderStaffId?: string; reviewerStaffIds?: readonly string[] };
 
 const ROW_FLAG = {
   view: "canView",
@@ -70,7 +74,11 @@ function departmentAllows(
   });
   if (!allowed) return false;
   if (module === "reviews" && ownTeamOnly(actor)) {
-    return actor.staffId !== null && resource?.teamLeaderStaffId === actor.staffId;
+    const staffId = actor.staffId;
+    return (
+      staffId !== null &&
+      (resource?.teamLeaderStaffId === staffId || resource?.reviewerStaffIds?.includes(staffId) === true)
+    );
   }
   return true;
 }
