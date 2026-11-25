@@ -1,28 +1,39 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { events, staff, staffPerformanceReviews, teamMembers, teams, users } from "@/db/schema";
-import { authorize, can, type PolicyResource, type Verb } from "@/features/auth/policy";
-import { ownTeamOnly } from "@/features/auth/scope";
+import { events, staff, staffPerformanceReviews, users } from "@/db/schema";
+import { authorize, type PolicyResource, type Verb } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { insertNotification, type NotificationRow } from "@/features/notifications/service";
 import { DomainError } from "@/lib/action";
+import { assertCanReview, reviewableStaff } from "./authority";
 import { REVIEW_MESSAGES } from "./labels";
+import { REVIEW_ROUTES } from "./routes";
 import type { CompleteAllReviewsInput, CompleteReviewInput, ParsedSaveReviewInput } from "./schemas";
 import { RATING_KEYS, computeScore, ratingBand } from "./score";
+import { isReviewComplete } from "./short-form";
 
 type Executor = Db | Tx;
 export type ReviewRow = typeof staffPerformanceReviews.$inferSelect;
 type EventRow = typeof events.$inferSelect;
-type TeamRow = typeof teams.$inferSelect;
 
-/** Lider için "kendi ekibim" kaynağı; menüdeki varsayımla aynı (bkz. features/auth/nav.ts). */
+/** Hiyerarşi aktörü için kapı kaynağı: aktörün kendisi değerlendirici (bkz. features/auth/nav.ts). */
 function ownResource(actor: Actor): PolicyResource | undefined {
-  return actor.staffId ? { teamLeaderStaffId: actor.staffId } : undefined;
+  return actor.staffId ? { reviewerStaffIds: [actor.staffId] } : undefined;
 }
 
-/** Ekip bilinmeden önce izin kapısı: değerlendirme izni olmayanlar ve ekipsiz lider elenir. */
+/** Hedef bilinmeden önce izin kapısı: değerlendirme izni olmayanlar ve personel kaydı olmayan hiyerarşi aktörü elenir. */
 export function authorizeReviewsGate(actor: Actor, verb: Verb): void {
   authorize(actor, "reviews", verb, ownResource(actor));
+}
+
+/**
+ * Etkinlik kapsamı denetimi: hiyerarşi aktörü bu etkinlikte en az bir değerlendirilebilir personeli
+ * yoksa reddedilir. Yönetici/admin için kaynak önemsizdir (her zaman geçer).
+ */
+export function authorizeEventScope(actor: Actor, verb: Verb, reviewable: ReadonlyMap<string, unknown>): void {
+  authorize(actor, "reviews", verb, {
+    reviewerStaffIds: reviewable.size > 0 && actor.staffId !== null ? [actor.staffId] : [],
+  });
 }
 
 /** Değerlendirilecek etkinlik; yoksa `not_found`. */
@@ -36,36 +47,6 @@ export async function loadReviewEvent(executor: Executor, actor: Actor, eventId:
 
 function assertWritable(event: EventRow): void {
   if (!event.reviewEnabled) throw new DomainError("conflict", REVIEW_MESSAGES.disabled);
-}
-
-/**
- * Personelin bu etkinlikteki ekibini bulur ve sahiplik denetimini yapar: lider yalnızca
- * kendi ekibindeki üyeyi değerlendirebilir (`authorize(..., "reviews", verb, { teamLeaderStaffId })`).
- */
-async function resolveTeam(
-  executor: Executor,
-  actor: Actor,
-  eventId: string,
-  staffId: string,
-  verb: Verb,
-): Promise<TeamRow> {
-  const candidates = await executor
-    .select({ team: teams })
-    .from(teamMembers)
-    .innerJoin(teams, eq(teams.id, teamMembers.teamId))
-    .where(and(eq(teamMembers.staffId, staffId), eq(teams.eventId, eventId), eq(teams.isActive, true)));
-  const own = candidates.find((c) => actor.staffId !== null && c.team.leaderStaffId === actor.staffId);
-  const chosen = own ?? candidates[0];
-  if (!chosen) throw new DomainError("not_found", REVIEW_MESSAGES.notOnTeam);
-  authorize(actor, "reviews", verb, chosen.team.leaderStaffId ? { teamLeaderStaffId: chosen.team.leaderStaffId } : {});
-  if (actor.staffId !== null && actor.staffId === staffId) {
-    throw new DomainError("conflict", REVIEW_MESSAGES.self);
-  }
-  return chosen.team;
-}
-
-function isFullyRated(row: ReviewRow): boolean {
-  return RATING_KEYS.every((key) => row[key] !== null);
 }
 
 /** Taslağı kaydeder (varsa günceller). Tamamlanmış değerlendirme tek ifadede, yarışa dayanıklı biçimde reddedilir. */
@@ -88,7 +69,7 @@ export async function saveReviewDraft(
         eq(staffPerformanceReviews.reviewerId, actor.id),
       ),
     );
-  await resolveTeam(executor, actor, input.eventId, input.staffId, existing ? "edit" : "create");
+  await assertCanReview(executor, actor, input.eventId, input.staffId, existing ? "edit" : "create");
   assertWritable(event);
 
   const score = computeScore(input.ratings);
@@ -138,7 +119,7 @@ export async function completeReview(
   authorizeReviewsGate(actor, "edit");
   return executor.transaction(async (tx) => {
     const event = await loadReviewEvent(tx, actor, input.eventId);
-    await resolveTeam(tx, actor, input.eventId, input.staffId, "edit");
+    await assertCanReview(tx, actor, input.eventId, input.staffId, "edit");
     assertWritable(event);
 
     const [existing] = await tx
@@ -153,7 +134,7 @@ export async function completeReview(
       );
     if (!existing) throw new DomainError("not_found", REVIEW_MESSAGES.reviewNotFound);
     if (existing.isCompleted) throw new DomainError("conflict", REVIEW_MESSAGES.locked);
-    if (!isFullyRated(existing)) throw new DomainError("invalid", REVIEW_MESSAGES.incomplete);
+    if (!isReviewComplete(existing)) throw new DomainError("invalid", REVIEW_MESSAGES.incomplete);
 
     const [review] = await tx
       .update(staffPerformanceReviews)
@@ -174,45 +155,15 @@ export async function completeReview(
       eventId: event.id,
       createdById: actor.id,
       metadata: { staffName: person?.fullName ?? null, reviewerName: reviewer },
-      actionUrl: `/leader/reviews/${event.id}`,
+      actionUrl: REVIEW_ROUTES.reviewBoard(event.id),
     });
     return { review, notification };
   });
 }
 
 /**
- * Taslak sahibinin, taslaktaki personeli şu an hâlâ değerlendirebildiği kümeyi bulur: personel
- * etkinlikte aktif bir ekipte olmalı ve tek değerlendirmedeki kural (`resolveTeam`) geçerli olmalı
- * (lider yalnızca kendi ekibini; kendini değil). Fırlatmaz; uygun olmayanlar atlanır.
- */
-async function currentlyReviewable(
-  executor: Executor,
-  actor: Actor,
-  eventId: string,
-  staffIds: string[],
-): Promise<Set<string>> {
-  if (staffIds.length === 0) return new Set();
-  const memberships = await executor
-    .select({ staffId: teamMembers.staffId, leaderStaffId: teams.leaderStaffId })
-    .from(teamMembers)
-    .innerJoin(teams, eq(teams.id, teamMembers.teamId))
-    .where(and(inArray(teamMembers.staffId, staffIds), eq(teams.eventId, eventId), eq(teams.isActive, true)));
-  const byStaff = new Map<string, (string | null)[]>();
-  for (const m of memberships) byStaff.set(m.staffId, [...(byStaff.get(m.staffId) ?? []), m.leaderStaffId]);
-
-  const allowed = new Set<string>();
-  for (const [staffId, leaders] of byStaff) {
-    if (actor.staffId !== null && actor.staffId === staffId) continue;
-    const own = leaders.find((l) => actor.staffId !== null && l === actor.staffId);
-    const chosen = own ?? leaders[0];
-    if (can(actor, "reviews", "edit", chosen ? { teamLeaderStaffId: chosen } : {})) allowed.add(staffId);
-  }
-  return allowed;
-}
-
-/**
- * Etkinlikte kendi tam puanlı taslaklarını tamamlar; eksik puanlı taslaklara dokunmaz. Personel
- * artık aktörün yetkisindeki bir ekipte değilse (taşındı/lider değişti) taslak atlanır (`skipped`).
+ * Etkinlikte kendi tamamlanabilir taslaklarını tamamlar (`isReviewComplete`); eksiklere dokunmaz. Personel
+ * artık aktörün değerlendirebildiği kümede değilse (taşındı, dayanak kalktı) taslak atlanır (`skipped`).
  */
 export async function completeAllReviews(
   executor: Db,
@@ -222,13 +173,9 @@ export async function completeAllReviews(
   authorizeReviewsGate(actor, "edit");
   return executor.transaction(async (tx) => {
     const event = await loadReviewEvent(tx, actor, input.eventId);
-    if (ownTeamOnly(actor)) {
-      const [led] = await tx
-        .select({ id: teams.id })
-        .from(teams)
-        .where(and(eq(teams.eventId, input.eventId), eq(teams.isActive, true), eq(teams.leaderStaffId, actor.staffId ?? "")));
-      authorize(actor, "reviews", "edit", led && actor.staffId ? { teamLeaderStaffId: actor.staffId } : {});
-    }
+    // Aktörün şu an değerlendirebildiği küme (hiyerarşi bir kez yüklenir); boşsa hiyerarşi aktörü reddedilir.
+    const reviewable = await reviewableStaff(tx, actor, input.eventId);
+    authorizeEventScope(actor, "edit", reviewable);
     assertWritable(event);
 
     const drafts = await tx
@@ -241,10 +188,9 @@ export async function completeAllReviews(
           eq(staffPerformanceReviews.isCompleted, false),
         ),
       );
-    const allowed = await currentlyReviewable(tx, actor, input.eventId, drafts.map((d) => d.staffId));
-    const eligible = drafts.filter((d) => allowed.has(d.staffId));
+    const eligible = drafts.filter((d) => reviewable.has(d.staffId));
     const skipped = drafts.length - eligible.length;
-    const ready = eligible.filter(isFullyRated).map((d) => d.id);
+    const ready = eligible.filter(isReviewComplete).map((d) => d.id);
     const done =
       ready.length === 0
         ? []
@@ -265,7 +211,7 @@ export async function completeAllReviews(
       eventId: event.id,
       createdById: actor.id,
       metadata: { reviewerName: reviewer, reviewCount: done.length },
-      actionUrl: `/leader/reviews/${event.id}`,
+      actionUrl: REVIEW_ROUTES.reviewBoard(event.id),
     });
     return { completed: done.length, incomplete: eligible.length - done.length, skipped, notification };
   });

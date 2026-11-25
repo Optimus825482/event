@@ -24,7 +24,7 @@ export const REVIEW_MESSAGES = {
   disabled: "Bu etkinlik için değerlendirme sistemi kapalı",
   locked: "Tamamlanan değerlendirme değiştirilemez",
   eventNotFound: "Etkinlik bulunamadı",
-  notOnTeam: "Personel bu etkinlikte bir ekipte değil",
+  notOnTeam: "Personel bu etkinlikte sizin değerlendirebileceğiniz bir görevde değil",
   self: "Kendinizi değerlendiremezsiniz",
   reviewNotFound: "Değerlendirme bulunamadı",
   incomplete: "Tamamlamak için tüm kategoriler puanlanmalı",
