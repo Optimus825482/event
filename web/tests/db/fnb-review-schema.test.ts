@@ -20,6 +20,24 @@ async function codeOf(tx: Tx, fn: (sp: Tx) => Promise<unknown>): Promise<string 
   return undefined;
 }
 
+/** İhlal edilen kısıtın adını döndürür (SQLSTATE tek başına hangi kısıt olduğunu ayırt etmez). */
+async function constraintOf(tx: Tx, fn: (sp: Tx) => Promise<unknown>): Promise<string | undefined> {
+  try {
+    await tx.transaction(async (sp) => {
+      await fn(sp as unknown as Tx);
+    });
+  } catch (err) {
+    let current: unknown = err;
+    for (let depth = 0; depth < 5 && current; depth += 1) {
+      if (typeof current === "object" && "constraint" in current && typeof current.constraint === "string") {
+        return current.constraint;
+      }
+      current = typeof current === "object" && "cause" in current ? current.cause : undefined;
+    }
+  }
+  return undefined;
+}
+
 async function base(tx: Tx) {
   const event = await createEvent(tx);
   const staff = await createStaff(tx);
@@ -43,7 +61,7 @@ describe("F&B değerlendirme şeması", () => {
   it("kısa form tamamlanmışsa genel puan zorunludur", async () => {
     await inRollback(async (tx) => {
       const { event, staff, reviewer } = await base(tx);
-      const code = await codeOf(tx, (sp) =>
+      const name = await constraintOf(tx, (sp) =>
         createShortReview(sp, {
           eventId: event.id,
           staffId: staff.id,
@@ -52,7 +70,7 @@ describe("F&B değerlendirme şeması", () => {
           isCompleted: true,
         }),
       );
-      expect(code).toBe("23514");
+      expect(name).toBe("staff_performance_reviews_short_complete");
       const draft = await createShortReview(tx, {
         eventId: event.id,
         staffId: staff.id,
@@ -68,7 +86,7 @@ describe("F&B değerlendirme şeması", () => {
     await inRollback(async (tx) => {
       const { event, staff, reviewer } = await base(tx);
       for (const bad of [0, 6]) {
-        const code = await codeOf(tx, (sp) =>
+        const name = await constraintOf(tx, (sp) =>
           createShortReview(sp, {
             eventId: event.id,
             staffId: staff.id,
@@ -77,7 +95,7 @@ describe("F&B değerlendirme şeması", () => {
             isCompleted: false,
           }),
         );
-        expect(code).toBe("23514");
+        expect(name).toBe("staff_performance_reviews_overall_range");
       }
       const ok = await createShortReview(tx, {
         eventId: event.id,

@@ -62,7 +62,8 @@ export async function createShortReview(
   ex: Executor,
   o: { eventId: string; staffId: string; reviewerId: string; overallRating: number | null; isCompleted?: boolean },
 ): Promise<ReviewRow> {
-  const score = o.overallRating === null ? 0 : o.overallRating * 20;
+  // Genel puan 0–100 aralığında tutulur: aralık dışı yıldız, score_range yerine overall_range kısıtını sınasın.
+  const score = o.overallRating === null ? 0 : Math.min(100, Math.max(0, o.overallRating * 20));
   const [row] = await ex
     .insert(staffPerformanceReviews)
     .values({
