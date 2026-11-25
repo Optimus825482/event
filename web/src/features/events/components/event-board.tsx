@@ -13,6 +13,7 @@ import {
   type BoardEvent,
   type BoardTab,
 } from "../board";
+import { StageBadge } from "@/features/planning/components/stage-badge";
 import { CreateEventDialog, EventRowActions } from "./event-dialogs";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 
@@ -155,6 +156,7 @@ function BoardRow({
           {event.name}
         </Link>
         <p className="mt-0.5 text-xs text-slate-500">{event.reservationCount} rezervasyon</p>
+        <StageBadge stage={event.planningStage} className="mt-1" />
       </div>
       <div className="col-span-2 flex justify-center">
         <Badge variant="outline" className={type.color}>
@@ -201,6 +203,7 @@ function BoardRow({
             startsAt: event.startsAt.toISOString(),
             endsAt: event.endsAt ? event.endsAt.toISOString() : null,
             eventType: event.eventType,
+            artistName: event.artistName,
             reservationEnabled: event.reservationEnabled,
           }}
           canEdit={canEdit}

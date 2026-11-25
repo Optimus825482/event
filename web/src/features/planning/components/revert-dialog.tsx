@@ -18,6 +18,12 @@ type Props = {
 /** Aşamayı geri alma: gerekçe zorunlu (en fazla 500 karakter). */
 export function RevertDialog({ open, onOpenChange, pending, onSubmit }: Props) {
   const [note, setNote] = useState("");
+  // Üst bileşen iletişim kutusunu kodla kapatırsa (onOpenChange çağrılmaz) yazılan neden de silinir.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) setNote("");
+  }
   const trimmed = note.trim();
   const invalid = trimmed.length === 0 || trimmed.length > MAX_NOTE;
 

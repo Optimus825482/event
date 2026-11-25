@@ -20,6 +20,8 @@ function ev(over: Partial<BoardEvent> = {}): BoardEvent {
     startsAt: new Date("2030-06-20T17:00:00Z"),
     endsAt: null,
     eventType: null,
+    artistName: null,
+    planningStage: "defined",
     reservationEnabled: true,
     reservationCount: 0,
     tableCount: 0,

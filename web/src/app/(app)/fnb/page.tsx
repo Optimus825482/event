@@ -8,6 +8,7 @@ import { db } from "@/db/client";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { FNB_LIST_LIMIT, listEventsForFnb } from "@/features/events/fnb-list";
+import { StageBadge } from "@/features/planning/components/stage-badge";
 import { canOpenTeamOrganization } from "@/features/staffing/team-organization-access";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 import { cn } from "@/lib/utils";
@@ -55,7 +56,10 @@ export default async function FnbEventsPage() {
               className="flex flex-col gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <h2 className="truncate font-medium text-white">{event.name}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate font-medium text-white">{event.name}</h2>
+                  <StageBadge stage={event.planningStage} />
+                </div>
                 <p className="text-sm text-slate-400">{dateFormat.format(event.startsAt)}</p>
                 <p className="mt-1 text-xs text-slate-500">
                   {event.hasLayout ? "Yerleşim hazır" : "Yerleşim yok"} · {event.teamCount} ekip

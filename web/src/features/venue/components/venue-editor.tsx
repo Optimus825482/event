@@ -6,7 +6,7 @@ import { formatDraftTime } from "../editor/draft";
 import { groupsByTable, type TableGroupInfo } from "../editor/groups";
 import { DEFAULT_VIEW_SETTINGS, type ViewSettings } from "../editor/view-chrome";
 import type { Point } from "../editor/geometry";
-import type { EditorLock } from "../editor/lock";
+import { editorLock, type EditorLock } from "../editor/lock";
 import { createEditorStore, isLayoutEmpty, type InitialLayout } from "../editor/store";
 import type { TableShape } from "../schemas";
 import type { WriteLayoutResult } from "../layout-core";
@@ -42,8 +42,11 @@ export type VenueEditorProps = {
   templates: TemplateOption[];
   canEdit: boolean;
   canSaveTemplate: boolean;
-  /** Satış kilidi görünümü; yetkili olan sunucudur, editör yalnızca kullanıcıyı önceden bilgilendirir. */
-  lock: EditorLock;
+  /**
+   * Satış kilidi görünümü; yetkili olan sunucudur, editör yalnızca kullanıcıyı önceden bilgilendirir.
+   * Sunucu sayfasından geçtiği için serileştirilebilir (dizi); `Set` istemcide kurulur.
+   */
+  lock: { locked: boolean; frozenTableIds: string[] };
   /** Ekip masa grupları (planda halka); verilmezse gösterilmez. */
   tableGroups?: readonly TableGroupInfo[];
   /** Izgara boyutu / yapışma / görünürlük varsayılanları (sistem ayarları). */
@@ -84,19 +87,32 @@ function groupTableErrors(fieldErrors: Record<string, string[]>, keys: readonly 
 }
 
 export function VenueEditor(props: VenueEditorProps) {
+  const lock = useMemo(
+    () => editorLock({ layoutLocked: props.lock.locked, frozenTableIds: props.lock.frozenTableIds }),
+    [props.lock.locked, props.lock.frozenTableIds],
+  );
   const [store] = useState(() =>
-    createEditorStore({ ...props.initial, frozenTableIds: [...props.lock.frozen] }, props.viewSettings ?? DEFAULT_VIEW_SETTINGS),
+    createEditorStore({ ...props.initial, frozenTableIds: [...lock.frozen] }, props.viewSettings ?? DEFAULT_VIEW_SETTINGS),
   );
   return (
     <EditorStoreContext.Provider value={store}>
-      <EditorLockContext.Provider value={props.lock}>
-        <EditorShell {...props} />
+      <EditorLockContext.Provider value={lock}>
+        <EditorShell {...props} lock={lock} />
       </EditorLockContext.Provider>
     </EditorStoreContext.Provider>
   );
 }
 
-function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveTemplate, tableGroups, lock }: VenueEditorProps) {
+function EditorShell({
+  eventId,
+  userId,
+  tableTypes,
+  templates,
+  canEdit,
+  canSaveTemplate,
+  tableGroups,
+  lock,
+}: Omit<VenueEditorProps, "lock"> & { lock: EditorLock }) {
   const store = useEditorStore();
   const dirty = useEditor((s) => s.dirty);
   const layoutEmpty = useEditor(isLayoutEmpty);
