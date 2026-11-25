@@ -289,6 +289,9 @@ export async function assertCanReview(
   return bases;
 }
 
+/** EXISTS alt sorgularının seçtiği sabit. */
+const ONE = sql`1`;
+
 /**
  * Aktörün en az bir değerlendirilebilir personeli olan etkinlikler, başlangıca göre sıralı.
  * Yönetici/admin için aktörün kendisi dışında en az bir etkinlik personeli olan tüm etkinlikler.
@@ -301,7 +304,6 @@ export async function reviewEventIds(ex: Executor, actor: PolicyActor): Promise<
   if (reviewerId === null) return [];
 
   // Aday etkinlikler: aktörün etkin ekip liderliği, süpervizörlüğü ya da kısım sorumluluğu olanlar.
-  const one = sql`1`;
   const candidates = await ex
     .select({ id: events.id })
     .from(events)
@@ -309,19 +311,19 @@ export async function reviewEventIds(ex: Executor, actor: PolicyActor): Promise<
       or(
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(teams)
             .where(and(eq(teams.eventId, events.id), eq(teams.isActive, true), eq(teams.leaderStaffId, reviewerId))),
         ),
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(tableGroups)
             .where(and(eq(tableGroups.eventId, events.id), eq(tableGroups.supervisorStaffId, reviewerId))),
         ),
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(eventSectionHeads)
             .where(and(eq(eventSectionHeads.eventId, events.id), eq(eventSectionHeads.staffId, reviewerId))),
         ),
@@ -336,7 +338,6 @@ export async function reviewEventIds(ex: Executor, actor: PolicyActor): Promise<
 /** Tek sorgu: `staffOf` kaynaklarından birinde aktörden başka personel bulunan etkinlikler. */
 async function wholeEventIds(ex: Executor, selfStaffId: string | null): Promise<string[]> {
   const notSelf = (column: AnyPgColumn) => (selfStaffId === null ? sql`true` : ne(column, selfStaffId));
-  const one = sql`1`;
   const rows = await ex
     .select({ id: events.id })
     .from(events)
@@ -344,7 +345,7 @@ async function wholeEventIds(ex: Executor, selfStaffId: string | null): Promise<
       or(
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(teams)
             .where(
               and(
@@ -357,14 +358,14 @@ async function wholeEventIds(ex: Executor, selfStaffId: string | null): Promise<
         ),
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(teamMembers)
             .innerJoin(teams, eq(teams.id, teamMembers.teamId))
             .where(and(eq(teams.eventId, events.id), eq(teams.isActive, true), notSelf(teamMembers.staffId))),
         ),
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(tableGroups)
             .where(
               and(
@@ -376,7 +377,7 @@ async function wholeEventIds(ex: Executor, selfStaffId: string | null): Promise<
         ),
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(eventStaffAssignments)
             .where(
               and(
@@ -388,7 +389,7 @@ async function wholeEventIds(ex: Executor, selfStaffId: string | null): Promise<
         ),
         exists(
           ex
-            .select({ one })
+            .select({ one: ONE })
             .from(eventSectionHeads)
             .where(and(eq(eventSectionHeads.eventId, events.id), notSelf(eventSectionHeads.staffId))),
         ),

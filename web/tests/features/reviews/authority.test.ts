@@ -222,6 +222,8 @@ describe("hiyerarşik değerlendirme yetkisi", () => {
     expect(after.C.ids).toBe(6);
     expect(after.manager.ids).toBe(6);
     expect(after.C.queries).toBe(before.C.queries);
+    // Hiyerarşi yolu: aday sorgusu + toplu yükleme (en fazla 6).
+    expect(after.C.queries).toBeLessThanOrEqual(7);
     expect(after.manager.queries).toBe(before.manager.queries);
   });
 
@@ -242,6 +244,16 @@ describe("hiyerarşik değerlendirme yetkisi", () => {
     expect(await reviewerStaffIdsFor(db, w.event.id, w.C.id)).toEqual([w.H.id, w.S.id].sort());
     expect(await reviewerStaffIdsFor(db, w.event2.id, w.W9.id)).toEqual([w.C.id]);
     await expectDomain(assertCanReview(db, s3, w.event.id, w.W9.id, "edit"), "not_found");
+  });
+
+  it("toplu yüklemede başka etkinliğin ekibine bağlı grup o etkinliği açmaz", async () => {
+    // S3 iki etkinlikte de aday: E'de G3'ün süpervizörü (ekibi E2'nin T2'si, masası yok), E2'de kısım sorumlusu.
+    // E'ye yalnızca etkinlikler arası bağla ulaşılabilirdi; iki etkinlik aynı toplu yüklemeye girer.
+    const S3 = await f.createStaff(db, { fullName: "Süpervizör S3" });
+    await f.createTableGroup(db, w.event.id, { name: "G3", supervisorStaffId: S3.id, teamId: w.T2.id });
+    await createSectionHead(db, { eventId: w.event2.id, staffId: S3.id });
+    const s3 = await makeLeader(S3.id);
+    expect(await reviewEventIds(db, s3)).toEqual([w.event2.id]);
   });
 
   it("pasif atama etkinlik personeli saymaz ve dayanak üretmez", async () => {
