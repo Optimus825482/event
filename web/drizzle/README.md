@@ -43,3 +43,12 @@ ifade olmadığını, (b) kuralın dayandığı davranışı gerçek `migrate.mj
 `*.sql` ve `meta/*.json` git'te tutulur (kökteki `.gitignore` `*.sql` desenine rağmen `web/drizzle/` istisnadır; yeni
 dosyanın `git status`'ta göründüğünü kontrol edin). Üretilen SQL'i her zaman okuyun: `drizzle-kit` birincil anahtar
 değişikliği gibi bazı durumlarda hatalı SQL üretebilir (bkz. `0003`).
+
+## Kural 4 - paralel dallarda migration
+
+Birden çok dal aynı anda çalışıyorsa (paralel worktree'ler, bkz. `docs/superpowers/plans/2026-11-26-faz2-3-paralel-yurutme.md`):
+
+- **Numaralar ayrılmıştır.** Her fazda migration üreten tek görev vardır; numarasını entegratör ayırır, başka görev `drizzle/` klasörüne dokunmaz. Gerekirse görev durur ve entegratöre sorar.
+- **Migration commit'i görevin son ve ayrı commit'idir.** Journal (`meta/_journal.json`) ve snapshot dosyaları **asla elle birleştirilmez**; çatışmada migration commit'i düşürülüp `npm run db:generate` ile yeniden üretilir.
+- **Yeniden üretimden sonra şeridin veritabanları sıfırlanır.** Drizzle, kayıtlı son migration'ın `created_at`'inden eski `when` değerli girdiyi uygulamaz; eski numaralı kayıt kalan bir veritabanında yeni migration sessizce atlanır ve test eksik şemayla yeşil görünür. Test veritabanı için `npm run db:drop-test` (sonraki `npm test` yeniden kurar), geliştirme veritabanı için düşürüp `npm run db:migrate` çalıştırın.
+- **Otomatik denetim:** `web/tests/scripts/migration-journal.test.ts` journal bütünlüğünü sınar: `idx` değerleri 0'dan kesintisiz, etiketler numarayla başlar, `when` değerleri kesin artan, her girdinin SQL ve snapshot dosyası var, snapshot `prevId` zinciri kopuk değil ve journal'a girmemiş `.sql` dosyası yok.
