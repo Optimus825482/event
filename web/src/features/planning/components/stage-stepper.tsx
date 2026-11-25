@@ -7,7 +7,7 @@ import type { PlanningStage } from "@/domain/planning-stage";
 export function StageStepper({ stage }: { stage: PlanningStage }) {
   const steps = stageSteps(stage);
   return (
-    <div className="max-w-full overflow-x-auto" data-testid="stage-stepper">
+    <div className="relative max-w-full overflow-x-auto" data-testid="stage-stepper">
       <ol className="flex min-w-max gap-2 pb-2" aria-label="Planlama aşamaları">
         {steps.map((step, i) => (
           <li
