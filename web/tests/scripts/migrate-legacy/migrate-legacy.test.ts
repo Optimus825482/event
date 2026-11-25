@@ -157,6 +157,21 @@ describe("rapor kategorileri", () => {
     expect(c.catalogEntriesCreated.map((f) => f.name)).toEqual(expect.arrayContaining(["Servis", "Komi"]));
   });
 
+  it("eski rol eşlemesi bilgi olarak, taşınmayan eski izin satırları atlanan olarak raporlanır", () => {
+    const c = real.categories;
+    expect(c.invalidValues.filter((f) => f.field === "role")).toEqual([]);
+    expect(c.information).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ table: "users", id: IDS.users.organizer, field: "role", from: "organizer", to: "user" }),
+        expect.objectContaining({ table: "users", id: IDS.users.blank, field: "role", from: "controller", to: "user" }),
+      ]),
+    );
+    expect(c.information.some((f) => f.table === "users" && f.id === IDS.users.admin)).toBe(false);
+    const skippedPerms = c.skippedRows.filter((f) => f.table === "user_permissions");
+    expect(skippedPerms).toHaveLength(2);
+    expect(skippedPerms.every((f) => f.userId === IDS.users.organizer)).toBe(true);
+  });
+
   it("şema boşlukları dolu satırlarla listelenir", () => {
     const gap = (legacy: string) => real.schemaGaps.find((g) => g.legacy === legacy)?.rows;
     expect(gap("staff.age")).toBe(1);
@@ -385,8 +400,9 @@ describe("hedef durum", () => {
         [IDS.review],
       );
       expect(review.rows[0]).toEqual({ staff_id: createdStaff, communication: 5, strengths: ["güler yüzlü"] });
-      const perms = await c.query<{ can_create: boolean; can_edit: boolean }>("SELECT can_create, can_edit FROM user_permissions");
-      expect(perms.rows).toEqual([{ can_create: true, can_edit: true }]);
+      // Eski izin satırı kısıt anlamındaydı; yeni modelde verilen yetki olacağından taşınmaz.
+      const perms = await c.query("SELECT 1 FROM user_permissions");
+      expect(perms.rowCount).toBe(0);
       const settings = await c.query<{ smtp_password_encrypted: string | null }>("SELECT smtp_password_encrypted FROM system_settings");
       expect(settings.rows).toEqual([{ smtp_password_encrypted: null }]);
     });

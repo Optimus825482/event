@@ -53,6 +53,23 @@ describe("roller", () => {
   it("yalnızca admin ve user vardır", () => {
     expect([...ROLES]).toEqual(["admin", "user"]);
   });
+
+  it("beklenmeyen rol değeri (eski rol adı) yalnızca departman kurallarına uyar; users/settings kapalı", () => {
+    // Eski oturum ya da göç edilmemiş satır: tür dışı rol admin sayılmaz.
+    const legacy = { ...user([m("casino", "manager")], { users: "vced", settings: "vced" }), role: "organizer" } as unknown as PolicyActor;
+    for (const verb of VERBS) {
+      expect(can(legacy, "reservations", verb)).toBe(true);
+      expect(can(legacy, "users", verb)).toBe(false);
+      expect(can(legacy, "settings", verb)).toBe(false);
+      expect(can(legacy, "events", verb)).toBe(verb === "view");
+      expect(can(legacy, "staff", verb)).toBe(false);
+    }
+  });
+
+  it("beklenmeyen rol değeri, üyelik yoksa izin satırına rağmen hiçbir şey yapamaz", () => {
+    const legacy = { ...user([], { events: "vced", check_in: "vced" }), role: "venue_owner" } as unknown as PolicyActor;
+    for (const mod of MODULES) for (const verb of VERBS) expect(can(legacy, mod, verb)).toBe(false);
+  });
 });
 
 describe("admin", () => {

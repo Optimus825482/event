@@ -187,17 +187,21 @@ describe("scripts/migrate.mjs çalışma zamanı migrator'ı", { timeout: 60_000
       });
     });
 
-    it("0013 durumundaki veritabanında user ve üyelikleri korunur, eski rollünün üyeliği silinir", async () => {
+    it("0013 durumundaki veritabanında user üyelikleri ve izin satırları korunur; eski rollünün ve yöneticinin satırları silinir", async () => {
       await recreateDb();
       const at0013 = migrate(realPrefix("upto0013", 14));
       expect(at0013.status, at0013.out).toBe(0);
       const ids = await withClient(DB_URL, async (c) => {
         const member = await insertUser(c, "uye", "user");
         const legacy = await insertUser(c, "eski", "staff");
+        const admin = await insertUser(c, "yonetici", "admin");
         for (const userId of [member, legacy]) {
           await c.query(`insert into department_memberships (user_id, department, level) values ($1, 'casino', 'manager')`, [userId]);
         }
-        return { member, legacy };
+        for (const userId of [member, legacy, admin]) {
+          await c.query(`insert into user_permissions (user_id, module, can_view) values ($1, 'reservations', true)`, [userId]);
+        }
+        return { member, legacy, admin };
       });
 
       const res = migrate(REAL_FOLDER);
@@ -208,9 +212,12 @@ describe("scripts/migrate.mjs çalışma zamanı migrator'ı", { timeout: 60_000
         expect(Object.fromEntries(roles.rows.map((r) => [r.id, r.role]))).toEqual({
           [ids.member]: "user",
           [ids.legacy]: "user",
+          [ids.admin]: "admin",
         });
         const memberships = await c.query<{ user_id: string }>("select user_id from department_memberships");
         expect(memberships.rows).toEqual([{ user_id: ids.member }]);
+        const perms = await c.query<{ user_id: string }>("select user_id from user_permissions");
+        expect(perms.rows).toEqual([{ user_id: ids.member }]);
       });
     });
   });
