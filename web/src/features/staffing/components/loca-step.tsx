@@ -6,13 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { groupUngroupedLocasAction } from "../actions";
 import type { LocaStaffingView } from "../organization-service";
+import { draftWriteBlock } from "../draft-guard";
 import { Section } from "./bits";
+import { useOrganization } from "./store";
 
 /** Loca personel planı: her loca için grup, süpervizör ve atanan personel; grupsuz locaları tek tıkla gruplar. */
 export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingView[]; eventId: string; canEdit: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const guard = draftWriteBlock(useOrganization((s) => s.dirty));
   const ungrouped = rows.filter((r) => r.groupId === null).length;
 
   const group = () =>
@@ -67,9 +70,10 @@ export function LocaStep({ rows, eventId, canEdit }: { rows: LocaStaffingView[];
       )}
       {canEdit && (
         <div className="mt-3 flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={group} disabled={pending || ungrouped === 0}>
+          <Button type="button" variant="outline" onClick={group} disabled={pending || ungrouped === 0 || guard.blocked}>
             Grupsuz locaları gruplandır
           </Button>
+          {guard.note && <span role="note" className="text-sm text-amber-400">{guard.note}</span>}
           {message && (
             <span className={message.kind === "ok" ? "text-sm text-slate-400" : "text-sm text-red-400"}>
               {message.text}

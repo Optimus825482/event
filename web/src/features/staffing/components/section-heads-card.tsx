@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { setSectionHeadsAction } from "../section-heads-actions";
 import type { SectionHead } from "../section-heads-service";
+import { draftWriteBlock } from "../draft-guard";
 import { Section } from "./bits";
+import { useOrganization } from "./store";
 
 export const MAX_SECTION_HEADS = 10;
 
@@ -43,6 +45,7 @@ type Props = {
 /** Etkinlik kısım sorumluları: personel listesinden çoklu seçim, "Kaydet" ile kümeyi değiştirir. */
 export function SectionHeadsCard({ eventId, heads, candidates, canEdit }: Props) {
   const router = useRouter();
+  const guard = draftWriteBlock(useOrganization((s) => s.dirty));
   const [selected, setSelected] = useState<string[]>(() => initialSectionHeadSelection(heads));
   const [message, setMessage] = useState<{ error: boolean; lines: string[] } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -110,9 +113,10 @@ export function SectionHeadsCard({ eventId, heads, candidates, canEdit }: Props)
             })}
           </fieldset>
           <div className="flex items-start gap-3">
-            <Button type="button" onClick={save} disabled={pending || !dirty}>
+            <Button type="button" onClick={save} disabled={pending || !dirty || guard.blocked}>
               Kaydet
             </Button>
+            {guard.note ? <p role="note" className="text-sm text-amber-400">{guard.note}</p> : null}
             {message ? (
               <div role="status" className={message.error ? "text-sm text-red-400" : "text-sm text-emerald-400"}>
                 {message.lines.map((line) => (
