@@ -197,6 +197,24 @@ describe("hiyerarşik değerlendirme akışları", () => {
     });
   });
 
+  it("kısa taslak ayrıntılı formla kaydedilince 'full' olur; tamamlık 8 kategoriye göre", async () => {
+    await createShortReview(db, {
+      eventId: w.event.id,
+      staffId: w.W1.id,
+      reviewerId: w.actors.C.id,
+      overallRating: 4,
+      isCompleted: false,
+    });
+    const input = { ...lists, eventId: w.event.id, staffId: w.W1.id, ratings: { communication: 5 } };
+    await saveReviewDraft(db, w.actors.C, input);
+    expect(await rowOf(w, w.W1.id, w.actors.C.id)).toMatchObject({ formKind: "full", overallRating: null });
+    await expectDomain(completeReview(db, w.actors.C, { eventId: w.event.id, staffId: w.W1.id }), "invalid");
+
+    await saveReviewDraft(db, w.actors.C, { ...input, ratings: FULL_RATINGS });
+    const { review } = await completeReview(db, w.actors.C, { eventId: w.event.id, staffId: w.W1.id });
+    expect(review).toMatchObject({ formKind: "full", overallRating: null, isCompleted: true });
+  });
+
   it("eski ayrıntılı satır panoda aynen görünür", async () => {
     await db.insert(staffPerformanceReviews).values({
       staffId: w.W1.id,

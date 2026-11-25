@@ -73,7 +73,10 @@ export async function saveReviewDraft(
   assertWritable(event);
 
   const score = computeScore(input.ratings);
+  // Ayrıntılı form kaydı: satır `full` olur, kısa formun genel puanı temizlenir (tamamlanmış satır değişmez).
   const values = {
+    formKind: "full" as const,
+    overallRating: null,
     score,
     rating: ratingBand(score),
     ...(Object.fromEntries(RATING_KEYS.map((key) => [key, input.ratings[key] ?? null])) as Record<
