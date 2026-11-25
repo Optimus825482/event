@@ -14,11 +14,12 @@ import { getEditorViewSettings } from "./view-settings-service";
 export async function loadVenueEditor(eventId: string) {
   const actor = await requirePolicyActor();
   authorize(actor, "events", "view");
+  authorize(actor, "venues", "view");
   if (!isUuid(eventId)) notFound();
   try {
     const layout = await getVenueLayout(db, actor, eventId);
     const tableTypes = await listTableTypes(db);
-    const templates = can(actor, "venues", "view") ? await listVenueTemplates(db, actor) : [];
+    const templates = await listVenueTemplates(db, actor);
     const [tableGroups, viewSettings] = await Promise.all([listTableGroupMembers(db, eventId), getEditorViewSettings(db)]);
     return {
       layout,

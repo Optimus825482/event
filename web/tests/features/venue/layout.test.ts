@@ -8,7 +8,8 @@ import type { TableInput } from "@/features/venue/schemas";
 import { getVenueLayout, saveLayout } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
-import { adminActor, managerActor, persistActor } from "../../helpers/actors";
+import { ForbiddenError } from "@/features/auth/errors";
+import { adminActor, managerActor, memberActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
@@ -362,6 +363,16 @@ describe("getVenueLayout", () => {
     await db.update(events).set({ layoutDecor: { placedTables: "x" } }).where(eq(events.id, event.id));
     const layout = await getVenueLayout(db, actor, event.id);
     expect(layout.decor.elements).toEqual([]);
+  });
+
+  it("events:view var ama venues:view yoksa ForbiddenError", async () => {
+    const { actor, event } = await setup(memberActor("fnb", { events: "v---" }));
+    await expect(getVenueLayout(db, actor, event.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("events:view ve venues:view ikisi de varsa okur", async () => {
+    const { actor, event } = await setup(memberActor("fnb", { events: "v---", venues: "v---" }));
+    await expect(getVenueLayout(db, actor, event.id)).resolves.toMatchObject({ event: { id: event.id } });
   });
 
   it("olmayan etkinlik not_found", async () => {

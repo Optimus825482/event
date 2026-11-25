@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { eventTables, events, tableTypes, venueTemplates } from "@/db/schema";
+import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow, listEventTables, totalCapacity } from "@/features/events/service";
 import { publish } from "@/features/realtime/publish";
@@ -61,7 +62,9 @@ export type VenueLayout = {
   totalCapacity: number;
 };
 
+/** Yerleşim venues modülüne aittir: okumak için `venues:view` gerekir (etkinlik okuma denetimine ek olarak). */
 export async function getVenueLayout(db: Db, actor: Actor, eventId: string): Promise<VenueLayout> {
+  authorize(actor, "venues", "view");
   const event = await getEventOrThrow(db, eventId);
   const tables = await listEventTables(db, eventId);
   const used = await tablesInUse(
