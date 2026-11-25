@@ -108,22 +108,22 @@ describe("scripts/migrate.mjs çalışma zamanı migrator'ı", { timeout: 60_000
     });
   });
 
-  describe("0014: sabit roller kalkar (eski rollü kullanıcılar üyeliksiz `user` olur)", () => {
-    /** Gerçek klasörün ilk `count` migration'ını (journal dahil) ayrı bir klasöre kopyalar. */
-    function realPrefix(name: string, count: number): string {
-      const dir = path.join(root, name);
-      mkdirSync(path.join(dir, "meta"), { recursive: true });
-      const journal = JSON.parse(readFileSync(path.join(REAL_FOLDER, "meta", "_journal.json"), "utf8")) as {
-        entries: { tag: string }[];
-      };
-      const entries = journal.entries.slice(0, count);
-      for (const e of entries) {
-        writeFileSync(path.join(dir, `${e.tag}.sql`), readFileSync(path.join(REAL_FOLDER, `${e.tag}.sql`)));
-      }
-      writeFileSync(path.join(dir, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
-      return dir;
+  /** Gerçek klasörün ilk `count` migration'ını (journal dahil) ayrı bir klasöre kopyalar. */
+  function realPrefix(name: string, count: number): string {
+    const dir = path.join(root, name);
+    mkdirSync(path.join(dir, "meta"), { recursive: true });
+    const journal = JSON.parse(readFileSync(path.join(REAL_FOLDER, "meta", "_journal.json"), "utf8")) as {
+      entries: { tag: string }[];
+    };
+    const entries = journal.entries.slice(0, count);
+    for (const e of entries) {
+      writeFileSync(path.join(dir, `${e.tag}.sql`), readFileSync(path.join(REAL_FOLDER, `${e.tag}.sql`)));
     }
+    writeFileSync(path.join(dir, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+    return dir;
+  }
 
+  describe("0014: sabit roller kalkar (eski rollü kullanıcılar üyeliksiz `user` olur)", () => {
     const insertUser = (c: Client, username: string, role: string) =>
       c
         .query<{ id: string }>(
@@ -218,6 +218,38 @@ describe("scripts/migrate.mjs çalışma zamanı migrator'ı", { timeout: 60_000
         expect(memberships.rows).toEqual([{ user_id: ids.member }]);
         const perms = await c.query<{ user_id: string }>("select user_id from user_permissions");
         expect(perms.rows).toEqual([{ user_id: ids.member }]);
+      });
+    });
+  });
+
+  describe("0015: şirket saat dilimi varsayılanı Kıbrıs saati olur", () => {
+    const tzOf = (c: Client, id: string) =>
+      c
+        .query<{ timezone: string }>("select timezone from system_settings where id = $1", [id])
+        .then((r) => r.rows[0]?.timezone);
+
+    it("eski varsayılan (Europe/Istanbul) Asia/Famagusta olur; elle yazılmış başka dil dokunulmaz kalır; yeni satır varsayılanı alır", async () => {
+      await recreateDb();
+      const at0014 = migrate(realPrefix("upto0014", 15));
+      expect(at0014.status, at0014.out).toBe(0);
+      const ids = await withClient(DB_URL, async (c) => {
+        const istanbul = await c.query<{ id: string }>(
+          "insert into system_settings (company_name, timezone) values ('A', 'Europe/Istanbul') returning id",
+        );
+        const custom = await c.query<{ id: string }>(
+          "insert into system_settings (company_name, timezone) values ('B', 'Europe/London') returning id",
+        );
+        return { istanbul: istanbul.rows[0]!.id, custom: custom.rows[0]!.id };
+      });
+
+      const res = migrate(REAL_FOLDER);
+      expect(res.status, res.out).toBe(0);
+
+      await withClient(DB_URL, async (c) => {
+        expect(await tzOf(c, ids.istanbul)).toBe("Asia/Famagusta");
+        expect(await tzOf(c, ids.custom)).toBe("Europe/London");
+        const fresh = await c.query<{ id: string }>("insert into system_settings (company_name) values ('C') returning id");
+        expect(await tzOf(c, fresh.rows[0]!.id)).toBe("Asia/Famagusta");
       });
     });
   });

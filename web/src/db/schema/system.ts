@@ -7,7 +7,7 @@ export const systemSettings = pgTable("system_settings", {
   id: pk(),
   companyName: text("company_name").notNull().default("EventFlow"),
   logo: text("logo"),
-  timezone: text("timezone").notNull().default("Europe/Istanbul"),
+  timezone: text("timezone").notNull().default("Asia/Famagusta"),
   language: text("language").notNull().default("tr"),
   defaultGridSize: integer("default_grid_size").notNull().default(20),
   snapToGrid: boolean("snap_to_grid").notNull().default(true),
