@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_TIME_ZONE, zoneOffsetMs, zonedDayStart, zonedNextDayStart } from "@/lib/time-zone";
+import { APP_TIME_ZONE, zoneOffsetMs, zonedDayStart, zonedNextDayStart, zonedWallClockToDate, dateToZonedWallClock } from "@/lib/time-zone";
 
 const H = 3_600_000;
 
@@ -74,5 +74,47 @@ describe("zonedNextDayStart", () => {
   it("Mart geçiş gününde 23, Ekim geçiş gününde 25 saat sonradır", () => {
     expect(zonedNextDayStart(new Date("2027-03-28T12:00:00Z")).toISOString()).toBe("2027-03-28T21:00:00.000Z");
     expect(zonedNextDayStart(new Date("2027-10-31T12:00:00Z")).toISOString()).toBe("2027-10-31T22:00:00.000Z");
+  });
+});
+
+describe("zonedWallClockToDate / dateToZonedWallClock", () => {
+  it("kışın (UTC+2) gidiş-dönüş", () => {
+    const d = zonedWallClockToDate("2027-01-15T20:00");
+    expect(d?.toISOString()).toBe("2027-01-15T18:00:00.000Z");
+    expect(dateToZonedWallClock(d!)).toBe("2027-01-15T20:00");
+  });
+
+  it("yazın (UTC+3) gidiş-dönüş", () => {
+    const d = zonedWallClockToDate("2027-07-15T20:00");
+    expect(d?.toISOString()).toBe("2027-07-15T17:00:00.000Z");
+    expect(dateToZonedWallClock(d!)).toBe("2027-07-15T20:00");
+  });
+
+  it("bilinen başka bir bölgede de çalışır", () => {
+    expect(zonedWallClockToDate("2027-01-15T20:00", "America/New_York")?.toISOString()).toBe("2027-01-16T01:00:00.000Z");
+  });
+
+  it("Mart geçiş gününde var olmayan saat ileri kayar (03:30 -> 04:30 yaz saati)", () => {
+    expect(zonedWallClockToDate("2027-03-28T02:59")?.toISOString()).toBe("2027-03-28T00:59:00.000Z");
+    const gap = zonedWallClockToDate("2027-03-28T03:30");
+    expect(gap?.toISOString()).toBe("2027-03-28T01:30:00.000Z");
+    expect(dateToZonedWallClock(gap!)).toBe("2027-03-28T04:30");
+    expect(zonedWallClockToDate("2027-03-28T04:00")?.toISOString()).toBe("2027-03-28T01:00:00.000Z");
+  });
+
+  it("Ekim geçiş gününde iki kez yaşanan saat ilk yaşanana (yaz saati) çözülür", () => {
+    const first = zonedWallClockToDate("2027-10-31T03:30");
+    expect(first?.toISOString()).toBe("2027-10-31T00:30:00.000Z");
+    // İkinci yaşanış (UTC+2) aynı duvar saatini gösterir; dönüşüm onu da ilkine bağlar.
+    expect(dateToZonedWallClock(new Date("2027-10-31T01:30:00Z"))).toBe("2027-10-31T03:30");
+    expect(zonedWallClockToDate("2027-10-31T02:59")?.toISOString()).toBe("2027-10-30T23:59:00.000Z");
+    expect(zonedWallClockToDate("2027-10-31T04:00")?.toISOString()).toBe("2027-10-31T02:00:00.000Z");
+  });
+
+  it("geçersiz girdide null döner", () => {
+    expect(zonedWallClockToDate("")).toBeNull();
+    expect(zonedWallClockToDate("2027-02-30T10:00")).toBeNull();
+    expect(zonedWallClockToDate("2027-01-15")).toBeNull();
+    expect(zonedWallClockToDate("2027-01-15T25:00")).toBeNull();
   });
 });

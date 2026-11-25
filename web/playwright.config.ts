@@ -41,7 +41,7 @@ export default defineConfig({
     baseURL: E2E_BASE_URL,
     storageState: AUTH_STATE_FILE,
     locale: "tr-TR",
-    timezoneId: "Europe/Istanbul",
+    timezoneId: "Asia/Famagusta",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     actionTimeout: 20_000,

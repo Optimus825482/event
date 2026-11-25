@@ -188,6 +188,15 @@ describe("WhatsApp bağlantısı", () => {
     expect(text).toMatch(/http:\/\/localhost:3000\/i\/\S+/);
   });
 
+  it("tarih ve saat her zaman Kıbrıs saatindedir; ayar satırındaki eski saat dilimi yok sayılır", async () => {
+    const admin = await makeActor(adminActor());
+    await db.insert(systemSettings).values({ timezone: "America/New_York" });
+    const { reservation } = await seed(); // 2027-01-10T18:00Z = Kıbrıs 20:00 (kış, UTC+2)
+    const res = await getWhatsAppLink(db, admin, { reservationId: reservation.id });
+    const text = decodeURIComponent(res.url.split("?text=")[1] ?? "");
+    expect(text).toContain("10 Ocak 2027 20:00");
+  });
+
   it("telefon yoksa numarasız bağlantı", async () => {
     const admin = await makeActor(adminActor());
     const { reservation } = await seed(undefined, { email: "a@example.com" });

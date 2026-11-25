@@ -43,7 +43,7 @@ afterAll(async () => {
 describe("CLI", () => {
   it("--dry-run raporu yazar, hedefi boş bırakır, konsola kişisel veri yazmaz", async () => {
     const reportBase = path.join(OUT, "rapor");
-    const run = cli(["--dry-run", "--report", reportBase], { LEGACY_DATABASE_URL: dbUrl(LEGACY), DATABASE_URL: dbUrl(TARGET) });
+    const run = cli(["--dry-run", "--report", reportBase], { LEGACY_DATABASE_URL: dbUrl(LEGACY), DATABASE_URL: dbUrl(TARGET), LEGACY_TZ: "Asia/Famagusta" });
     expect(run.stderr).toBe("");
     expect(run.status).toBe(0);
     expect(run.stdout).toMatch(/Taşıma \(dry-run\) sonucu: rolled-back/);
@@ -55,6 +55,15 @@ describe("CLI", () => {
     expect(report.categories.conflictingReservations).toHaveLength(2);
     expect(await totalRows(TARGET)).toBe(0);
   }, 120_000);
+
+  it("LEGACY_TZ zorunludur: eksikse hiçbir şeye dokunmadan, değişkeni ve olası değerleri söyleyerek 2 ile çıkar", async () => {
+    const run = cli(["--dry-run"], { LEGACY_DATABASE_URL: dbUrl(LEGACY), DATABASE_URL: dbUrl(TARGET) });
+    expect(run.status).toBe(2);
+    expect(run.stderr).toMatch(/LEGACY_TZ/);
+    expect(run.stderr).toMatch(/Asia\/Famagusta/);
+    expect(run.stderr).toMatch(/Europe\/Istanbul/);
+    expect(await totalRows(TARGET)).toBe(0);
+  }, 60_000);
 
   it("eksik ortam değişkeni ve aynı kaynak/hedef kullanım hatasıdır", () => {
     expect(cli([], { DATABASE_URL: dbUrl(TARGET) }).status).toBe(2);

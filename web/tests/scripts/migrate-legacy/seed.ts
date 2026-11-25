@@ -66,7 +66,7 @@ export async function seedLegacy(client: pg.Client): Promise<void> {
   await ins(client, "table_types", { id: IDS.tableType, name: "VIP", basePrice: "1500.50", capacity: 10 });
   await ins(client, "staff_roles", { key: "waiter", label: "Garson" });
   await ins(client, "staff_colors", { name: "Kırmızı", color: "#ff0000" });
-  await ins(client, "system_settings", { companyName: "Sentetik", smtpPassword: "sentetik-parola" });
+  await ins(client, "system_settings", { companyName: "Sentetik", timezone: "Europe/Istanbul", smtpPassword: "sentetik-parola" });
 
   await ins(client, "staff", {
     id: IDS.staff.s1, sicilNo: "S001", fullName: "Personel Bir", position: "garson", department: "Servis", age: 30, isActive: false, status: null,

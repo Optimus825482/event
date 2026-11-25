@@ -103,9 +103,9 @@ export async function getAdminDashboard(db: Executor, actor: Actor): Promise<Adm
   authorize(actor, "users", "view");
   authorize(actor, "settings", "view");
 
-  const monthStart = sql`date_trunc('month', now() at time zone ${APP_TIME_ZONE})`;
-  const dayStart = sql`date_trunc('day', now() at time zone ${APP_TIME_ZONE})`;
-  const local = (column: SQLWrapper) => sql`(${column} at time zone ${APP_TIME_ZONE})`;
+  const monthStart = sql`date_trunc('month', now() at time zone ${APP_TIME_ZONE}::text)`;
+  const dayStart = sql`date_trunc('day', now() at time zone ${APP_TIME_ZONE}::text)`;
+  const local = (column: SQLWrapper) => sql`(${column} at time zone ${APP_TIME_ZONE}::text)`;
 
   const [userRow] = await db
     .select({

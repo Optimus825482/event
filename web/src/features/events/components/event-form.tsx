@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { APP_TIME_ZONE, dateToZonedWallClock, zonedWallClockToDate } from "@/lib/time-zone";
 import { EVENT_TYPE_SUGGESTIONS } from "../board";
 import { createEventAction, updateEventAction } from "../actions";
 
@@ -32,18 +33,15 @@ type Props = {
 export const eventInputClass =
   "w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500";
 
-/** ISO anını tarayıcının yerel saatiyle `datetime-local` değerine çevirir. */
+/** ISO anını uygulama saat dilimindeki (Kıbrıs) `datetime-local` değerine çevirir; tarayıcı dilimi etkilemez. */
 function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return iso ? dateToZonedWallClock(new Date(iso), APP_TIME_ZONE) : "";
 }
 
-/** Yerel `datetime-local` değerini ISO'ya çevirir; boşsa `undefined`. */
+/** Kıbrıs duvar saati olarak girilen `datetime-local` değerini ISO'ya çevirir; boş ya da geçersizse `undefined`. */
 function toIso(value: FormDataEntryValue | null): string | undefined {
   const text = typeof value === "string" ? value : "";
-  return text === "" ? undefined : new Date(text).toISOString();
+  return zonedWallClockToDate(text, APP_TIME_ZONE)?.toISOString();
 }
 
 function Field({

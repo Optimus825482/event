@@ -12,7 +12,7 @@ npx tsx scripts/migrate-legacy/index.ts [--dry-run] [--report raporlar/taşıma]
   [--force-empty-check=off] [--default-organizer <kullanıcı-uuid>]
 ```
 
-- `LEGACY_TZ`: eski `timestamp without time zone` değerlerinin yazıldığı dilim (açık soru 3). Değer
+- `LEGACY_TZ` (zorunlu, varsayılanı yok; eksikse betik hiçbir şeye dokunmadan 2 koduyla çıkar; olası değerler `Asia/Famagusta`, `Europe/Istanbul`): eski `timestamp without time zone` değerlerinin yazıldığı dilim (açık soru 3). Değer
   PostgreSQL'in `pg_timezone_names` listesinde olmalı.
 - `BETTER_AUTH_SECRET` / `QR_SIGNING_KEY` uygulamanın üretim değerleriyle **aynı** olmalı: `qr_token`
   bu anahtarla imzalanır. Farklıysa taşınan rezervasyonların QR'ları uygulamada doğrulanmaz.
