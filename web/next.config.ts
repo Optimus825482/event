@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { LEGACY_LEADER_REDIRECTS } from "./src/features/reviews/legacy-redirects";
 import { securityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
@@ -12,6 +13,9 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "11mb" },
     // `forbidden.tsx` ve 403 durum kodu (yetkisiz kullanıcı için, bkz. features/auth/errors.ts).
     authInterrupts: true,
+  },
+  async redirects() {
+    return [...LEGACY_LEADER_REDIRECTS];
   },
   async headers() {
     return [

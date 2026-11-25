@@ -60,7 +60,7 @@ describe("F&B kullanıcısı yalnızca kendi ekibini görür (ownTeamOnly)", () 
   it("menüde değerlendirme öğesi staffId'si olan kullanıcıya ve yöneticiye görünür, staffId'siz kullanıcıya görünmez", async () => {
     const w = await setupReviewWorld();
     const hasReviews = (a: Parameters<typeof visibleNavItems>[0]) =>
-      visibleNavItems(a).some((i) => i.href === "/leader/reviews");
+      visibleNavItems(a).some((i) => i.href === "/fnb/team/reviews");
     expect(hasReviews(w.leader)).toBe(true);
     expect(hasReviews(managerActor("fnb"))).toBe(true);
     expect(hasReviews(await makeLeader(null))).toBe(false);

@@ -15,6 +15,7 @@ import {
 } from "@/features/reviews/components/leader-ui";
 import { getLeaderDashboard } from "@/features/reviews/leader-queries";
 import { canUseLeaderPanel } from "@/features/reviews/leader-scope";
+import { REVIEW_ROUTES } from "@/features/reviews/routes";
 
 export const metadata: Metadata = { title: "Lider Paneli | EventFlow" };
 
@@ -85,7 +86,7 @@ export default async function LeaderDashboardPage() {
                 {data.upcoming.map((event) => (
                   <li key={event.id}>
                     <Link
-                      href={`/leader/events/${event.id}`}
+                      href={REVIEW_ROUTES.event(event.id)}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 p-3 transition-colors hover:border-cyan-500/40 hover:bg-slate-800 focus-visible:outline-2"
                     >
                       <span>

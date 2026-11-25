@@ -41,7 +41,7 @@ describe("launcherModules", () => {
 
   it("kendi ekibiyle sınırlı F&B kullanıcısı yalnızca erişebildiği ekip panosuna gider", () => {
     const a = memberActor("fnb", { reviews: "v---" }, { staffId: "s1" });
-    expect(cards(a)).toEqual([expect.objectContaining({ key: "fnb", href: "/leader" })]);
+    expect(cards(a)).toEqual([expect.objectContaining({ key: "fnb", href: "/fnb/team" })]);
   });
 
   it("her kartın adresi, o grubun görünür öğelerinden biridir", () => {
@@ -64,7 +64,7 @@ describe("launcherModules", () => {
 describe("landingFor", () => {
   it("tek modül grubu varsa onun ilk öğesi", () => {
     expect(landingFor(memberActor("casino", { reservations: "v---" }))).toBe("/reservations");
-    expect(landingFor(memberActor("fnb", { reviews: "v---" }, { staffId: "s1" }))).toBe("/leader");
+    expect(landingFor(memberActor("fnb", { reviews: "v---" }, { staffId: "s1" }))).toBe("/fnb/team");
   });
 
   it("events:view olmayan F&B kullanıcısı /venues sayfasına iner; kart da oraya gider", () => {

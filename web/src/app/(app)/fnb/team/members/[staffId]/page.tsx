@@ -19,6 +19,7 @@ import { orNotFound } from "@/features/reviews/leader-page";
 import { getMemberPerformance } from "@/features/reviews/leader-queries";
 import { canUseLeaderPanel } from "@/features/reviews/leader-scope";
 import { RATING_KEYS } from "@/features/reviews/score";
+import { REVIEW_ROUTES } from "@/features/reviews/routes";
 import { isUuid } from "@/lib/identifiers";
 
 export const metadata: Metadata = { title: "Performans analizi | Lider | EventFlow" };
@@ -32,7 +33,7 @@ export default async function LeaderMemberPage({ params }: { params: Promise<{ s
 
   return (
     <div className="mx-auto max-w-4xl">
-      <Link href="/leader/team" className="text-sm text-slate-400 hover:text-cyan-300 hover:underline">
+      <Link href={REVIEW_ROUTES.members} className="text-sm text-slate-400 hover:text-cyan-300 hover:underline">
         Ekip
       </Link>
       <PageHeader

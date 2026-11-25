@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import type { LeaderTeamCard } from "../leader-queries";
+import { REVIEW_ROUTES } from "../routes";
 import { formatDate } from "./leader-ui";
 
 /** "Takımlarım": ekip kartları ve üye arama (eski `leader/team`). */
@@ -48,7 +49,7 @@ export function TeamMemberList({ teams }: { teams: LeaderTeamCard[] }) {
                 {members.map((m) => (
                   <li key={m.staffId}>
                     <Link
-                      href={`/leader/team/${m.staffId}`}
+                      href={REVIEW_ROUTES.member(m.staffId)}
                       className="flex items-center gap-3 rounded-lg border border-slate-700 p-3 transition-colors hover:border-cyan-500/40 hover:bg-slate-800 focus-visible:outline-2"
                     >
                       <span

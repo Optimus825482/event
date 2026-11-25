@@ -19,16 +19,26 @@ describe("findActiveGroup", () => {
 });
 
 describe("isItemActive", () => {
-  const root: ShellItem = { href: "/leader", label: "Pano", icon: "star" };
-  const events: ShellItem = { href: "/leader/events", label: "Etkinlikler", icon: "calendar" };
-  const items: ShellItem[] = [root, events, { href: "/leader/team", label: "Ekip", icon: "users" }];
+  const root: ShellItem = { href: "/fnb/team", label: "Pano", icon: "star" };
+  const events: ShellItem = { href: "/fnb/team/events", label: "Etkinlikler", icon: "calendar" };
+  const items: ShellItem[] = [root, events, { href: "/fnb/team/team", label: "Ekip", icon: "users" }];
 
   it("kök öğe yalnızca tam eşleşmede ya da daha uzun kardeş uymadığında etkindir", () => {
-    expect(isItemActive("/leader", root, items)).toBe(true);
-    expect(isItemActive("/leader/events", root, items)).toBe(false);
-    expect(isItemActive("/leader/events/abc", root, items)).toBe(false);
-    expect(isItemActive("/leader/events/abc", events, items)).toBe(true);
-    expect(isItemActive("/leader/other", root, items)).toBe(true);
+    expect(isItemActive("/fnb/team", root, items)).toBe(true);
+    expect(isItemActive("/fnb/team/events", root, items)).toBe(false);
+    expect(isItemActive("/fnb/team/events/abc", root, items)).toBe(false);
+    expect(isItemActive("/fnb/team/events/abc", events, items)).toBe(true);
+    expect(isItemActive("/fnb/team/other", root, items)).toBe(true);
+  });
+
+  it("F&B ekip yollarında en uzun eşleşen öğe etkindir; üst F&B öğesi etkin değildir", () => {
+    const fnbEvents: ShellItem = { href: "/fnb", label: "Etkinlikler", icon: "calendar" };
+    const team: ShellItem = { href: "/fnb/team", label: "Ekip Panosu", icon: "layout-dashboard" };
+    const reviews: ShellItem = { href: "/fnb/team/reviews", label: "Değerlendirmeler", icon: "star" };
+    const fnbItems: ShellItem[] = [fnbEvents, team, reviews];
+    expect(isItemActive("/fnb/team/reviews/abc", reviews, fnbItems)).toBe(true);
+    expect(isItemActive("/fnb/team/reviews/abc", team, fnbItems)).toBe(false);
+    expect(isItemActive("/fnb/team/reviews/abc", fnbEvents, fnbItems)).toBe(false);
   });
 
   it("kardeşsiz öğe önek eşleşmesini korur", () => {

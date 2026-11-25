@@ -13,6 +13,7 @@ import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import { EventStatusBadge, formatDateTime, LeaderNoAccess } from "@/features/reviews/components/leader-ui";
 import { listLeaderEvents } from "@/features/reviews/leader-queries";
 import { canUseLeaderPanel } from "@/features/reviews/leader-scope";
+import { REVIEW_ROUTES } from "@/features/reviews/routes";
 
 export const metadata: Metadata = { title: "Etkinlikler | Lider | EventFlow" };
 
@@ -77,7 +78,7 @@ export default async function LeaderEventsPage({
           {events.map((event) => (
             <li key={event.id}>
               <Link
-                href={`/leader/events/${event.id}`}
+                href={REVIEW_ROUTES.event(event.id)}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 transition-colors hover:border-cyan-500/40 hover:bg-slate-800 focus-visible:outline-2"
               >
                 <div className="space-y-1">
