@@ -269,7 +269,19 @@ export function createEditorStore(initial: InitialLayout, view: ViewSettings = D
         const s = get();
         // Kilit (rezervasyon) bilgisi taslaktan değil, sunucudan gelen güncel durumdan alınır.
         const locked = new Set(s.tables.filter((t) => t.locked && t.id).map((t) => t.id));
-        const tables = draft.tables.map((t) => ({ ...t, locked: t.id !== null && locked.has(t.id) }));
+        // Donmuş masalar (satış kilidi) taslaktan değil, sunucudan gelen güncel durumdan alınır:
+        // taslak satıştan önce kaydedilmiş olabilir; taşınmış/yeniden adlandırılmış/silinmiş hâliyle kaydedilirse sunucu reddeder.
+        const frozen = new Map(s.tables.filter((t) => t.id !== null && s.frozenIds.has(t.id)).map((t) => [t.id, t] as const));
+        const restored = draft.tables.map((t) => {
+          const server = t.id !== null ? frozen.get(t.id) : undefined;
+          const base = server
+            ? { ...t, x: server.x, y: server.y, rotation: server.rotation, floor: server.floor, label: server.label, tableTypeId: server.tableTypeId }
+            : t;
+          return { ...base, locked: t.id !== null && locked.has(t.id) };
+        });
+        const present = new Set(restored.map((t) => t.id));
+        const dropped = [...frozen.values()].filter((t) => !present.has(t.id));
+        const tables = [...restored, ...dropped];
         change({ tables, elements: draft.elements, lines: draft.lines ?? [], selection: [] });
         set({ canvas: draft.canvas });
       },

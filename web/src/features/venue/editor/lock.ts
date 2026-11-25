@@ -28,9 +28,6 @@ export function partitionDeletion(lock: EditorLock, ids: readonly string[]): { a
   return { allowed, blocked };
 }
 
-/** Kilitliyken salt-okunur masa alanları (kapasite sınırı sunucu doğrulamasıdır; istemci yalnızca bilgi verir). */
-export const frozenFieldNames = ["label", "floor", "tableTypeId"] as const;
-
 type TableRef = { key: string; id?: string | null; isPinned: boolean };
 
 /** Taşıma/hizalama için: sabitlenmiş veya donmuş masalar çıkarılır; masa olmayan anahtarlar (dekor) korunur. */

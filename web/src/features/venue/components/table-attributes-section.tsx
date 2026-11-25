@@ -12,7 +12,7 @@ type Props = {
   tables: readonly EditorTable[];
   allTables: readonly EditorTable[];
   readOnly: boolean;
-  /** Seçimde donmuş masa var: kat salt-okunur (`frozenFieldNames`). */
+  /** Seçimde donmuş masa var: kat salt-okunur (etiket, masa tipi ve dönüş panelde ayrıca devre dışı). */
   floorLocked?: boolean;
 };
 

@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { runAutoAlign, runCenterHorizontally, runDelete, runSnapToCells, runSpacing } from "@/features/venue/components/editor-commands";
-import { editorLock, frozenFieldNames, isFrozen, movableKeys, partitionDeletion } from "@/features/venue/editor/lock";
+import { runCenterHorizontally, runDelete, runSnapToCells, runSpacing } from "@/features/venue/components/editor-commands";
+import { editorLock, isFrozen, movableKeys, partitionDeletion } from "@/features/venue/editor/lock";
 import { createEditorStore, type InitialLayout } from "@/features/venue/editor/store";
 
 const ATTRS = { isVip: false, isPinned: false, size: null, floor: 1, sortNumber: null } as const;
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
+const C = "33333333-3333-4333-8333-333333333333";
 
 function layout(): InitialLayout {
   return {
@@ -32,10 +33,6 @@ describe("editör kilidi", () => {
 
   it("donmuş kimliklerin sırası önemsizdir", () => {
     expect(editorLock({ layoutLocked: true, frozenTableIds: ["b", "a"] }).frozen).toEqual(new Set(["a", "b"]));
-  });
-
-  it("salt-okunur alan adları", () => {
-    expect(frozenFieldNames).toEqual(["label", "floor", "tableTypeId"]);
   });
 
   it("movableKeys sabitlenmiş ve donmuş masaları çıkarır", () => {
@@ -77,18 +74,46 @@ describe("editör kilidi", () => {
     expect(store.getState().tables[0]).toMatchObject({ x: 100, y: 100, rotation: 0 });
   });
 
-  it("hizalama komutları donmuş masayı atlar, serbest masayı taşır", () => {
+  it("hizalama komutları kilitliyken donmuş masayı taşımaz, kilitsizken taşır", () => {
+    const messy = (): InitialLayout => {
+      const l = layout();
+      l.tables[0] = { ...l.tables[0]!, x: 103, y: 97 };
+      l.tables[1] = { ...l.tables[1]!, x: 303, y: 97 };
+      return l;
+    };
+    const store = createEditorStore(messy());
+    runSnapToCells(store, vi.fn(), lockA);
+    expect(store.getState().tables.find((t) => t.id === A)).toMatchObject({ x: 103, y: 97 });
+    expect(store.getState().tables.find((t) => t.id === B)).not.toMatchObject({ x: 303, y: 97 });
+    const free = createEditorStore(messy());
+    runSnapToCells(free, vi.fn(), editorLock({ layoutLocked: false, frozenTableIds: [] }));
+    expect(free.getState().tables.find((t) => t.id === A)).not.toMatchObject({ x: 103, y: 97 });
+  });
+
+  it("aralık ve yatay ortalama komutları donmuş masayı taşımaz", () => {
     const store = createEditorStore(layout());
     const notify = vi.fn();
     store.getState().setSnap(false);
-    runAutoAlign(store, notify, lockA);
-    runSnapToCells(store, notify, lockA);
-    expect(store.getState().tables.find((t) => t.id === A)).toMatchObject({ x: 100, y: 100 });
     store.getState().select([`t:${A}`, `t:${B}`]);
     runSpacing(store, 40, notify, lockA);
     expect(store.getState().tables.find((t) => t.id === A)).toMatchObject({ x: 100, y: 100 });
     store.getState().select([`t:${A}`]);
     runCenterHorizontally(store, notify, lockA);
     expect(store.getState().tables.find((t) => t.id === A)).toMatchObject({ x: 100, y: 100 });
+  });
+
+  it("taslak geri yüklemesi donmuş masaları sunucudaki hâlinde tutar, diğer değişiklikleri korur", () => {
+    const l = layout();
+    l.tables.push({ id: C, label: "C1", capacity: 8, tableTypeId: null, x: 500, y: 100, rotation: 0, isLoca: false, ...ATTRS });
+    const store = createEditorStore({ ...l, frozenTableIds: [A, C] });
+    const server = store.getState().tables;
+    const draftTables = server
+      .filter((t) => t.id !== C)
+      .map((t) => (t.id === A ? { ...t, x: 900, y: 700, rotation: 90, floor: 2, label: "X", tableTypeId: "tip" } : { ...t, x: 320, label: "B9" }));
+    store.getState().restoreDraft({ tables: draftTables, elements: [], canvas: { width: 1200, height: 800 } });
+    const after = store.getState().tables;
+    expect(after.find((t) => t.id === A)).toMatchObject({ x: 100, y: 100, rotation: 0, floor: 1, label: "A1", tableTypeId: null });
+    expect(after.find((t) => t.id === C)).toMatchObject({ x: 500, y: 100, label: "C1" });
+    expect(after.find((t) => t.id === B)).toMatchObject({ x: 320, label: "B9" });
   });
 });
