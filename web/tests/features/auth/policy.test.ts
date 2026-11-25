@@ -39,6 +39,7 @@ const EXPECTED: Record<Role, Row> = {
   leader: row({ check_in: "vc--", reviews: NONE, notifications: "v---" }),
   controller: row({ check_in: "vc--" }),
   venue_owner: row({ venues: "vc--" }),
+  user: row({}),
 };
 
 const VERB_CHARS = { view: "v", create: "c", edit: "e", delete: "d" } as const;
@@ -51,8 +52,8 @@ const actorFor = (role: Role, over: Partial<PolicyActor> = {}): PolicyActor => (
 });
 
 describe("policy matrix", () => {
-  it("covers 6 roles x 11 modules x 4 verbs", () => {
-    expect(ROLES.length * MODULES.length * VERBS.length).toBe(264);
+  it("covers 7 roles x 11 modules x 4 verbs", () => {
+    expect(ROLES.length * MODULES.length * VERBS.length).toBe(308);
   });
 
   for (const role of ROLES) {

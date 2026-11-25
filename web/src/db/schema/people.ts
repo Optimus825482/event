@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { DEPARTMENT_LEVELS, DEPARTMENTS } from "../../features/auth/departments";
 import { users } from "./auth";
 import { departments, positions, workLocations } from "./catalog";
 import { createdOnly, currency, money, pk, timestamps, tstz } from "./columns";
@@ -26,6 +27,10 @@ import { reservations } from "./reservations";
 
 export const staffStatus = pgEnum("staff_status", ["active", "inactive", "terminated"]);
 export const gender = pgEnum("gender", ["male", "female"]);
+
+// Uygulama departmanları (HR kataloğundaki `departments` tablosundan ayrıdır).
+export const appDepartment = pgEnum("app_department", DEPARTMENTS);
+export const departmentLevel = pgEnum("department_level", DEPARTMENT_LEVELS);
 
 export const staff = pgTable(
   "staff",
@@ -159,4 +164,19 @@ export const guestNotes = pgTable(
     index("guest_notes_reservation_id_idx").on(t.reservationId),
     index("guest_notes_created_by_id_idx").on(t.createdById),
   ],
+);
+
+// Kullanıcının departman üyelikleri: departman başına tek düzey.
+export const departmentMemberships = pgTable(
+  "department_memberships",
+  {
+    id: pk(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    department: appDepartment("department").notNull(),
+    level: departmentLevel("level").notNull(),
+    ...createdOnly(),
+  },
+  (t) => [unique("department_memberships_user_department_unique").on(t.userId, t.department)],
 );

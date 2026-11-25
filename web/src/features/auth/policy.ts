@@ -69,6 +69,8 @@ const BASELINE: Record<Role, Grants> = {
   },
   controller: { check_in: ["view", "create"] },
   venue_owner: { venues: ["view", "create", "edit", "delete"] },
+  // Departman üyeliği yetkileri Task 3'te eklenecek; şimdilik her şey reddedilir.
+  user: {},
 };
 
 const ROW_FLAG = {
