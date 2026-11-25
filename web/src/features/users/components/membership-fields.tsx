@@ -39,7 +39,7 @@ export function MembershipFields({
         const membership = value.find((m) => m.department === department);
         return (
           <div key={department} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <label className="flex min-w-0 items-center gap-2 text-sm sm:w-48">
+            <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm sm:min-h-0 sm:w-48">
               <input
                 type="checkbox"
                 checked={membership !== undefined}
@@ -52,7 +52,7 @@ export function MembershipFields({
               value={membership?.level ?? "member"}
               disabled={membership === undefined}
               onChange={(e) => setLevel(department, e.target.value as DepartmentLevel)}
-              className={`${SELECT_CLASS} sm:w-52`}
+              className={`${SELECT_CLASS} min-h-11 sm:min-h-0 sm:w-52`}
             >
               {DEPARTMENT_LEVELS.map((level) => (
                 <option key={level} value={level}>
@@ -72,7 +72,7 @@ export type AccessValue = { memberships: Membership[]; grants: PermissionRow[] }
 /** Üyelikler ve izin tablosu birlikte: üyelik değişince tavan dışı izinler atılır. */
 export function AccessFields({ value, onChange }: { value: AccessValue; onChange: (next: AccessValue) => void }) {
   return (
-    <div className="space-y-4 sm:col-span-2">
+    <div className="min-w-0 space-y-4 sm:col-span-2">
       <MembershipFields
         value={value.memberships}
         onChange={(memberships) => onChange({ memberships, grants: pruneGrants(value.grants, memberships) })}

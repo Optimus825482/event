@@ -57,7 +57,7 @@ export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (mes
 
   const errors = state?.fieldErrors;
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2" noValidate>
+    <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2" noValidate>
       <Field id="name" label="Ad soyad" errors={errors?.name}>
         <Input id="name" name="name" defaultValue={user.name} required />
       </Field>
@@ -86,7 +86,7 @@ export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (mes
         <Input id="position" name="position" defaultValue={user.position ?? ""} />
       </Field>
       {usesDepartments(role) ? <AccessFields value={access} onChange={setAccess} /> : null}
-      <div className="flex items-end gap-3 sm:col-span-2">
+      <div className="flex items-end gap-3 sm:col-span-2 in-data-[slot=dialog-content]:sticky in-data-[slot=dialog-content]:bottom-0 in-data-[slot=dialog-content]:z-10 in-data-[slot=dialog-content]:-mx-6 in-data-[slot=dialog-content]:-mb-6 in-data-[slot=dialog-content]:border-t in-data-[slot=dialog-content]:bg-background in-data-[slot=dialog-content]:px-6 in-data-[slot=dialog-content]:py-4">
         <Button type="submit" disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">
           {pending ? "Kaydediliyor…" : "Kaydet"}
         </Button>

@@ -59,7 +59,7 @@ export function CreateUserForm({ onDone }: { onDone?: (message: string) => void 
 
   const errors = state?.fieldErrors;
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2" noValidate>
+    <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2" noValidate>
       <Field id="username" label="Kullanıcı adı" errors={errors?.username}>
         <Input id="username" name="username" autoComplete="off" required aria-invalid={Boolean(errors?.username)} />
       </Field>
@@ -95,7 +95,7 @@ export function CreateUserForm({ onDone }: { onDone?: (message: string) => void 
         />
       </Field>
       {usesDepartments(role) ? <AccessFields value={access} onChange={setAccess} /> : null}
-      <div className="flex items-end gap-3 sm:col-span-2">
+      <div className="flex items-end gap-3 sm:col-span-2 in-data-[slot=dialog-content]:sticky in-data-[slot=dialog-content]:bottom-0 in-data-[slot=dialog-content]:z-10 in-data-[slot=dialog-content]:-mx-6 in-data-[slot=dialog-content]:-mb-6 in-data-[slot=dialog-content]:border-t in-data-[slot=dialog-content]:bg-background in-data-[slot=dialog-content]:px-6 in-data-[slot=dialog-content]:py-4">
         <Button type="submit" disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">
           {pending ? "Oluşturuluyor…" : "Kullanıcı oluştur"}
         </Button>

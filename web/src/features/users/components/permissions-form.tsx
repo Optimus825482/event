@@ -36,7 +36,7 @@ export function PermissionsForm({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       {hasElevated ? (
         <p className="text-sm text-muted-foreground">Departmanın tüm modülleri (asistan: silme hariç)</p>
       ) : null}
@@ -61,14 +61,16 @@ export function PermissionsForm({
                   <tr key={module} className="border-b last:border-0">
                     <td className="py-2 pr-4">{label}</td>
                     {VERB_FLAGS.map(([verb, flag, verbLabel]) => (
-                      <td key={verb} className="py-2 pr-4">
+                      <td key={verb} className="py-0 pr-4">
                         {(verbs as Verb[]).includes(verb) ? (
-                          <input
-                            type="checkbox"
-                            aria-label={`${label}: ${verbLabel}`}
-                            checked={row?.[flag] ?? false}
-                            onChange={(e) => setFlag(module, flag, e.target.checked)}
-                          />
+                          <span className="flex h-11 w-11 items-center justify-center">
+                            <input
+                              type="checkbox"
+                              aria-label={`${label}: ${verbLabel}`}
+                              checked={row?.[flag] ?? false}
+                              onChange={(e) => setFlag(module, flag, e.target.checked)}
+                            />
+                          </span>
                         ) : null}
                       </td>
                     ))}
