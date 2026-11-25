@@ -5,6 +5,7 @@ import { authorize, type PolicyActor } from "@/features/auth/policy";
 import { searchCustomersInput, type SearchCustomersInput } from "./schemas";
 import { VIP_SCORE_THRESHOLD } from "./vip";
 import { escapeLike } from "@/lib/identifiers";
+import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -80,7 +81,7 @@ export async function getCustomerDetail(db: Executor, actor: PolicyActor, id: st
   if (!customer) return null;
 
   // Organizatör yalnızca kendi etkinliklerinin geçmişini ve notlarını görür (başkasının etkinlik adı sızmaz).
-  const ownEventOnly = actor.role === "organizer";
+  const ownEventOnly = seesOnlyOwnEvents(actor);
   const [tags, notes, history] = await Promise.all([
     tagsByCustomer(db, [id]),
     db

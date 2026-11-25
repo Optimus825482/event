@@ -5,7 +5,7 @@ import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { ForbiddenError } from "@/features/auth/errors";
-import { adminActor, managerActor, persistActor } from "../../helpers/actors";
+import { adminActor, managerActor, memberActor, persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
 /** Departman aktörü ya da eski rol adı (bildirim testleri hedef rol için eski rolleri kullanır). */
@@ -15,13 +15,9 @@ export async function makeActor(who: Actor | Role, staffId?: string | null): Pro
   return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
-/**
- * Ekip lideri: eski `leader` rolü. Kapsam (yalnızca kendi ekibi) kaynak kodda hâlâ role bağlı;
- * Task 5'te `memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }, { staffId })` olur.
- */
+/** Ekip lideri: F&B kullanıcı düzeyi; yalnızca kendi ekibini görür (`ownTeamOnly`). */
 export async function makeLeader(staffId: string | null = null): Promise<Actor> {
-  const u = await f.createUser(db, { role: "leader", ...(staffId ? { staffId } : {}) });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
+  return persistActor(db, memberActor("fnb", { reviews: "vce-", check_in: "vc--", notifications: "v---" }, { staffId }));
 }
 
 /** Sahiplik/eski rol testleri: eski rolle aktör (bu görevde dokunulmaz). */

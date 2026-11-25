@@ -15,7 +15,7 @@ import { DomainError } from "@/lib/action";
 import { managerActor, persistActor } from "../../helpers/actors";
 import * as f from "../../helpers/factories";
 
-export async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+export async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
 }
 

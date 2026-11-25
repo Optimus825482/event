@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { events, staff, staffPerformanceReviews, teamMembers, teams, users } from "@/db/schema";
 import { authorize, can, type PolicyResource, type Verb } from "@/features/auth/policy";
+import { ownTeamOnly } from "@/features/auth/scope";
 import type { Actor } from "@/features/auth/session";
 import { canAccessEvent } from "@/features/events/access";
 import { insertNotification, type NotificationRow } from "@/features/notifications/service";
@@ -222,7 +223,7 @@ export async function completeAllReviews(
   authorizeReviewsGate(actor, "edit");
   return executor.transaction(async (tx) => {
     const event = await loadReviewEvent(tx, actor, input.eventId);
-    if (actor.role === "leader") {
+    if (ownTeamOnly(actor)) {
       const [led] = await tx
         .select({ id: teams.id })
         .from(teams)

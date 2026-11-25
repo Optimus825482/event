@@ -4,6 +4,7 @@ import { events, staff, staffPerformanceReviews } from "@/db/schema";
 import { authorize, type PolicyActor } from "@/features/auth/policy";
 import { average } from "./leader-stats";
 import { ratingBand, type RatingBand } from "./score";
+import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -40,7 +41,7 @@ export async function listStaffReviewSummaries(executor: Executor, actor: Policy
     .innerJoin(events, eq(events.id, staffPerformanceReviews.eventId))
     .where(eq(staffPerformanceReviews.isCompleted, true))
     .orderBy(desc(staffPerformanceReviews.updatedAt));
-  const visible = rows.filter((r) => actor.role !== "organizer" || r.organizerId === actor.id);
+  const visible = rows.filter((r) => !seesOnlyOwnEvents(actor) || r.organizerId === actor.id);
 
   const byStaff = new Map<string, typeof visible>();
   for (const row of visible) byStaff.set(row.staffId, [...(byStaff.get(row.staffId) ?? []), row]);
@@ -94,7 +95,7 @@ export async function listStaffReviewHistory(
     .orderBy(desc(staffPerformanceReviews.updatedAt))
     .limit(50);
   return rows
-    .filter((r) => actor.role !== "organizer" || r.organizerId === actor.id)
+    .filter((r) => !seesOnlyOwnEvents(actor) || r.organizerId === actor.id)
     .map((r) => ({
       eventId: r.eventId,
       eventName: r.eventName,

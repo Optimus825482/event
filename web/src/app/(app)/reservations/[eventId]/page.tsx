@@ -14,6 +14,7 @@ import { ReservationMap } from "@/features/reservations/components/reservation-m
 import { RESERVATION_STATUS_LABELS } from "@/features/reservations/labels";
 import { loadInvitationRecipients, loadReservationList, loadReservationMap } from "@/features/reservations/queries";
 import { cn } from "@/lib/utils";
+import { isAdmin } from "@/features/auth/scope";
 
 export const metadata: Metadata = {
   title: "Etkinlik rezervasyonları | EventFlow",
@@ -182,7 +183,7 @@ export default async function EventReservationsPage({ params, searchParams }: { 
             <ReservationList
               eventId={eventId}
               canEdit={canEdit}
-              canOverrideBlacklist={actor.role === "admin"}
+              canOverrideBlacklist={isAdmin(actor)}
               items={items.map((r) => ({
                 id: r.id,
                 status: r.status,

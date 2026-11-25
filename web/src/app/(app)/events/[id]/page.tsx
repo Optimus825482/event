@@ -34,6 +34,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const canEdit = can(actor, "events", "edit");
   const closed = event.status === "completed" || event.status === "cancelled";
   const editable = canEdit && !closed;
+  const venueEditable = can(actor, "venues", "edit") && !closed;
   const type = eventTypeBadge(event.eventType);
 
   return (
@@ -93,7 +94,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           </div>
         </dl>
 
-        {preview ? <PlanPreviewCard eventId={event.id} plan={preview} canEdit={editable} /> : null}
+        {preview ? <PlanPreviewCard eventId={event.id} plan={preview} canEdit={venueEditable} /> : null}
 
         <ReviewToggles
           id={event.id}

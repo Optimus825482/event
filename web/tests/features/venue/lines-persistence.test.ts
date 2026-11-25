@@ -12,7 +12,7 @@ import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
 async function makeActor(): Promise<Actor> {
-  return persistActor(db, managerActor("entertainment"));
+  return persistActor(db, managerActor("fnb"));
 }
 
 const lines = [

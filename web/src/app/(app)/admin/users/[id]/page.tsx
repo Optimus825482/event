@@ -13,6 +13,7 @@ import { EditUserForm } from "@/features/users/components/edit-user-form";
 import { PermissionsForm } from "@/features/users/components/permissions-form";
 import { UserDeleteButton } from "@/features/users/components/user-delete-button";
 import { getUserDetail } from "@/features/users/queries";
+import { isAdmin } from "@/features/auth/scope";
 
 export const metadata: Metadata = { title: "Kullanıcı | EventFlow" };
 
@@ -25,7 +26,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
   if (!user) notFound();
   const canEdit = can(actor, "users", "edit");
   // Liste ile aynı kural: yalnızca yönetici ve izin, kendi hesabı ve silinmiş hesap değil.
-  const canDelete = actor.role === "admin" && can(actor, "users", "delete") && user.id !== actor.id && !isDeletedAccount(user);
+  const canDelete = isAdmin(actor) && can(actor, "users", "delete") && user.id !== actor.id && !isDeletedAccount(user);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

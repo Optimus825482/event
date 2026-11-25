@@ -51,7 +51,7 @@ export async function loadWizardOptions() {
   const actor = await requirePolicyActor();
   if (!can(actor, "events", "create")) notFound();
   const canVenue = can(actor, "venues", "view");
-  const canTeam = can(actor, "events", "view");
+  const canTeam = can(actor, "staff", "view");
   const [venue, team] = await Promise.all([
     canVenue ? listVenueTemplates(db, actor) : Promise.resolve([]),
     canTeam ? listOrganizationTemplates(db, actor) : Promise.resolve([]),
@@ -71,8 +71,8 @@ export async function loadWizardOptions() {
   return {
     venueTemplates,
     teamTemplates,
-    canApplyVenue: can(actor, "events", "edit") && canVenue,
-    canApplyTeam: can(actor, "events", "edit") && canTeam,
+    canApplyVenue: can(actor, "venues", "edit") && canVenue,
+    canApplyTeam: can(actor, "staff", "edit") && canTeam,
     canInvite: can(actor, "events", "view"),
   };
 }

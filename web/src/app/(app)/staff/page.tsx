@@ -162,7 +162,7 @@ async function PeopleTab({ actor, raw }: { actor: Actor; raw: Record<string, str
 
 async function TeamsTab({ actor }: { actor: Actor }) {
   const teamCards = await listTeamCards(db, actor);
-  return <TeamCardsGrid teams={teamCards} canOrganize={can(actor, "events", "view")} />;
+  return <TeamCardsGrid teams={teamCards} canOrganize={can(actor, "staff", "view")} />;
 }
 
 async function ReviewsTab({ actor }: { actor: Actor }) {

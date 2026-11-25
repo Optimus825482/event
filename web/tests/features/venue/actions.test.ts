@@ -10,7 +10,7 @@ import { adminActor, managerActor, noAccessActor, persistActor } from "../../hel
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 
-async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
+async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
 }
 
@@ -39,7 +39,7 @@ describe("venue actions", () => {
   });
 
   it("organizatör yerleşimi kaydeder", async () => {
-    const actor = await makeActor(managerActor("entertainment"));
+    const actor = await makeActor(managerActor("fnb"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -63,7 +63,7 @@ describe("venue actions", () => {
   });
 
   it("kapasite 0 ve yinelenen etiket alan hatası olarak döner", async () => {
-    const actor = await makeActor(managerActor("entertainment"));
+    const actor = await makeActor(managerActor("fnb"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const res = await actionsFor(actor).saveLayout({
       eventId: event.id,
@@ -81,7 +81,7 @@ describe("venue actions", () => {
   });
 
   it("rezervasyonlu masa silme conflict ve etiketi mesajda", async () => {
-    const actor = await makeActor(managerActor("entertainment"));
+    const actor = await makeActor(managerActor("fnb"));
     const event = await f.createEvent(db, { organizerId: actor.id });
     const table = await f.createTable(db, event.id, { label: "VIP-7" });
     const customer = await f.createCustomer(db);
@@ -101,7 +101,7 @@ describe("venue actions", () => {
 
   it("masa tipini yalnızca ayar yetkisi olan oluşturur", async () => {
     const input = { name: "VIP", color: "#ffaa00", shape: "round", capacity: "12", basePrice: "0" };
-    const organizer = await makeActor(managerActor("entertainment"));
+    const organizer = await makeActor(managerActor("fnb"));
     expect(await actionsFor(organizer).createTableType(input)).toMatchObject({ ok: false, code: "forbidden" });
     const admin = await makeActor(adminActor());
     expect((await actionsFor(admin).createTableType(input)).ok).toBe(true);

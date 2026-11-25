@@ -30,7 +30,7 @@ export async function loadVenueEditor(eventId: string) {
       /** Ekip masa grupları (planda halka olarak gösterilir) ve ızgara ayarları. */
       tableGroups,
       viewSettings,
-      canEdit: can(actor, "events", "edit") && layout.editable,
+      canEdit: can(actor, "venues", "edit") && layout.editable,
       canSaveTemplate: can(actor, "venues", "create"),
       /** Yerleşim taslağı anahtarı için (paylaşılan cihazda kullanıcılar birbirinin taslağını görmez). */
       userId: actor.id,

@@ -7,13 +7,13 @@ import { importAssignments, previewAssignmentImport } from "@/features/import/as
 import { saveAssignments } from "@/features/staffing/assignments-service";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { memberActor } from "../../helpers/actors";
+import { managerActor, memberActor } from "../../helpers/actors";
 import { actorOf, expectDomain, xlsx, type Cell } from "./helpers";
 
 const HEADER: Cell[] = ["Sicil no", "Personel adı", "Masa etiketleri", "Grup", "Vardiya", "Görev"];
 
 async function setup() {
-  const owner = await actorOf("organizer");
+  const owner = await actorOf(managerActor("fnb"));
   const event = await f.createEvent(db, { organizerId: owner.id });
   const tables: Record<string, Awaited<ReturnType<typeof f.createTable>>> = {};
   for (const label of ["T1", "T2", "T3", "T4"]) tables[label] = await f.createTable(db, event.id, { label });

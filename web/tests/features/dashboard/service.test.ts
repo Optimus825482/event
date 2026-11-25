@@ -44,8 +44,7 @@ describe("dashboard service", () => {
     });
 
     it("geri sayım listesi yalnızca yerleşimi ve ekip ataması olan yaklaşan etkinlikleri getirir", async () => {
-      // Task 5: totalStaff `staff` görüntüleme ister (tavan matrisinde Entertainment'ta yok); o zaman taşınır.
-      const actor = await makeLegacy("organizer");
+      const actor = await makeActor(managerActor("fnb"));
       const ready = await f.createEvent(db, { organizerId: actor.id, startsAt: inDays(2), name: "Hazır" });
       await f.createTable(db, ready.id);
       const person = await f.createStaff(db);

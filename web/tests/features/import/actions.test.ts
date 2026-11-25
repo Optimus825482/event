@@ -5,7 +5,7 @@ import { importActionDefs } from "@/features/import/action-defs";
 import { createAction } from "@/lib/action";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
-import { memberActor } from "../../helpers/actors";
+import { managerActor, memberActor } from "../../helpers/actors";
 import { actorOf, bookableEvent, xlsx, type Cell } from "./helpers";
 
 const HEADER: Cell[] = ["Masa etiketi", "Misafir adı", "Telefon", "E-posta", "Kişi sayısı", "Not"];
@@ -67,5 +67,28 @@ describe("içe aktarma action'ları", () => {
     await f.createStaff(db, { sicilNo: "S-1" });
     const assignBytes = await xlsx([["Sicil no", "Masa etiketleri"], ["S-1", "A1"]]);
     expect(await own.defineAction(importActionDefs.importAssignments)(form(event.id, assignBytes))).toMatchObject({ ok: true, data: { written: true, appliedCount: 1 } });
+  });
+});
+
+describe("atama içe aktarma action'ları: staff modülü", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("F&B yöneticisi önizler ve içe aktarır; Entertainment yöneticisi forbidden alır", async () => {
+    const fnb = await actorOf(managerActor("fnb"));
+    const ent = await actorOf(managerActor("entertainment"));
+    const event = await f.createEvent(db, { organizerId: fnb.id });
+    await f.createTable(db, event.id, { label: "A1" });
+    await f.createStaff(db, { sicilNo: "S-9" });
+    const bytes = await xlsx([["Sicil no", "Masa etiketleri"], ["S-9", "A1"]]);
+
+    const asFnb = createAction({ getActor: async () => fnb });
+    expect(await asFnb.defineAction(importActionDefs.previewAssignments)(form(event.id, bytes))).toMatchObject({ ok: true });
+    expect(await asFnb.defineAction(importActionDefs.importAssignments)(form(event.id, bytes))).toMatchObject({ ok: true });
+
+    const asEnt = createAction({ getActor: async () => ent });
+    expect(await asEnt.defineAction(importActionDefs.previewAssignments)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await asEnt.defineAction(importActionDefs.importAssignments)(form(event.id, bytes))).toMatchObject({ ok: false, code: "forbidden" });
   });
 });

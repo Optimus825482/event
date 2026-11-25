@@ -34,13 +34,13 @@ function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOption
  */
 export const venueActionDefs = {
   saveLayout: def({
-    module: "events",
+    module: "venues",
     verb: "edit",
     input: saveLayoutSchema,
     handler: async ({ actor, input }) => saveLayout(db, actor, input),
   }),
   applyTemplate: def({
-    module: "events",
+    module: "venues",
     verb: "edit",
     input: applyTemplateSchema,
     handler: async ({ actor, input }) => applyVenueTemplate(db, actor, input),

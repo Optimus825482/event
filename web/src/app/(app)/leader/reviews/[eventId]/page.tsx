@@ -9,6 +9,7 @@ import { ReviewBoardView } from "@/features/reviews/components/review-board";
 import { getReviewBoard } from "@/features/reviews/queries";
 import { DomainError } from "@/lib/action";
 import { isUuid } from "@/lib/identifiers";
+import { ownTeamOnly } from "@/features/auth/scope";
 
 export const metadata: Metadata = { title: "Ekip değerlendirmesi | EventFlow" };
 
@@ -23,7 +24,7 @@ export default async function ReviewBoardPage({ params }: { params: Promise<{ ev
   } catch (error) {
     // Başkasının ekibi/etkinliği "yok" gibi davranır.
     if (error instanceof DomainError && error.code === "not_found") notFound();
-    if (error instanceof ForbiddenError && actor.role === "leader" && actor.staffId !== null) notFound();
+    if (error instanceof ForbiddenError && ownTeamOnly(actor) && actor.staffId !== null) notFound();
     throw error;
   }
 

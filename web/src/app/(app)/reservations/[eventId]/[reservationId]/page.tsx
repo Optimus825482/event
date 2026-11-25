@@ -7,6 +7,7 @@ import { ReservationEditForm } from "@/features/reservations/components/reservat
 import { ReservationStatusActions } from "@/features/reservations/components/status-actions";
 import { RESERVATION_STATUS_LABELS } from "@/features/reservations/labels";
 import { loadReservationDetail } from "@/features/reservations/queries";
+import { isAdmin } from "@/features/auth/scope";
 
 export const metadata: Metadata = { title: "Rezervasyon | EventFlow", referrer: "no-referrer" };
 
@@ -101,7 +102,7 @@ export default async function ReservationDetailPage({ params }: { params: Params
         id={reservation.id}
         status={reservation.status}
         canEdit={canEdit && event.status !== "completed"}
-        canOverrideBlacklist={actor.role === "admin"}
+        canOverrideBlacklist={isAdmin(actor)}
         isBlacklisted={isBlacklisted}
       />
 

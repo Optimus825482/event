@@ -1,3 +1,4 @@
+import { isAdmin } from "@/features/auth/scope";
 import type { UserSummary } from "./types";
 
 export type StatusFilter = "all" | "active" | "inactive";
@@ -27,7 +28,7 @@ export function countUsers(users: UserSummary[]): UserCounts {
     total: users.length,
     active,
     inactive: users.length - active,
-    admins: users.filter((u) => u.role === "admin").length,
+    admins: users.filter((u) => isAdmin(u)).length,
   };
 }
 

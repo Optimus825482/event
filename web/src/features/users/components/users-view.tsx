@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { ROLES } from "@/features/auth/roles";
+import { isAdmin } from "@/features/auth/scope";
 import { setUserActiveAction } from "../actions";
 import { countUsers, filterUsers, isDeletedAccount, type RoleFilter, type StatusFilter } from "../filter";
 import type { UserSummary } from "../types";
@@ -163,7 +164,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
                   <TableCell>{user.name}</TableCell>
                   <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={user.role === "admin" ? "border-amber-500/40 text-amber-400" : ""}>
+                    <Badge variant="outline" className={isAdmin(user) ? "border-amber-500/40 text-amber-400" : ""}>
                       {ROLE_LABELS[user.role]}
                     </Badge>
                   </TableCell>

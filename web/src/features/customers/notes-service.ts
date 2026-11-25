@@ -6,6 +6,7 @@ import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
 import type { AddNoteInput } from "./schemas";
+import { isAdmin, seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -43,7 +44,7 @@ export async function removeTag(
 
 /** Organizatör yalnızca kendi etkinliğine erişir; başkasınınki "yok" gibi görünür (events/service ile aynı kural). */
 function mayAccessEvent(actor: Actor, event: { organizerId: string }): boolean {
-  return actor.role !== "organizer" || event.organizerId === actor.id;
+  return !seesOnlyOwnEvents(actor) || event.organizerId === actor.id;
 }
 
 /**
@@ -117,7 +118,7 @@ async function assertNoteAccess(db: Executor, actor: Actor, id: string): Promise
     .where(eq(guestNotes.id, id));
   const notFound = new DomainError("not_found", "Not bulunamadı");
   if (!row) throw notFound;
-  if (actor.role === "admin") return;
+  if (isAdmin(actor)) return;
   for (const organizerId of [row.directOrganizerId, row.reservationOrganizerId]) {
     if (organizerId && !mayAccessEvent(actor, { organizerId })) throw notFound;
   }

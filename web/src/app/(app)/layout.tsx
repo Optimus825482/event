@@ -14,6 +14,7 @@ import { can } from "@/features/auth/policy";
 import { countUnread } from "@/features/notifications/service";
 import { currentSessionExpiry } from "@/features/users/current-session";
 import { getOwnAvatar } from "@/features/users/profile";
+import { isAdmin } from "@/features/auth/scope";
 
 async function currentActorOrLogin(): Promise<ActorWithPermissions> {
   try {
@@ -42,7 +43,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           username={actor.username}
           avatarUrl={avatarUrl}
           roleLabel={ROLE_LABELS[actor.role]}
-          isAdmin={actor.role === "admin"}
+          isAdmin={isAdmin(actor)}
           nav={nav}
           unreadCount={unreadCount}
           showBell={showBell}

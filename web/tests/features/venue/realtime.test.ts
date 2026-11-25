@@ -11,7 +11,7 @@ import { watchEvents } from "../realtime/emitted";
 const decor = { width: 1200, height: 800, elements: [] };
 
 async function setup() {
-  const actor = await persistActor(db, managerActor("entertainment"));
+  const actor = await persistActor(db, managerActor("fnb"));
   const event = await f.createEvent(db, { organizerId: actor.id });
   return { actor, event };
 }

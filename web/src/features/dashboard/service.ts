@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { authorize, can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
+import { isAdmin, seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -50,7 +51,7 @@ export type AdminDashboard = {
 
 /** Organizatör yalnızca kendi etkinliklerini görür; diğer roller kısıtsızdır (`canAccessEvent` ile aynı kural). */
 function eventScope(actor: Pick<Actor, "id" | "role">): SQL | undefined {
-  return actor.role === "organizer" ? eq(events.organizerId, actor.id) : undefined;
+  return seesOnlyOwnEvents(actor) ? eq(events.organizerId, actor.id) : undefined;
 }
 
 // Tamamlanan: durumu "completed" ya da başlangıcı geçmiş (iptaller hariç). Yaklaşan: başlangıcı gelecekte ve bitmemiş.
@@ -82,7 +83,7 @@ export async function getEventsDashboard(db: Executor, actor: Actor): Promise<Ev
   // Sayılar yalnızca ilgili modülü görebilenlere verilir; şablonlarda görünürlük kuralı (herkese açık ya da kendi) uygulanır.
   const seeStaff = can(actor, "staff", "view");
   const seeVenues = can(actor, "venues", "view");
-  const templateScope = actor.role === "admin" ? undefined : or(eq(venueTemplates.isPublic, true), eq(venueTemplates.createdById, actor.id));
+  const templateScope = isAdmin(actor) ? undefined : or(eq(venueTemplates.isPublic, true), eq(venueTemplates.createdById, actor.id));
   const none = [{ n: 0 }];
   const [staffRow] = seeStaff ? await db.select({ n: count() }).from(staff).where(eq(staff.status, "active")) : none;
   const [teamRow] = seeStaff ? await db.select({ n: count() }).from(teams).where(eq(teams.isActive, true)) : none;

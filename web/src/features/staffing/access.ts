@@ -12,11 +12,11 @@ const NOT_FOUND = "Etkinlik bulunamadı";
 const LOCKED = "Tamamlanmış veya iptal edilmiş etkinlikte ekip organizasyonu değiştirilemez";
 
 /**
- * Ekip organizasyonu etkinliğin bir parçasıdır: yetki `events` modülünden gelir.
+ * Ekip organizasyonu `staff` modülüyle yetkilendirilir (etkinliği okumak ayrıca `events:view` ister).
  * Servis düzeyinde ikinci savunma; kullanıcı izin satırları action/sayfa katmanında uygulanır.
  */
 export function ensureStaffingAccess(actor: PolicyActor, verb: Verb): void {
-  authorize(actor, "events", verb);
+  authorize(actor, "staff", verb);
 }
 
 function assertOwnership(actor: Actor, event: EventRow): void {

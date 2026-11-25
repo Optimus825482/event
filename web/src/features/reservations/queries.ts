@@ -13,6 +13,7 @@ import { canAccessEvent, MSG, type Executor } from "./internal";
 import { getReservationPlan } from "./plan-service";
 import { availableTables } from "./read-service";
 import { listReservationsInput, type ListReservationsInput } from "./schemas";
+import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 
 async function accessibleEvent(db: Executor, actor: ActorWithPermissions, eventId: string) {
@@ -206,7 +207,7 @@ export async function loadReservationDashboard(raw: { search?: string }) {
   const dayStart = istanbulDayStart(new Date());
 
   const conditions: SQL[] = [gte(events.startsAt, dayStart), ne(events.status, "cancelled")];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
+  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
   if (search) conditions.push(ilike(events.name, `%${escapeLike(search)}%`));
 
   const items = await defaultDb

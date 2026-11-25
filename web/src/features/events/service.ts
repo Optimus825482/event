@@ -15,6 +15,7 @@ import type {
   ReviewSettingsInput,
   UpdateEventInput,
 } from "./schemas";
+import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 export type EventRow = typeof events.$inferSelect;
@@ -171,7 +172,7 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
   const pageSize = filter.pageSize ?? DEFAULT_PAGE_SIZE;
 
   const conditions: SQL[] = [];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
+  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
   if (filter.status) conditions.push(eq(events.status, filter.status));
   if (filter.search) conditions.push(ilike(events.name, `%${escapeLike(filter.search)}%`));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -225,7 +226,7 @@ const BOARD_LIMIT = 500;
  */
 export async function listEventBoard(db: Executor, actor: Actor, filter: { search?: string | undefined }) {
   const conditions: SQL[] = [];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
+  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
   if (filter.search) conditions.push(ilike(events.name, `%${escapeLike(filter.search)}%`));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 

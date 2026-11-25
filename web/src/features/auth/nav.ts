@@ -1,4 +1,5 @@
 import { can, type Module, type PolicyActor } from "./policy";
+import { ownTeamOnly } from "./scope";
 
 /** Menü modülleri (eski arayüzdeki modül şeridi). `general` yalnızca zil/profil menüsünden erişilir. */
 export type NavGroupKey = "events" | "leader" | "reservations" | "check_in" | "admin" | "general";
@@ -93,7 +94,7 @@ export function visibleNavGroups(actor: PolicyActor): NavGroupView[] {
 // `reviews` modülünde lider yalnızca kendi ekibini görür; menüde modülün görünmesi için
 // aktörün kendi ekibi varsayılır. Gerçek sahiplik denetimi sayfa/action içinde yapılır.
 function navResource(actor: PolicyActor, module: Module) {
-  if (module === "reviews" && actor.role === "leader" && actor.staffId !== null) {
+  if (module === "reviews" && ownTeamOnly(actor) && actor.staffId !== null) {
     return { teamLeaderStaffId: actor.staffId };
   }
   return undefined;

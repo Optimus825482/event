@@ -5,6 +5,7 @@ import { can, type PolicyActor } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { canAccessEvent } from "@/features/events/access";
 import { authorizeReviewsGate } from "./service";
+import { ownTeamOnly, seesOnlyOwnEvents } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
@@ -41,7 +42,7 @@ export function canUseLeaderPanel(actor: PolicyActor): boolean {
 export async function scopedTeams(executor: Executor, actor: Actor): Promise<ScopedTeam[]> {
   authorizeReviewsGate(actor, "view");
   const conditions = [eq(teams.isActive, true)];
-  if (actor.role === "leader") {
+  if (ownTeamOnly(actor)) {
     if (!actor.staffId) return [];
     conditions.push(eq(teams.leaderStaffId, actor.staffId));
   }
@@ -62,7 +63,7 @@ export async function scopedTeams(executor: Executor, actor: Actor): Promise<Sco
     .where(and(...conditions))
     .orderBy(asc(events.startsAt), asc(teams.sortOrder), asc(teams.name));
   return rows
-    .filter((r) => (actor.role === "organizer" ? r.organizerId === actor.id : true))
+    .filter((r) => (seesOnlyOwnEvents(actor) ? r.organizerId === actor.id : true))
     .filter((r) => r.organizerId === null || canAccessEvent(actor, { organizerId: r.organizerId }))
     .map((r) => ({
       id: r.id,

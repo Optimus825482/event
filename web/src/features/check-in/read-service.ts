@@ -7,6 +7,7 @@ import { DomainError } from "@/lib/action";
 import type { SearchGuestsInput } from "./schemas";
 import { toEventStats, type EventStats } from "./stats";
 import { escapeLike } from "@/lib/identifiers";
+import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 export type { EventStats } from "./stats";
 
@@ -194,7 +195,7 @@ export async function listCheckInEvents(db: Executor, actor: Actor): Promise<Che
       and(eq(events.status, "completed"), sql`${events.startsAt} >= now() - interval '3 days'`),
     ) ?? sql`false`,
   ];
-  if (actor.role === "organizer") conditions.push(eq(events.organizerId, actor.id));
+  if (seesOnlyOwnEvents(actor)) conditions.push(eq(events.organizerId, actor.id));
   const rows = await db
     .select({
       id: events.id,

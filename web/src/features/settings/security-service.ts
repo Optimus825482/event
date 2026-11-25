@@ -7,6 +7,7 @@ import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import type { ClearLockoutInput, RevokeSessionInput } from "./security-schemas";
+import { isAdmin } from "@/features/auth/scope";
 
 const MAX_USER_AGENT = 300;
 /** Parola değiştirme sınırlayıcısının anahtar öneki (own-password.ts); giriş kilidi değildir. */
@@ -43,7 +44,7 @@ export type LockoutRow = {
 /** Güvenlik sekmesi yalnızca yöneticinindir: ayar izni verilmiş başka rol de erişemez. */
 function requireAdmin(actor: Actor, verb: "view" | "edit"): void {
   authorize(actor, "settings", verb);
-  if (actor.role !== "admin") throw new ForbiddenError();
+  if (!isAdmin(actor)) throw new ForbiddenError();
 }
 
 /** Oturum belirteci (`token`) bilerek seçilmez; istemciye yalnızca kimlik ve üst veri çıkar. */

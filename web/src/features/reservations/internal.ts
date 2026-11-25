@@ -8,6 +8,7 @@ import { canAccessEvent } from "@/features/events/access";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import type { EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
+import { isAdmin } from "@/features/auth/scope";
 
 export type Executor = Db | Tx;
 export type ReservationRow = typeof reservations.$inferSelect;
@@ -107,7 +108,7 @@ export function assertCapacity(guestCount: number, table: Pick<EventTableRow, "c
 
 /** Kara listedeki müşteri yalnızca yönetici açıkça onaylarsa (`overrideBlacklist`) geçer. */
 export function assertNotBlacklisted(actor: Actor, isBlacklisted: boolean, override: boolean | undefined): void {
-  if (isBlacklisted && !(actor.role === "admin" && override === true)) {
+  if (isBlacklisted && !(isAdmin(actor) && override === true)) {
     throw new DomainError("conflict", MSG.blacklisted);
   }
 }

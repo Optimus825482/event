@@ -17,6 +17,7 @@ import type {
 } from "./schemas";
 import { DELETED_EMAIL_SUFFIX, isDeletedAccount } from "./filter";
 import { USER_COLUMNS, type UserSummary } from "./types";
+import { isAdmin } from "@/features/auth/scope";
 
 const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
 const DELETED_USERNAME_PREFIX = "silinmis-";
@@ -143,7 +144,7 @@ export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInp
   return withAdminLock(db, async (tx) => {
     const target = await getTarget(tx, id);
     assertNotDeleted(target);
-    const demoting = input.role !== undefined && input.role !== "admin" && target.role === "admin";
+    const demoting = input.role !== undefined && input.role !== "admin" && isAdmin(target);
     if (demoting && target.isActive && (await otherActiveAdmins(tx, id)) === 0) {
       throw new DomainError("conflict", MESSAGES.lastAdminDemote);
     }
@@ -165,7 +166,7 @@ export async function setUserActive(db: Db | Tx, actor: Actor, input: SetUserAct
     const target = await getTarget(tx, input.id);
     if (!input.active) {
       if (target.id === actor.id) throw new DomainError("conflict", MESSAGES.selfDeactivate);
-      if (target.role === "admin" && target.isActive && (await otherActiveAdmins(tx, target.id)) === 0) {
+      if (isAdmin(target) && target.isActive && (await otherActiveAdmins(tx, target.id)) === 0) {
         throw new DomainError("conflict", MESSAGES.lastAdminDeactivate);
       }
       await deactivateUser(target.id);
@@ -245,11 +246,11 @@ async function hasRestrictingReferences(tx: Tx, userId: string): Promise<boolean
 export async function deleteUser(db: Db | Tx, actor: Actor, input: DeleteUserInput): Promise<DeleteUserResult> {
   authorize(actor, "users", "delete");
   // Silme izni yalnızca yönetici rolündedir; özel izin satırları bunu genişletemez.
-  if (actor.role !== "admin") throw new ForbiddenError();
+  if (!isAdmin(actor)) throw new ForbiddenError();
   return withAdminLock(db, async (tx) => {
     const target = await getTarget(tx, input.id);
     if (target.id === actor.id) throw new DomainError("conflict", MESSAGES.selfDelete);
-    if (target.role === "admin" && (await otherActiveAdmins(tx, target.id)) === 0) {
+    if (isAdmin(target) && (await otherActiveAdmins(tx, target.id)) === 0) {
       throw new DomainError("conflict", MESSAGES.lastAdminDelete);
     }
 

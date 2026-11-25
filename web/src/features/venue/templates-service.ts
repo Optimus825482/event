@@ -6,6 +6,7 @@ import { DomainError } from "@/lib/action";
 import { emptyDecor, type TemplateIdInput, type TemplateLayout, type UpdateTemplateInput } from "./schemas";
 import type { CreateBlankTemplateInput } from "./template-schemas";
 import { parseTemplateLayout } from "./template-layout";
+import { isAdmin } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 export type VenueTemplateRow = typeof venueTemplates.$inferSelect;
@@ -33,12 +34,12 @@ export async function templateOwnerResource(db: Executor, id: string): Promise<{
 
 /** Yönetici hepsini, diğerleri kendi şablonlarını ve herkese açık olanları görür. */
 export function canSeeTemplate(actor: Actor, template: Pick<VenueTemplateRow, "isPublic" | "createdById">): boolean {
-  return actor.role === "admin" || template.isPublic || template.createdById === actor.id;
+  return isAdmin(actor) || template.isPublic || template.createdById === actor.id;
 }
 
 /** Yalnızca yönetici ve şablonun sahibi değiştirebilir/silebilir. */
 export function canManageTemplate(actor: Actor, template: Pick<VenueTemplateRow, "createdById">): boolean {
-  return actor.role === "admin" || template.createdById === actor.id;
+  return isAdmin(actor) || template.createdById === actor.id;
 }
 
 export function assertTemplateVisible(actor: Actor, template: VenueTemplateRow): void {
@@ -72,7 +73,7 @@ export type VenueTemplateSummary = {
 
 export async function listVenueTemplates(db: Executor, actor: Actor): Promise<VenueTemplateSummary[]> {
   const where: SQL | undefined =
-    actor.role === "admin" ? undefined : or(eq(venueTemplates.isPublic, true), eq(venueTemplates.createdById, actor.id));
+    isAdmin(actor) ? undefined : or(eq(venueTemplates.isPublic, true), eq(venueTemplates.createdById, actor.id));
   const rows = await db
     .select({ template: venueTemplates, createdByName: users.name })
     .from(venueTemplates)

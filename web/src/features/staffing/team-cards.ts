@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventStaffAssignments, events, staff, teamMembers, teams } from "@/db/schema";
 import { authorize, type PolicyActor } from "@/features/auth/policy";
+import { seesOnlyOwnEvents } from "@/features/auth/scope";
 
 export type TeamCard = {
   id: string;
@@ -39,7 +40,7 @@ export async function listTeamCards(db: Db | Tx, actor: PolicyActor): Promise<Te
     .leftJoin(events, eq(events.id, teams.eventId))
     .where(eq(teams.isActive, true))
     .orderBy(desc(events.startsAt), asc(teams.sortOrder), asc(teams.name));
-  const visible = rows.filter((r) => actor.role !== "organizer" || r.organizerId === actor.id);
+  const visible = rows.filter((r) => !seesOnlyOwnEvents(actor) || r.organizerId === actor.id);
   if (visible.length === 0) return [];
 
   const ids = visible.map((r) => r.id);

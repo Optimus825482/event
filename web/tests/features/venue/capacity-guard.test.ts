@@ -11,7 +11,7 @@ import * as f from "../../helpers/factories";
 const decor = { width: 1200, height: 800, elements: [] };
 
 async function setup() {
-  const actor = await persistActor(db, managerActor("entertainment"));
+  const actor = await persistActor(db, managerActor("fnb"));
   const event = await f.createEvent(db, { organizerId: actor.id });
   const big = await f.createTable(db, event.id, { label: "A1", capacity: 8, x: 0, y: 0 });
   const other = await f.createTable(db, event.id, { label: "A2", capacity: 6, x: 60, y: 0 });

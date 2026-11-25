@@ -2,6 +2,7 @@ import { and, eq, exists, or, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { eventInvitations, events, invitationTemplates } from "@/db/schema";
 import { can, type PolicyActor } from "@/features/auth/policy";
+import { isAdmin, seesOnlyOwnEvents } from "@/features/auth/scope";
 
 export type UploadAccess = "allowed" | "forbidden" | "not_found";
 
@@ -29,10 +30,10 @@ export async function checkUploadAccess(
   }
   if (category === "invitation") {
     if (!can(actor, "invitations", "view")) return "forbidden";
-    if (actor.role !== "organizer") return "allowed";
+    if (!seesOnlyOwnEvents(actor)) return "allowed";
     return (await organizerMayReadInvitationImage(db, actor.id, relative)) ? "allowed" : "not_found";
   }
-  return actor.role === "admin" ? "allowed" : "not_found";
+  return isAdmin(actor) ? "allowed" : "not_found";
 }
 
 async function organizerMayReadInvitationImage(db: Db, organizerId: string, relative: string): Promise<boolean> {
