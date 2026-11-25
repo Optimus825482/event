@@ -7,13 +7,14 @@
  *       [--force-empty-check=off] [--default-organizer <kullanıcı-uuid>]
  *
  * Ortam: LEGACY_DATABASE_URL (salt-okunur açılır), DATABASE_URL (hedef), LEGACY_TZ (varsayılan
- * Europe/Istanbul), BETTER_AUTH_SECRET / QR_SIGNING_KEY (uygulamayla aynı; QR belirteçleri için).
+ * Asia/Famagusta), BETTER_AUTH_SECRET / QR_SIGNING_KEY (uygulamayla aynı; QR belirteçleri için).
  * Çıkış kodu: 0 başarılı (dry-run dahil), 1 hata ya da doğrulama başarısızlığı, 2 kullanım hatası.
  * Konsola yalnızca sayılar yazılır; ayrıntı `--report` dosyalarındadır (.json ve .txt).
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { APP_TIME_ZONE } from "../../src/lib/time-zone";
 import { renderSummary, renderText } from "./report";
 import { runMigration } from "./run";
 import { isUuid } from "./values";
@@ -82,7 +83,7 @@ async function main(): Promise<number> {
     legacyUrl,
     targetUrl,
     dryRun: args.dryRun,
-    legacyTz: process.env.LEGACY_TZ?.trim() || "Europe/Istanbul",
+    legacyTz: process.env.LEGACY_TZ?.trim() || APP_TIME_ZONE,
     emptyCheck: args.emptyCheck,
     defaultOrganizerId: args.defaultOrganizerId,
   });

@@ -10,6 +10,7 @@ import { listRecipients } from "@/features/invitations/event-invitation";
 import { searchCustomers } from "@/features/customers/queries";
 import { DomainError } from "@/lib/action";
 import { escapeLike, isUuid } from "@/lib/identifiers";
+import { zonedDayStart, zonedNextDayStart } from "@/lib/time-zone";
 import { MSG, type Executor } from "./internal";
 import { getReservationPlan } from "./plan-service";
 import { availableTables } from "./read-service";
@@ -190,12 +191,6 @@ export async function loadReservationMap(eventId: string) {
   }
 }
 
-/** Türkiye saatiyle bugünün başlangıcı (Türkiye yıl boyu UTC+3). */
-function istanbulDayStart(now: Date): Date {
-  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(now);
-  return new Date(`${day}T00:00:00+03:00`);
-}
-
 /**
  * Rezervasyon ana ekranı: bugünden itibaren (iptal edilmemiş) yaklaşan etkinlikler, en yakın önce.
  * İlk etkinlik hero kartında gösterilir.
@@ -204,7 +199,7 @@ export async function loadReservationDashboard(raw: { search?: string }) {
   const actor = await requirePolicyActor();
   authorize(actor, "reservations", "view");
   const search = raw.search?.trim() || undefined;
-  const dayStart = istanbulDayStart(new Date());
+  const dayStart = zonedDayStart(new Date());
 
   const conditions: SQL[] = [gte(events.startsAt, dayStart), ne(events.status, "cancelled")];
   if (search) conditions.push(ilike(events.name, `%${escapeLike(search)}%`));
@@ -225,7 +220,7 @@ export async function loadReservationDashboard(raw: { search?: string }) {
     .orderBy(asc(events.startsAt), asc(events.id))
     .limit(48);
 
-  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  const dayEnd = zonedNextDayStart(dayStart);
   const todayCount = items.filter((e) => e.startsAt < dayEnd).length;
   return { actor, search, items, todayCount };
 }

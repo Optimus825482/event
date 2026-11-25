@@ -7,7 +7,7 @@ Tasarım, eşleme kararları ve şema boşlukları: `.superpowers/sdd/2026-11-22
 LEGACY_DATABASE_URL=postgres://okuyucu@eski-host/eventflow \
 DATABASE_URL=postgres://.../eventflow_yeni \
 BETTER_AUTH_SECRET=<uygulamanınkiyle aynı> [QR_SIGNING_KEY=<uygulamanınkiyle aynı>] \
-LEGACY_TZ=Europe/Istanbul \
+LEGACY_TZ=Asia/Famagusta \
 npx tsx scripts/migrate-legacy/index.ts [--dry-run] [--report raporlar/taşıma] \
   [--force-empty-check=off] [--default-organizer <kullanıcı-uuid>]
 ```

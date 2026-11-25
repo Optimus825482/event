@@ -1,4 +1,7 @@
 import type { EventStatus } from "@/domain/event-status";
+import { zonedDayStart } from "@/lib/time-zone";
+
+const DAY_MS = 86_400_000;
 
 export type BoardTab = "planning" | "upcoming" | "completed";
 
@@ -43,23 +46,13 @@ export type BoardEvent = {
 export const hasVenue = (e: Pick<BoardEvent, "tableCount">) => e.tableCount > 0;
 export const hasTeam = (e: Pick<BoardEvent, "assignmentCount">) => e.assignmentCount > 0;
 
-/** Türkiye'de yaz saati yok (UTC+3 sabit): günün başlangıcı bu ofsetle bulunur. */
-const ISTANBUL_OFFSET_MS = 3 * 3_600_000;
-const DAY_MS = 86_400_000;
-
-/** Verilen anın İstanbul takvimindeki gün başlangıcı. */
-export function istanbulDayStart(now: Date): Date {
-  const shifted = now.getTime() + ISTANBUL_OFFSET_MS;
-  return new Date(shifted - (shifted % DAY_MS) - ISTANBUL_OFFSET_MS);
-}
-
 /**
  * Eski panodaki gibi: bugünden önceki (ya da tamamlanmış/iptal) etkinlikler "tamamlanan";
  * kalanlar alan düzeni ve ekip hazırsa "gelecek", değilse "planlama".
  */
 export function boardTabOf(event: BoardEvent, now: Date): BoardTab {
   if (event.status === "completed" || event.status === "cancelled") return "completed";
-  if (event.startsAt.getTime() < istanbulDayStart(now).getTime()) return "completed";
+  if (event.startsAt.getTime() < zonedDayStart(now).getTime()) return "completed";
   return hasVenue(event) && hasTeam(event) ? "upcoming" : "planning";
 }
 

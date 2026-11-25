@@ -8,12 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { addNoteAction, deleteNoteAction, updateNoteAction } from "../actions";
 import { NOTE_TYPE_LABELS, NOTE_TYPES, type NoteType } from "../schemas";
 import { useRunAction } from "./use-run-action";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 // Sunucu (UTC) ve tarayıcı aynı metni üretsin: saat dilimi sabit.
 const NOTE_TIME = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "short",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 export type NoteView = {

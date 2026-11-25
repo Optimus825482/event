@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BAND_LABELS } from "@/features/reviews/labels";
 import type { StaffReviewSummary } from "@/features/reviews/staff-summary";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: APP_TIME_ZONE });
 
 /** "Değerlendirmeler" sekmesi: kişi başına tamamlanmış değerlendirme özeti (özel notlar yok). */
 export function ReviewSummaryTable({ rows }: { rows: StaffReviewSummary[] }) {

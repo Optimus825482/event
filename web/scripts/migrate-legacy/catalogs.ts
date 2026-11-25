@@ -1,4 +1,5 @@
 import * as schema from "@/db/schema";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 import type { Ctx } from "./context";
 import { type Row, stableId } from "./values";
 
@@ -173,7 +174,7 @@ async function migrateSettings(ctx: Ctx): Promise<void> {
         id: r.id,
         companyName: r.text("companyName", "EventFlow"),
         logo: r.str("logo"),
-        timezone: r.text("timezone", "Europe/Istanbul"),
+        timezone: r.text("timezone", APP_TIME_ZONE),
         language: r.text("language", "tr"),
         defaultGridSize: r.int("defaultGridSize") ?? 20,
         snapToGrid: r.bool("snapToGrid", true),

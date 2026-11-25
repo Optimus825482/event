@@ -14,6 +14,7 @@ import { assertInvitationSystemEnabled } from "./access";
 import { formatEventWhen } from "./public";
 import type { ReservationIdInput } from "./schemas";
 import { signInvitationToken } from "./token";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export type MailMessage = {
   from: string;
@@ -100,7 +101,7 @@ async function loadTarget(db: Db, actor: Actor, reservationId: string): Promise<
 
 async function readTimezone(db: Db): Promise<string> {
   const [row] = await db.select({ tz: systemSettings.timezone }).from(systemSettings).limit(1);
-  return row?.tz ?? "Europe/Istanbul";
+  return row?.tz ?? APP_TIME_ZONE;
 }
 
 /** Misafirin herkese açık davetiye bağlantısı (imzalı belirteç). */
@@ -192,7 +193,7 @@ export async function sendInvitationEmail(
   if (!to) throw new DomainError("conflict", "Misafirin geçerli bir e-posta adresi yok");
 
   const [company] = await db.select({ name: systemSettings.companyName, tz: systemSettings.timezone }).from(systemSettings).limit(1);
-  const when = formatEventWhen(target.startsAt, company?.tz ?? "Europe/Istanbul");
+  const when = formatEventWhen(target.startsAt, company?.tz ?? APP_TIME_ZONE);
   const link = buildInvitationUrl(target.reservationId, target.eventId);
   const { text, html } = emailBodies(target, when, link, company?.name ?? "EventFlow");
   const qr = await QRCode.toBuffer(target.qrToken, { width: 300, margin: 1 });

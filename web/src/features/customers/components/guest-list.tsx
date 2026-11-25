@@ -5,8 +5,9 @@ import type { CustomerList } from "../queries";
 import { GuestNoteDialog } from "./guest-note-dialog";
 import { Pagination } from "./customer-list";
 import { TagChips } from "./tag-chips";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: APP_TIME_ZONE });
 
 type Props = { list: CustomerList; q: string | undefined; canAddNote: boolean };
 

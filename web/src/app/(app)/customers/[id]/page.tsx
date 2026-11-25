@@ -12,6 +12,7 @@ import { CustomerForm } from "@/features/customers/components/customer-form";
 import { NotesPanel } from "@/features/customers/components/notes-panel";
 import { TagsEditor } from "@/features/customers/components/tags-editor";
 import { getCustomerDetail } from "@/features/customers/queries";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = { title: "Müşteri | EventFlow" };
 
@@ -26,7 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
 // Sunucu bileşeni kapsayıcının saat dilimini (UTC) kullanırdı; gece yarısına yakın etkinlikler önceki günü gösterirdi.
 const CARD = "space-y-3 rounded-2xl border border-slate-700 bg-slate-800/50 p-5";
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: APP_TIME_ZONE });
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requirePolicyActor();

@@ -5,10 +5,11 @@ import { buttonVariants } from "@/components/ui/button";
 import type { CustomerList } from "../queries";
 import { VIP_SCORE_THRESHOLD } from "../vip";
 import { TagChips } from "./tag-chips";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 type Props = { list: CustomerList; basePath: string; q: string | undefined; showReservations: boolean };
 
-const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" });
+const dateFormat = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: APP_TIME_ZONE });
 
 function pageHref(basePath: string, q: string | undefined, page: number): string {
   const params = new URLSearchParams();

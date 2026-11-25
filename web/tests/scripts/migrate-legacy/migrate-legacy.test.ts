@@ -1,3 +1,4 @@
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { verifyQrToken } from "@/features/reservations/qr-token";
@@ -23,7 +24,7 @@ const opts = (dryRun: boolean) => ({
   legacyUrl: dbUrl(LEGACY),
   targetUrl: dbUrl(TARGET),
   dryRun,
-  legacyTz: "Europe/Istanbul",
+  legacyTz: APP_TIME_ZONE,
   emptyCheck: true,
 });
 
@@ -220,7 +221,7 @@ describe("hedef durum", () => {
     });
   });
 
-  it("eski yerel saat (Europe/Istanbul) timestamptz'ye doğru çevrilir", async () => {
+  it("eski yerel saat (Kıbrıs, haziranda UTC+3) timestamptz'ye doğru çevrilir", async () => {
     await withClient(TARGET, async (c) => {
       const ev = await c.query<{ starts_at: Date; ends_at: Date | null }>("SELECT starts_at, ends_at FROM events WHERE id = $1", [E.e1]);
       expect(ev.rows[0]?.starts_at.toISOString()).toBe("2025-06-01T18:00:00.000Z");

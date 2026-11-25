@@ -2,6 +2,7 @@ import { ArrowRight, MapPin, QrCode, Ticket, Users } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { HeroCountdown } from "./hero-countdown";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export type HeroEvent = {
   id: string;
@@ -15,7 +16,7 @@ export type HeroEvent = {
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "full",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 const GRADIENT_LINK =

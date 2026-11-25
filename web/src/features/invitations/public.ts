@@ -4,6 +4,7 @@ import { customers, eventTables, events, reservations, systemSettings } from "@/
 import { withFieldValues, type FieldValues, type InvitationElement } from "./elements";
 import { layoutImagePaths, resolveEventLayout, type ResolvedLayout } from "./layout";
 import { parseInvitationToken, verifyInvitationMac } from "./token";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 type Executor = Db | Tx;
 
@@ -69,7 +70,7 @@ async function readSystemFlags(db: Executor): Promise<{ enabled: boolean; timezo
     .select({ enabled: systemSettings.invitationSystemEnabled, timezone: systemSettings.timezone })
     .from(systemSettings)
     .limit(1);
-  return { enabled: row?.enabled ?? true, timezone: row?.timezone ?? "Europe/Istanbul" };
+  return { enabled: row?.enabled ?? true, timezone: row?.timezone ?? APP_TIME_ZONE };
 }
 
 export function formatEventWhen(date: Date, timeZone: string): { date: string; time: string } {
@@ -80,7 +81,7 @@ export function formatEventWhen(date: Date, timeZone: string): { date: string; t
   try {
     return make(timeZone);
   } catch {
-    return make("Europe/Istanbul");
+    return make(APP_TIME_ZONE);
   }
 }
 

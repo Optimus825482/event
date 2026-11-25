@@ -15,6 +15,7 @@ import { RESERVATION_STATUS_LABELS } from "@/features/reservations/labels";
 import { loadInvitationRecipients, loadReservationList, loadReservationMap } from "@/features/reservations/queries";
 import { cn } from "@/lib/utils";
 import { isAdmin } from "@/features/auth/scope";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = {
   title: "Etkinlik rezervasyonları | EventFlow",
@@ -28,7 +29,7 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "long",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 const CHIP_TONES: Record<ReservationStatus, string> = {

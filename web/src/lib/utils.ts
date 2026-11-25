@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -30,7 +31,7 @@ export function formatPhone(phone: string): string {
 export function formatDate(
   date: string | Date,
   format: string = "short",
-  timezone: string = "Europe/Nicosia"
+  timezone: string = APP_TIME_ZONE
 ): string {
   if (!date) return "";
   const d = new Date(date);
@@ -90,7 +91,7 @@ export function formatDate(
 // Tarih ve saat formatla (ayrı ayrı)
 export function formatDateTime(
   date: string | Date,
-  timezone: string = "Europe/Nicosia"
+  timezone: string = APP_TIME_ZONE
 ): { date: string; time: string } {
   return {
     date: formatDate(date, "long", timezone),

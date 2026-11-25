@@ -5,12 +5,11 @@ import {
   countdownParts,
   eventTypeBadge,
   groupBoard,
-  istanbulDayStart,
   parseBoardTab,
   type BoardEvent,
 } from "@/features/events/board";
 
-const NOW = new Date("2030-06-15T09:00:00Z"); // İstanbul 12:00
+const NOW = new Date("2030-06-15T09:00:00Z"); // Kıbrıs 12:00 (yaz, UTC+3)
 
 function ev(over: Partial<BoardEvent> = {}): BoardEvent {
   return {
@@ -29,11 +28,20 @@ function ev(over: Partial<BoardEvent> = {}): BoardEvent {
   };
 }
 
-describe("istanbulDayStart", () => {
-  it("İstanbul gün başlangıcını (UTC+3) verir", () => {
-    expect(istanbulDayStart(NOW).toISOString()).toBe("2030-06-14T21:00:00.000Z");
-    // 00:30 İstanbul = 21:30 UTC önceki gün; aynı İstanbul gününe düşer.
-    expect(istanbulDayStart(new Date("2030-06-14T21:30:00Z")).toISOString()).toBe("2030-06-14T21:00:00.000Z");
+describe("boardTabOf gün sınırı (Kıbrıs saati)", () => {
+  const started = (iso: string) => ev({ startsAt: new Date(iso), tableCount: 1, assignmentCount: 1 });
+
+  it("yazın (UTC+3) bugünün 00:00'ından önce başlayan etkinlik tamamlanmıştır", () => {
+    // 15 Haziran 12:00 yerel; gün başlangıcı 14 Haziran 21:00 UTC.
+    expect(boardTabOf(started("2030-06-14T20:59:00Z"), NOW)).toBe("completed");
+    expect(boardTabOf(started("2030-06-14T21:00:00Z"), NOW)).toBe("upcoming");
+  });
+
+  it("kışın (UTC+2) gün başlangıcı bir saat önce UTC'dedir", () => {
+    const winter = new Date("2030-01-15T10:00:00Z"); // yerel 12:00
+    // Gün başlangıcı 14 Ocak 22:00 UTC.
+    expect(boardTabOf(started("2030-01-14T21:59:00Z"), winter)).toBe("completed");
+    expect(boardTabOf(started("2030-01-14T22:00:00Z"), winter)).toBe("upcoming");
   });
 });
 

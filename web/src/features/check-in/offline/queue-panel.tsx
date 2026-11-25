@@ -4,8 +4,9 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import type { QueueItem } from "./queue-core";
 import type { OfflineQueue } from "./use-offline-queue";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
-const timeFormat = new Intl.DateTimeFormat("tr-TR", { timeStyle: "medium", timeZone: "Europe/Istanbul" });
+const timeFormat = new Intl.DateTimeFormat("tr-TR", { timeStyle: "medium", timeZone: APP_TIME_ZONE });
 
 function targetLabel(item: QueueItem): string {
   if ("token" in item.target) return "QR kod";

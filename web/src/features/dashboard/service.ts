@@ -15,11 +15,11 @@ import {
 import { authorize, can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { isAdmin } from "@/features/auth/scope";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 type Executor = Db | Tx;
 
 const UPCOMING_LIMIT = 5;
-const TZ = "Europe/Istanbul";
 
 export type UpcomingReadyEvent = {
   id: string;
@@ -103,9 +103,9 @@ export async function getAdminDashboard(db: Executor, actor: Actor): Promise<Adm
   authorize(actor, "users", "view");
   authorize(actor, "settings", "view");
 
-  const monthStart = sql`date_trunc('month', now() at time zone ${TZ})`;
-  const dayStart = sql`date_trunc('day', now() at time zone ${TZ})`;
-  const local = (column: SQLWrapper) => sql`(${column} at time zone ${TZ})`;
+  const monthStart = sql`date_trunc('month', now() at time zone ${APP_TIME_ZONE})`;
+  const dayStart = sql`date_trunc('day', now() at time zone ${APP_TIME_ZONE})`;
+  const local = (column: SQLWrapper) => sql`(${column} at time zone ${APP_TIME_ZONE})`;
 
   const [userRow] = await db
     .select({

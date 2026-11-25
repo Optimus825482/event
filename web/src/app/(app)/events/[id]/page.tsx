@@ -12,13 +12,14 @@ import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import { loadEventDetail } from "@/features/events/queries";
 import { PlanPreviewCard } from "@/features/venue/components/plan-preview-card";
 import { loadEventPlanPreview } from "@/features/venue/queries";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = { title: "Etkinlik | EventFlow" };
 
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "long",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 const statCard = "rounded-xl border border-slate-700 bg-slate-800/50 p-4";

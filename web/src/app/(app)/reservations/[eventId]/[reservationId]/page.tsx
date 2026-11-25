@@ -8,6 +8,7 @@ import { ReservationStatusActions } from "@/features/reservations/components/sta
 import { RESERVATION_STATUS_LABELS } from "@/features/reservations/labels";
 import { loadReservationDetail } from "@/features/reservations/queries";
 import { isAdmin } from "@/features/auth/scope";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export const metadata: Metadata = { title: "Rezervasyon | EventFlow", referrer: "no-referrer" };
 
@@ -16,7 +17,7 @@ type Params = Promise<{ eventId: string; reservationId: string }>;
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "Europe/Istanbul",
+  timeZone: APP_TIME_ZONE,
 });
 
 export default async function ReservationDetailPage({ params }: { params: Params }) {
