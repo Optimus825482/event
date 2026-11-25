@@ -2,11 +2,18 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolvePgConfig } from "./pg-config.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = join(root, ".pgdata");
-const PORT = "54329";
-const DATABASES = ["eventflow_dev", "eventflow_test"];
+// Paralel worktree'ler tek kümeyi paylaşır: PGDATA_DIR, DATABASE_URL ve TEST_DB_NAME (.env.local) şeridi belirler.
+let config;
+try {
+  config = resolvePgConfig(process.env, root);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+}
+const { dataDir, port: PORT, databases: DATABASES } = config;
 const WIN_BIN = "C:/Program Files/PostgreSQL/17/bin";
 const ext = process.platform === "win32" ? ".exe" : "";
 
@@ -76,6 +83,14 @@ function reset() {
   console.log("veritabanları sıfırlandı");
 }
 
+/** Yalnızca bu şeridin test veritabanını siler; sonraki `npm test` yeniden kurar ve migrate eder. */
+function dropTest() {
+  start();
+  const name = DATABASES.at(-1);
+  psql(`drop database if exists ${name} with (force)`);
+  console.log(`test veritabanı silindi: ${name}`);
+}
+
 /**
  * `npm run dev` öncesi (predev) çalışır: DATABASE_URL bu projenin yerel kümesini
  * gösteriyorsa kümeyi başlatır; uzak/başka bir veritabanıysa dokunmaz.
@@ -103,7 +118,7 @@ function ensure() {
   }
 }
 
-const commands = { init, start, stop, reset, ensure };
+const commands = { init, start, stop, reset, "drop-test": dropTest, ensure };
 const cmd = process.argv[2] ?? "";
 const handler = commands[cmd];
 if (!handler) {
