@@ -1,5 +1,7 @@
+import { ceilingOf, type Membership } from "./departments";
 import { ForbiddenError } from "./errors";
 import type { Role } from "./roles";
+import { ownTeamOnly } from "./scope";
 
 export const MODULES = [
   "users",
@@ -31,7 +33,8 @@ export type PolicyActor = {
   id: string;
   role: Role;
   staffId: string | null;
-  permissions?: PermissionRow[];
+  memberships?: readonly Membership[];
+  permissions?: readonly PermissionRow[];
 };
 
 export type PolicyResource = { ownerId?: string; teamLeaderStaffId?: string };
@@ -69,7 +72,7 @@ const BASELINE: Record<Role, Grants> = {
   },
   controller: { check_in: ["view", "create"] },
   venue_owner: { venues: ["view", "create", "edit", "delete"] },
-  // Departman üyeliği yetkileri Task 3'te eklenecek; şimdilik her şey reddedilir.
+  // `user` rolü BASELINE'a bakılmadan departman dalında (departmentAllows) karar verilir.
   user: {},
 };
 
@@ -100,6 +103,35 @@ function ownershipAllows(
   return true;
 }
 
+// Yalnızca yönetici yetkisi; hiçbir departman tavanında yer almaz.
+const ADMIN_ONLY_MODULES: readonly Module[] = ["users", "settings"];
+
+/**
+ * `user` rolü için karar: üyeliklerden en az biri izin vermeli. Tavan fiili içermeli; yönetici
+ * tavanın tamamını, asistan `delete` dışını alır, kullanıcı ise izin satırında açılmış bayrağı.
+ * İzin satırı burada verilen yetkidir (kısıt değil) ve tavanı aşamaz.
+ */
+function departmentAllows(
+  actor: PolicyActor,
+  module: Module,
+  verb: Verb,
+  resource?: PolicyResource,
+): boolean {
+  if (ADMIN_ONLY_MODULES.includes(module)) return false;
+  const granted = (actor.permissions ?? []).some((row) => row.module === module && row[ROW_FLAG[verb]]);
+  const allowed = (actor.memberships ?? []).some(({ department, level }) => {
+    if (!ceilingOf(department, module).includes(verb)) return false;
+    if (level === "manager") return true;
+    if (level === "assistant") return verb !== "delete";
+    return granted;
+  });
+  if (!allowed) return false;
+  if (module === "reviews" && ownTeamOnly(actor)) {
+    return actor.staffId !== null && resource?.teamLeaderStaffId === actor.staffId;
+  }
+  return true;
+}
+
 export function can(
   actor: PolicyActor,
   module: Module,
@@ -107,6 +139,7 @@ export function can(
   resource?: PolicyResource,
 ): boolean {
   if (actor.role === "admin") return true;
+  if (actor.role === "user") return departmentAllows(actor, module, verb, resource);
   if (!BASELINE[actor.role][module]?.includes(verb)) return false;
   if (!ownershipAllows(actor, module, verb, resource)) return false;
   return (actor.permissions ?? [])

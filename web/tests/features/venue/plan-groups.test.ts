@@ -9,7 +9,7 @@ import { createEvent, createTable, createTableGroup, createUser } from "../../he
 
 async function admin(): Promise<Actor> {
   const u = await createUser(db, { role: "admin" });
-  return { id: u.id, username: u.username, role: "admin", staffId: null };
+  return { id: u.id, username: u.username, role: "admin", staffId: null, memberships: [], permissions: [] };
 }
 
 describe("planda masa grupları", () => {

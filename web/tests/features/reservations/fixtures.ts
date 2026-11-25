@@ -10,7 +10,7 @@ export const TABLE_TAKEN = "Bu masa için aktif bir rezervasyon var";
 
 export async function actorOf(role: Role): Promise<Actor> {
   const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null };
+  return { id: u.id, username: u.username, role, staffId: null, memberships: [], permissions: [] };
 }
 
 /** Yayında bir etkinlik, bir masa (kapasite 4) ve bir müşteri. */

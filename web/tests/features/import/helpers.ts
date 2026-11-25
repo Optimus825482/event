@@ -22,7 +22,7 @@ export async function xlsx(rows: Cell[][], extraSheetRows?: Cell[][]): Promise<U
 
 export async function actorOf(role: Role = "organizer"): Promise<Actor> {
   const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 export async function expectDomain(promise: Promise<unknown>, code: "conflict" | "not_found" | "invalid", message?: RegExp | string) {

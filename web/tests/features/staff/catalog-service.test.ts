@@ -26,7 +26,7 @@ import { truncateAll } from "../../helpers/db";
 import { createAssignment, createEvent, createShift as makeShift, createStaff } from "../../helpers/factories";
 
 function actorOf(role: Role): Actor {
-  return { id: "00000000-0000-4000-8000-000000000001", username: "t", role, staffId: null };
+  return { id: "00000000-0000-4000-8000-000000000001", username: "t", role, staffId: null, memberships: [], permissions: [] };
 }
 const admin = actorOf("admin");
 

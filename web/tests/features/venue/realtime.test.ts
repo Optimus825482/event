@@ -12,7 +12,7 @@ const decor = { width: 1200, height: 800, elements: [] };
 
 async function setup() {
   const u = await f.createUser(db, { role: "organizer" });
-  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
   const event = await f.createEvent(db, { organizerId: actor.id });
   return { actor, event };
 }

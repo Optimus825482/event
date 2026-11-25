@@ -28,7 +28,7 @@ function dataUrl(mime: string, signature: number[], size = 64): string {
 
 async function actorOf(role: Actor["role"] = "staff", isActive = true): Promise<Actor> {
   const u = await insertUser(db, { role, isActive });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
 describe("avatar biçim denetimi", () => {
@@ -132,7 +132,7 @@ describe("kendi profil fotoğrafı", () => {
   it("pasif ya da olmayan hesap yazamaz", async () => {
     const inactive = await actorOf("staff", false);
     await expect(setOwnAvatar(db, inactive, { image: null })).rejects.toMatchObject({ code: "not_found" });
-    const ghost: Actor = { id: "00000000-0000-4000-8000-0000000000bb", username: "x", role: "admin", staffId: null };
+    const ghost: Actor = { id: "00000000-0000-4000-8000-0000000000bb", username: "x", role: "admin", staffId: null, memberships: [], permissions: [] };
     await expect(setOwnAvatar(db, ghost, { image: null })).rejects.toMatchObject({ code: "not_found" });
   });
 

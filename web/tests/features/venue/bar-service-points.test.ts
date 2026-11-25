@@ -23,7 +23,7 @@ const decorOf = (...elements: Array<ReturnType<typeof bar> | typeof stage>) => (
 
 async function setup() {
   const u = await f.createUser(db, { role: "organizer" });
-  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
   const event = await f.createEvent(db, { organizerId: actor.id });
   const save = (decor: ReturnType<typeof decorOf>) => saveLayout(db, actor, { eventId: event.id, tables: [], decor });
   const points = () => db.select().from(servicePoints).where(eq(servicePoints.eventId, event.id)).orderBy(asc(servicePoints.name));

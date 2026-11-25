@@ -14,7 +14,7 @@ import { PASSWORD, signedInCookie, signIn } from "../auth/helpers";
 
 async function actorOf(role: Actor["role"]): Promise<Actor> {
   const u = await insertUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
 async function rowOf(id: string) {

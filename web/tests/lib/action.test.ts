@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/db/client";
 import { userPermissions, users } from "@/db/schema";
 import { ForbiddenError, UnauthenticatedError } from "@/features/auth/errors";
+import { loadPermissions } from "@/features/auth/permissions";
 import type { Role } from "@/features/auth/roles";
 import type { Actor } from "@/features/auth/session";
 import { createAction, DomainError } from "@/lib/action";
@@ -13,7 +14,7 @@ import { createUser } from "../helpers/factories";
 
 async function makeActor(role: Role): Promise<Actor> {
   const user = await createUser(db, { role });
-  return { id: user.id, username: user.username, role: user.role, staffId: user.staffId };
+  return { id: user.id, username: user.username, role: user.role, staffId: user.staffId, memberships: [], permissions: [] };
 }
 
 function actionFor(actor: Actor | null) {
@@ -90,13 +91,15 @@ describe("defineAction", () => {
   });
 
   it("kullanıcıya özel izin satırı yetkiyi daraltır", async () => {
-    const actor = await makeActor("organizer");
+    const base = await makeActor("organizer");
     await db.insert(userPermissions).values({
-      userId: actor.id,
+      userId: base.id,
       module: "events",
       canView: true,
       canCreate: false,
     });
+    // İzin satırları artık aktörle (oturumdan) gelir; eylem ayrıca veritabanından okumaz.
+    const actor: Actor = { ...base, permissions: await loadPermissions(base.id) };
     const handler = vi.fn(async () => "x");
     const create = actionFor(actor)({ module: "events", verb: "create", input: z.object({}), handler });
     const view = actionFor(actor)({ module: "events", verb: "view", input: z.object({}), handler });

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { userPermissions } from "@/db/schema";
-import { withPermissions } from "@/features/auth/permissions";
+import { loadPermissions, withPermissions } from "@/features/auth/permissions";
 import type { Actor } from "@/features/auth/session";
 import { getReservationDetail, listReservations } from "@/features/reservations/queries";
 import { createReservation } from "@/features/reservations/service";
@@ -12,7 +12,8 @@ import { actorOf, bookable, expectDomain } from "./fixtures";
 async function staffWithoutCustomerView(): Promise<Actor> {
   const staff = await actorOf("staff");
   await db.insert(userPermissions).values({ userId: staff.id, module: "customers", canView: false });
-  return staff;
+  // Aktör izin satırlarını oturumdan taşır; burada oturumun yapacağı gibi veritabanından yüklenir.
+  return { ...staff, permissions: await loadPermissions(staff.id) };
 }
 
 describe("rezervasyon: müşteri verisi customers:view ister", () => {

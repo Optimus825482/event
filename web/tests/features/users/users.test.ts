@@ -30,7 +30,7 @@ const NEW_PASSWORD = "YepYeniParola!2025";
 
 async function actorOf(role: Actor["role"], extra: Partial<typeof users.$inferInsert> = {}): Promise<Actor> {
   const u = await insertUser(db, { role, ...extra });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
 const validCreate = { username: "ayse", password: PASSWORD, role: "staff" as const };

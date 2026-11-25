@@ -10,7 +10,7 @@ export { expectDomain, rejection } from "../reservations/fixtures";
 
 export async function actorOf(role: Actor["role"]): Promise<Actor> {
   const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null };
+  return { id: u.id, username: u.username, role, staffId: null, memberships: [], permissions: [] };
 }
 
 /**
@@ -30,6 +30,8 @@ export async function bookedGuest(options: { organizerId?: string; status?: "pub
     username: "org",
     role: "organizer",
     staffId: null,
+    memberships: [],
+    permissions: [],
   };
   const reservation = await bookReservation(db, organizer, {
     eventId: event.id,

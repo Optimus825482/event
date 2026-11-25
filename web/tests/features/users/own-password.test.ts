@@ -18,10 +18,10 @@ const TOO_MANY = { message: expect.stringContaining("Çok fazla") as string };
 
 async function makeUser(username: string, active = true): Promise<Actor> {
   const admin = await insertUser(db, { role: "admin" });
-  const adminActor: Actor = { id: admin.id, username: admin.username, role: "admin", staffId: null };
+  const adminActor: Actor = { id: admin.id, username: admin.username, role: "admin", staffId: null, memberships: [], permissions: [] };
   const created = await createUser(db, adminActor, { username, password: PASSWORD, role: "staff" });
   if (!active) await db.update(users).set({ isActive: false }).where(eq(users.id, created.id));
-  return { id: created.id, username, role: "staff", staffId: null };
+  return { id: created.id, username, role: "staff", staffId: null, memberships: [], permissions: [] };
 }
 
 /** Gerçek bir giriş yapar ve oluşan oturum satırının kimliğini döner. */

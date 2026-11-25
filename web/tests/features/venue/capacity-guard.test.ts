@@ -12,7 +12,7 @@ const decor = { width: 1200, height: 800, elements: [] };
 
 async function setup() {
   const u = await f.createUser(db, { role: "organizer" });
-  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  const actor: Actor = { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
   const event = await f.createEvent(db, { organizerId: actor.id });
   const big = await f.createTable(db, event.id, { label: "A1", capacity: 8, x: 0, y: 0 });
   const other = await f.createTable(db, event.id, { label: "A2", capacity: 6, x: 60, y: 0 });

@@ -9,7 +9,7 @@ import { createEvent, createTable, createUser } from "../../helpers/factories";
 
 async function actorOf(role: "admin" | "organizer"): Promise<Actor> {
   const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role, staffId: null };
+  return { id: u.id, username: u.username, role, staffId: null, memberships: [], permissions: [] };
 }
 
 describe("getFloorPlan", () => {

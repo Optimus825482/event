@@ -24,7 +24,7 @@ afterAll(() => {
 
 async function actorOf(role: Actor["role"]): Promise<Actor> {
   const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
 async function pngFile(): Promise<File> {

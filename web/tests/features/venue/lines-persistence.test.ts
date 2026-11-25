@@ -12,7 +12,7 @@ import * as f from "../../helpers/factories";
 
 async function makeActor(): Promise<Actor> {
   const u = await f.createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 const lines = [

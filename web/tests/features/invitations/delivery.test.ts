@@ -25,7 +25,7 @@ afterAll(() => {
 
 async function makeActor(role: Role): Promise<Actor> {
   const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 async function seed(organizerId?: string, contact: { email?: string; phone?: string } = { email: "misafir@example.com", phone: "0532 111 22 33" }) {

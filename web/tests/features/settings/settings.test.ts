@@ -16,7 +16,7 @@ const PLAIN = "SmtpParolasi-Cok-Gizli-123";
 
 async function actorOf(role: Actor["role"]): Promise<Actor> {
   const u = await createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: null };
+  return { id: u.id, username: u.username, role: u.role, staffId: null, memberships: [], permissions: [] };
 }
 
 describe("sistem ayarları", () => {

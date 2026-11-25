@@ -11,7 +11,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function seedUser(username: string): Promise<string> {
   const admin = await insertUser(db, { role: "admin" });
-  const user = await createUser(db, { id: admin.id, username: admin.username, role: "admin", staffId: null }, {
+  const user = await createUser(db, { id: admin.id, username: admin.username, role: "admin", staffId: null, memberships: [], permissions: [] }, {
     username,
     password: PASSWORD,
     role: "staff",

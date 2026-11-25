@@ -10,7 +10,7 @@ import { createCustomer, createEvent, createReservation, createTable, createUser
 
 async function organizer(): Promise<Actor> {
   const u = await createUser(db, { role: "organizer" });
-  return { id: u.id, username: u.username, role: "organizer", staffId: null };
+  return { id: u.id, username: u.username, role: "organizer", staffId: null, memberships: [], permissions: [] };
 }
 
 async function bookedEvent(organizerId: string, customerId: string) {
@@ -132,7 +132,7 @@ describe("müşteri CRM: organizatör kapsamı (M5)", () => {
       const customer = await createCustomer(db);
       const foreign = await bookedEvent(other.id, customer.id);
       const adminUser = await createUser(db, { role: "admin" });
-      const admin: Actor = { id: adminUser.id, username: adminUser.username, role: "admin", staffId: null };
+      const admin: Actor = { id: adminUser.id, username: adminUser.username, role: "admin", staffId: null, memberships: [], permissions: [] };
 
       await addNote(db, admin, { customerId: customer.id, content: "ok", noteType: "general", eventId: foreign.event.id });
       expect(await db.select().from(guestNotes)).toHaveLength(1);

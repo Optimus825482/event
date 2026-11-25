@@ -20,7 +20,7 @@ describe("checkIn: idempotent tekrar ve erişim (M1)", () => {
   it("M1: başkasının anahtarı tekrarlanınca saklanan yanıt sızmaz (erişimsiz not_found, başka kullanıcı keyReused)", async () => {
     const organizerId = (await createUser(db, { role: "organizer" })).id;
     const { event, reservation } = await bookedGuest({ organizerId });
-    const owner: Actor = { id: organizerId, username: "org", role: "organizer", staffId: null };
+    const owner: Actor = { id: organizerId, username: "org", role: "organizer", staffId: null, memberships: [], permissions: [] };
     const k = key();
     const first = await checkIn(db, owner, { eventId: event.id, idempotencyKey: k, token: reservation.qrToken });
     expect(first.outcome).toBe("checked_in");

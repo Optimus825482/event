@@ -13,7 +13,7 @@ import { truncateAll } from "../../helpers/db";
 import { createStaff, createUser } from "../../helpers/factories";
 
 function actorOf(role: Role): Actor {
-  return { id: "00000000-0000-4000-8000-000000000001", username: "t", role, staffId: null };
+  return { id: "00000000-0000-4000-8000-000000000001", username: "t", role, staffId: null, memberships: [], permissions: [] };
 }
 const admin = actorOf("admin");
 
@@ -127,7 +127,7 @@ describe("personel CSV içe aktarma", () => {
 
   it("action: FormData ile önizler ve içe aktarır; dosya yok/büyük/yetkisiz/oturumsuz durumları", async () => {
     const user = await createUser(db, { role: "organizer" });
-    const organizer: Actor = { id: user.id, username: user.username, role: "organizer", staffId: null };
+    const organizer: Actor = { id: user.id, username: user.username, role: "organizer", staffId: null, memberships: [], permissions: [] };
     const { defineAction } = createAction({ getActor: async () => organizer });
     const preview = defineAction(staffImportActionDefs.preview);
     const run = defineAction(staffImportActionDefs.run);
@@ -152,7 +152,7 @@ describe("personel CSV içe aktarma", () => {
 
     const staffUser = await createUser(db, { role: "staff" });
     const denied = createAction({
-      getActor: async () => ({ id: staffUser.id, username: staffUser.username, role: "staff", staffId: null }),
+      getActor: async () => ({ id: staffUser.id, username: staffUser.username, role: "staff", staffId: null, memberships: [], permissions: [] }),
     }).defineAction(staffImportActionDefs.run);
     expect(await denied(form(`${HEADER}\n2;Veli;;;;;;;;`))).toMatchObject({ ok: false, code: "forbidden" });
 

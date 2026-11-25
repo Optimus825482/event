@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { reservations, userPermissions } from "@/db/schema";
-import { withPermissions } from "@/features/auth/permissions";
+import { loadPermissions, withPermissions } from "@/features/auth/permissions";
 import { ForbiddenError } from "@/features/auth/errors";
 import type { Actor } from "@/features/auth/session";
 import { reservationActionDefs } from "@/features/reservations/action-defs";
@@ -82,7 +82,7 @@ describe("rezervasyon sorguları", () => {
 
     const staffActor = await actorOf("staff");
     await db.insert(userPermissions).values({ userId: staffActor.id, module: "reservations", canView: false });
-    const staff = await withPermissions(staffActor);
+    const staff = await withPermissions({ ...staffActor, permissions: await loadPermissions(staffActor.id) });
     expect(await rejection(listReservations(db, staff, { eventId: event.id }))).toBeInstanceOf(ForbiddenError);
   });
 

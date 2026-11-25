@@ -72,7 +72,7 @@ export async function loginAs(role: Role): Promise<{ id: string; cookie: string 
   const username = `rt_${role}_${Math.random().toString(36).slice(2, 8)}`;
   const created = await createLoginUser(
     db,
-    { id: admin.id, username: admin.username, role: "admin", staffId: null },
+    { id: admin.id, username: admin.username, role: "admin", staffId: null, memberships: [], permissions: [] },
     { username, password: PASSWORD, role },
   );
   return { id: created.id, cookie: await signedInCookie(username) };

@@ -11,7 +11,7 @@ import * as f from "../../helpers/factories";
 
 async function makeActor(role: Role): Promise<Actor> {
   const u = await f.createUser(db, { role });
-  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId };
+  return { id: u.id, username: u.username, role: u.role, staffId: u.staffId, memberships: [], permissions: [] };
 }
 
 function actionsFor(actor: Actor | null) {
