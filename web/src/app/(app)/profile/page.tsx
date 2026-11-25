@@ -4,7 +4,7 @@ import { Mail, Phone, ShieldCheck, User as UserIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PageHeader } from "@/components/layout/page-header";
-import { ROLE_LABELS } from "@/components/layout/role-labels";
+import { actorLabel } from "@/components/layout/role-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
@@ -59,7 +59,7 @@ export default async function ProfilePage() {
           <CardHeader>
             <CardTitle>{me.name}</CardTitle>
             <p className="text-sm text-slate-400">
-              @{me.username} · {ROLE_LABELS[actor.role]}
+              @{me.username} · {actorLabel(actor)}
               {me.position ? ` · ${me.position}` : ""}
             </p>
           </CardHeader>

@@ -6,6 +6,7 @@ import { DomainError } from "@/lib/action";
 import { isUuid } from "@/lib/identifiers";
 import type { WizardTemplate } from "./board";
 import { listEventsFilterSchema } from "./schemas";
+import { canOpenTeamOrganization } from "@/features/staffing/team-organization-access";
 import { listOrganizationTemplates } from "@/features/staffing/templates-service";
 import { listVenueTemplates } from "@/features/venue/templates-service";
 import { getEvent, listEventBoard, listEventTables, listEvents } from "./service";
@@ -74,5 +75,6 @@ export async function loadWizardOptions() {
     canApplyVenue: can(actor, "venues", "edit") && canVenue,
     canApplyTeam: can(actor, "staff", "edit") && canTeam,
     canInvite: can(actor, "events", "view"),
+    canOrganizeTeam: canOpenTeamOrganization(actor),
   };
 }

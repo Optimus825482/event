@@ -22,6 +22,7 @@ import { getStaffStats, listDepartmentCards } from "@/features/staff/overview-qu
 import { getStaffFormOptions, listStaff } from "@/features/staff/queries";
 import { staffFilterSchema } from "@/features/staff/schemas";
 import { listTeamCards } from "@/features/staffing/team-cards";
+import { canOpenTeamOrganization } from "@/features/staffing/team-organization-access";
 
 export const metadata: Metadata = { title: "Personel | EventFlow" };
 
@@ -162,7 +163,7 @@ async function PeopleTab({ actor, raw }: { actor: Actor; raw: Record<string, str
 
 async function TeamsTab({ actor }: { actor: Actor }) {
   const teamCards = await listTeamCards(db, actor);
-  return <TeamCardsGrid teams={teamCards} canOrganize={can(actor, "staff", "view")} />;
+  return <TeamCardsGrid teams={teamCards} canOrganize={canOpenTeamOrganization(actor)} />;
 }
 
 async function ReviewsTab({ actor }: { actor: Actor }) {

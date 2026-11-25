@@ -1,8 +1,9 @@
+import type { Department } from "./departments";
 import { can, type Module, type PolicyActor } from "./policy";
-import { ownTeamOnly } from "./scope";
+import { inDepartment, isDepartmentUser, ownTeamOnly } from "./scope";
 
-/** Menü modülleri (eski arayüzdeki modül şeridi). `general` yalnızca zil/profil menüsünden erişilir. */
-export type NavGroupKey = "events" | "leader" | "reservations" | "check_in" | "admin" | "general";
+/** Menü grupları: üç departman + yetkiyle açılan ortak gruplar. `general` yalnızca zil/profil menüsünden erişilir. */
+export type NavGroupKey = "entertainment" | "fnb" | "casino" | "check_in" | "admin" | "general";
 export type NavAccent = "blue" | "purple" | "emerald" | "amber" | "cyan" | "slate";
 /** Lucide simge anahtarı; sunucudan istemciye bileşen geçirilemediğinden ad olarak taşınır. */
 export type NavIconName =
@@ -36,37 +37,43 @@ export type NavGroup = {
   label: string;
   accent: NavAccent;
   icon: NavIconName;
+  /**
+   * Doluysa grup yalnızca admine ve bu departmanların üyelerine görünür; `null` ise yalnızca
+   * öğelerin modül izni belirler.
+   */
+  departments: readonly Department[] | null;
   /** Menüde öğesi olmayan ama bu modüle ait sayfa yolları (etkin modülü bulmak için). */
   extraPrefixes: readonly string[];
 };
 
 export const NAV_GROUPS: readonly NavGroup[] = [
-  { key: "events", label: "Etkinlik Planlama", accent: "blue", icon: "calendar", extraPrefixes: ["/import/assignments", "/import/template"] },
-  { key: "leader", label: "Ekip Lideri", accent: "cyan", icon: "star", extraPrefixes: [] },
-  { key: "reservations", label: "Rezervasyon", accent: "purple", icon: "ticket", extraPrefixes: ["/import/reservations"] },
-  { key: "check_in", label: "Check-in", accent: "emerald", icon: "scan-line", extraPrefixes: [] },
-  { key: "admin", label: "Sistem Yönetimi", accent: "amber", icon: "shield", extraPrefixes: ["/settings/organization"] },
-  { key: "general", label: "Genel", accent: "slate", icon: "bell", extraPrefixes: [] },
+  { key: "entertainment", label: "Entertainment", accent: "blue", icon: "calendar", departments: ["entertainment"], extraPrefixes: [] },
+  { key: "fnb", label: "Food & Beverage", accent: "cyan", icon: "star", departments: ["fnb"], extraPrefixes: ["/import/assignments", "/import/template"] },
+  { key: "casino", label: "Casino", accent: "purple", icon: "ticket", departments: ["casino"], extraPrefixes: ["/import/reservations"] },
+  { key: "check_in", label: "Check-in", accent: "emerald", icon: "scan-line", departments: null, extraPrefixes: [] },
+  { key: "admin", label: "Sistem Yönetimi", accent: "amber", icon: "shield", departments: null, extraPrefixes: ["/settings/organization"] },
+  { key: "general", label: "Genel", accent: "slate", icon: "bell", departments: null, extraPrefixes: [] },
 ];
 
 /**
  * Uygulama menüsünün TEK kaynağı. Yeni sayfalar bu listeye eklenmez; `(app)` altındaki
- * rotalar zaten buradaki yollara karşılık gelir. Etiketler eski arayüzdeki adlandırmayı izler.
+ * rotalar zaten buradaki yollara karşılık gelir.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
-  { href: "/dashboard", label: "Pano", module: "events", group: "events", icon: "layout-template" },
-  { href: "/events", label: "Etkinlikler", module: "events", group: "events", icon: "calendar" },
-  { href: "/staff", label: "Ekipler", module: "staff", group: "events", icon: "users" },
-  { href: "/venues", label: "Şablonlar", module: "venues", group: "events", icon: "layout-template" },
-  { href: "/templates", label: "Davetiye Şablonları", module: "invitations", group: "events", icon: "mail" },
-  { href: "/leader", label: "Pano", module: "reviews", group: "leader", icon: "layout-dashboard" },
-  { href: "/leader/events", label: "Etkinlikler", module: "reviews", group: "leader", icon: "calendar" },
-  { href: "/leader/team", label: "Ekip", module: "reviews", group: "leader", icon: "users" },
-  { href: "/leader/reviews", label: "Değerlendirmeler", module: "reviews", group: "leader", icon: "star" },
-  { href: "/leader/reports", label: "Raporlar", module: "reviews", group: "leader", icon: "bar-chart" },
-  { href: "/reservations", label: "Rezervasyonlar", module: "reservations", group: "reservations", icon: "ticket" },
-  { href: "/customers", label: "Müşteriler", module: "customers", group: "reservations", icon: "user-round" },
-  { href: "/guests", label: "Misafirler", module: "customers", group: "reservations", icon: "contact" },
+  { href: "/dashboard", label: "Pano", module: "events", group: "entertainment", icon: "layout-template" },
+  { href: "/events", label: "Etkinlikler", module: "events", group: "entertainment", icon: "calendar" },
+  { href: "/templates", label: "Davetiye Şablonları", module: "invitations", group: "entertainment", icon: "mail" },
+  { href: "/fnb", label: "Etkinlikler", module: "venues", group: "fnb", icon: "calendar" },
+  { href: "/venues", label: "Yerleşim Şablonları", module: "venues", group: "fnb", icon: "layout-template" },
+  { href: "/staff", label: "Ekipler", module: "staff", group: "fnb", icon: "users" },
+  { href: "/leader", label: "Ekip Panosu", module: "reviews", group: "fnb", icon: "layout-dashboard" },
+  { href: "/leader/events", label: "Ekip Etkinlikleri", module: "reviews", group: "fnb", icon: "calendar" },
+  { href: "/leader/team", label: "Ekibim", module: "reviews", group: "fnb", icon: "users" },
+  { href: "/leader/reviews", label: "Değerlendirmeler", module: "reviews", group: "fnb", icon: "star" },
+  { href: "/leader/reports", label: "Raporlar", module: "reviews", group: "fnb", icon: "bar-chart" },
+  { href: "/reservations", label: "Rezervasyonlar", module: "reservations", group: "casino", icon: "ticket" },
+  { href: "/customers", label: "Müşteriler", module: "customers", group: "casino", icon: "user-round" },
+  { href: "/guests", label: "Misafirler", module: "customers", group: "casino", icon: "contact" },
   { href: "/check-in", label: "Check-in", module: "check_in", group: "check_in", icon: "scan-line" },
   { href: "/admin", label: "Yönetim Paneli", module: "users", group: "admin", icon: "shield" },
   { href: "/admin/users", label: "Kullanıcılar", module: "users", group: "admin", icon: "users" },
@@ -78,9 +85,21 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
 export type NavGroupView = NavGroup & { items: NavItem[] };
 
-/** Aktörün `view` yetkisi olan menü öğeleri (liste sırası korunur). */
+const GROUPS_BY_KEY = new Map(NAV_GROUPS.map((group) => [group.key, group]));
+
+/** Departman kapsamlı grup yalnızca üyesine görünür (admin ve eski roller kapsama bağlı değildir). */
+function groupAllows(actor: PolicyActor, group: NavGroup): boolean {
+  if (group.departments === null || !isDepartmentUser(actor)) return true;
+  return group.departments.some((department) => inDepartment(actor, department));
+}
+
+/** Aktörün grubunu görebildiği ve `view` yetkisi olan menü öğeleri (liste sırası korunur). */
 export function visibleNavItems(actor: PolicyActor): NavItem[] {
-  return NAV_ITEMS.filter((item) => can(actor, item.module, "view", navResource(actor, item.module)));
+  return NAV_ITEMS.filter((item) => {
+    const group = GROUPS_BY_KEY.get(item.group);
+    if (!group || !groupAllows(actor, group)) return false;
+    return can(actor, item.module, "view", navResource(actor, item.module));
+  });
 }
 
 /** Görünür öğeleri modüllere böler; öğesi olmayan modül atılır. */

@@ -32,6 +32,7 @@ const ID_SEGMENT = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 const ROUTE_LABELS: Record<string, string> = {
   events: "Etkinlikler",
+  fnb: "Etkinlikler",
   new: "Yeni",
   venue: "Yerleşim Planı",
   "team-organization": "Ekip Organizasyonu",

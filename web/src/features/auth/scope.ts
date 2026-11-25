@@ -20,6 +20,14 @@ export function inDepartment(
 }
 
 /**
+ * Yetkisi departman üyelikleriyle belirlenen aktör (`user` rolü). Eski roller (Task 10'da silinir)
+ * departman kapsamına bağlı değildir; menüde yalnızca modül izni belirler.
+ */
+export function isDepartmentUser(actor: { role: Role }): boolean {
+  return actor.role === "user";
+}
+
+/**
  * Değerlendirmelerde yalnızca kendi ekibini görebilen aktör: eski `leader` rolü ya da
  * F&B'de yönetici/asistan olmayan `user` (F&B üyeliği hiç olmayan `user` da dahil).
  */

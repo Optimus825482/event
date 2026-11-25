@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/features/auth/session";
-import { managerActor } from "../../helpers/actors";
+import { adminActor, managerActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 
 let current: Actor;
@@ -22,5 +22,12 @@ describe("yeni etkinlik sihirbazı seçenekleri", () => {
     expect(options.teamTemplates).toEqual([]);
     expect(options.canApplyTeam).toBe(false);
     expect(options.canApplyVenue).toBe(false);
+  });
+
+  it("ekip organizasyonu bağlantısı yalnızca staff ve events görüntüleme izni olanlara açıktır", async () => {
+    current = managerActor("entertainment");
+    expect((await loadWizardOptions()).canOrganizeTeam).toBe(false);
+    current = adminActor();
+    expect((await loadWizardOptions()).canOrganizeTeam).toBe(true);
   });
 });
