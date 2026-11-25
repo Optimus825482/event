@@ -230,6 +230,18 @@ describe("üyelik güncelleme", () => {
     const list = await listUsers(db, admin);
     expect(list.find((u) => u.id === created.id)?.memberships).toEqual([{ department: "casino", level: "assistant" }]);
   });
+
+  it("listUsers izin satırlarını da döndürür (düzenleme formu için)", async () => {
+    const admin = await persistActor(db, adminActor());
+    const grant = { module: "customers" as const, canView: true, canCreate: false, canEdit: true, canDelete: false };
+    const created = await createUser(db, admin, {
+      ...base,
+      memberships: [{ department: "casino", level: "member" }],
+      permissions: [grant],
+    });
+    const list = await listUsers(db, admin);
+    expect(list.find((u) => u.id === created.id)?.permissions).toEqual([grant]);
+  });
 });
 
 describe("son etkin sistem yöneticisi", () => {

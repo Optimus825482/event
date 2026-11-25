@@ -7,7 +7,7 @@ export type RoleFilter = "all" | UserSummary["role"];
 export type UserFilters = { search: string; role: RoleFilter; status: StatusFilter };
 
 /** Arama (kullanıcı adı, ad, e-posta, telefon, görev) ile rol ve durum süzgeçlerini uygular. */
-export function filterUsers(users: UserSummary[], filters: UserFilters): UserSummary[] {
+export function filterUsers<T extends UserSummary>(users: T[], filters: UserFilters): T[] {
   const needle = filters.search.trim().toLocaleLowerCase("tr");
   return users.filter((user) => {
     if (filters.role !== "all" && user.role !== filters.role) return false;

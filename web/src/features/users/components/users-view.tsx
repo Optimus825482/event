@@ -19,7 +19,8 @@ import { ROLES } from "@/features/auth/roles";
 import { isAdmin } from "@/features/auth/scope";
 import { setUserActiveAction } from "../actions";
 import { countUsers, filterUsers, isDeletedAccount, type RoleFilter, type StatusFilter } from "../filter";
-import type { UserSummary } from "../types";
+import { accessSummary } from "../form-model";
+import type { UserDetail } from "../queries";
 import { CreateUserForm } from "./create-user-form";
 import { DeleteUserDialog } from "./delete-user-dialog";
 import { EditUserForm } from "./edit-user-form";
@@ -28,13 +29,13 @@ import { ResetPasswordForm } from "./reset-password-form";
 
 type DialogState =
   | { kind: "create" }
-  | { kind: "edit"; user: UserSummary }
-  | { kind: "password"; user: UserSummary }
-  | { kind: "toggle"; user: UserSummary }
-  | { kind: "delete"; user: UserSummary }
+  | { kind: "edit"; user: UserDetail }
+  | { kind: "password"; user: UserDetail }
+  | { kind: "toggle"; user: UserDetail }
+  | { kind: "delete"; user: UserDetail }
   | null;
 
-type Props = { users: UserSummary[]; selfId: string; canCreate: boolean; canEdit: boolean; canDelete: boolean };
+type Props = { users: UserDetail[]; selfId: string; canCreate: boolean; canEdit: boolean; canDelete: boolean };
 
 export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Props) {
   const router = useRouter();
@@ -54,7 +55,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
     setDialog(null);
   }
 
-  function setActive(user: UserSummary, active: boolean) {
+  function setActive(user: UserDetail, active: boolean) {
     startTransition(async () => {
       const result = await setUserActiveAction({ id: user.id, active });
       setDialog(null);
@@ -73,7 +74,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Kullanıcılar"
-        description="Sistem kullanıcılarını, rollerini ve hesap durumlarını yönetin"
+        description="Sistem kullanıcılarını, departman erişimlerini ve hesap durumlarını yönetin"
         icon={
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
             <Users className="h-5 w-5" aria-hidden="true" />
@@ -150,7 +151,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
                 <TableHead>Kullanıcı adı</TableHead>
                 <TableHead>Ad soyad</TableHead>
                 <TableHead className="hidden md:table-cell">E-posta</TableHead>
-                <TableHead>Rol</TableHead>
+                <TableHead>Erişim</TableHead>
                 <TableHead>Durum</TableHead>
                 <TableHead>
                   <span className="sr-only">İşlemler</span>
@@ -165,7 +166,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
                   <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={isAdmin(user) ? "border-amber-500/40 text-amber-400" : ""}>
-                      {ROLE_LABELS[user.role]}
+                      {accessSummary(user.role, user.memberships)}
                     </Badge>
                   </TableCell>
                   <TableCell>

@@ -14,7 +14,17 @@ const MEMBERSHIP_COLUMNS = {
   level: departmentMemberships.level,
 } as const;
 
-export async function listUsers(db: Db | Tx, actor: Actor): Promise<UserWithMemberships[]> {
+const PERMISSION_COLUMNS = {
+  userId: userPermissions.userId,
+  module: userPermissions.module,
+  canView: userPermissions.canView,
+  canCreate: userPermissions.canCreate,
+  canEdit: userPermissions.canEdit,
+  canDelete: userPermissions.canDelete,
+} as const;
+
+/** Liste satırı: üyelikler ve izin satırları düzenleme formunu ek sorgu olmadan doldurur. */
+export async function listUsers(db: Db | Tx, actor: Actor): Promise<UserDetail[]> {
   authorize(actor, "users", "view");
   const list: UserSummary[] = await db.select(USER_COLUMNS).from(users).orderBy(asc(users.username));
   const rows = await db.select(MEMBERSHIP_COLUMNS).from(departmentMemberships);
@@ -22,7 +32,16 @@ export async function listUsers(db: Db | Tx, actor: Actor): Promise<UserWithMemb
   for (const { userId, ...membership } of rows) {
     byUser.set(userId, [...(byUser.get(userId) ?? []), membership]);
   }
-  return list.map((user) => ({ ...user, memberships: byUser.get(user.id) ?? [] }));
+  const grants = await db.select(PERMISSION_COLUMNS).from(userPermissions).orderBy(asc(userPermissions.module));
+  const grantsByUser = new Map<string, PermissionRow[]>();
+  for (const { userId, ...grant } of grants) {
+    grantsByUser.set(userId, [...(grantsByUser.get(userId) ?? []), grant]);
+  }
+  return list.map((user) => ({
+    ...user,
+    memberships: byUser.get(user.id) ?? [],
+    permissions: grantsByUser.get(user.id) ?? [],
+  }));
 }
 
 export async function getUserDetail(db: Db | Tx, actor: Actor, id: string): Promise<UserDetail | null> {

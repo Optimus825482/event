@@ -5,36 +5,50 @@ import { useState, useTransition, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { ROLE_LABELS } from "@/components/layout/role-labels";
-import { ROLES } from "@/features/auth/roles";
+import type { Role } from "@/features/auth/roles";
 import { createUserAction } from "../actions";
+import { ACCESS_MESSAGES } from "../access-rules";
+import { ROLE_CHOICES, usesDepartments } from "../form-model";
 import { Field, FormStatus, SELECT_CLASS, toFormState, type FormState } from "./field";
+import { AccessFields, type AccessValue } from "./membership-fields";
 
 const CREATED_MESSAGE = "Kullanıcı oluşturuldu";
+const EMPTY_ACCESS: AccessValue = { memberships: [], grants: [] };
 
 export function CreateUserForm({ onDone }: { onDone?: (message: string) => void }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(null);
+  const [role, setRole] = useState<Role>("user");
+  const [access, setAccess] = useState<AccessValue>(EMPTY_ACCESS);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
     setState(null);
+    const withDepartments = usesDepartments(role);
+    if (withDepartments && access.memberships.length === 0) {
+      setState({ ok: false, message: ACCESS_MESSAGES.needDepartment });
+      return;
+    }
     startTransition(async () => {
       const result = await createUserAction({
         username: String(data.get("username") ?? ""),
         name: String(data.get("name") ?? ""),
         email: String(data.get("email") ?? ""),
-        role: String(data.get("role") ?? ""),
+        role,
         password: String(data.get("password") ?? ""),
+        memberships: withDepartments ? access.memberships : [],
+        permissions: withDepartments ? access.grants : [],
       });
       setState(toFormState(result, CREATED_MESSAGE));
       if (result.ok) {
         toast.success(CREATED_MESSAGE);
         form.reset();
+        setRole("user");
+        setAccess(EMPTY_ACCESS);
         router.refresh();
         onDone?.(CREATED_MESSAGE);
       } else {
@@ -56,10 +70,16 @@ export function CreateUserForm({ onDone }: { onDone?: (message: string) => void 
         <Input id="email" name="email" type="email" autoComplete="off" />
       </Field>
       <Field id="role" label="Rol" errors={errors?.role}>
-        <select id="role" name="role" defaultValue="staff" className={SELECT_CLASS}>
-          {ROLES.map((role) => (
-            <option key={role} value={role}>
-              {ROLE_LABELS[role]}
+        <select
+          id="role"
+          name="role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as Role)}
+          className={SELECT_CLASS}
+        >
+          {ROLE_CHOICES.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
             </option>
           ))}
         </select>
@@ -74,6 +94,7 @@ export function CreateUserForm({ onDone }: { onDone?: (message: string) => void 
           aria-invalid={Boolean(errors?.password)}
         />
       </Field>
+      {usesDepartments(role) ? <AccessFields value={access} onChange={setAccess} /> : null}
       <div className="flex items-end gap-3 sm:col-span-2">
         <Button type="submit" disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">
           {pending ? "Oluşturuluyor…" : "Kullanıcı oluştur"}
