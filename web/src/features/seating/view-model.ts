@@ -72,7 +72,9 @@ export function planColors(tables: readonly SeatingTable[], mode: "allocation" |
 /** Yalnızca rakamlardan oluşan metni sayıya çevirir; boş ya da geçersizse `undefined` (sunucu şeması sayı bekler). */
 export function parseWholeNumber(text: string): number | undefined {
   const trimmed = text.trim();
-  return /^\d+$/.test(trimmed) ? Number(trimmed) : undefined;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  return Number.isSafeInteger(value) ? value : undefined;
 }
 
 /** Satılabilir sandalye alanı: boş = kapasitenin tamamı (`null`); aksi halde 1..`max` arası tam sayı. */

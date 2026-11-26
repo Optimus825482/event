@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SALE_CATEGORIES, SALE_CATEGORY_LABELS, type SaleCategory } from "@/domain/seating";
+import { cn } from "@/lib/utils";
 import type { SeatingTable } from "../queries";
 import type { SaleSettings } from "../settings-service";
 import { parseSellableInput, saleMoveBlocker, type SaleMove } from "../view-model";
@@ -47,18 +48,10 @@ export function SeatingBulkBar({
 }) {
   const [category, setCategory] = useState<SaleCategory | "">("");
   const [seats, setSeats] = useState("");
-  const [seatsError, setSeatsError] = useState<string | null>(null);
   const minCapacity = Math.min(...selected.map((t) => t.capacity));
-
-  function applySeats() {
-    const parsed = parseSellableInput(seats, minCapacity);
-    if (!parsed.ok) {
-      setSeatsError(parsed.message);
-      return;
-    }
-    setSeatsError(null);
-    onClassify({ sellableSeats: parsed.value });
-  }
+  const parsedSeats = seats.trim() === "" ? null : parseSellableInput(seats, minCapacity);
+  const seatsError = parsedSeats && !parsedSeats.ok ? parsedSeats.message : null;
+  const seatsValue = parsedSeats && parsedSeats.ok && parsedSeats.value !== null ? parsedSeats.value : null;
 
   return (
     <section
@@ -107,23 +100,34 @@ export function SeatingBulkBar({
             <Input
               id="bulk-seats"
               inputMode="numeric"
-              placeholder="Tümü"
+              placeholder="Sayı"
               value={seats}
-              onChange={(e) => {
-                setSeats(e.target.value);
-                setSeatsError(null);
-              }}
+              onChange={(e) => setSeats(e.target.value)}
               aria-invalid={seatsError ? true : undefined}
               aria-describedby="bulk-seats-hint"
               className="h-11 w-full sm:w-32"
             />
-            <Button type="button" className="h-11" disabled={pending} onClick={applySeats}>
+            <Button
+              type="button"
+              className="h-11"
+              disabled={pending || seatsValue === null}
+              onClick={() => seatsValue !== null && onClassify({ sellableSeats: seatsValue })}
+            >
               Sayıyı uygula
             </Button>
           </div>
-          <p id="bulk-seats-hint" className={seatsError ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
-            {seatsError ?? `Boş bırakırsanız kapasitenin tamamı satılır (en çok ${minCapacity}).`}
+          <p id="bulk-seats-hint" className={cn("text-sm", seatsError ? "text-destructive" : "text-muted-foreground")}>
+            {seatsError ?? `1 ile ${minCapacity} arasında bir sayı girin.`}
           </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full sm:w-auto"
+            disabled={pending}
+            onClick={() => onClassify({ sellableSeats: null })}
+          >
+            Tüm sandalyeleri satılabilir yap
+          </Button>
         </div>
       </div>
 

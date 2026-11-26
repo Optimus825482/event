@@ -98,6 +98,8 @@ describe("masalar ve satış görünüm modeli", () => {
     ["abc", undefined],
     ["1.5", undefined],
     ["-3", undefined],
+    ["007", 7],
+    ["99999999999999999999", undefined],
   ] as const)("parseWholeNumber(%j) = %j", (text, expected) => expect(parseWholeNumber(text)).toBe(expected));
 
   it("parseSellableInput boş metni \"tümü\" (null) sayar, aralık dışını Türkçe mesajla reddeder", () => {

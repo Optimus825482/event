@@ -33,6 +33,8 @@ function unwrap<T>(result: ActionResult<T>): T {
   return result.data;
 }
 
+const FAILED_MESSAGE = "İşlem tamamlanamadı";
+
 const countText = (c: { tables: number; seats: number }) => `${c.tables} masa · ${c.seats} sandalye`;
 
 /** "Masalar ve Satış" ekranı: özet, renkli plan, masa listesi, toplu işlemler ve satış kuralları. */
@@ -72,6 +74,7 @@ export function SeatingConsole({
   /** Eylemi çalıştırır; sunucu mesajı toast'ta ve kalıcı uyarıda aynen gösterilir. */
   async function perform(call: () => Promise<ActionResult<{ updated: number }>>): Promise<boolean> {
     setBusy(true);
+    setLastError(null);
     try {
       const result = await call();
       if (result.ok) {
@@ -82,6 +85,10 @@ export function SeatingConsole({
       }
       setLastError(result.message);
       toast.error(result.message);
+      return false;
+    } catch {
+      setLastError(FAILED_MESSAGE);
+      toast.error(FAILED_MESSAGE);
       return false;
     } finally {
       setBusy(false);
@@ -199,6 +206,7 @@ export function SeatingConsole({
           onToggle={toggle}
           onToggleAll={(checked) => setSelectedIds(checked ? new Set(tables.map((t) => t.id)) : new Set())}
           onClassifyOne={(tableId, patch) => classify([tableId], patch)}
+          onInvalidInput={() => setLastError(null)}
         />
       </section>
 

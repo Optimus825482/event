@@ -19,7 +19,9 @@ export default async function EventTablesPage({ params }: { params: Promise<{ id
   const actor = await requirePolicyActor();
   authorize(actor, "ticketing", "view");
   if (!isUuid(id)) notFound();
-  const [loaded, event] = await Promise.all([loadSeatingOverview(id), getEventOrThrow(db, id)]);
+  // Önce genel bakış: olmayan etkinlikte `notFound()` (404) verir; durum sorgusu bundan sonra çalışır.
+  const loaded = await loadSeatingOverview(id);
+  const event = await getEventOrThrow(db, id);
   // Aktör istemciye geçirilmez: yalnızca genel bakış alanları.
   const overview: SeatingOverview = {
     eventName: loaded.eventName,

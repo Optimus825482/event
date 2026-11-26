@@ -11,14 +11,24 @@ import { saveSaleSettingsAction } from "../actions";
 import type { SaleSettings } from "../settings-service";
 import { parseWholeNumber } from "../view-model";
 
-type FieldName = "holdMinutes" | "maxSeatsPerOrder" | "saleStartsAt" | "saleEndsAt";
+type FieldName =
+  "holdMinutes" | "maxSeatsPerOrder" | "saleStartsAt" | "saleEndsAt";
 type Errors = Partial<Record<FieldName, string>>;
 
-const wallClock = (date: Date | null) => (date ? dateToZonedWallClock(date) : "");
+const wallClock = (date: Date | null) =>
+  date ? dateToZonedWallClock(date) : "";
 
 const SWITCHES = [
-  { key: "sharedTables", label: "Paylaşımlı masa", hint: "Kapalıyken masa yalnızca bütün olarak satılır" },
-  { key: "blockSingleLeftover", label: "Tek sandalye bırakan alımı engelle", hint: null },
+  {
+    key: "sharedTables",
+    label: "Paylaşımlı masa",
+    hint: "Kapalıyken masa yalnızca bütün olarak satılır",
+  },
+  {
+    key: "blockSingleLeftover",
+    label: "Tek sandalye bırakan alımı engelle",
+    hint: null,
+  },
   { key: "locaOnline", label: "Localar online satılsın", hint: null },
 ] as const;
 
@@ -42,8 +52,12 @@ export function SaleSettingsForm({
     locaOnline: settings.locaOnline,
   });
   const [holdMinutes, setHoldMinutes] = useState(String(settings.holdMinutes));
-  const [maxSeatsPerOrder, setMaxSeatsPerOrder] = useState(String(settings.maxSeatsPerOrder));
-  const [saleStartsAt, setSaleStartsAt] = useState(wallClock(settings.saleStartsAt));
+  const [maxSeatsPerOrder, setMaxSeatsPerOrder] = useState(
+    String(settings.maxSeatsPerOrder),
+  );
+  const [saleStartsAt, setSaleStartsAt] = useState(
+    wallClock(settings.saleStartsAt),
+  );
   const [saleEndsAt, setSaleEndsAt] = useState(wallClock(settings.saleEndsAt));
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -52,14 +66,21 @@ export function SaleSettingsForm({
     event.preventDefault();
     if (!canEdit) return;
     startTransition(async () => {
-      const result = await saveSaleSettingsAction({
-        eventId,
-        ...flags,
-        holdMinutes: parseWholeNumber(holdMinutes),
-        maxSeatsPerOrder: parseWholeNumber(maxSeatsPerOrder),
-        saleStartsAt: saleStartsAt === "" ? null : saleStartsAt,
-        saleEndsAt: saleEndsAt === "" ? null : saleEndsAt,
-      });
+      let result: Awaited<ReturnType<typeof saveSaleSettingsAction>>;
+      try {
+        result = await saveSaleSettingsAction({
+          eventId,
+          ...flags,
+          holdMinutes: parseWholeNumber(holdMinutes),
+          maxSeatsPerOrder: parseWholeNumber(maxSeatsPerOrder),
+          saleStartsAt: saleStartsAt === "" ? null : saleStartsAt,
+          saleEndsAt: saleEndsAt === "" ? null : saleEndsAt,
+        });
+      } catch {
+        setFormError("İşlem tamamlanamadı");
+        toast.error("İşlem tamamlanamadı");
+        return;
+      }
       if (result.ok) {
         setErrors({});
         setFormError(null);
@@ -68,7 +89,9 @@ export function SaleSettingsForm({
         return;
       }
       const next: Errors = {};
-      for (const [field, messages] of Object.entries(result.fieldErrors ?? {})) {
+      for (const [field, messages] of Object.entries(
+        result.fieldErrors ?? {},
+      )) {
         if (messages[0]) next[field as FieldName] = messages[0];
       }
       setErrors(next);
@@ -77,7 +100,13 @@ export function SaleSettingsForm({
     });
   }
 
-  function field(name: FieldName, label: string, value: string, set: (v: string) => void, type: "number" | "datetime-local") {
+  function field(
+    name: FieldName,
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    type: "number" | "datetime-local",
+  ) {
     const id = `sale-${name}`;
     const error = errors[name];
     return (
@@ -119,19 +148,28 @@ export function SaleSettingsForm({
           {SWITCHES.map(({ key, label, hint }) => {
             const id = `sale-${key}`;
             return (
-              <li key={key} className="flex min-h-11 items-center justify-between gap-3">
+              <li
+                key={key}
+                className="flex min-h-11 items-center justify-between gap-3"
+              >
                 <div className="min-w-0">
                   <Label htmlFor={id} className="leading-snug">
                     {label}
                   </Label>
                   {hint ? (
-                    <p id={`${id}-hint`} className="mt-0.5 text-sm text-muted-foreground">
+                    <p
+                      id={`${id}-hint`}
+                      className="mt-0.5 text-sm text-muted-foreground"
+                    >
                       {hint}
                     </p>
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="w-10 text-right text-sm text-muted-foreground" aria-hidden="true">
+                  <span
+                    className="w-10 text-right text-sm text-muted-foreground"
+                    aria-hidden="true"
+                  >
                     {flags[key] ? "Açık" : "Kapalı"}
                   </span>
                   <Switch
@@ -139,7 +177,9 @@ export function SaleSettingsForm({
                     checked={flags[key]}
                     disabled={!canEdit}
                     aria-describedby={hint ? `${id}-hint` : undefined}
-                    onCheckedChange={(checked) => setFlags((prev) => ({ ...prev, [key]: checked }))}
+                    onCheckedChange={(checked) =>
+                      setFlags((prev) => ({ ...prev, [key]: checked }))
+                    }
                     className="data-[state=unchecked]:bg-muted-foreground"
                   />
                 </div>
@@ -149,10 +189,34 @@ export function SaleSettingsForm({
         </ul>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {field("holdMinutes", "Tutma süresi (dk)", holdMinutes, setHoldMinutes, "number")}
-          {field("maxSeatsPerOrder", "Sipariş başına azami adet", maxSeatsPerOrder, setMaxSeatsPerOrder, "number")}
-          {field("saleStartsAt", "Satış başlangıcı", saleStartsAt, setSaleStartsAt, "datetime-local")}
-          {field("saleEndsAt", "Satış bitişi", saleEndsAt, setSaleEndsAt, "datetime-local")}
+          {field(
+            "holdMinutes",
+            "Tutma süresi (dk)",
+            holdMinutes,
+            setHoldMinutes,
+            "number",
+          )}
+          {field(
+            "maxSeatsPerOrder",
+            "Sipariş başına azami adet",
+            maxSeatsPerOrder,
+            setMaxSeatsPerOrder,
+            "number",
+          )}
+          {field(
+            "saleStartsAt",
+            "Satış başlangıcı",
+            saleStartsAt,
+            setSaleStartsAt,
+            "datetime-local",
+          )}
+          {field(
+            "saleEndsAt",
+            "Satış bitişi",
+            saleEndsAt,
+            setSaleEndsAt,
+            "datetime-local",
+          )}
         </div>
 
         {formError ? (
@@ -161,7 +225,9 @@ export function SaleSettingsForm({
           </p>
         ) : null}
         {!canEdit ? (
-          <p className="text-sm text-muted-foreground">Satış kurallarını yalnızca düzenleme yetkisi olanlar değiştirebilir.</p>
+          <p className="text-sm text-muted-foreground">
+            Satış kurallarını yalnızca düzenleme yetkisi olanlar değiştirebilir.
+          </p>
         ) : null}
         <Button type="submit" className="h-11" disabled={!canEdit || pending}>
           Kuralları kaydet

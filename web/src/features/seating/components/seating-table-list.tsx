@@ -21,10 +21,12 @@ function SellableCell({
   table,
   disabled,
   onCommit,
+  onInvalid,
 }: {
   table: SeatingTable;
   disabled: boolean;
   onCommit: (patch: ClassifyPatch) => Promise<boolean>;
+  onInvalid: () => void;
 }) {
   const [draft, setDraft] = useState(table.sellableSeats === null ? "" : String(table.sellableSeats));
   const [error, setError] = useState<string | null>(null);
@@ -35,14 +37,20 @@ function SellableCell({
     const parsed = parseSellableInput(draft, table.capacity);
     if (!parsed.ok) {
       setError(parsed.message);
+      onInvalid();
       return;
     }
     setError(null);
     if (parsed.value === table.sellableSeats || inFlight.current) return;
     inFlight.current = true;
-    const ok = await onCommit({ sellableSeats: parsed.value }).finally(() => {
+    let ok = false;
+    try {
+      ok = await onCommit({ sellableSeats: parsed.value });
+    } catch {
+      ok = false;
+    } finally {
       inFlight.current = false;
-    });
+    }
     // Reddedilirse alan sunucudaki değere döner; başarıda yeni değer yenilenen veriyle gelir.
     if (!ok) setDraft(table.sellableSeats === null ? "" : String(table.sellableSeats));
   }
@@ -87,6 +95,7 @@ export function SeatingTableList({
   onToggle,
   onToggleAll,
   onClassifyOne,
+  onInvalidInput,
 }: {
   tables: readonly SeatingTable[];
   selectedIds: ReadonlySet<string>;
@@ -95,6 +104,8 @@ export function SeatingTableList({
   onToggle: (tableId: string) => void;
   onToggleAll: (checked: boolean) => void;
   onClassifyOne: (tableId: string, patch: ClassifyPatch) => Promise<boolean>;
+  /** Satır içi alanda doğrulama hatası olunca eski sunucu hatasını temizlemek için. */
+  onInvalidInput: () => void;
 }) {
   const allSelected = tables.length > 0 && tables.every((t) => selectedIds.has(t.id));
   const someSelected = !allSelected && tables.some((t) => selectedIds.has(t.id));
@@ -104,7 +115,7 @@ export function SeatingTableList({
   }
 
   return (
-    <Table>
+    <Table aria-label="Masalar">
       <TableHeader>
         <TableRow>
           {canEdit ? (
@@ -165,6 +176,7 @@ export function SeatingTableList({
                   table={table}
                   disabled={busy}
                   onCommit={(patch) => onClassifyOne(table.id, patch)}
+                  onInvalid={onInvalidInput}
                 />
               ) : (
                 table.effectiveSellable
