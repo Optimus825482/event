@@ -40,8 +40,13 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 | `TRUSTED_IP_HEADER` | evet | Ters vekilin istemci IP'sini yazdığı başlık. Traefik/Coolify arkasında `x-real-ip` |
 | `SETTINGS_ENCRYPTION_KEY` | evet (bu yığında) | Ayarlardaki SMTP parolasını şifreler; 32 bayt base64: `openssl rand -base64 32`. Kaybedilirse kayıtlı SMTP parolası çözülemez, yeniden girilir |
 | `QR_SIGNING_KEY` | hayır | QR belirteçleri için HMAC anahtarı (en az 32 karakter). Boşsa `BETTER_AUTH_SECRET`'tan türetilir. **Değişirse dağıtılmış QR'lar geçersiz olur** |
+| `SALES_API_SECRET` | hayır | Satış API'sinin ortak sırrı (en az 32 karakter; `openssl rand -base64 48`). Tanımsızsa `/api/sales/*` uçları `503` döner |
+| `PAYMENT_PROVIDER` | hayır | `demo` \| `disabled`; varsayılan `disabled`. Başka değer açılışı durdurur. `demo` gerçek ödeme almaz |
+| `SALES_SITE_URL` | hayır | Herkese açık satış sitesinin adresi, `https://` ile başlamalı (sondaki `/` atılır) |
 | `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 6 karakter; büyük harf, küçük harf ve rakam içermeli). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
 | `ADMIN_USERNAME` | hayır | Otomatik oluşturulan yöneticinin kullanıcı adı; varsayılan `admin` (büyük/küçük harf duyarlı) |
+
+> Faz 7'de `/api/sales/*` için iç ağ yönlendirme kısıtı eklenene dek tek koruma `SALES_API_SECRET`'tır; sır tanımlanmadan uçlar `503` döner. `PAYMENT_PROVIDER=demo` gerçek ödeme almaz; canlı satışta kullanılmaz.
 
 `UPLOAD_DIR` compose içinde `/data/uploads` olarak sabittir (adlandırılmış volume). Uygulama `NODE_ENV=production` iken
 `BETTER_AUTH_URL` (https) ve `TRUSTED_IP_HEADER` olmadan açılmaz.
