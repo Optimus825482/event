@@ -56,6 +56,10 @@ export function StaffLinkField({
         placeholder="Ad ya da sicil no ara"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        // Enter aramayı bitirir; formu göndermemeli (rol ve izinler yarım kaydedilmesin).
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.preventDefault();
+        }}
         autoComplete="off"
       />
       <select
@@ -75,6 +79,9 @@ export function StaffLinkField({
           );
         })}
       </select>
+      <p role="status" className={shown.length === 0 ? "text-xs text-muted-foreground" : "sr-only"}>
+        {shown.length === 0 ? "Eşleşen personel kaydı yok" : `${shown.length} personel kaydı listeleniyor`}
+      </p>
     </Field>
   );
 }

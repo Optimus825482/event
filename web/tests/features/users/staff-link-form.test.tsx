@@ -92,6 +92,25 @@ describe("personel kaydı alanı", () => {
     expect(updateUserAction.mock.calls[0]?.[0]).toMatchObject({ staffId: "s1" });
   });
 
+  it("arama kutusunda Enter formu göndermez", () => {
+    const { container } = render(<EditUserForm user={USER} staffOptions={OPTIONS} />);
+    const onSubmit = vi.fn((e: Event) => e.preventDefault());
+    container.querySelector("form")!.addEventListener("submit", onSubmit);
+    const search = screen.getByLabelText("Personel kaydı ara");
+    const notCancelled = fireEvent.keyDown(search, { key: "Enter", code: "Enter" });
+    expect(notCancelled).toBe(false);
+    expect(updateUserAction).not.toHaveBeenCalled();
+  });
+
+  it("eşleşme yoksa boş durum iletisi ve canlı bölge sayıyı duyurur", () => {
+    render(<EditUserForm user={{ ...USER, staffId: null }} staffOptions={OPTIONS} />);
+    const live = screen.getByRole("status", { name: "" , hidden: true });
+    expect(live.textContent).toBe("3 personel kaydı listeleniyor");
+    fireEvent.change(screen.getByLabelText("Personel kaydı ara"), { target: { value: "zzz" } });
+    expect(screen.getByText("Eşleşen personel kaydı yok")).toBeTruthy();
+    expect(live.textContent).toBe("Eşleşen personel kaydı yok");
+  });
+
   it("başka hesaba bağlı kayıt seçilemez; 'Bağlı değil' seçeneği vardır", () => {
     render(<EditUserForm user={USER} staffOptions={OPTIONS} />);
     const options = Array.from((screen.getByLabelText("Personel kaydı") as HTMLSelectElement).options);

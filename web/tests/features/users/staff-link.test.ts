@@ -113,6 +113,33 @@ describe("kullanıcı - personel kaydı bağı", () => {
     expect(await staffIdOf(target.id)).toBe(own.id);
   });
 
+  it("ayrılmış personel kaydına yeni bağ kurulamaz; mevcut bağ korunur ve çözülebilir", async () => {
+    const actor = await admin();
+    const gone = await createStaff(db, { status: "terminated" });
+    const target = await insertUser(db, { role: "admin" });
+    await expect(updateUser(db, actor, { id: target.id, staffId: gone.id })).rejects.toMatchObject({
+      code: "invalid",
+      message: "Ayrılmış personel kaydına hesap bağlanamaz",
+    });
+    await expect(
+      createUser(db, actor, { username: "ayse", password: PASSWORD, ...ACCESS, staffId: gone.id }),
+    ).rejects.toMatchObject({ code: "invalid" });
+
+    const linked = await insertUser(db, { role: "admin", staffId: gone.id });
+    await updateUser(db, actor, { id: linked.id, staffId: gone.id, name: "Yeni Ad" });
+    expect(await staffIdOf(linked.id)).toBe(gone.id);
+    await updateUser(db, actor, { id: linked.id, staffId: null });
+    expect(await staffIdOf(linked.id)).toBeNull();
+  });
+
+  it("ayrılmış ama hâlâ bağlı personel seçici listesinde kalır", async () => {
+    const actor = await admin();
+    const gone = await createStaff(db, { fullName: "Ayrılan Bağlı", status: "terminated" });
+    await insertUser(db, { staffId: gone.id });
+    const list = await listLinkableStaff(db, actor);
+    expect(list.map((p) => p.id)).toContain(gone.id);
+  });
+
   it("yetkisiz aktör bağı değiştiremez", async () => {
     const person = await createStaff(db);
     const target = await insertUser(db, { role: "admin" });

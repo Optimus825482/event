@@ -47,6 +47,7 @@ const MESSAGES = {
   reservedEmail: "Bu e-posta adresi kullanılamaz",
   reservedUsername: "Bu kullanıcı adı kullanılamaz",
   staffNotFound: "Personel kaydı bulunamadı",
+  staffTerminated: "Ayrılmış personel kaydına hesap bağlanamaz",
 } as const;
 
 /** Yönetici sayısını etkileyen işlemleri (pasifleştirme, rol düşürme) sıraya sokar. */
@@ -116,7 +117,7 @@ async function assertUnique(db: Db | Tx, username: string | undefined, email: st
  */
 async function assertStaffLinkable(tx: Tx, staffId: string, selfId?: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext('eventflow_user_staff_link'))`);
-  const [person] = await tx.select({ id: staff.id }).from(staff).where(eq(staff.id, staffId));
+  const [person] = await tx.select({ id: staff.id, status: staff.status }).from(staff).where(eq(staff.id, staffId));
   if (!person) throw new DomainError("not_found", MESSAGES.staffNotFound);
   const [owner] = await tx
     .select({ name: users.name, username: users.username, id: users.id })
@@ -127,6 +128,10 @@ async function assertStaffLinkable(tx: Tx, staffId: string, selfId?: string) {
       "conflict",
       `Bu personel kaydı zaten "${owner.name}" (${owner.username}) kullanıcısına bağlı`,
     );
+  }
+  // Yeni bağ ayrılmış personele kurulamaz; hesabın mevcut bağı ayrılsa da korunur ve çözülebilir.
+  if (person.status === "terminated" && !(owner && owner.id === selfId)) {
+    throw new DomainError("invalid", MESSAGES.staffTerminated);
   }
 }
 
