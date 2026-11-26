@@ -50,6 +50,13 @@ export async function updateFinanceItem(db: Db, actor: Actor, input: UpdateFinan
   authorize(actor, "finance", "edit");
 
   return db.transaction(async (tx) => {
+    const [found] = await tx
+      .select({ eventId: eventFinanceItems.eventId })
+      .from(eventFinanceItems)
+      .where(eq(eventFinanceItems.id, input.id));
+    if (!found) throw new DomainError("not_found", ITEM_NOT_FOUND);
+    // Etkinlik kilidi önce (tüm yazıcılarla aynı sıra); `computeRecommendation` tutarlı okuma için buna dayanır.
+    await tx.select({ id: events.id }).from(events).where(eq(events.id, found.eventId)).for("update");
     const [item] = await tx.select().from(eventFinanceItems).where(eq(eventFinanceItems.id, input.id)).for("update");
     if (!item) throw new DomainError("not_found", ITEM_NOT_FOUND);
     if (!CATEGORIES_BY_DIRECTION[item.direction].includes(input.category)) {
@@ -80,10 +87,19 @@ export async function deleteFinanceItem(
 ): Promise<{ id: string; eventId: string }> {
   authorize(actor, "finance", "delete");
 
-  const [row] = await db
-    .delete(eventFinanceItems)
-    .where(eq(eventFinanceItems.id, input.id))
-    .returning({ id: eventFinanceItems.id, eventId: eventFinanceItems.eventId });
-  if (!row) throw new DomainError("not_found", ITEM_NOT_FOUND);
-  return row;
+  return db.transaction(async (tx) => {
+    const [found] = await tx
+      .select({ eventId: eventFinanceItems.eventId })
+      .from(eventFinanceItems)
+      .where(eq(eventFinanceItems.id, input.id));
+    if (!found) throw new DomainError("not_found", ITEM_NOT_FOUND);
+    // Etkinlik kilidi: eşzamanlı tavsiye hesabı silinen kalemi yarım görmesin.
+    await tx.select({ id: events.id }).from(events).where(eq(events.id, found.eventId)).for("update");
+    const [row] = await tx
+      .delete(eventFinanceItems)
+      .where(eq(eventFinanceItems.id, input.id))
+      .returning({ id: eventFinanceItems.id, eventId: eventFinanceItems.eventId });
+    if (!row) throw new DomainError("not_found", ITEM_NOT_FOUND);
+    return row;
+  });
 }

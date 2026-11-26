@@ -15,7 +15,8 @@ const MESSAGES = {
   frozen: "Tamamlanmış veya iptal edilmiş etkinliğin fiyatı değiştirilemez",
 } as const;
 
-async function lockEditableEvent(tx: Tx, eventId: string): Promise<void> {
+/** Etkinlik satırını `FOR UPDATE` kilitler; yok ise `not_found`, tamamlanmış/iptal ise `conflict`. */
+export async function lockEditableEvent(tx: Tx, eventId: string): Promise<void> {
   const [event] = await tx.select({ status: events.status }).from(events).where(eq(events.id, eventId)).for("update");
   if (!event) throw new DomainError("not_found", MESSAGES.notFound);
   if (event.status === "completed" || event.status === "cancelled") {

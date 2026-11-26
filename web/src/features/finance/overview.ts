@@ -48,8 +48,8 @@ async function readOverview(tx: Db | Tx, actor: Actor, eventId: string): Promise
   const summary = await getFinanceSummary(tx, eventId);
   const items = await getFinanceItems(tx, eventId);
   const plan = await getFinancePlan(tx, eventId);
-  const recommendation = await previewRecommendation(tx, eventId);
   const seatPrices = await getSeatPrices(tx, eventId);
+  const recommendation = await previewRecommendation(tx, eventId, { summary, prices: seatPrices });
   const missingFinalPrice = await categoriesMissingFinalPrice(tx, eventId);
   return {
     event: { id: event.id, name: event.name, status: event.status, planningStage: event.planningStage },
@@ -85,11 +85,13 @@ async function readOverview(tx: Db | Tx, actor: Actor, eventId: string): Promise
 /** Finans ekranı verisi; tutarlı görüntü için tek işlemde okunur. */
 export async function getFinanceOverview(ex: Db | Tx, actor: Actor, eventId: string): Promise<FinanceOverview> {
   authorize(actor, "finance", "view");
-  // `Db` kendi işlemini açar; `Tx` zaten çağıranın işleminin içindedir.
-  if ("transaction" in ex && typeof ex.transaction === "function") {
-    return (ex as Db).transaction((tx) => readOverview(tx, actor, eventId));
-  }
-  return readOverview(ex, actor, eventId);
+  // `Tx` (drizzle işlem nesnesi) `rollback` taşır, `Db` taşımaz: işlem içindeysek iç içe işlem açmadan
+  // çağıranın görüntüsünden okuruz. `Db` için çok sorgulu tutarlı görüntü: yinelenebilir okuma, salt okunur.
+  if ("rollback" in ex) return readOverview(ex, actor, eventId);
+  return ex.transaction((tx) => readOverview(tx, actor, eventId), {
+    isolationLevel: "repeatable read",
+    accessMode: "read only",
+  });
 }
 
 /** Finans sayfası verisi. Kimlik geçersizse ya da etkinlik yoksa 404; yetkisizse `ForbiddenError` yukarı çıkar. */
