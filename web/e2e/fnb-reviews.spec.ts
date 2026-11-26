@@ -38,11 +38,19 @@ async function loginAs(page: Page, username: string, password: string): Promise<
   for (let attempt = 0; attempt < 3; attempt++) {
     await login(page, username, password);
     const throttled = page.getByRole("alert").filter({ hasText: "Çok fazla deneme yapıldı" });
+    // İki kol da sınırlı ve hatayı yutar: kaybeden kol bağlam kapanırken askıda kalıp beklenmedik hata üretmez.
     const outcome = await Promise.race([
-      page.waitForURL((url) => !url.pathname.startsWith("/login")).then(() => "ok" as const),
-      throttled.waitFor().then(() => "throttled" as const),
+      page
+        .waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 })
+        .then(() => "ok" as const)
+        .catch(() => "none" as const),
+      throttled
+        .waitFor({ timeout: 15_000 })
+        .then(() => "throttled" as const)
+        .catch(() => "none" as const),
     ]);
     if (outcome === "ok") return;
+    if (outcome === "none") continue;
     const seconds = Number(/(\d+) saniye/.exec((await throttled.textContent()) ?? "")?.[1] ?? "10");
     await page.waitForTimeout((seconds + 1) * 1000);
   }
