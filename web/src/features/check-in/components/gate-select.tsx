@@ -18,7 +18,7 @@ export function GateSelect({ gate, onChange }: { gate: number | null; onChange: 
           value={gate ?? ""}
           onChange={(e) => onChange(parseGate(e.target.value))}
           aria-describedby={gate === null ? noteId : undefined}
-          className="h-8 rounded-md border border-slate-500 bg-slate-800 px-2 text-sm text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+          className="min-h-10 rounded-md border border-slate-500 bg-slate-800 px-2 text-sm text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
         >
           <option value="">Seçilmedi</option>
           {CHECK_IN_GATES.map((g) => (

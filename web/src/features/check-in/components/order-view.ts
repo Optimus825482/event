@@ -3,9 +3,9 @@ import { gateLabel } from "../gates";
 import type { DoorOrder } from "../order-lookup";
 import type { CheckInSuccess } from "../result-schema";
 
-/** Giriş yapmamış biletler, liste sırasıyla. */
-export function selectableTicketIds(order: DoorOrder): string[] {
-  return order.tickets.filter((t) => t.checkedInAt === null).map((t) => t.ticketId);
+/** Giriş yapmamış ve gönderimi reddedilmemiş biletler, liste sırasıyla. */
+export function selectableTicketIds(order: DoorOrder, failedIds: readonly string[] = []): string[] {
+  return order.tickets.filter((t) => t.checkedInAt === null && !failedIds.includes(t.ticketId)).map((t) => t.ticketId);
 }
 
 export function orderSummary(order: DoorOrder): string {

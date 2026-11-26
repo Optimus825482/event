@@ -149,6 +149,9 @@ function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: 
           canWrite={canWrite}
           pending={pending}
           onCheckIn={(reservationId) => submit({ reservationId })}
+          failedTicketIds={queue.failed.flatMap((i) =>
+            i.eventId === eventId && "ticketId" in i.target ? [i.target.ticketId] : [],
+          )}
           onCheckInTicket={(ticketId) => submit({ ticketId })}
           onCheckInTickets={(ids) => submitMany(ids.map((ticketId) => ({ ticketId })))}
         />,

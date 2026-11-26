@@ -91,6 +91,7 @@ export function GuestSearch({
   onCheckIn,
   onCheckInTicket,
   onCheckInTickets,
+  failedTicketIds,
 }: {
   eventId: string;
   canWrite: boolean;
@@ -98,6 +99,7 @@ export function GuestSearch({
   onCheckIn: (reservationId: string) => void;
   onCheckInTicket: (ticketId: string) => void;
   onCheckInTickets: (ticketIds: string[]) => void;
+  failedTicketIds: readonly string[];
 }) {
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim());
@@ -137,6 +139,8 @@ export function GuestSearch({
         pending={pending}
         onCheckIn={onCheckInTicket}
         onCheckInMany={onCheckInTickets}
+        failedTicketIds={failedTicketIds}
+        guestsLoading={guests.isPending}
         hasGuests={(guests.data?.length ?? 0) > 0}
       />
 

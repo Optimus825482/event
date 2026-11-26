@@ -11,7 +11,10 @@ import { useOnline } from "../offline/use-offline-queue";
 import { orderSummary, selectableTicketIds } from "./order-view";
 import { unwrap } from "./use-check-in";
 
-const timeFormat = new Intl.DateTimeFormat("tr-TR", { timeStyle: "short", timeZone: APP_TIME_ZONE });
+const timeFormat = new Intl.DateTimeFormat("tr-TR", {
+  timeStyle: "short",
+  timeZone: APP_TIME_ZONE,
+});
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -26,7 +29,9 @@ export function OrderLookup({
   pending,
   onCheckIn,
   onCheckInMany,
+  guestsLoading = false,
   hasGuests = false,
+  failedTicketIds = [],
 }: {
   eventId: string;
   query: string;
@@ -34,14 +39,19 @@ export function OrderLookup({
   pending: boolean;
   onCheckIn: (ticketId: string) => void;
   onCheckInMany: (ticketIds: string[]) => void;
+  /** Misafir araması sürerken "sipariş bulunamadı" notu gösterilmez. */
+  guestsLoading?: boolean;
   /** Aynı aramada misafir listesi doluysa "sipariş bulunamadı" notu gösterilmez. */
   hasGuests?: boolean;
+  /** Kuyrukta reddedilmiş bu etkinlik biletleri: seçilemez, toplu gönderime girmez. */
+  failedTicketIds?: readonly string[];
 }) {
   const online = useOnline();
   const enabled = looksLikePnr(query);
   const order = useQuery({
     queryKey: [...realtimeKeys.checkIns(eventId), "order", query],
-    queryFn: async () => unwrap(await findOrderAtDoorAction({ eventId, pnr: query })),
+    queryFn: async () =>
+      unwrap(await findOrderAtDoorAction({ eventId, pnr: query })),
     enabled: enabled && online,
   });
   // Kullanıcının işaretini kaldırdığı biletler; varsayılan hepsi seçili.
@@ -51,7 +61,8 @@ export function OrderLookup({
   if (!online) {
     return (
       <p className="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-300">
-        PNR araması için bağlantı gerekir; bilet QR&apos;ı çevrimdışı da okutulabilir.
+        PNR araması için bağlantı gerekir; bilet QR&apos;ı çevrimdışı da
+        okutulabilir.
       </p>
     );
   }
@@ -62,9 +73,14 @@ export function OrderLookup({
       </p>
     );
   }
-  if (order.isPending) return <p className="text-sm text-slate-400">Sipariş aranıyor…</p>;
+  if (order.isPending)
+    return (
+      <p role="status" className="text-sm text-slate-400">
+        Sipariş aranıyor…
+      </p>
+    );
   if (!order.data) {
-    return hasGuests ? null : (
+    return hasGuests || guestsLoading ? null : (
       <p className="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-300">
         Bu PNR ile ödenmiş sipariş bulunamadı.
       </p>
@@ -72,7 +88,7 @@ export function OrderLookup({
   }
 
   const data = order.data;
-  const selectable = selectableTicketIds(data);
+  const selectable = selectableTicketIds(data, failedTicketIds);
   const chosen = selectable.filter((id) => !unchecked.has(id));
   const toggle = (id: string) =>
     setUnchecked((prev) => {
@@ -83,39 +99,61 @@ export function OrderLookup({
     });
 
   return (
-    <section aria-label="Sipariş" className="space-y-3 rounded-xl border border-slate-600 bg-slate-800 p-3">
+    <section
+      aria-label="Sipariş"
+      className="space-y-3 rounded-xl border border-slate-600 bg-slate-800 p-3"
+    >
       <div>
-        <h3 className="font-medium text-white">{`Sipariş · PNR ${displayPnr(data.pnr)} · ${data.buyerName}`}</h3>
+        <h3 className="break-words font-medium text-white">{`Sipariş · PNR ${displayPnr(data.pnr)} · ${data.buyerName}`}</h3>
         <p className="text-sm text-slate-300">{orderSummary(data)}</p>
       </div>
       <ul className="space-y-2">
-        {data.tickets.map((t) => {
+        {data.tickets.map((t, index) => {
+          const rejected = failedTicketIds.includes(t.ticketId);
+          const name = `Bilet ${index + 1} · Masa ${t.tableLabel}`;
           const boxId = `order-ticket-${t.ticketId}`;
           return (
-            <li key={t.ticketId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 p-2">
+            <li
+              key={t.ticketId}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 p-2"
+            >
               <div className="flex items-center gap-2">
-                {t.checkedInAt === null && canWrite ? (
+                {t.checkedInAt === null && canWrite && !rejected ? (
                   <>
                     <input
                       id={boxId}
                       type="checkbox"
                       checked={!unchecked.has(t.ticketId)}
                       onChange={() => toggle(t.ticketId)}
-                      className="h-5 w-5 accent-emerald-500"
+                      aria-label={`${name} seç`}
+                      className="h-6 w-6 accent-emerald-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
                     />
-                    <label htmlFor={boxId} className="text-sm text-white">
+                    <label
+                      htmlFor={boxId}
+                      aria-hidden="true"
+                      className="text-sm text-white"
+                    >
                       Masa {t.tableLabel}
                     </label>
                   </>
                 ) : (
-                  <span className="text-sm text-white">Masa {t.tableLabel}</span>
+                  <span className="text-sm text-white">
+                    Masa {t.tableLabel}
+                  </span>
                 )}
               </div>
               {t.checkedInAt !== null ? (
-                <span className="text-sm text-emerald-300">Giriş yaptı {formatTime(t.checkedInAt)}</span>
+                <span className="text-sm text-emerald-300">
+                  Giriş yaptı {formatTime(t.checkedInAt)}
+                </span>
+              ) : rejected ? (
+                <span className="text-sm text-amber-300">
+                  Reddedildi — Gönderilemeyen girişler&apos;e bakın
+                </span>
               ) : canWrite ? (
                 <Button
                   size="sm"
+                  aria-label={`${name} için giriş yap`}
                   className="bg-emerald-600 text-white hover:bg-emerald-500"
                   onClick={() => onCheckIn(t.ticketId)}
                   disabled={pending}

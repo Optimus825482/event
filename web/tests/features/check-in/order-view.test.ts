@@ -34,6 +34,9 @@ describe("kapı sipariş görünümü", () => {
   it("yalnızca giriş yapmamış biletler seçilebilir", () => {
     expect(selectableTicketIds(order)).toEqual(["t2", "t3"]);
   });
+  it("reddedilmiş biletler seçilemez", () => {
+    expect(selectableTicketIds(order, ["t2"])).toEqual(["t3"]);
+  });
   it("özet satırı", () => expect(orderSummary(order)).toBe("3 bilet · 1 giriş yaptı"));
   it("bilet sonucu satırı PNR ve kapıyı gösterir", () =>
     expect(
