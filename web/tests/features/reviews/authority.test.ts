@@ -366,3 +366,60 @@ describe("toplu değerlendirilebilir personel (reviewableStaffByEvent)", () => {
     }
   });
 });
+
+describe("hiyerarşi yetkisi aktörün personel kaydının etkin olmasını gerektirir", () => {
+  let w: World;
+
+  beforeEach(async () => {
+    await truncateAll();
+    w = await setupHierarchy();
+  });
+
+  const deactivate = (id: string, status: "inactive" | "terminated" = "inactive") =>
+    db.update(schema.staff).set({ status }).where(eq(schema.staff.id, id));
+
+  const roles = [
+    ["kaptan", (x: World) => x.C, (x: World) => x.actors.C],
+    ["süpervizör", (x: World) => x.S, (x: World) => x.actors.S],
+    ["kısım sorumlusu", (x: World) => x.H, (x: World) => x.actors.H],
+  ] as const;
+
+  for (const [name, person, actorOf] of roles) {
+    for (const status of ["inactive", "terminated"] as const) {
+      it(`${name}: personel kaydı ${status} ise kimseyi değerlendiremez, etkinlik görmez`, async () => {
+        const before = await mapOf(w, actorOf(w));
+        expect(Object.keys(before).length).toBeGreaterThan(0);
+        await deactivate(person(w).id, status);
+        expect(await mapOf(w, actorOf(w))).toEqual({});
+        expect(await reviewableStaffByEvent(db, actorOf(w), [w.event.id, w.event2.id])).toEqual(
+          new Map([
+            [w.event.id, new Map()],
+            [w.event2.id, new Map()],
+          ]),
+        );
+        expect(await reviewEventIds(db, actorOf(w))).toEqual([]);
+        await expectForbidden(assertCanReview(db, actorOf(w), w.event.id, w.W1.id, "edit"));
+      });
+    }
+
+    it(`${name}: etkin kayıt değişmez`, async () => {
+      expect(Object.keys(await mapOf(w, actorOf(w))).length).toBeGreaterThan(0);
+      expect((await reviewEventIds(db, actorOf(w))).length).toBeGreaterThan(0);
+    });
+  }
+
+  it("reviewerStaffIdsFor pasif personeli değerlendirici olarak listelemez", async () => {
+    await deactivate(w.S.id);
+    expect(await reviewerStaffIdsFor(db, w.event.id, w.W3.id)).toEqual([w.H.id]);
+    await deactivate(w.C.id);
+    expect(await reviewerStaffIdsFor(db, w.event.id, w.W1.id)).toEqual([w.H.id]);
+    await deactivate(w.H.id);
+    expect(await reviewerStaffIdsFor(db, w.event.id, w.W1.id)).toEqual([]);
+  });
+
+  it("pasif personel değerlendirilebilir kalır; yönetici yetkisi etkilenmez", async () => {
+    await deactivate(w.W1.id);
+    expect(Object.keys(await mapOf(w, w.actors.C))).toContain(w.W1.id);
+    expect(Object.keys(await mapOf(w, w.manager)).length).toBeGreaterThan(0);
+  });
+});

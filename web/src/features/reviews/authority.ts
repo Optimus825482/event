@@ -6,6 +6,7 @@ import {
   eventSectionHeads,
   eventStaffAssignments,
   events,
+  staff,
   tableGroups,
   tableGroupTables,
   teamMembers,
@@ -36,21 +37,34 @@ export const REVIEW_BASIS_LABELS: Record<ReviewBasis, string> = {
   manager: "F&B Yönetimi",
 };
 
-type HierarchyTeam = { leaderStaffId: string | null; memberIds: string[] };
-type HierarchyGroup = { supervisorStaffId: string; team: HierarchyTeam | null; tableStaffIds: string[] };
+/**
+ * `leaderActive` / `supervisorActive` / `activeSectionHeadIds`: dayanak yalnızca personel kaydı etkin olan
+ * kişiye aittir (pasif ya da işten ayrılmış kaydın hesabı hiyerarşiyle yetki kazanmaz). Kişi yine de etkinlik
+ * personeli olarak sayılır ve değerlendirilebilir.
+ */
+type HierarchyTeam = { leaderStaffId: string | null; leaderActive: boolean; memberIds: string[] };
+type HierarchyGroup = { supervisorStaffId: string; supervisorActive: boolean; team: HierarchyTeam | null; tableStaffIds: string[] };
 
 /** Bir etkinliğin değerlendirme hiyerarşisi: yalnızca etkin, etkinliğe ait ekipler ve etkin atamalar. */
 type EventHierarchy = {
   teams: HierarchyTeam[];
   groups: HierarchyGroup[];
   sectionHeadIds: string[];
+  activeSectionHeadIds: string[];
   assignedStaffIds: string[];
 };
 
-const emptyHierarchy = (): EventHierarchy => ({ teams: [], groups: [], sectionHeadIds: [], assignedStaffIds: [] });
+const emptyHierarchy = (): EventHierarchy => ({
+  teams: [],
+  groups: [],
+  sectionHeadIds: [],
+  activeSectionHeadIds: [],
+  assignedStaffIds: [],
+});
 
 /**
- * Verilen etkinliklerin hiyerarşilerini toplu yükler: etkinlik sayısından bağımsız olarak en fazla 6 sorgu.
+ * Verilen etkinliklerin hiyerarşilerini toplu yükler: etkinlik sayısından bağımsız olarak en fazla 6 sorgu
+ * (liderin/süpervizörün/kısım sorumlusunun personel durumu mevcut sorgulara birleştirilir).
  * Dönen haritada istenen her etkinlik vardır (personeli yoksa boş hiyerarşi).
  */
 async function loadHierarchies(ex: Executor, eventIds: readonly string[]): Promise<Map<string, EventHierarchy>> {
@@ -60,8 +74,14 @@ async function loadHierarchies(ex: Executor, eventIds: readonly string[]): Promi
   const of = (eventId: string | null) => (eventId === null ? undefined : result.get(eventId));
 
   const teamRows = await ex
-    .select({ id: teams.id, eventId: teams.eventId, leaderStaffId: teams.leaderStaffId })
+    .select({
+      id: teams.id,
+      eventId: teams.eventId,
+      leaderStaffId: teams.leaderStaffId,
+      leaderStatus: staff.status,
+    })
     .from(teams)
+    .leftJoin(staff, eq(staff.id, teams.leaderStaffId))
     .where(and(inArray(teams.eventId, ids), eq(teams.isActive, true)));
   const memberRows =
     teamRows.length === 0
@@ -80,7 +100,7 @@ async function loadHierarchies(ex: Executor, eventIds: readonly string[]): Promi
   const teamByKey = new Map<string, HierarchyTeam>();
   const teamById = new Map<string, HierarchyTeam>();
   for (const t of teamRows) {
-    const team: HierarchyTeam = { leaderStaffId: t.leaderStaffId, memberIds: [] };
+    const team: HierarchyTeam = { leaderStaffId: t.leaderStaffId, leaderActive: t.leaderStatus === "active", memberIds: [] };
     teamByKey.set(teamKey(t.eventId, t.id), team);
     teamById.set(t.id, team);
     of(t.eventId)?.teams.push(team);
@@ -93,8 +113,10 @@ async function loadHierarchies(ex: Executor, eventIds: readonly string[]): Promi
       eventId: tableGroups.eventId,
       teamId: tableGroups.teamId,
       supervisorStaffId: tableGroups.supervisorStaffId,
+      supervisorStatus: staff.status,
     })
     .from(tableGroups)
+    .leftJoin(staff, eq(staff.id, tableGroups.supervisorStaffId))
     .where(and(inArray(tableGroups.eventId, ids), isNotNull(tableGroups.supervisorStaffId)));
   const tableStaffRows =
     groupRows.length === 0
@@ -124,6 +146,7 @@ async function loadHierarchies(ex: Executor, eventIds: readonly string[]): Promi
     of(g.eventId)?.groups.push({
       // Sorguda NULL süpervizörler elendi.
       supervisorStaffId: g.supervisorStaffId as string,
+      supervisorActive: g.supervisorStatus === "active",
       // Pasif ya da başka etkinliğin ekibi dayanak üretmez.
       team: g.teamId ? (teamByKey.get(teamKey(g.eventId, g.teamId)) ?? null) : null,
       tableStaffIds: tableStaffByGroup.get(g.id) ?? [],
@@ -131,10 +154,14 @@ async function loadHierarchies(ex: Executor, eventIds: readonly string[]): Promi
   }
 
   const headRows = await ex
-    .select({ eventId: eventSectionHeads.eventId, staffId: eventSectionHeads.staffId })
+    .select({ eventId: eventSectionHeads.eventId, staffId: eventSectionHeads.staffId, status: staff.status })
     .from(eventSectionHeads)
+    .leftJoin(staff, eq(staff.id, eventSectionHeads.staffId))
     .where(inArray(eventSectionHeads.eventId, ids));
-  for (const r of headRows) of(r.eventId)?.sectionHeadIds.push(r.staffId);
+  for (const r of headRows) {
+    of(r.eventId)?.sectionHeadIds.push(r.staffId);
+    if (r.status === "active") of(r.eventId)?.activeSectionHeadIds.push(r.staffId);
+  }
 
   const assignmentRows = await ex
     .select({ eventId: eventStaffAssignments.eventId, staffId: eventStaffAssignments.staffId })
@@ -179,12 +206,12 @@ function reviewableBy(h: EventHierarchy, reviewerId: string): Map<string, Review
     section_head: new Set(),
   };
   for (const t of h.teams) {
-    if (t.leaderStaffId === reviewerId) for (const m of t.memberIds) found.captain.add(m);
+    if (t.leaderActive && t.leaderStaffId === reviewerId) for (const m of t.memberIds) found.captain.add(m);
   }
   for (const g of h.groups) {
-    if (g.supervisorStaffId === reviewerId) for (const id of groupScope(g)) found.supervisor.add(id);
+    if (g.supervisorActive && g.supervisorStaffId === reviewerId) for (const id of groupScope(g)) found.supervisor.add(id);
   }
-  if (h.sectionHeadIds.includes(reviewerId)) for (const id of staffOf(h)) found.section_head.add(id);
+  if (h.activeSectionHeadIds.includes(reviewerId)) for (const id of staffOf(h)) found.section_head.add(id);
 
   const map = new Map<string, ReviewBasis[]>();
   for (const basis of ["captain", "supervisor", "section_head"] as const) {
@@ -269,12 +296,12 @@ export async function reviewerStaffIdsFor(ex: Executor, eventId: string, staffId
 function reviewersOf(h: EventHierarchy, staffId: string): string[] {
   const ids = new Set<string>();
   for (const t of h.teams) {
-    if (t.leaderStaffId && t.memberIds.includes(staffId)) ids.add(t.leaderStaffId);
+    if (t.leaderActive && t.leaderStaffId && t.memberIds.includes(staffId)) ids.add(t.leaderStaffId);
   }
   for (const g of h.groups) {
-    if (groupScope(g).includes(staffId)) ids.add(g.supervisorStaffId);
+    if (g.supervisorActive && groupScope(g).includes(staffId)) ids.add(g.supervisorStaffId);
   }
-  if (staffOf(h).has(staffId)) for (const id of h.sectionHeadIds) ids.add(id);
+  if (staffOf(h).has(staffId)) for (const id of h.activeSectionHeadIds) ids.add(id);
   ids.delete(staffId);
   return [...ids].sort();
 }
@@ -330,7 +357,10 @@ export async function reviewEventIds(ex: Executor, actor: PolicyActor): Promise<
     .select({ id: events.id })
     .from(events)
     .where(
-      or(
+      and(
+        // Aktörün personel kaydı etkin değilse hiyerarşi yetki vermez: aday yok, hiyerarşi yüklenmez.
+        exists(ex.select({ one: ONE }).from(staff).where(and(eq(staff.id, reviewerId), eq(staff.status, "active")))),
+        or(
         exists(
           ex
             .select({ one: ONE })
@@ -349,6 +379,7 @@ export async function reviewEventIds(ex: Executor, actor: PolicyActor): Promise<
             .from(eventSectionHeads)
             .where(and(eq(eventSectionHeads.eventId, events.id), eq(eventSectionHeads.staffId, reviewerId))),
         ),
+      ),
       ),
     )
     .orderBy(asc(events.startsAt), asc(events.id));
