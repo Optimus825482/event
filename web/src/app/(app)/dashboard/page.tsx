@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { Countdown } from "@/components/dashboard/countdown";
 import { StatCard } from "@/components/layout/stat-card";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { can } from "@/features/auth/policy";
 import { loadEventsDashboard } from "@/features/dashboard/queries";
@@ -174,19 +175,19 @@ export default async function EventsDashboardPage() {
 
       <nav aria-label="Hızlı erişim" className="flex flex-wrap items-center justify-center gap-3 rounded-xl border border-slate-700 bg-slate-800/30 p-4">
         {can(actor, "events", "create") && (
-          <Link href="/events/new" className={`${buttonVariants({ variant: "outline" })} border-blue-500/30 text-blue-400 hover:bg-blue-500/10`}>
+          <Link href="/events/new" className={cn(buttonVariants({ variant: "outline" }), "border-blue-500/30 text-blue-400 hover:bg-blue-500/10")}>
             <Calendar aria-hidden="true" className="mr-2 h-4 w-4" />
             Yeni Etkinlik
           </Link>
         )}
         {canStaff && (
-          <Link href="/staff" className={`${buttonVariants({ variant: "outline" })} border-purple-500/30 text-purple-400 hover:bg-purple-500/10`}>
+          <Link href="/staff" className={cn(buttonVariants({ variant: "outline" }), "border-purple-500/30 text-purple-400 hover:bg-purple-500/10")}>
             <Users aria-hidden="true" className="mr-2 h-4 w-4" />
             Ekip Yönetimi
           </Link>
         )}
         {canVenues && (
-          <Link href="/venues" className={`${buttonVariants({ variant: "outline" })} border-green-500/30 text-green-400 hover:bg-green-500/10`}>
+          <Link href="/venues" className={cn(buttonVariants({ variant: "outline" }), "border-green-500/30 text-green-400 hover:bg-green-500/10")}>
             <LayoutGrid aria-hidden="true" className="mr-2 h-4 w-4" />
             Şablonlar
           </Link>

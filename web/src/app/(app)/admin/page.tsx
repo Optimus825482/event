@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { loadAdminDashboard } from "@/features/dashboard/queries";
 
 export const metadata: Metadata = { title: "Sistem Yönetimi | EventFlow" };
@@ -30,7 +31,7 @@ function AdminCard({ title, description, icon, iconBg, hover, children, href, ac
       </h2>
       <p className="mb-4 text-sm text-slate-400">{description}</p>
       <div className="mb-4 flex-1 space-y-2">{children}</div>
-      <Link href={href} className={`${buttonVariants()} w-full ${actionClass}`}>
+      <Link href={href} className={cn(buttonVariants(), "w-full", actionClass)}>
         {action}
       </Link>
     </section>
