@@ -27,6 +27,8 @@ export function StaffPicker({
   defaultRole = "",
   roles = NO_ROLES,
   hints,
+  compact = false,
+  pickLabel = "Ekle",
 }: {
   availability: (pick: Pick<StaffPick, "staffId" | "shiftId">) => Availability;
   onPick: (pick: StaffPick) => void;
@@ -34,6 +36,10 @@ export function StaffPicker({
   roles?: readonly RoleRequirement[];
   /** Geçmiş değerlendirme ipuçları (yalnızca yetkili aktör ve açık anahtar için dolu gelir). */
   hints?: Record<string, ReviewHint>;
+  /** Tek kişi seçimi (ör. süpervizör): vardiya ve görev alanları gizlenir, vardiyasız/görevsiz seçilir. */
+  compact?: boolean;
+  /** Satır düğmesinin metni; erişilebilir adı `${ad} ${pickLabel}` (küçük harfle) olur. */
+  pickLabel?: string;
 }) {
   const { staff, shifts } = useOrganization((s) => s.reference);
   const [query, setQuery] = useState("");
@@ -48,7 +54,7 @@ export function StaffPicker({
 
   return (
     <div className="space-y-2 rounded-lg border border-slate-700 p-3">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className={compact ? "grid gap-2" : "grid gap-2 sm:grid-cols-3"}>
         <div className="relative">
           <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <Input
@@ -60,15 +66,19 @@ export function StaffPicker({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <NativeSelect aria-label="Eklenecek vardiya" value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
-          <option value="">Vardiyasız</option>
-          {shifts.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} ({hhmm(s.startTime)}–{hhmm(s.endTime)})
-            </option>
-          ))}
-        </NativeSelect>
-        <RoleField label="Eklenecek görev" value={role} roles={roles} onChange={setRole} />
+        {compact ? null : (
+          <>
+            <NativeSelect aria-label="Eklenecek vardiya" value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+              <option value="">Vardiyasız</option>
+              {shifts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({hhmm(s.startTime)}–{hhmm(s.endTime)})
+                </option>
+              ))}
+            </NativeSelect>
+            <RoleField label="Eklenecek görev" value={role} roles={roles} onChange={setRole} />
+          </>
+        )}
       </div>
       {staff.length === 0 ? (
         <p className="text-xs text-slate-400">Aktif personel yok.</p>
@@ -78,8 +88,8 @@ export function StaffPicker({
             const a = availability({ staffId: p.id, shiftId: shiftId || null });
             const hint = hints?.[p.id];
             return (
-              <li key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-700/50">
-                <span className="flex-1 text-slate-200">
+              <li key={p.id} className="flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-700/50">
+                <span className="min-w-0 flex-1 break-words text-slate-200">
                   {p.fullName} <span className="text-xs text-slate-500">({p.sicilNo})</span>
                 </span>
                 {hint ? (
@@ -95,7 +105,7 @@ export function StaffPicker({
                   size="sm"
                   variant="outline"
                   disabled={!a.ok}
-                  aria-label={`${p.fullName} ekle`}
+                  aria-label={`${p.fullName} ${pickLabel.toLocaleLowerCase("tr")}`}
                   onClick={() =>
                     onPick({
                       staffId: p.id,
@@ -107,7 +117,7 @@ export function StaffPicker({
                   }
                 >
                   <UserPlus aria-hidden className="size-4" />
-                  Ekle
+                  {pickLabel}
                 </Button>
               </li>
             );

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { groupStaffAssignments, groupStaffAvailability } from "../group-staff";
 import { Chip, EmptyState, Swatch } from "./bits";
+import { GroupSupervisorField } from "./group-supervisor-field";
 import { AssignedStaffRow, StaffPicker } from "./staff-picker";
 import { useOrganization, type DraftGroup } from "./store";
 
@@ -43,6 +44,8 @@ export function GroupStaffDialog({ group, readOnly }: { group: DraftGroup; readO
             {labels.length === 0 ? "Grupta masa yok; önce planda masa ekleyin." : `Masalar: ${labels.join(", ")}`}
           </DialogDescription>
         </DialogHeader>
+
+        <GroupSupervisorField groupId={group.id} readOnly={readOnly} />
 
         <section className="space-y-2">
           <h3 className="text-sm font-medium text-white">Atanan personel ({rows.length})</h3>

@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { assignmentTables, eventStaffAssignments, eventTables, tableGroupTables, tableGroups, teams } from "@/db/schema";
+import { assignmentTables, eventStaffAssignments, eventTables, staff, tableGroupTables, tableGroups, teams } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
@@ -21,6 +21,24 @@ export async function assertTeamsInEvent(tx: Tx, eventId: string, teamIds: Array
     .from(teams)
     .where(and(eq(teams.eventId, eventId), inArray(teams.id, ids)));
   if (rows.length !== ids.length) throw new DomainError("conflict", STAFFING_MESSAGES.teamNotInEvent);
+}
+
+/**
+ * Süpervizör etkin bir personel olmalıdır. Karar: etkinliğe atanmış olması gerekmez (yetki
+ * çekirdeği süpervizörü yalnızca grup kaydından okur) ve bir kişi birden çok grubu denetleyebilir.
+ * Grubun zaten kayıtlı süpervizörü sonradan pasifleşmişse değişmediği sürece reddedilmez; böylece
+ * diğer değişiklikler kaydedilebilir. Yeni ya da değişen seçim etkin olmak zorundadır.
+ */
+async function assertSupervisorsActive(tx: Tx, input: GroupInput[], current: Map<string, string | null>) {
+  const wanted = unique(
+    input.flatMap((g) => (g.supervisorStaffId && g.supervisorStaffId !== (g.id ? current.get(g.id) : null) ? [g.supervisorStaffId] : [])),
+  );
+  if (wanted.length === 0) return;
+  const rows = await tx
+    .select({ id: staff.id })
+    .from(staff)
+    .where(and(inArray(staff.id, wanted), eq(staff.status, "active")));
+  if (rows.length !== wanted.length) throw new DomainError("conflict", STAFFING_MESSAGES.supervisorNotActive);
 }
 
 function groupValues(eventId: string, group: GroupInput, index: number) {
@@ -84,7 +102,11 @@ export async function applyGroups(tx: Tx, eventId: string, input: GroupInput[]):
   );
   await assertGroupTypesMatchTables(tx, eventId, input);
 
-  const existing = await tx.select({ id: tableGroups.id }).from(tableGroups).where(eq(tableGroups.eventId, eventId));
+  const existing = await tx
+    .select({ id: tableGroups.id, supervisorStaffId: tableGroups.supervisorStaffId })
+    .from(tableGroups)
+    .where(eq(tableGroups.eventId, eventId));
+  await assertSupervisorsActive(tx, input, new Map(existing.map((e) => [e.id, e.supervisorStaffId])));
   const { keep, deleteIds } = splitKept(input, existing);
   if (deleteIds.length > 0) await tx.delete(tableGroups).where(inArray(tableGroups.id, deleteIds));
 

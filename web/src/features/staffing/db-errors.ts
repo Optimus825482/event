@@ -10,6 +10,7 @@ export const STAFFING_MESSAGES = {
   servicePointNotInEvent: "Servis noktası bu etkinlikte bulunamadı",
   shiftNotInEvent: "Vardiya bu etkinlikte kullanılamaz",
   staffNotFound: "Personel bulunamadı",
+  supervisorNotActive: "Süpervizör etkin bir personel olmalı",
   foreignRecord: "Kayıt başka bir etkinliğe ait",
   servicePointRequired: "Servis noktası ataması için servis noktası seçilmeli",
   teamTableMismatch: "Bir masa tek ekibe ait olabilir: atamanın ekibi masanın grubundaki ekiple aynı olmalı",

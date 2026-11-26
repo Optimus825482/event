@@ -58,6 +58,8 @@ export type OrganizationState = Draft & {
   clearGroupTables: (groupId: string) => void;
   /** Grubu ekibe bağlar; grup ekibin rengini alır, gruptaki masaların atamaları ekibe geçer. */
   setGroupTeam: (groupId: string, teamId: string | null) => void;
+  /** Grubun süpervizörünü seçer; `null` kaldırır. Yalnızca taslağı değiştirir, kayıt "Tümünü kaydet" ile yapılır. */
+  setGroupSupervisor: (groupId: string, staffId: string | null) => void;
   addTeam: () => void;
   updateTeam: (id: string, patch: Partial<DraftTeam>) => void;
   removeTeam: (id: string) => void;
@@ -212,6 +214,12 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
               ? s.assignments.map((a) => (a.tableIds.some((t) => group.tableIds.includes(t)) ? { ...a, teamId: team.id } : a))
               : s.assignments,
           };
+        }),
+      setGroupSupervisor: (groupId, staffId) =>
+        change((s) => {
+          const group = s.groups.find((g) => g.id === groupId);
+          if (!group || group.supervisorStaffId === staffId) return {};
+          return { groups: replaceById(s.groups, groupId, { supervisorStaffId: staffId }) };
         }),
       addTeam: () =>
         change((s) => ({

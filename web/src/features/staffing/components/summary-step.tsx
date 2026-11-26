@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { saveOrganizationAction } from "../actions";
 import type { SectionHead } from "../section-heads-service";
 import { Section } from "./bits";
+import { useSupervisorName } from "./group-supervisor-field";
 import { SectionHeadsCard } from "./section-heads-card";
 import { toSavePayload, useOrganization, useOrganizationStoreApi } from "./store";
 
@@ -16,6 +17,11 @@ type Status = { kind: "ok" | "error"; message: string; details?: string[] } | nu
 function detailsOf(fieldErrors: Record<string, string[]> | undefined): string[] {
   if (!fieldErrors) return [];
   return Object.entries(fieldErrors).flatMap(([field, messages]) => messages.map((m) => `${field}: ${m}`));
+}
+
+function SupervisorName({ staffId }: { staffId: string | null }) {
+  const name = useSupervisorName(staffId);
+  return <span className="text-muted-foreground">{name ? `Süpervizör: ${name}` : "Süpervizör yok"}</span>;
 }
 
 /** Adım 5: kontrol listesi ve tek transaction'lık kayıt. */
@@ -79,6 +85,21 @@ export function SummaryStep({ eventId, readOnly, sectionHeads }: { eventId: stri
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground">Uyarı yok.</p>
+        )}
+      </Section>
+
+      <Section title="Süpervizörler">
+        {groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Grup yok.</p>
+        ) : (
+          <ul className="space-y-1 text-sm" aria-label="Grup süpervizörleri">
+            {groups.map((g) => (
+              <li key={g.id} className="flex flex-wrap gap-x-2">
+                <span className="font-medium">{g.name || "Adsız grup"}</span>
+                <SupervisorName staffId={g.supervisorStaffId} />
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
 
