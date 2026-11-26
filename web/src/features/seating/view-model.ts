@@ -62,6 +62,15 @@ export function saleMoveBlocker(
   return null;
 }
 
+export type CasinoMove = "allocate" | "release";
+
+/** Casino ekranında bir masaya uygulanabilecek geçiş; karar sunucunundur. Uygulanamıyorsa `null`. */
+export function casinoMove(table: Pick<SeatingTable, "allocation" | "hasActiveReservation">): CasinoMove | null {
+  if (table.allocation === "pending") return "allocate";
+  if (table.allocation === "casino" && !table.hasActiveReservation) return "release";
+  return null;
+}
+
 /** Masa kimliği -> plan dolgusu, seçilen kipe göre. */
 export function planColors(tables: readonly SeatingTable[], mode: "allocation" | "category"): Record<string, string> {
   return Object.fromEntries(

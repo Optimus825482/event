@@ -56,3 +56,14 @@ export async function fillReservation(
   if (input.phone) await page.getByLabel("Telefon").fill(input.phone);
   await page.getByRole("button", { name: "Rezervasyonu oluştur" }).click();
 }
+
+/**
+ * Casino tahsis sayfasında beklemedeki tüm masaları seçip Casino'ya ayırır ve bildirimi bekler.
+ * Arayüzden yaratılan masalar `Beklemede` doğar; rezervasyon yalnızca Casino'ya ayrılmış masaya yapılır.
+ */
+export async function allocateAllToCasino(page: Page, eventId: string): Promise<void> {
+  await page.goto(`/reservations/${eventId}/allocation`);
+  await page.getByRole("button", { name: "Beklemedeki tüm masaları seç" }).click();
+  await page.getByRole("button", { name: "Casino'ya ayır" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Casino'ya ayrıldı" })).toBeVisible();
+}
