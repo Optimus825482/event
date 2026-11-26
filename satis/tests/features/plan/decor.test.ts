@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDecor, parseLines } from "@/features/plan/decor";
+import { decorCenter, parseDecor, parseLines } from "@/features/plan/decor";
 
 describe("decor", () => {
   it("geçerli sahne korunur, bozuk öğeler atlanır", () =>
@@ -18,4 +18,6 @@ describe("decor", () => {
     expect(
       parseLines([{ id: "l", x1: 0, y1: 0, x2: 10, y2: 0, width: 2, color: "#ef4444" }, { id: "k", x1: "a" }]),
     ).toEqual([{ id: "l", x1: 0, y1: 0, x2: 10, y2: 0, width: 2 }]));
+  it("dekor x,y sol-üst köşedir: 600,60 300x80 merkezi 750,100", () =>
+    expect(decorCenter({ x: 600, y: 60, width: 300, height: 80 })).toEqual({ x: 750, y: 100 }));
 });

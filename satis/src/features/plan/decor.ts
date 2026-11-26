@@ -12,6 +12,11 @@ export type PlanDecor = {
   label: string;
 };
 
+/** Çekirdekte dekor x,y SOL-ÜST köşedir; çizimde döndürme pivotu merkezdir. */
+export function decorCenter(decor: Pick<PlanDecor, "x" | "y" | "width" | "height">): { x: number; y: number } {
+  return { x: decor.x + decor.width / 2, y: decor.y + decor.height / 2 };
+}
+
 export type PlanLine = { id: string; x1: number; y1: number; x2: number; y2: number; width: number };
 
 const MAX_LABEL = 60;

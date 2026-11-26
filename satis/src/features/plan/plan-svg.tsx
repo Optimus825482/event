@@ -4,7 +4,7 @@ import type { KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import type { ColorName } from "@/lib/theme";
-import type { PlanDecor } from "./decor";
+import { decorCenter, type PlanDecor } from "./decor";
 import type { PlanModel, PlanTableModel } from "./model";
 import { TABLE_STYLES, tableVisual } from "./table-style";
 import { usePanZoom } from "./use-pan-zoom";
@@ -60,7 +60,8 @@ const DECOR_STYLE: Record<PlanDecor["kind"], string> = {
 };
 
 function DecorShape({ decor }: { decor: PlanDecor }) {
-  const { x, y, width, height, rotation, kind, label } = decor;
+  const { width, height, rotation, kind, label } = decor;
+  const { x, y } = decorCenter(decor);
   return (
     <g transform={`translate(${x} ${y}) rotate(${rotation})`} aria-hidden="true">
       <rect x={-width / 2} y={-height / 2} width={width} height={height} rx={kind === "wall" ? 0 : 6} strokeWidth={2} className={DECOR_STYLE[kind]} />
@@ -69,6 +70,23 @@ function DecorShape({ decor }: { decor: PlanDecor }) {
           {label}
         </text>
       ) : null}
+    </g>
+  );
+}
+
+/** Klavye odağı halkası: masanın çevresinde ayrı bir şekil; yalnızca odak-görünür iken çizilir. */
+function FocusRing({ table }: { table: PlanTableModel }) {
+  const pad = 6;
+  const className = "fill-none stroke-transparent group-focus-visible:stroke-ivory";
+  const common = { strokeWidth: 3, strokeDasharray: "5 3", vectorEffect: "non-scaling-stroke" as const, className, "data-focus-ring": "" };
+  const { width, height } = table;
+  return (
+    <g transform={`rotate(${table.rotation})`} aria-hidden="true" pointerEvents="none">
+      {table.shape === "round" && !table.isLoca ? (
+        <circle r={width / 2 + pad} {...common} />
+      ) : (
+        <rect x={-width / 2 - pad} y={-height / 2 - pad} width={width + 2 * pad} height={height + 2 * pad} rx={8} {...common} />
+      )}
     </g>
   );
 }
@@ -92,6 +110,7 @@ function TableShape({ table, selected }: { table: PlanTableModel; selected: bool
 function TableNode({ table, selected, onSelect }: { table: PlanTableModel; selected: boolean; onSelect?: (id: string) => void }) {
   const available = table.status === "available";
   const style = TABLE_STYLES[tableVisual(table, selected)];
+  const interactive = onSelect !== undefined;
   const choose = () => {
     if (available) onSelect?.(table.id);
   };
@@ -104,17 +123,18 @@ function TableNode({ table, selected, onSelect }: { table: PlanTableModel; selec
   return (
     <g
       transform={`translate(${table.x} ${table.y})`}
-      role="button"
+      role={interactive ? "button" : "img"}
       data-table-id={table.id}
       data-status={table.status}
       aria-label={table.ariaLabel}
-      aria-pressed={selected}
-      aria-disabled={!available}
-      tabIndex={available ? 0 : -1}
-      onClick={choose}
-      onKeyDown={onKeyDown}
-      className={cn("outline-none focus-visible:outline-2 focus-visible:outline-gold", available ? "cursor-pointer" : "cursor-default")}
+      aria-pressed={interactive ? selected : undefined}
+      aria-disabled={interactive ? !available : undefined}
+      tabIndex={interactive ? (available ? 0 : -1) : undefined}
+      onClick={interactive ? choose : undefined}
+      onKeyDown={interactive ? onKeyDown : undefined}
+      className={cn("group outline-none", interactive && available ? "cursor-pointer" : "cursor-default")}
     >
+      {interactive ? <FocusRing table={table} /> : null}
       <TableShape table={table} selected={selected} />
       <text textAnchor="middle" y={secondary ? -6 : 0} dominantBaseline="central" fontSize={12} fontWeight={700} className={cn("pointer-events-none", FILL[style.text])}>
         {table.label}
@@ -132,7 +152,7 @@ export function PlanSvg({ model, selectedId, onSelect, height = 420 }: PlanSvgPr
   const { ref, view, zoomIn, zoomOut, fit } = usePanZoom(model.canvas);
   return (
     <div className="relative w-full overflow-hidden rounded-xl border border-line bg-bg">
-      <div ref={ref} className="w-full touch-none select-none" style={{ height }}>
+      <div ref={ref} className="w-full touch-pan-y select-none" style={{ height }}>
         <svg role="group" aria-label="Salon planı" width="100%" height="100%" className="block">
           <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
             <rect width={model.canvas.width} height={model.canvas.height} strokeWidth={2} className="fill-surface stroke-line" />

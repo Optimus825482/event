@@ -46,11 +46,26 @@ describe("PlanSvg", () => {
     expect(onSelect).toHaveBeenCalledWith("a1");
   });
   it("seçili masa aria-pressed taşır", () => {
-    render(<PlanSvg model={m} selectedId="a1" />);
+    render(<PlanSvg model={m} selectedId="a1" onSelect={vi.fn()} />);
     expect(screen.getByRole("button", { name: /Masa A1/ }).getAttribute("aria-pressed")).toBe("true");
   });
   it("araç düğmeleri adlandırılmıştır", () => {
     render(<PlanSvg model={m} selectedId={null} />);
     for (const name of ["Yakınlaştır", "Uzaklaştır", "Sığdır"]) expect(screen.getByRole("button", { name })).toBeTruthy();
+  });
+  it("salt görüntülemede masalar düğme değildir ve odaklanmaz", () => {
+    render(<PlanSvg model={m} selectedId={null} />);
+    const a1 = screen.getByRole("img", { name: /Masa A1/ });
+    expect(a1.getAttribute("tabindex")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Masa A1/ })).toBeNull();
+  });
+  it("dekor merkezi sol-üst köşeden hesaplanır (600,60 300x80 → 750,100)", () => {
+    const { container } = render(<PlanSvg model={m} selectedId={null} />);
+    expect(container.querySelector('g[transform="translate(750 100) rotate(0)"]')).not.toBeNull();
+  });
+  it("etkileşimli masada ayrı odak halkası şekli vardır", () => {
+    const { container } = render(<PlanSvg model={m} selectedId={null} onSelect={vi.fn()} />);
+    const ring = container.querySelector("[data-focus-ring]");
+    expect(ring?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
   });
 });

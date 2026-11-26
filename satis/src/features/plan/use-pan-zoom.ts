@@ -127,6 +127,8 @@ export function usePanZoom(canvas: Size): {
     };
 
     const onWheel = (event: WheelEvent) => {
+      // Ctrl/Cmd olmadan tekerlek sayfayı kaydırır (kaydırma tuzağı yok).
+      if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       const rect = el.getBoundingClientRect();
       const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
