@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { compareItems, heldAside, ownedBy, summarize, type QueueItem, type QueueTarget, type SettledEvent } from "./queue-core";
-import { getQueueRuntime } from "./runtime";
+import { getQueueRuntime, type EnqueueMeta } from "./runtime";
 
 const FLUSH_INTERVAL_MS = 15_000;
 
@@ -35,7 +35,8 @@ export type OfflineQueue = {
   online: boolean;
   durable: boolean;
   /** Yalnızca kalıcı olarak kuyruğa yazar; göndermek için `flushNow` çağrılır. */
-  enqueue(eventId: string, target: QueueTarget): Promise<QueueItem>;
+  enqueue(eventId: string, target: QueueTarget, meta?: EnqueueMeta): Promise<QueueItem>;
+  enqueueMany(eventId: string, targets: readonly QueueTarget[], meta?: EnqueueMeta): Promise<QueueItem[]>;
   flushNow(): Promise<void>;
   /** Anlık durum (render beklemeden): 401 sonrası kuyruk duraklatıldı mı. */
   isPausedNow(): boolean;
@@ -111,8 +112,15 @@ export function useOfflineQueue(userId: string, onEvents?: (events: SettledEvent
   const heldAsideCount = useMemo(() => heldAside(allItems, userId).length, [allItems, userId]);
 
   const enqueue = useCallback(
-    async (eventId: string, target: QueueTarget) => {
-      return getQueueRuntime().enqueue(eventId, target);
+    async (eventId: string, target: QueueTarget, meta?: EnqueueMeta) => {
+      return getQueueRuntime().enqueue(eventId, target, meta);
+    },
+    [],
+  );
+
+  const enqueueMany = useCallback(
+    async (eventId: string, targets: readonly QueueTarget[], meta?: EnqueueMeta) => {
+      return getQueueRuntime().enqueueMany(eventId, targets, meta);
     },
     [],
   );
@@ -150,12 +158,13 @@ export function useOfflineQueue(userId: string, onEvents?: (events: SettledEvent
       online,
       durable,
       enqueue,
+      enqueueMany,
       flushNow,
       isPausedNow,
       resume,
       retry,
       dismiss,
     }),
-    [items, heldAsideCount, paused, online, durable, enqueue, flushNow, isPausedNow, resume, retry, dismiss],
+    [items, heldAsideCount, paused, online, durable, enqueue, enqueueMany, flushNow, isPausedNow, resume, retry, dismiss],
   );
 }

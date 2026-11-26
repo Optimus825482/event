@@ -1,20 +1,10 @@
 import { z } from "zod";
+import { checkInSuccessSchema } from "../result-schema";
 import type { BatchOutcome, ItemResult, QueueItem } from "./queue-core";
 
-const successSchema = z.object({
-  outcome: z.enum(["checked_in", "already_checked_in"]),
-  reservationId: z.string(),
-  eventId: z.string(),
-  guestName: z.string().nullable(),
-  guestCount: z.number(),
-  tableId: z.string(),
-  tableLabel: z.string(),
-  checkedInAt: z.string(),
-  checkedInBy: z.object({ id: z.string(), username: z.string() }).nullable(),
-});
 
 const itemResultSchema = z.union([
-  z.object({ ok: z.literal(true), data: successSchema }),
+  z.object({ ok: z.literal(true), data: checkInSuccessSchema }),
   z.object({ ok: z.literal(false), code: z.string(), message: z.string() }),
 ]);
 
@@ -26,7 +16,10 @@ const errorBodySchema = z.object({ message: z.string() });
 
 function wireItem(i: QueueItem) {
   const common = { eventId: i.eventId, idempotencyKey: i.idempotencyKey, clientTimestamp: i.clientTimestamp };
-  return "walkIn" in i.target ? { kind: "walk_in", ...common, ...i.target.walkIn } : { ...common, ...i.target };
+  const gate = typeof i.gate === "number" ? { gate: i.gate } : {};
+  return "walkIn" in i.target
+    ? { kind: "walk_in", ...common, ...i.target.walkIn, ...gate }
+    : { ...common, ...i.target, ...gate };
 }
 
 export const CHECK_IN_ENDPOINT = "/api/check-in";
@@ -87,7 +80,7 @@ export async function sendBatch(items: readonly QueueItem[], fetchImpl: typeof f
   if (!parsed.success) return { kind: "retry", status };
   const results = parsed.data.results.map((r) => ({
     idempotencyKey: r.idempotencyKey,
-    result: r.result as ItemResult,
+    result: r.result satisfies ItemResult,
   }));
   return { kind: "results", results };
 }

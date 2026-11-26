@@ -50,3 +50,15 @@ export function success(reservationId = "r1", outcome: CheckInSuccess["outcome"]
     checkedInBy: null,
   };
 }
+
+export function ticketItem(overrides: { ticketId: string; gate?: number | null; key?: string }): QueueItem {
+  return createItem({
+    idempotencyKey: overrides.key ?? uuid(),
+    ownerId: USER_ID,
+    eventId: EVENT_ID,
+    target: { ticketId: overrides.ticketId },
+    clientTimestamp: new Date(1_000).toISOString(),
+    now: 1_000,
+    gate: overrides.gate ?? null,
+  });
+}
