@@ -4,7 +4,7 @@ import { buildWorkbook, moneyCell, type SheetSpec } from "@/features/archive/xls
 import type { Actor } from "@/features/auth/session";
 import { formatDate } from "@/lib/utils";
 import { periodSchema } from "./period";
-import { getPeriodReport, type PeriodReport } from "./service";
+import { assertCanViewReports, getPeriodReport, type PeriodReport } from "./service";
 
 export function periodSheets(report: PeriodReport): SheetSpec[] {
   const money = (v: string | null) => moneyCell(v);
@@ -52,8 +52,8 @@ export function periodSheets(report: PeriodReport): SheetSpec[] {
       name: "Toplamlar",
       headers: [
         "Para birimi", "Etkinlik sayısı", "Satılan bilet", "Demo bilet", "Bilet geliri", "Demo bilet geliri",
-        "Sanatçı ücreti", "Gerçekleşen gider", "Gerçekleşen diğer gelir", "Net (gerçekleşen)", "Doluluk %",
-        "Katılım %", "No-show %",
+        "Sanatçı ücreti", "Tahmini gider", "Gerçekleşen gider", "Tahmini diğer gelir", "Gerçekleşen diğer gelir",
+        "Net (gerçekleşen)", "Doluluk %", "Katılım %", "No-show %",
       ],
       rows: report.totals.map((t) => [
         t.currency,
@@ -63,14 +63,16 @@ export function periodSheets(report: PeriodReport): SheetSpec[] {
         money(t.ticketRevenue),
         money(t.demoTicketRevenue),
         money(t.artistFee),
+        money(t.estimatedExpense),
         money(t.actualExpense),
+        money(t.estimatedOtherIncome),
         money(t.actualOtherIncome),
         money(t.netActual),
         t.rates.occupancy,
         t.rates.attendance,
         t.rates.noShow,
       ]),
-      moneyColumns: [5, 6, 7, 8, 9, 10],
+      moneyColumns: [5, 6, 7, 8, 9, 10, 11, 12],
     },
   ];
 }
@@ -82,6 +84,11 @@ export async function exportPeriodReport(
   params: { from?: string | null; to?: string | null },
 ): Promise<ExportResult> {
   if (!actor) return NO_SESSION;
+  try {
+    assertCanViewReports(actor);
+  } catch (error) {
+    return exportFailure(error);
+  }
   const parsed = periodSchema.safeParse({ from: params.from ?? "", to: params.to ?? "" });
   if (!parsed.success) {
     return { ok: false, status: 400, message: parsed.error.issues[0]?.message ?? "Geçerli bir tarih girin" };

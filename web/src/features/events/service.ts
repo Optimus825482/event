@@ -123,6 +123,7 @@ export async function changeEventStatus(
   actor: Actor,
   input: ChangeEventStatusInput,
 ): Promise<EventRow> {
+  // Arşiv anlık görüntüsü tek tutarlı zamanda okunsun diye repeatable read.
   return db.transaction(async (tx) => {
     // Eşzamanlı iki geçişin aynı eski durumu görmemesi için satır kilitlenir.
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
@@ -142,7 +143,7 @@ export async function changeEventStatus(
     // Tamamlanma ile arşiv aynı işlemde yazılır; arşiv başarısızsa durum da değişmez.
     if (input.status === "completed") await archiveEvent(tx, row.id, actor.id);
     return row;
-  });
+  }, { isolationLevel: "repeatable read" });
 }
 
 /** Yalnızca taslak ve hiç rezervasyonu olmayan etkinlik silinir (iptal edilmiş rezervasyon da sayılır). */

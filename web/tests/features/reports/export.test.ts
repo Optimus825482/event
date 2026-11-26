@@ -40,7 +40,7 @@ describe("dönem raporu Excel", () => {
     await insertArchive(db, {
       eventName: "Gala", startsAt: new Date("2027-01-10T18:00:00Z"), artistName: "Sezen Aksu", eventType: "Konser",
       sellableSeatCount: 14, ticketsSold: 4, ticketRevenue: "550.50", demoTicketsSold: 2, demoTicketRevenue: "501.00",
-      actualExpense: "1680.00", actualOtherIncome: "250.25", artistFee: "1200.00",
+      estimatedExpense: "1500.00", estimatedOtherIncome: "300.00", actualExpense: "1680.00", actualOtherIncome: "250.25", artistFee: "1200.00",
     });
     const res = await exportPeriodReport(db, actor, { from: "2027-01-01", to: "2027-01-31" });
     if (!res.ok) throw new Error(res.message);
@@ -52,6 +52,8 @@ describe("dönem raporu Excel", () => {
     expect(rows[1]![15]).toBe(-879.25);
     const totals = await readSheet(res.bytes, "Toplamlar");
     expect(totals[1]!.slice(0, 6)).toEqual(["TRY", 1, 4, 2, 550.5, 501]);
+    expect(totals[0]!.slice(7, 11)).toEqual(["Tahmini gider", "Gerçekleşen gider", "Tahmini diğer gelir", "Gerçekleşen diğer gelir"]);
+    expect(totals[1]!.slice(7, 11)).toEqual([1500, 1680, 300, 250.25]);
   });
 
   it("iki para birimi iki toplam satırı verir", async () => {
@@ -96,6 +98,12 @@ describe("dönem raporu Excel", () => {
   ])("geçersiz dönem %j → %i", async (params, status, message) => {
     const res = await exportPeriodReport(db, actor, params);
     expect(res).toEqual({ ok: false, status, message });
+  });
+
+  it("yetkisiz kullanıcı geçersiz dönemle de 403 alır (400 değil)", async () => {
+    expect(await exportPeriodReport(db, managerActor("fnb"), { from: "2027-01-31", to: "2027-01-01" })).toEqual({
+      ok: false, status: 403, message: "Bu işlem için yetkiniz yok",
+    });
   });
 
   it("oturumsuz → 401; F&B ve Casino yöneticisi → 403", async () => {

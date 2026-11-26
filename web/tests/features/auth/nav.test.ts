@@ -37,15 +37,16 @@ describe("NAV_ITEMS", () => {
     expect(NAV_ITEMS).toHaveLength(23);
   });
 
-  it("arşiv öğeleri hazır bayrağına bağlıdır ve bayrak kapalıyken kimseye görünmez", () => {
+  it("arşiv öğeleri hazırdır; admin ve Entertainment yöneticisi görür, F&B görmez", () => {
     const items = NAV_ITEMS.filter((i) => i.module === "archive");
     expect(items.map((i) => [i.href, i.label, i.icon, i.ready])).toEqual([
-      ["/archive", "Arşiv", "archive", false],
-      ["/artists", "Sanatçılar", "music", false],
-      ["/reports", "Raporlar", "bar-chart", false],
+      ["/archive", "Arşiv", "archive", true],
+      ["/artists", "Sanatçılar", "music", true],
+      ["/reports", "Raporlar", "bar-chart", true],
     ]);
-    expect(hrefs(adminActor())).not.toContain("/archive");
-    expect(hrefs(managerActor("entertainment"))).not.toContain("/reports");
+    expect(hrefs(adminActor())).toContain("/archive");
+    expect(hrefs(managerActor("entertainment"))).toContain("/reports");
+    expect(hrefs(managerActor("fnb"))).not.toContain("/archive");
   });
 
   it("gruplar etiket, departman kapsamı ve ek önekleriyle tanımlıdır", () => {
