@@ -36,7 +36,11 @@ export function walkInItem(walkIn: { tableId: string; guestName: string; guestCo
 export function success(reservationId = "r1", outcome: CheckInSuccess["outcome"] = "checked_in"): CheckInSuccess {
   return {
     outcome,
+    kind: "reservation",
     reservationId,
+    ticketId: null,
+    pnr: null,
+    gate: null,
     eventId: EVENT_ID,
     guestName: "Ayşe",
     guestCount: 2,
@@ -45,4 +49,16 @@ export function success(reservationId = "r1", outcome: CheckInSuccess["outcome"]
     checkedInAt: new Date(1_000).toISOString(),
     checkedInBy: null,
   };
+}
+
+export function ticketItem(overrides: { ticketId: string; gate?: number | null; key?: string }): QueueItem {
+  return createItem({
+    idempotencyKey: overrides.key ?? uuid(),
+    ownerId: USER_ID,
+    eventId: EVENT_ID,
+    target: { ticketId: overrides.ticketId },
+    clientTimestamp: new Date(1_000).toISOString(),
+    now: 1_000,
+    gate: overrides.gate ?? null,
+  });
 }

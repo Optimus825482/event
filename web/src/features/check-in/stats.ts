@@ -16,15 +16,24 @@ export type EventStats = StatusCounts & {
   remaining: number;
   /** Giriş yapanların beklenenlere oranı, yuvarlanmış yüzde (beklenen yoksa 0). */
   checkInPercentage: number;
+  /** Kesilmiş (issued) biletler, demo dahil; rezervasyon sayılarından bağımsızdır. */
+  ticketsIssued: number;
+  /** Kapıdan girmiş biletler. */
+  ticketsCheckedIn: number;
 };
 
-export function toEventStats(counts: StatusCounts): EventStats {
+export function toEventStats(
+  counts: StatusCounts,
+  tickets: { issued: number; checkedIn: number } = { issued: 0, checkedIn: 0 },
+): EventStats {
   const totalExpected = counts.pending + counts.confirmed + counts.checkedIn;
   return {
     ...counts,
     totalExpected,
     remaining: counts.pending + counts.confirmed,
     checkInPercentage: totalExpected > 0 ? Math.round((counts.checkedIn / totalExpected) * 100) : 0,
+    ticketsIssued: tickets.issued,
+    ticketsCheckedIn: tickets.checkedIn,
   };
 }
 

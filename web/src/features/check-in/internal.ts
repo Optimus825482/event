@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { customers, eventTables, reservations, users } from "@/db/schema";
+import { customers, eventTables, reservations, tickets, users } from "@/db/schema";
 import type { EventRow } from "@/features/events/service";
 import { publish } from "@/features/realtime/publish";
 import { verifyQrToken } from "@/features/reservations/qr-token";
+import { findTicketByQr } from "@/features/ticketing/tickets-read";
 import { DomainError } from "@/lib/action";
+import type { CheckInSuccess } from "./result-schema";
 
 export const CHECK_IN_MSG = {
   invalidCode: "QR kod geçersiz veya rezervasyon bulunamadı",
@@ -13,6 +15,9 @@ export const CHECK_IN_MSG = {
   cancelled: "Rezervasyon iptal edilmiş; check-in yapılamaz",
   keyReused: "Bu istek anahtarı başka bir istek için kullanılmış",
   reservationNotFound: "Rezervasyon bulunamadı",
+  ticketNotFound: "Bilet bulunamadı",
+  ticketUnpaid: "Bu biletin ödemesi tamamlanmamış; giriş yapılamaz",
+  ticketExpired: "Bu biletin süresi dolmuş; giriş yapılamaz",
 } as const;
 
 /** İstemci zaman damgası, en fazla bu kadar eskiyse giriş zamanı olarak kabul edilir. */
@@ -20,21 +25,14 @@ export const CLIENT_TIMESTAMP_MAX_AGE_HOURS = 24;
 
 export type CheckInOutcome = "checked_in" | "already_checked_in";
 
-/** Check-in yanıtı. Yalnızca JSON değerleri içerir: saklanan yanıt ile ilk yanıt birebir aynıdır. */
-export type CheckInSuccess = {
-  outcome: CheckInOutcome;
-  reservationId: string;
-  eventId: string;
-  guestName: string | null;
-  guestCount: number;
-  tableId: string;
-  tableLabel: string;
-  checkedInAt: string;
-  checkedInBy: { id: string; username: string } | null;
-};
+/** Check-in yanıtı (bkz. `result-schema.ts`). Yalnızca JSON değerleri içerir: saklanan yanıt ile ilk yanıt birebir aynıdır. */
+export type { CheckInSuccess };
 
 export type ReservationRef =
-  { kind: "token"; value: string } | { kind: "legacyHash"; value: string } | { kind: "reservationId"; value: string };
+  | { kind: "token"; value: string }
+  | { kind: "legacyHash"; value: string }
+  | { kind: "reservationId"; value: string }
+  | { kind: "ticketId"; value: string };
 
 export function fingerprint(eventId: string, ref: ReservationRef): string {
   return createHash("sha256").update(`${eventId}\n${ref.kind}\n${ref.value}`).digest("hex");
@@ -58,28 +56,63 @@ export function assertCheckInOpen(event: EventRow): void {
   if (event.status === "cancelled") throw new DomainError("conflict", "Etkinlik iptal edilmiş; check-in yapılamaz");
 }
 
-/** Belirteç/hash/kimlikten rezervasyonu bulur ve etkinliğe ait olduğunu denetler. */
-export async function resolveReservation(tx: Tx, eventId: string, ref: ReservationRef): Promise<string> {
-  let where: SQL | undefined;
-  if (ref.kind === "token") {
-    const verified = verifyQrToken(ref.value);
-    if (!verified) throw new DomainError("not_found", CHECK_IN_MSG.invalidCode);
-    // Taşınan eski kayıtlarda satırdaki belirteç farklı olabilir: imza + satır eşleşmesi birlikte aranır.
-    where = and(eq(reservations.id, verified.reservationId), eq(reservations.qrToken, ref.value));
-  } else if (ref.kind === "legacyHash") {
-    where = eq(reservations.legacyQrHash, ref.value);
+/** Girişin hedefi: rezervasyon ya da bilet. */
+export type CheckInTargetRef = { kind: "reservation"; id: string } | { kind: "ticket"; id: string };
+
+/**
+ * Belirteç/hash/kimlikten hedefi bulur ve etkinliğe ait olduğunu denetler. Belirteçte önce rezervasyon,
+ * bulunamazsa bilet aranır; `legacyHash` ve `reservationId` yalnızca rezervasyon, `ticketId` yalnızca bilet arar.
+ */
+export async function resolveTarget(tx: Tx, eventId: string, ref: ReservationRef): Promise<CheckInTargetRef> {
+  let target: { kind: "reservation" | "ticket"; id: string; eventId: string } | null = null;
+  if (ref.kind === "ticketId") {
+    const [row] = await tx
+      .select({ id: tickets.id, eventId: tickets.eventId })
+      .from(tickets)
+      .where(eq(tickets.id, ref.value));
+    if (!row) throw new DomainError("not_found", CHECK_IN_MSG.ticketNotFound);
+    target = { kind: "ticket", ...row };
   } else {
-    where = eq(reservations.id, ref.value);
+    let where: SQL | undefined;
+    if (ref.kind === "token") {
+      const verified = verifyQrToken(ref.value);
+      if (!verified) throw new DomainError("not_found", CHECK_IN_MSG.invalidCode);
+      // Taşınan eski kayıtlarda satırdaki belirteç farklı olabilir: imza + satır eşleşmesi birlikte aranır.
+      where = and(eq(reservations.id, verified.reservationId), eq(reservations.qrToken, ref.value));
+    } else if (ref.kind === "legacyHash") {
+      where = eq(reservations.legacyQrHash, ref.value);
+    } else {
+      where = eq(reservations.id, ref.value);
+    }
+    const [row] = await tx
+      .select({ id: reservations.id, eventId: reservations.eventId })
+      .from(reservations)
+      .where(where);
+    if (row) {
+      target = { kind: "reservation", ...row };
+    } else if (ref.kind === "token") {
+      const ticket = await findTicketByQr(tx, ref.value);
+      if (ticket) target = { kind: "ticket", id: ticket.ticketId, eventId: ticket.eventId };
+    }
+    if (!target) {
+      throw new DomainError(
+        "not_found",
+        ref.kind === "reservationId" ? CHECK_IN_MSG.reservationNotFound : CHECK_IN_MSG.invalidCode,
+      );
+    }
   }
-  const [row] = await tx.select({ id: reservations.id, eventId: reservations.eventId }).from(reservations).where(where);
-  if (!row) {
-    throw new DomainError(
-      "not_found",
-      ref.kind === "reservationId" ? CHECK_IN_MSG.reservationNotFound : CHECK_IN_MSG.invalidCode,
-    );
-  }
-  if (row.eventId !== eventId) throw new DomainError("conflict", CHECK_IN_MSG.otherEvent);
-  return row.id;
+  if (target.eventId !== eventId) throw new DomainError("conflict", CHECK_IN_MSG.otherEvent);
+  return { kind: target.kind, id: target.id };
+}
+
+/** Giriş zamanı: istemci zaman damgası gelecekte değilse ve 24 saatten eski değilse o, yoksa sunucu zamanı. */
+export function checkedInAtExpr(clientTimestamp: Date | null): SQL {
+  const ts = clientTimestamp ? clientTimestamp.toISOString() : null;
+  return sql`case
+      when ${ts}::timestamptz is not null
+        and ${ts}::timestamptz <= now()
+        and ${ts}::timestamptz >= now() - make_interval(hours => ${CLIENT_TIMESTAMP_MAX_AGE_HOURS})
+      then ${ts}::timestamptz else now() end`;
 }
 
 /**
@@ -98,20 +131,16 @@ export async function markCheckedIn(
     event: EventRow;
     actorId: string;
     clientTimestamp: Date | null;
+    gate: number | null;
   },
 ): Promise<boolean> {
-  const ts = input.clientTimestamp ? input.clientTimestamp.toISOString() : null;
-  const checkedInAt = sql`case
-      when ${ts}::timestamptz is not null
-        and ${ts}::timestamptz <= now()
-        and ${ts}::timestamptz >= now() - make_interval(hours => ${CLIENT_TIMESTAMP_MAX_AGE_HOURS})
-      then ${ts}::timestamptz else now() end`;
+  const checkedInAt = checkedInAtExpr(input.clientTimestamp);
   const result = await tx.execute<{
     customer_id: string;
     previous_status: string;
   }>(sql`
     update ${reservations} as r
-    set status = 'checked_in', checked_in_at = ${checkedInAt}, checked_in_by = ${input.actorId}, updated_at = now()
+    set status = 'checked_in', checked_in_at = ${checkedInAt}, checked_in_by = ${input.actorId}, check_in_gate = ${input.gate}::smallint, updated_at = now()
     from (
       select id, status as previous_status from ${reservations}
       where id = ${input.reservationId} and event_id = ${input.event.id}
@@ -150,6 +179,7 @@ export async function readCheckIn(tx: Tx, reservationId: string, outcome: CheckI
       tableId: reservations.tableId,
       tableLabel: eventTables.label,
       checkedInAt: reservations.checkedInAt,
+      gate: reservations.checkInGate,
       byId: users.id,
       byUsername: users.username,
     })
@@ -164,7 +194,11 @@ export async function readCheckIn(tx: Tx, reservationId: string, outcome: CheckI
   if (row.status !== "checked_in") return { status: row.status, response: null };
   const response: CheckInSuccess = {
     outcome,
+    kind: "reservation",
     reservationId: row.reservationId,
+    ticketId: null,
+    pnr: null,
+    gate: row.gate,
     eventId: row.eventId,
     guestName: row.guestName,
     guestCount: row.guestCount,
@@ -178,7 +212,7 @@ export async function readCheckIn(tx: Tx, reservationId: string, outcome: CheckI
 }
 
 /** Giriş olayları: kapıdaki diğer ekranlar listeyi ve istatistikleri yeniler. Commit ile teslim edilir. */
-export async function publishCheckIn(tx: Tx, eventId: string, reservationId: string): Promise<void> {
-  await publish(tx, { type: "guest.checked_in", eventId, id: reservationId });
+export async function publishCheckIn(tx: Tx, eventId: string, targetId: string): Promise<void> {
+  await publish(tx, { type: "guest.checked_in", eventId, id: targetId });
   await publish(tx, { type: "stats.updated", eventId });
 }

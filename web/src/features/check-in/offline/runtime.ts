@@ -8,13 +8,17 @@ const CHANNEL = "eventflow-check-in-queue";
 
 type Listener = (events: SettledEvent[]) => void;
 
+export type EnqueueMeta = { gate?: number | null };
+
 export type QueueRuntime = {
   /** `false`: IndexedDB yok, kuyruk yalnızca bu sekmenin belleğinde. */
   durable: boolean;
   /** Oturumdaki kullanıcı (sunucudan gelen kimlik); boşaltma ve yeni öğeler bununla damgalanır. */
   setUser(userId: string): void;
   list(): Promise<QueueItem[]>;
-  enqueue(eventId: string, target: QueueTarget): Promise<QueueItem>;
+  enqueue(eventId: string, target: QueueTarget, meta?: EnqueueMeta): Promise<QueueItem>;
+  /** Her hedef için ayrı anahtarla, tek yazımda kuyruğa ekler. */
+  enqueueMany(eventId: string, targets: readonly QueueTarget[], meta?: EnqueueMeta): Promise<QueueItem[]>;
   flush(options?: FlushOptions): Promise<void>;
   isPaused(): boolean;
   resume(): void;
@@ -60,6 +64,27 @@ export function getQueueRuntime(): QueueRuntime {
     },
   });
 
+  async function enqueueMany(eventId: string, targets: readonly QueueTarget[], meta?: EnqueueMeta): Promise<QueueItem[]> {
+    if (userId === null) throw new Error("Oturum kimliği bilinmiyor; giriş kuyruğa yazılamaz");
+    const now = Date.now();
+    const clientTimestamp = new Date(now).toISOString();
+    const items = targets.map((target) =>
+      createItem({
+        idempotencyKey: crypto.randomUUID(),
+        ownerId: userId as string,
+        eventId,
+        target,
+        clientTimestamp,
+        now,
+        gate: meta?.gate ?? null,
+      }),
+    );
+    if (items.length === 0) return [];
+    await store.putMany(items);
+    notifyAll();
+    return items;
+  }
+
   instance = {
     durable,
     setUser(next) {
@@ -69,20 +94,12 @@ export function getQueueRuntime(): QueueRuntime {
       flusher.resume();
     },
     list: () => store.getAll(),
-    async enqueue(eventId, target) {
-      if (userId === null) throw new Error("Oturum kimliği bilinmiyor; giriş kuyruğa yazılamaz");
-      const item = createItem({
-        idempotencyKey: crypto.randomUUID(),
-        ownerId: userId,
-        eventId,
-        target,
-        clientTimestamp: new Date().toISOString(),
-        now: Date.now(),
-      });
-      await store.putMany([item]);
-      notifyAll();
+    async enqueue(eventId, target, meta) {
+      const [item] = await enqueueMany(eventId, [target], meta);
+      if (!item) throw new Error("Giriş kuyruğa yazılamadı");
       return item;
     },
+    enqueueMany,
     async flush(options) {
       await flusher.flush(options);
       notifyAll();

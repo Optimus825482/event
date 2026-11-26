@@ -1,7 +1,8 @@
 import type { Request } from "@playwright/test";
 
 import { expect, test } from "./support/fixtures";
-import { checkedInCount, checkInKeys, qrTokenFor, reservationsByGuest } from "./support/db";
+import { checkedInCount, checkInKeys, qrTokenFor, reservationsByGuest, withDb } from "./support/db";
+import { seedDoorEvent } from "./support/faz8";
 import {
   expectPending,
   openConsoleAndWarm,
@@ -23,6 +24,20 @@ const GUEST = {
   offline: "Cevrimdisi Misafir",
   lost: "Kayip Yanit Misafir",
 };
+/** Biletin giriş durumu ve `check_in_events` satır sayısı. */
+async function ticketCheckInCount(ticketId: string): Promise<{ checkedIn: boolean; events: number }> {
+  return withDb(async (pool) => {
+    const t = await pool.query<{ checked_in: boolean }>(
+      "select checked_in_at is not null as checked_in from tickets where id = $1",
+      [ticketId],
+    );
+    const e = await pool.query<{ n: string }>("select count(*)::text as n from check_in_events where ticket_id = $1", [
+      ticketId,
+    ]);
+    return { checkedIn: t.rows[0]?.checked_in ?? false, events: Number(e.rows[0]?.n ?? "0") };
+  });
+}
+
 const WALK_IN = { offline: "Cevrimdisi Walkin", lost: "Kayip Yanit Walkin" };
 
 let fixture: OfflineFixture;
@@ -192,6 +207,37 @@ test("service worker /api/** yanıtlarını önbellekten asla sunmaz", async ({ 
       return hits;
     });
     expect(cached).toEqual([]);
+  } finally {
+    await context.close();
+  }
+  expect(errors, "yakalanmamış tarayıcı hataları").toEqual([]);
+});
+
+test("çevrimdışı okutulan bilet QR'ı bağlantı gelince tek giriş olarak eşitlenir", async ({ browser }) => {
+  const door = await seedDoorEvent(`Bilet Offline ${STAMP}`);
+  const ticket = door.tickets[0]!;
+  const errors: string[] = [];
+  const { context, page } = await openDevice(browser, { session: fixture.admin, errors });
+  try {
+    await openConsoleAndWarm(page, door.eventId, door.eventName);
+
+    // Bağlantı kesilir: bilet QR'ı kuyruğa girer, sunucuda henüz giriş yoktur.
+    await context.setOffline(true);
+    await expect(queueRegion(page).getByText("Çevrimdışı", { exact: true })).toBeVisible();
+    await scanCode(page, ticket.qrPayload);
+    await expect(page.getByRole("status").filter({ hasText: "Çevrimdışı — kuyruğa alındı" })).toContainText("ONAYLANMADI");
+    await expectPending(page, 1);
+    expect(await ticketCheckInCount(ticket.ticketId)).toEqual({ checkedIn: false, events: 0 });
+
+    // Bağlantı gelir: tek giriş olarak eşitlenir.
+    await context.setOffline(false);
+    await expectPending(page, 0);
+    await expect.poll(() => ticketCheckInCount(ticket.ticketId)).toEqual({ checkedIn: true, events: 1 });
+
+    // Yeniden yükleyince bir daha gönderilmez.
+    await page.reload();
+    await expectPending(page, 0);
+    expect(await ticketCheckInCount(ticket.ticketId)).toEqual({ checkedIn: true, events: 1 });
   } finally {
     await context.close();
   }

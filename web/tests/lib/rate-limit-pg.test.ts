@@ -119,4 +119,19 @@ describe("createPgRateLimiter", () => {
     for (let i = 0; i < 3; i += 1) expect(await closed.check("ip-1")).toEqual({ allowed: true });
     expect((await closed.check("ip-1")).allowed).toBe(false);
   });
+
+  it("refund geçerli penceredeki sayımı geri alır, sıfırın altına inmez ve hatayı yutar", async () => {
+    const a = limiter();
+    await a.refund("ip-1");
+    for (let i = 0; i < 10; i += 1) {
+      expect(await a.check("ip-1")).toEqual({ allowed: true });
+      await a.refund("ip-1");
+    }
+    for (let i = 0; i < 3; i += 1) expect((await a.check("ip-1")).allowed).toBe(true);
+    expect((await a.check("ip-1")).allowed).toBe(false);
+    const onError = vi.fn();
+    const broken = limiter({ db: { execute: async () => { throw new Error("x"); } } as never, onError });
+    await expect(broken.refund("ip-1")).resolves.toBeUndefined();
+    expect(onError).toHaveBeenCalled();
+  });
 });

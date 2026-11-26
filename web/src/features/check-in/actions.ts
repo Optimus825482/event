@@ -10,3 +10,4 @@ export const eventStatsAction = defineAction(checkInActionDefs.stats);
 export const searchGuestsAction = defineAction(checkInActionDefs.searchGuests);
 export const recentCheckInsAction = defineAction(checkInActionDefs.recentCheckIns);
 export const freeTablesAction = defineAction(checkInActionDefs.freeTables);
+export const findOrderAtDoorAction = defineAction(checkInActionDefs.findOrder);
