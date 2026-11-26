@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-r
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { batchMessage, batchTone } from "./batch-feedback";
+import { resultLine } from "./order-view";
 import type { CheckInFeedback, QueuedReason } from "./use-check-in";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 
@@ -136,9 +137,7 @@ export function CheckInFeedbackBanner({
         <div className="space-y-1">
           <p className="text-lg font-semibold">{success ? "Giriş yapıldı" : "Bu misafir zaten giriş yaptı"}</p>
           <p className="text-2xl font-bold text-white">Masa {result.tableLabel}</p>
-          <p>
-            {result.guestName ?? "Misafir"} · {result.guestCount} kişi
-          </p>
+          <p>{resultLine(result)}</p>
           {!success ? (
             <p className="text-sm">
               {formatTime(result.checkedInAt)}

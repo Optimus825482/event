@@ -13,6 +13,8 @@ import { realtimeKeys } from "@/features/realtime/keys";
 import { RESERVATION_STATUS_LABELS } from "@/features/reservations/labels";
 import { searchGuestsAction, updateGuestCountAction } from "../actions";
 import type { GuestRow } from "../read-service";
+import { cn } from "@/lib/utils";
+import { OrderLookup } from "./order-lookup";
 import { unwrap, useRefreshEvent } from "./use-check-in";
 
 const CHECKABLE = new Set(["pending", "confirmed", "no_show"]);
@@ -87,11 +89,15 @@ export function GuestSearch({
   canWrite,
   pending,
   onCheckIn,
+  onCheckInTicket,
+  onCheckInTickets,
 }: {
   eventId: string;
   canWrite: boolean;
   pending: boolean;
   onCheckIn: (reservationId: string) => void;
+  onCheckInTicket: (ticketId: string) => void;
+  onCheckInTickets: (ticketIds: string[]) => void;
 }) {
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim());
@@ -117,12 +123,22 @@ export function GuestSearch({
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Ad, telefon ya da masa"
+            placeholder="Ad, telefon, masa, rezervasyon kodu ya da PNR"
             autoComplete="off"
             className="h-11 border-slate-600 bg-slate-800 pl-9 text-white placeholder:text-slate-500"
           />
         </div>
       </div>
+
+      <OrderLookup
+        eventId={eventId}
+        query={query}
+        canWrite={canWrite}
+        pending={pending}
+        onCheckIn={onCheckInTicket}
+        onCheckInMany={onCheckInTickets}
+        hasGuests={(guests.data?.length ?? 0) > 0}
+      />
 
       {guests.isError ? (
         <p role="alert" className="text-sm text-red-400">
@@ -171,11 +187,11 @@ export function GuestSearch({
               <div className="flex items-center gap-2">
                 <Badge
                   variant="outline"
-                  className={
-                    guest.status === "checked_in"
-                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-300"
-                      : "border-slate-600 text-slate-300"
-                  }
+                  className={cn(
+                    guest.status === "checked_in" && "border-emerald-500/30 bg-emerald-500/20 text-emerald-300",
+                    guest.status === "cancelled" && "border-red-500/50 bg-red-500/15 text-red-300",
+                    guest.status !== "checked_in" && guest.status !== "cancelled" && "border-slate-600 text-slate-300",
+                  )}
                 >
                   {guest.status === "checked_in" ? <UserCheck aria-hidden="true" /> : null}
                   {RESERVATION_STATUS_LABELS[guest.status]}
