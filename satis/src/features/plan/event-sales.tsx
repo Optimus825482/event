@@ -8,7 +8,7 @@ import { holdAction } from "@/features/checkout/actions";
 import type { Availability, EventDetail } from "@/lib/core/contract";
 import { ERROR_MESSAGES } from "@/lib/core/errors";
 import { buildPlanModel } from "./model";
-import { PlanSvg } from "./plan-svg";
+import { PlanViewer } from "./plan-viewer";
 import { optionsFor, reconcileSelection, type Selection } from "./selection";
 import { SelectionPanel } from "./selection-panel";
 import { TableList } from "./table-list";
@@ -99,7 +99,7 @@ export function EventSales({ event, initialAvailability }: { event: EventDetail;
       </div>
       {stale ? <Notice>Canlı durum güncellenemiyor.</Notice> : null}
       {view === "plan" ? (
-        <PlanSvg model={model} selectedId={selection?.tableId ?? null} onSelect={choose} />
+        <PlanViewer model={model} selectedId={selection?.tableId ?? null} onSelect={choose} />
       ) : (
         <TableList model={model} selectedId={selection?.tableId ?? null} onSelect={choose} prices={event.prices} currency={event.currency} />
       )}
