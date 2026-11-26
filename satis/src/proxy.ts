@@ -20,7 +20,8 @@ export function proxy(request: NextRequest): NextResponse {
   return response;
 }
 
+// Dosya soneki dışlaması yoktur: sipariş belirteçleri (`<base64url>.<base64url>`) nokta içerir ve
+// bir sonek gibi görünebilir. `satis/public` varlığı yok; eklenirse yolları buraya açıkça yazılır.
 export const config = {
-  // API, statik dosyalar ve Next iç yolları hariç her şey.
-  matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)"],
+  matcher: ["/((?!api/|_next/static|_next/image|favicon\\.ico$).*)"],
 };
