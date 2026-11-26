@@ -8,3 +8,5 @@ export const classifyTablesAction = defineAction(seatingActionDefs.classify);
 export const allocateToCasinoAction = defineAction(seatingActionDefs.allocateToCasino);
 export const releaseFromCasinoAction = defineAction(seatingActionDefs.releaseFromCasino);
 export const setSaleAllocationAction = defineAction(seatingActionDefs.setSaleAllocation);
+export const seatingOverviewAction = defineAction(seatingActionDefs.overview);
+export const casinoOverviewAction = defineAction(seatingActionDefs.casinoOverview);
