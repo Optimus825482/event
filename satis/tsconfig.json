@@ -39,10 +39,15 @@
     ".next-e2e/types/**/*.ts",
     ".next-e2e/dev/types/**/*.ts",
     ".next-check/types/**/*.ts",
-    ".next-check/dev/types/**/*.ts"
+    ".next-check/dev/types/**/*.ts",
+    ".next-cross/types/**/*.ts",
+    ".next-cross/dev/types/**/*.ts",
+    ".next-load/types/**/*.ts",
+    ".next-load/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    ".next-e2e"
+    ".next-e2e",
+    ".next-cross"
   ]
 }

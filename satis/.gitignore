@@ -11,3 +11,7 @@ next-env.d.ts
 /playwright-report/
 /e2e/.state/
 /.next-check/
+/.next-cross/
+/test-results-cross/
+/e2e-cross/.state.json
+/.next-load/
