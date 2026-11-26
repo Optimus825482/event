@@ -109,6 +109,7 @@ body {
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);
   --card: oklch(0.208 0.042 265.755);
@@ -149,6 +150,13 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Native select popups: the OS list ignores the control's own colors, so set them explicitly */
+select option,
+select optgroup {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
 }
 
 /* Focus indicators for keyboard accessibility */
