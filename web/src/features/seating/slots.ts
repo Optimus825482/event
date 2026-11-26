@@ -116,6 +116,10 @@ export async function removeSeatSlots(tx: Tx, eventId: string, tableIds: readonl
     .where(and(eq(eventTables.eventId, eventId), inArray(eventTables.id, [...tableIds])))
     .orderBy(asc(eventTables.id))
     .for("update");
+  if (tables.length === 0) return;
+  // Süresi dolmuş ama süpürülmemiş tutmalar yuvaları hâlâ bağlar: masa kilitleri altında önce süpür
+  // (`syncSeatSlots` ile aynı kilit sırası: masalar → sipariş → bilet).
+  await expireStaleHolds(tx, { eventId, tableIds: tables.map((t) => t.id) });
 
   const blocked: string[] = [];
   for (const table of tables) {

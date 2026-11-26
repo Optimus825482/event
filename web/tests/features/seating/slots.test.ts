@@ -1,12 +1,14 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, type Tx } from "@/db/client";
-import { eventTables, tableSeatSlots } from "@/db/schema";
+import { eventTables, orders, tableSeatSlots } from "@/db/schema";
 import { removeSeatSlots, syncSeatSlots } from "@/features/seating/slots";
 import { inRollback } from "../../db/isolation";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { openOnline, setAllocation } from "../../helpers/seating";
+import { createPendingHold, expireOrder } from "../../helpers/ticketing";
+import { saleEvent } from "../ticketing/fixtures";
 
 async function seatNos(ex: Pick<Tx, "select">, tableId: string): Promise<number[]> {
   const rows = await ex
@@ -124,5 +126,31 @@ describe("sandalye yuvaları: eşzamanlılık", () => {
     const nos = await seatNos(db, t.id);
     expect(nos).toEqual(range(8));
     expect(new Set(nos).size).toBe(8);
+  });
+});
+
+describe("removeSeatSlots: süresi dolmuş tutmalar", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("süresi dolmuş ama süpürülmemiş tutma yuva silmeyi engellemez; canlı tutma engeller", async () => {
+    const {
+      event,
+      tables: [a1, a2],
+    } = await saleEvent({ tables: [{ label: "A1" }, { label: "A2" }], settings: { blockSingleLeftover: false } });
+    const stale = await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }] });
+    await expireOrder(db, stale.orderId);
+    await createPendingHold(db, { eventId: event.id, items: [{ tableId: a2!.id, quantity: 2 }] });
+
+    await db.transaction((tx) => removeSeatSlots(tx, event.id, [a1!.id]));
+    expect(await seatNos(db, a1!.id)).toEqual([]);
+    const [row] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, stale.orderId));
+    expect(row?.status).toBe("expired");
+
+    await expect(db.transaction((tx) => removeSeatSlots(tx, event.id, [a2!.id]))).rejects.toMatchObject({
+      code: "conflict",
+    });
+    expect(await seatNos(db, a2!.id)).toEqual(range(8));
   });
 });

@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { eventStaffAssignments, eventTables, events, reservations } from "@/db/schema";
+import { eventStaffAssignments, eventTables, events, orders, reservations } from "@/db/schema";
 import { canTransitionEvent } from "@/domain/event-status";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
@@ -148,6 +148,10 @@ export async function deleteEvent(db: Db, actor: Actor, input: DeleteEventInput)
       .where(eq(reservations.eventId, input.id));
     if ((res?.n ?? 0) > 0) {
       throw new DomainError("conflict", "Rezervasyonu olan etkinlik silinemez");
+    }
+    const [ord] = await tx.select({ n: count() }).from(orders).where(eq(orders.eventId, input.id));
+    if ((ord?.n ?? 0) > 0) {
+      throw new DomainError("conflict", "Siparişi olan etkinlik silinemez");
     }
     await tx.delete(events).where(eq(events.id, input.id));
     return { id: input.id };
