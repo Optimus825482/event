@@ -24,6 +24,8 @@ function unwrap<T>(result: ActionResult<T>): T {
   return result.data;
 }
 
+const FAILED_MESSAGE = "İşlem tamamlanamadı";
+
 /** Onay kutusu 16 px'tir; çevresindeki etiket dokunma hedefini 44 px yapar. */
 const checkboxClass = "border-muted-foreground";
 
@@ -87,22 +89,28 @@ export function CasinoAllocation({
   async function perform(
     call: () => Promise<ActionResult<{ updated: number }>>,
     successText: (updated: number) => string,
+    processedIds: readonly string[],
   ): Promise<void> {
     setBusy(true);
+    setNotice(null);
+    setLastError(null);
     try {
       const result = await call();
       if (result.ok) {
         const text = successText(result.data.updated);
-        setLastError(null);
         setNotice(text);
-        setSelectedIds(new Set());
+        // Yalnızca işlem gören masalar seçimden çıkar; diğerleri seçili kalır.
+        setSelectedIds((prev) => new Set([...prev].filter((id) => !processedIds.includes(id))));
         toast.success(text);
         await refresh();
         return;
       }
-      setNotice(null);
       setLastError(result.message);
       toast.error(result.message);
+    } catch {
+      setNotice(null);
+      setLastError(FAILED_MESSAGE);
+      toast.error(FAILED_MESSAGE);
     } finally {
       setBusy(false);
     }
@@ -112,11 +120,13 @@ export function CasinoAllocation({
     perform(
       () => allocateToCasinoAction({ eventId, tableIds: toAllocate.map((t) => t.id) }),
       (n) => `${n} masa Casino'ya ayrıldı`,
+      toAllocate.map((t) => t.id),
     );
   const release = () =>
     perform(
       () => releaseFromCasinoAction({ eventId, tableIds: toRelease.map((t) => t.id) }),
       (n) => `${n} masa serbest bırakıldı`,
+      toRelease.map((t) => t.id),
     );
 
   const toggle = (tableId: string) => {
@@ -182,7 +192,7 @@ export function CasinoAllocation({
           aria-label="Toplu işlemler"
           className="space-y-3 rounded-xl border border-border bg-card p-4 text-card-foreground"
         >
-          <p role="status" className="text-sm font-semibold">
+          <p className="text-sm font-semibold">
             {selectedTables.length} masa seçili
           </p>
           <div className="flex flex-wrap gap-2">
@@ -233,7 +243,7 @@ export function CasinoAllocation({
         {tables.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">Bu etkinlikte henüz masa yok.</p>
         ) : (
-          <Table>
+          <Table aria-label="Masalar">
             <TableHeader>
               <TableRow>
                 {canEdit ? (
