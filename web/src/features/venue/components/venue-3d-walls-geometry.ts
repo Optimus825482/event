@@ -1,6 +1,7 @@
 /** Tuvalde 50 piksel = 3B sahnede 1 birim (venue-3d-preview ile aynı ölçek). */
 export const WALL_PX = 50;
-export const WALL_HEIGHT = 3.2;
+/** Üst kat locaları (kat yüksekliği 3) duvarın içinde kalsın diye iki kat boyu. */
+export const WALL_HEIGHT = 8;
 export const WALL_MARGIN = 0.6;
 
 export type WallSide = "back" | "left" | "right";
