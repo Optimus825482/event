@@ -102,4 +102,21 @@ describe("createPgRateLimiter", () => {
     expect(await failing.check("k")).toEqual({ allowed: true });
     expect(onError).toHaveBeenCalledTimes(2);
   });
+
+  it("kapalı kipte veritabanı hatasında isteği reddeder ve hatayı bildirir", async () => {
+    const onError = vi.fn();
+    const closed = limiter({
+      onFailure: "closed",
+      onError,
+      db: { execute: () => Promise.reject(new Error("bağlantı koptu")) } as unknown as typeof db,
+    });
+    expect(await closed.check("ip-1")).toEqual({ allowed: false, retryAfterSeconds: 60 });
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("kapalı kip sağlıklı veritabanında açık kiple aynı sayar", async () => {
+    const closed = limiter({ onFailure: "closed" });
+    for (let i = 0; i < 3; i += 1) expect(await closed.check("ip-1")).toEqual({ allowed: true });
+    expect((await closed.check("ip-1")).allowed).toBe(false);
+  });
 });

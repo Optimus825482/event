@@ -34,13 +34,13 @@ export function keysToInvalidate(event: RealtimeEvent | "resync", eventId: strin
     case "stats.updated":
       return [realtimeKeys.stats(eventId)];
     case "allocation.changed":
-      return [realtimeKeys.tables(eventId), realtimeKeys.reservations(eventId), realtimeKeys.seats(eventId)];
+      return [realtimeKeys.tables(eventId), realtimeKeys.reservations(eventId), realtimeKeys.seats(eventId), realtimeKeys.orders(eventId)];
     case "seats.changed":
-      return [realtimeKeys.seats(eventId), realtimeKeys.tables(eventId)];
+      return [realtimeKeys.seats(eventId), realtimeKeys.tables(eventId), realtimeKeys.orders(eventId)];
     case "order.paid":
       return [realtimeKeys.orders(eventId), realtimeKeys.stats(eventId), realtimeKeys.seats(eventId)];
     case "sales.changed":
-      return [realtimeKeys.sales(eventId), realtimeKeys.event(eventId)];
+      return [realtimeKeys.sales(eventId), realtimeKeys.event(eventId), realtimeKeys.seats(eventId)];
     case "notification.created":
       return [realtimeKeys.notifications()];
   }

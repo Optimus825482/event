@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { eventTables, tableSeatSlots } from "@/db/schema";
 import { effectiveSellable } from "@/domain/seating";
+import { expireStaleHolds } from "@/features/ticketing/orders-service";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf } from "@/lib/pg-error";
 
@@ -30,10 +31,27 @@ async function tryDeleteSlots(tx: Tx, slotIds: string[]): Promise<boolean> {
   }
 }
 
+/** Masaların yuvaları (masa, `seat_no` sırasıyla); `active`: yuvada etkin (`held`/`issued`) bilet var. */
+async function readSlots(tx: Tx, tableIds: string[]) {
+  return tx
+    .select({
+      id: tableSeatSlots.id,
+      tableId: tableSeatSlots.tableId,
+      seatNo: tableSeatSlots.seatNo,
+      // Tam nitelikli ham SQL: seçim alanındaki alt sorguda Drizzle sütunları öneksiz yazar ("id" biletinkine çözülür).
+      active: sql<boolean>`exists (select 1 from tickets t where t.seat_slot_id = "table_seat_slots"."id" and t.status in ('held', 'issued'))`,
+    })
+    .from(tableSeatSlots)
+    .where(inArray(tableSeatSlots.tableId, tableIds))
+    .orderBy(asc(tableSeatSlots.tableId), asc(tableSeatSlots.seatNo));
+}
+
 /**
  * Kapsamdaki `online` masaların yuva sayısını `effectiveSellable`'a getirir. Masa satırları kimlik
  * sırasıyla `FOR UPDATE` kilitlenir (etkinlik kilidi çağıranındır). Eksikse en büyük numaradan devam
- * edilir, fazlaysa en büyük numaralardan silinir; `online` olmayan masaya dokunulmaz.
+ * edilir; fazlaysa önce süresi dolmuş tutmalar süpürülür, sonra etkin bileti olmayan yuvalardan en büyük
+ * numaralılar silinir (kalanların numarası değişmez). Boş yuva yetmezse `conflict`. `online` olmayan
+ * masaya dokunulmaz.
  */
 export async function syncSeatSlots(tx: Tx, eventId: string, tableIds?: readonly string[]): Promise<void> {
   if (tableIds && tableIds.length === 0) return;
@@ -51,16 +69,15 @@ export async function syncSeatSlots(tx: Tx, eventId: string, tableIds?: readonly
     .for("update");
   if (tables.length === 0) return;
 
-  const slots = await tx
-    .select({ id: tableSeatSlots.id, tableId: tableSeatSlots.tableId, seatNo: tableSeatSlots.seatNo })
-    .from(tableSeatSlots)
-    .where(
-      inArray(
-        tableSeatSlots.tableId,
-        tables.map((t) => t.id),
-      ),
-    )
-    .orderBy(asc(tableSeatSlots.tableId), asc(tableSeatSlots.seatNo));
+  const ids = tables.map((t) => t.id);
+  let slots = await readSlots(tx, ids);
+  const shrinking = tables.filter((t) => slots.filter((s) => s.tableId === t.id).length > effectiveSellable(t));
+  // Süresi dolmuş tutmalar yuvayı hâlâ dolu gösterir: masa kilitleri tutulurken, silinecekleri seçmeden önce
+  // süpür (kilit sırası: masalar → sipariş → bilet). Süpürme olduysa etkin bilet bayrakları yeniden okunur.
+  if (shrinking.length > 0) {
+    const swept = await expireStaleHolds(tx, { eventId, tableIds: shrinking.map((t) => t.id) });
+    if (swept > 0) slots = await readSlots(tx, ids);
+  }
 
   const blocked: string[] = [];
   for (const table of tables) {
@@ -76,7 +93,14 @@ export async function syncSeatSlots(tx: Tx, eventId: string, tableIds?: readonly
         })),
       );
     } else if (own.length > target) {
-      const doomed = own.slice(target).map((s) => s.id);
+      // Yalnızca etkin bileti olmayan yuvalar, büyük numaradan küçüğe; kalanların numarası değişmez.
+      const excess = own.length - target;
+      const free = own.filter((s) => !s.active).reverse();
+      if (free.length < excess) {
+        blocked.push(table.label);
+        continue;
+      }
+      const doomed = free.slice(0, excess).map((s) => s.id);
       if (!(await tryDeleteSlots(tx, doomed))) blocked.push(table.label);
     }
   }
@@ -92,6 +116,10 @@ export async function removeSeatSlots(tx: Tx, eventId: string, tableIds: readonl
     .where(and(eq(eventTables.eventId, eventId), inArray(eventTables.id, [...tableIds])))
     .orderBy(asc(eventTables.id))
     .for("update");
+  if (tables.length === 0) return;
+  // Süresi dolmuş ama süpürülmemiş tutmalar yuvaları hâlâ bağlar: masa kilitleri altında önce süpür
+  // (`syncSeatSlots` ile aynı kilit sırası: masalar → sipariş → bilet).
+  await expireStaleHolds(tx, { eventId, tableIds: tables.map((t) => t.id) });
 
   const blocked: string[] = [];
   for (const table of tables) {

@@ -75,7 +75,7 @@ test.describe("Masa sınıflandırma ve tahsis", () => {
     await ent.goto(`/events/${eventId}`);
     const nav = ent.getByRole("navigation", { name: "Etkinlik bölümleri" });
     await expect(nav.getByRole("link", { name: "Masalar ve Satış" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "Finans" })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Finans" })).toBeVisible();
     await nav.getByRole("link", { name: "Masalar ve Satış" }).click();
     await expect(ent.getByRole("heading", { name: "Masalar ve Satış", level: 1 })).toBeVisible();
 

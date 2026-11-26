@@ -120,3 +120,46 @@ describe("parseEnv", () => {
     expect(() => parseEnv(rest)).toThrow(/DATABASE_URL/);
   });
 });
+
+describe("satış ve ödeme", () => {
+  const prod = {
+    ...valid,
+    NODE_ENV: "production",
+    BETTER_AUTH_URL: "https://eventflow.example.com",
+    TRUSTED_IP_HEADER: "x-real-ip",
+  };
+  it("geliştirme ve testte ödeme sağlayıcı varsayılanı demo", () => {
+    expect(parseEnv(valid).PAYMENT_PROVIDER).toBe("demo");
+    expect(parseEnv({ ...valid, NODE_ENV: "development" }).PAYMENT_PROVIDER).toBe("demo");
+  });
+  it("üretimde PAYMENT_PROVIDER verilmezse ya da boşsa disabled", () => {
+    expect(parseEnv(prod).PAYMENT_PROVIDER).toBe("disabled");
+    expect(parseEnv({ ...prod, PAYMENT_PROVIDER: "" }).PAYMENT_PROVIDER).toBe("disabled");
+    expect(parseEnv({ ...prod, PAYMENT_PROVIDER: "  " }).PAYMENT_PROVIDER).toBe("disabled");
+  });
+  it("üretimde demo yalnızca açıkça yazılırsa etkindir", () =>
+    expect(parseEnv({ ...prod, PAYMENT_PROVIDER: "demo" }).PAYMENT_PROVIDER).toBe("demo"));
+  it.each(["DEMO", "Demo", "true", "1", "on", "test"])("tanınmayan PAYMENT_PROVIDER %j açılışta hata verir", (value) =>
+    expect(() => parseEnv({ ...prod, PAYMENT_PROVIDER: value })).toThrow(/PAYMENT_PROVIDER/));
+  it("üretim derleme evresinde de varsayılan disabled", () =>
+    expect(
+      parseEnv({ ...valid, NODE_ENV: "production", NEXT_PHASE: "phase-production-build" }).PAYMENT_PROVIDER,
+    ).toBe("disabled"));
+  it("SALES_API_SECRET isteğe bağlıdır; 31 karakter reddedilir, boş tanımsız sayılır", () => {
+    expect(parseEnv(valid).SALES_API_SECRET).toBeUndefined();
+    expect(parseEnv({ ...valid, SALES_API_SECRET: "" }).SALES_API_SECRET).toBeUndefined();
+    expect(parseEnv({ ...valid, SALES_API_SECRET: "  " }).SALES_API_SECRET).toBeUndefined();
+    expect(() => parseEnv({ ...valid, SALES_API_SECRET: "a".repeat(31) })).toThrow(/SALES_API_SECRET/);
+    expect(parseEnv({ ...valid, SALES_API_SECRET: "a".repeat(32) }).SALES_API_SECRET).toHaveLength(32);
+  });
+  it("SALES_SITE_URL üretimde https:// olmalı; sondaki eğik çizgi atılır", () => {
+    expect(() => parseEnv({ ...prod, SALES_SITE_URL: "http://bilet.example.com" })).toThrow(/SALES_SITE_URL/);
+    expect(parseEnv({ ...prod, SALES_SITE_URL: "https://bilet.example.com/" }).SALES_SITE_URL).toBe(
+      "https://bilet.example.com",
+    );
+    expect(parseEnv({ ...valid, SALES_SITE_URL: "http://localhost:3370" }).SALES_SITE_URL).toBe(
+      "http://localhost:3370",
+    );
+    expect(parseEnv({ ...valid, SALES_SITE_URL: "" }).SALES_SITE_URL).toBeUndefined();
+  });
+});

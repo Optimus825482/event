@@ -141,6 +141,13 @@
       "when": 1795692795839,
       "tag": "0019_faz5_finans",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795693715805,
+      "tag": "0020_faz6_bilet",
+      "breakpoints": true
     }
   ]
 }
