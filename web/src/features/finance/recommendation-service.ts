@@ -1,14 +1,14 @@
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { eventFinancePlans, eventSeatPrices, events } from "@/db/schema";
+import { eventFinancePlans, eventSeatPrices } from "@/db/schema";
 import { SALE_CATEGORIES, type SaleCategory } from "@/domain/seating";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
-import { getSeatPrices } from "@/features/seating/prices";
+import { getSeatPrices, type SeatPrice } from "@/features/seating/prices";
 import { getSaleSettings } from "@/features/seating/settings-service";
-import { DomainError } from "@/lib/action";
 import type { CasinoCostMode } from "./constants";
-import { getFinanceSummary } from "./queries";
+import { lockEditableEvent } from "./price-service";
+import { type FinanceSummary, getFinanceSummary } from "./queries";
 import { casinoShare as computeCasinoShare, distributableAmount, recommendPrices } from "./recommend";
 import { casinoCapacity, sellableSeatsByCategory } from "./seats";
 
@@ -30,16 +30,16 @@ export type RecommendationView = {
   };
 };
 
-const MESSAGES = {
-  notFound: "Etkinlik bulunamadı",
-  frozen: "Tamamlanmış veya iptal edilmiş etkinliğin fiyatı değiştirilemez",
-} as const;
-
 /** Tavsiyeyi hesaplar; hiçbir şey yazmaz. Yetki denetimi çağırana aittir. */
-export async function previewRecommendation(ex: Db | Tx, eventId: string): Promise<RecommendationView> {
-  const summary = await getFinanceSummary(ex, eventId);
+export async function previewRecommendation(
+  ex: Db | Tx,
+  eventId: string,
+  /** Çağıranın aynı görüntüden zaten okuduğu veriler; verilirse yeniden okunmaz. */
+  preloaded: { summary?: FinanceSummary; prices?: Record<SaleCategory, SeatPrice> } = {},
+): Promise<RecommendationView> {
+  const summary = preloaded.summary ?? (await getFinanceSummary(ex, eventId));
   const settings = await getSaleSettings(ex, eventId);
-  const prices = await getSeatPrices(ex, eventId);
+  const prices = preloaded.prices ?? (await getSeatPrices(ex, eventId));
   const capacity = await casinoCapacity(ex, eventId);
   const seats = await sellableSeatsByCategory(ex, eventId, { includeLoca: settings.locaOnline });
 
@@ -78,7 +78,14 @@ export async function previewRecommendation(ex: Db | Tx, eventId: string): Promi
   };
 }
 
-/** Tavsiyeyi hesaplar ve kaydeder: yalnızca `recommended_price` sütunları ve `recommended_at` yazılır. */
+/**
+ * Tavsiyeyi hesaplar ve kaydeder: yalnızca `recommended_price` sütunları ve `recommended_at` yazılır.
+ *
+ * Değişmez: girdileri değiştiren tüm yazıcılar (kalem ekle/güncelle/sil, plan, katsayı, kesin fiyat,
+ * satış ayarları, sınıflandırma, tahsis, yerleşim kaydı) etkinlik satırını `FOR UPDATE` ya da `FOR SHARE`
+ * ile kilitler. Burada `FOR UPDATE` alındığı için hepsi bu işlem bitene dek bekler; sonraki ayrı
+ * SELECT'ler (READ COMMITTED) bu sayede tek tutarlı görüntü okur. Yeni bir yazıcı kilidi atlamamalıdır.
+ */
 export async function computeRecommendation(
   db: Db,
   actor: Actor,
@@ -87,18 +94,9 @@ export async function computeRecommendation(
   authorize(actor, "finance", "edit");
 
   return db.transaction(async (tx) => {
-    const [event] = await tx
-      .select({ status: events.status })
-      .from(events)
-      .where(eq(events.id, input.eventId))
-      .for("update");
-    if (!event) throw new DomainError("not_found", MESSAGES.notFound);
-    if (event.status === "completed" || event.status === "cancelled") {
-      throw new DomainError("conflict", MESSAGES.frozen);
-    }
+    await lockEditableEvent(tx, input.eventId);
 
     const view = await previewRecommendation(tx, input.eventId);
-    const now = new Date();
     for (const category of SALE_CATEGORIES) {
       const recommendedPrice = view.prices[category];
       await tx
@@ -106,17 +104,15 @@ export async function computeRecommendation(
         .values({ eventId: input.eventId, category, recommendedPrice })
         .onConflictDoUpdate({
           target: [eventSeatPrices.eventId, eventSeatPrices.category],
-          set: { recommendedPrice, updatedAt: now },
+          set: { recommendedPrice, updatedAt: sql`now()` },
         });
     }
-    const recommendedAt = view.reason === "ok" ? now : null;
+    // Plan satırında yalnızca `recommended_at` yazılır; planı son değiştiren bilgisi korunur.
+    const recommendedAt = view.reason === "ok" ? sql`now()` : null;
     await tx
       .insert(eventFinancePlans)
-      .values({ eventId: input.eventId, recommendedAt, updatedBy: actor.id })
-      .onConflictDoUpdate({
-        target: eventFinancePlans.eventId,
-        set: { recommendedAt, updatedBy: actor.id, updatedAt: now },
-      });
+      .values({ eventId: input.eventId, recommendedAt })
+      .onConflictDoUpdate({ target: eventFinancePlans.eventId, set: { recommendedAt, updatedAt: eventFinancePlans.updatedAt } });
     return view;
   });
 }

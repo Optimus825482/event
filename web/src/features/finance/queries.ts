@@ -40,8 +40,8 @@ export async function getFinanceItems(ex: Db | Tx, eventId: string): Promise<Fin
 export async function getFinanceSummary(ex: Db | Tx, eventId: string): Promise<FinanceSummary> {
   const i = eventFinanceItems;
   const total = (expr: SQL) => sql<string>`coalesce(${expr}, 0)::numeric(15,2)::text`;
-  const [[totals], items, plan, settings] = await Promise.all([
-    ex
+  // Sıralı okuma: işlem (tek bağlantı) içinde eşzamanlı sorgu pg'de kullanımdan kaldırılmış bir kullanımdır.
+  const [totals] = await ex
       .select({
         estimatedExpense: total(sql`sum(${i.estimatedAmount}) filter (where ${i.direction} = 'expense')`),
         actualExpense: total(sql`sum(${i.actualAmount}) filter (where ${i.direction} = 'expense')`),
@@ -50,11 +50,10 @@ export async function getFinanceSummary(ex: Db | Tx, eventId: string): Promise<F
         artistFee: sql<string | null>`(sum(coalesce(${i.actualAmount}, ${i.estimatedAmount})) filter (where ${i.direction} = 'expense' and ${i.category} = 'artist_fee'))::numeric(15,2)::text`,
       })
       .from(i)
-      .where(eq(i.eventId, eventId)),
-    getFinanceItems(ex, eventId),
-    getFinancePlan(ex, eventId),
-    getSaleSettings(ex, eventId),
-  ]);
+      .where(eq(i.eventId, eventId));
+  const items = await getFinanceItems(ex, eventId);
+  const plan = await getFinancePlan(ex, eventId);
+  const settings = await getSaleSettings(ex, eventId);
 
   return {
     currency: settings.currency,

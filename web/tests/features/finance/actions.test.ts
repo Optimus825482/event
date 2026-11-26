@@ -6,6 +6,7 @@ import { db } from "@/db/client";
 import { eventSeatPrices } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { financeActionDefs } from "@/features/finance/action-defs";
+import { publish } from "@/features/realtime/publish";
 import { createAction } from "@/lib/action";
 import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
@@ -116,6 +117,17 @@ describe("finans eylemleri", () => {
       ok: true,
       data: { eventId: event.id },
     });
+  });
+
+  it("boş fiyat isteği alan hatası döner; servis çağrılmaz, sales.changed yayılmaz", async () => {
+    const event = await f.createEvent(db);
+    const ent = await persistActor(db, managerActor("entertainment"));
+    vi.mocked(publish).mockClear();
+    const result = await run("saveFinalPrices", ent)({ eventId: event.id, prices: {} });
+    expect(result).toMatchObject({ ok: false, code: "invalid" });
+    expect(result.fieldErrors?.prices).toEqual(["En az bir fiyat girin"]);
+    expect(publish).not.toHaveBeenCalled();
+    expect(await db.select().from(eventSeatPrices)).toHaveLength(0);
   });
 
   it("oturumsuz çağrı unauthenticated döner", async () => {
