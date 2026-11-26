@@ -1,10 +1,47 @@
 @import "tailwindcss";
 
+/* Renk token'ları src/lib/theme.ts ile birebir aynıdır (tests/lib/theme.test.ts eşitliği zorlar). */
+@theme {
+  --color-*: initial;
+  --color-bg: #0b1220;
+  --color-surface: #141b2d;
+  --color-surface-raised: #1c2540;
+  --color-line: #2a3555;
+  --color-gold: #d4af37;
+  --color-gold-bright: #e6c558;
+  --color-ivory: #f4f0e8;
+  --color-muted: #b9ae9a;
+  --color-on-gold: #141b2d;
+  --color-glass: #262c3c;
+  --color-danger: #ff8a80;
+  --color-success: #7fd1a3;
+  --color-disabled-bg: #2a3555;
+  --color-disabled-text: #b9ae9a;
+}
+
 /* Web yazı tipi yok: sistem yazı tipi yığını (dış ağa bağımlılık olmasın). */
 @theme inline {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+}
+
+html {
+  color-scheme: dark;
 }
 
 body {
+  background-color: var(--color-bg);
+  color: var(--color-ivory);
   font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
 }
