@@ -8,10 +8,18 @@ const OTHER = "9a8b7c6d-1e2f-4a3b-8c4d-5e6f7a8b9c0d";
 describe("order-token", () => {
   it("imzala-doğrula gidiş dönüşü", () => expect(verifyOrderToken(signOrderToken(ID))).toEqual({ orderId: ID }));
   it("imzanın tek karakteri değişirse reddedilir", () => {
-    const t = signOrderToken(ID);
-    const last = t.slice(-1);
-    const tampered = t.slice(0, -1) + (last === "A" ? "B" : "A");
-    expect(verifyOrderToken(tampered)).toBeNull();
+    const [head, sig] = signOrderToken(ID).split(".") as [string, string];
+    const first = sig[0] === "A" ? "B" : "A";
+    expect(verifyOrderToken(`${head}.${first}${sig.slice(1)}`)).toBeNull();
+  });
+  it("aynı baytlara çözülen kanonik olmayan imza reddedilir", () => {
+    const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const [head, sig] = signOrderToken(ID).split(".") as [string, string];
+    const idx = ALPHABET.indexOf(sig.slice(-1));
+    expect(idx % 4).toBe(0);
+    const sibling = `${head}.${sig.slice(0, -1)}${ALPHABET[idx + 1]}`;
+    expect(Buffer.from(sibling.split(".")[1] as string, "base64url").equals(Buffer.from(sig, "base64url"))).toBe(true);
+    expect(verifyOrderToken(sibling)).toBeNull();
   });
   it("başka kimliğin imzasıyla birleştirilen belirteç reddedilir", () => {
     const head = signOrderToken(ID).split(".")[0];

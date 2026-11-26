@@ -11,7 +11,10 @@ function toCents(value: string): bigint {
   return BigInt(m[1] as string) * HUNDRED + BigInt(frac);
 }
 
+const MAX_CENTS = BigInt("999999999999"); // numeric(12,2) üst sınırı: 9999999999.99
+
 function fromCents(cents: bigint): string {
+  if (cents > MAX_CENTS) throw new RangeError("Tutar numeric(12,2) sınırını aşıyor");
   const s = cents.toString().padStart(3, "0");
   return `${s.slice(0, -2)}.${s.slice(-2)}`;
 }

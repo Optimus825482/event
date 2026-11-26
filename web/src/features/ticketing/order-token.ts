@@ -36,6 +36,8 @@ export function verifyOrderToken(token: string, secret: string = env.BETTER_AUTH
   if (!isUuid(orderId) || Buffer.from(orderId, "utf8").toString("base64url") !== head) return null;
 
   const given = Buffer.from(signature, "base64url");
+  // İmzanın son karakterinin kullanılmayan bitleri: kanonik olmayan eş yazımlar reddedilir.
+  if (given.toString("base64url") !== signature) return null;
   const expected = mac(orderId, secret);
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   return { orderId };

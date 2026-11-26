@@ -20,4 +20,10 @@ describe("money", () => {
     ["10.00", 0],
     ["10.00", 1.5],
   ])("geçersiz girdi (%s, %s) hata verir", (unit, qty) => expect(() => lineTotal(unit, qty)).toThrow());
+  it("numeric(12,2) sınırını aşan sonuç RangeError verir", () => {
+    expect(lineTotal("99999999.99", 100)).toBe("9999999999.00");
+    expect(() => lineTotal("9999999999.99", 2)).toThrow(RangeError);
+    expect(sumMoney(["9999999999.99", "0.00"])).toBe("9999999999.99");
+    expect(() => sumMoney(["9999999999.99", "0.01"])).toThrow(RangeError);
+  });
 });
