@@ -55,7 +55,7 @@ export function createSalesHandlers(deps: SalesDeps): SalesReadHandlers {
     getAvailability: (request, eventId) =>
       guarded(request, async () => {
         if (!isUuid(eventId)) return salesFailure("event_not_found");
-        const availability = await availabilityCache.get(eventId, () => computeAvailability(deps.db, eventId));
+        const availability = await availabilityCache.get(eventId, () => computeAvailability(deps.db, eventId, new Date(deps.now())));
         return availability ? salesJson(200, availability) : salesFailure("event_not_found");
       }),
   };

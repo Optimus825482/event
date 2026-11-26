@@ -179,6 +179,8 @@ describe("satış API okuma uçları", () => {
     const free = async () =>
       availabilitySchema.parse(await (await api.getAvailability(req("GET", path), event.id)).json()).tables[0]?.free;
     expect(await free()).toBe(8);
+    const at = availabilitySchema.parse(await (await api.getAvailability(req("GET", path), event.id)).json()).at;
+    expect(at).toBe(new Date(0).toISOString());
     await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1.id, quantity: 2 }] });
     t = 1999;
     expect(await free()).toBe(8);

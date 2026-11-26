@@ -23,5 +23,9 @@ describe("satış API kimliği", () => {
   ])("istemci IP'si %j → %j", (value, key) =>
     expect(salesClientIp(new Headers({ "x-sales-client-ip": value }))).toBe(key),
   );
+  it.each(["", "kisa-sir"])("sır %j çok kısaysa sales_api_disabled; boş sır + Bearer kabul edilmez", (short) => {
+    expect(checkSalesAuth(h("Bearer "), short)).toEqual({ ok: false, code: "sales_api_disabled" });
+    expect(checkSalesAuth(h(`Bearer ${short}`), short)).toEqual({ ok: false, code: "sales_api_disabled" });
+  });
   it("başlık yoksa anahtar unknown", () => expect(salesClientIp(new Headers())).toBe("unknown"));
 });

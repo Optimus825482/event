@@ -9,6 +9,8 @@ import { minMoney } from "@/features/ticketing/money";
 import { getSeatOccupancy } from "@/features/ticketing/occupancy";
 import type { PaymentProvider } from "@/features/ticketing/payment/provider";
 import { saleStateOf } from "@/features/ticketing/sale-state";
+import { DomainError } from "@/lib/action";
+import { SalesError } from "@/features/ticketing/orders-service";
 import { getFloorPlan } from "@/features/venue/plan-service";
 import {
   SALES_CATEGORIES,
@@ -112,7 +114,10 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
   if (state === null) return null;
 
   const [plan, seatPrices, slotRows] = await Promise.all([
-    getFloorPlan(ex, SALES_ACTOR, eventId),
+    getFloorPlan(ex, SALES_ACTOR, eventId).catch((error: unknown) => {
+      if (error instanceof DomainError && error.code === "not_found") throw new SalesError("event_not_found");
+      throw error;
+    }),
     getSeatPrices(ex, eventId),
     ex.select({ tableId: tableSeatSlots.tableId }).from(tableSeatSlots).where(eq(tableSeatSlots.eventId, eventId)),
   ]);
@@ -160,7 +165,7 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
   };
 }
 
-export async function computeAvailability(ex: Db | Tx, eventId: string): Promise<Availability | null> {
+export async function computeAvailability(ex: Db | Tx, eventId: string, now: Date): Promise<Availability | null> {
   const [row] = await visibleEvents(ex, eventId);
   if (!row) return null;
   const [slotRows, occupancy] = await Promise.all([
@@ -180,5 +185,5 @@ export async function computeAvailability(ex: Db | Tx, eventId: string): Promise
       return { id, free: free < 0 ? 0 : free };
     })
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return { at: new Date().toISOString(), tables };
+  return { at: now.toISOString(), tables };
 }
