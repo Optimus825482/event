@@ -19,10 +19,10 @@ describe("realtimeKeys / keysToInvalidate", () => {
 
   it("yeni olay türleri sözleşmedeki anahtarları geçersiz kılar", () => {
     const k = realtimeKeys;
-    expect(keysToInvalidate({ type: "allocation.changed", eventId, at }, eventId)).toEqual([k.tables(eventId), k.reservations(eventId), k.seats(eventId)]);
-    expect(keysToInvalidate({ type: "seats.changed", eventId, at }, eventId)).toEqual([k.seats(eventId), k.tables(eventId)]);
+    expect(keysToInvalidate({ type: "allocation.changed", eventId, at }, eventId)).toEqual([k.tables(eventId), k.reservations(eventId), k.seats(eventId), k.orders(eventId)]);
+    expect(keysToInvalidate({ type: "seats.changed", eventId, at }, eventId)).toEqual([k.seats(eventId), k.tables(eventId), k.orders(eventId)]);
     expect(keysToInvalidate({ type: "order.paid", eventId, at }, eventId)).toEqual([k.orders(eventId), k.stats(eventId), k.seats(eventId)]);
-    expect(keysToInvalidate({ type: "sales.changed", eventId, at }, eventId)).toEqual([k.sales(eventId), k.event(eventId)]);
+    expect(keysToInvalidate({ type: "sales.changed", eventId, at }, eventId)).toEqual([k.sales(eventId), k.event(eventId), k.seats(eventId)]);
     expect(k.seats(eventId)).toEqual(["events", eventId, "seats"]);
     expect(k.orders(eventId)).toEqual(["events", eventId, "orders"]);
     expect(k.sales(eventId)).toEqual(["events", eventId, "sales"]);

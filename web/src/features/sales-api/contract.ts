@@ -71,17 +71,19 @@ export const SALE_STATES = ["open", "not_started", "ended", "closed"] as const;
 export type SaleState = (typeof SALE_STATES)[number];
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
+// UUID'ler küçük harfe indirilir: büyük harfli yineleme (`clientKey`) aynı siparişi bulur.
+const uuid = () => z.uuid().transform((s) => s.toLowerCase());
 const categorySchema = z.enum(SALES_CATEGORIES);
 const saleStateSchema = z.enum(SALE_STATES);
 
 // --- İstek şemaları ---
 export const createOrderBodySchema = z.strictObject({
-  eventId: z.uuid(),
+  eventId: uuid(),
   items: z
-    .array(z.strictObject({ tableId: z.uuid(), quantity: z.number().int().min(1).max(50) }))
+    .array(z.strictObject({ tableId: uuid(), quantity: z.number().int().min(1).max(50) }))
     .min(1)
     .max(20),
-  clientKey: z.uuid(),
+  clientKey: uuid(),
 });
 export type CreateOrderBody = z.infer<typeof createOrderBodySchema>;
 
