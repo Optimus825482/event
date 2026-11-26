@@ -7,7 +7,7 @@ import { signFindTableToken } from "@/features/find-table/token";
 import { formatEventWhen } from "@/features/invitations/public";
 import { createCustomer, createReservation, createTable, createTableGroup } from "../../helpers/factories";
 import { truncateAll } from "../../helpers/db";
-import { ticketedEvent } from "../../helpers/door";
+import { addPaidOrder, ticketedEvent } from "../../helpers/door";
 import { bookedGuest, reservationRow, setReservationStatus } from "../check-in/fixtures";
 
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -31,6 +31,16 @@ describe("herkese açık masa görünümü", () => {
     for (const t of view!.plan.tables) {
       expect(Object.keys(t).sort()).toEqual(["capacity", "color", "id", "isLoca", "label", "rotation", "shape", "x", "y"]);
     }
+  });
+
+  it("masa etiketleri doğal sırayla gelir (2, 10)", async () => {
+    const te = await ticketedEvent();
+    const order = await addPaidOrder(te.event.id, [
+      { label: "10", quantity: 1 },
+      { label: "2", quantity: 1 },
+    ]);
+    const view = await getPublicTableView(db, signFindTableToken("order", order.orderId));
+    expect(view!.tables.map((t) => t.label)).toEqual(["2", "10"]);
   });
 
   it("yanıtın JSON'unda kişisel veri, PNR, grup, tahsis ve başka masaların rezervasyon bilgisi yok", async () => {

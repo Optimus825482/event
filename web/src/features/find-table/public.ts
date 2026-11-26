@@ -1,9 +1,8 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, events, orders, reservations, tickets } from "@/db/schema";
-import type { Actor } from "@/features/auth/session";
 import { formatEventWhen } from "@/features/invitations/public";
-import { getFloorPlan } from "@/features/venue/plan-service";
+import { loadFloorPlan } from "@/features/venue/plan-service";
 import type { FloorPlanData } from "@/features/venue/plan-types";
 import { verifyFindTableToken } from "./token";
 import { eventWindowOpen } from "./window";
@@ -29,9 +28,10 @@ async function locateOrder(db: Db | Tx, orderId: string): Promise<Located | null
     .from(tickets)
     .innerJoin(eventTables, and(eq(eventTables.eventId, tickets.eventId), eq(eventTables.id, tickets.tableId)))
     .where(and(eq(tickets.orderId, orderId), eq(tickets.status, "issued")))
-    .groupBy(eventTables.id, eventTables.label)
-    .orderBy(asc(eventTables.label), asc(eventTables.id));
+    .groupBy(eventTables.id, eventTables.label);
   if (rows.length === 0) return null;
+  // Etiketler doğal sırayla ("2" < "10"); SQL harmanlaması buna güvenilmez.
+  rows.sort((a, b) => a.label.localeCompare(b.label, "tr", { numeric: true }) || a.id.localeCompare(b.id));
   return { ...order, tables: rows };
 }
 
@@ -74,8 +74,8 @@ export async function getPublicTableView(db: Db | Tx, token: string): Promise<Pu
   const located = target.kind === "order" ? await locateOrder(db, target.id) : await locateReservation(db, target.id);
   if (!located) return null;
 
-  // getFloorPlan yetkilendirme yapmaz (çağıranın işidir); actor kullanılmaz.
-  const plan = await getFloorPlan(db, null as unknown as Actor, located.eventId);
+  // Erişim imzalı belirteçle doğrulandı; plan aşağıda beyaz listeyle süzülür.
+  const plan = await loadFloorPlan(db, located.eventId);
   return {
     eventName: located.eventName,
     eventDate: formatEventWhen(located.startsAt).date,
