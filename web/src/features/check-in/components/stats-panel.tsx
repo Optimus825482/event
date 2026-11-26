@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CheckCircle2, Clock, Percent, UserX, Users, type LucideIcon } from "lucide-react";
+import { Ban, CheckCircle2, Clock, Percent, Ticket, TicketCheck, UserX, Users, type LucideIcon } from "lucide-react";
 import type { EventStats } from "../stats";
 
 type Tone = "slate" | "emerald" | "amber" | "blue" | "red";
@@ -77,6 +77,12 @@ export function StatsPanel({ stats, stale }: { stats: EventStats; stale: boolean
         <Tile label="İptal" value={stats.cancelled} icon={Ban} tone="red" />
         <Tile label="Gelmedi" value={stats.noShow} icon={UserX} tone="slate" />
       </div>
+      {stats.ticketsIssued > 0 ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <Tile label="Bilet" value={stats.ticketsIssued} icon={Ticket} tone="blue" />
+          <Tile label="Bilet girişi" value={stats.ticketsCheckedIn} icon={TicketCheck} tone="emerald" />
+        </div>
+      ) : null}
     </section>
   );
 }

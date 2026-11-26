@@ -2,6 +2,10 @@
 
 import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
+import { batchMessage, batchTone } from "./batch-feedback";
+import { resultLine } from "./order-view";
 import type { CheckInFeedback, QueuedReason } from "./use-check-in";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 
@@ -42,11 +46,21 @@ export function CheckInFeedbackBanner({
   feedback: CheckInFeedback | null;
   onClose: () => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Toplu gönderim bitince düğmesi kaybolur/devre dışı kalır; odak gövdeye düşmesin diye banta taşınır.
+  // Diğer sonuçlarda odak yalnızca gövdeye düşmüşse taşınır (tarayıcı girişindeki odak bozulmaz).
+  useEffect(() => {
+    if (!feedback) return;
+    if (feedback.kind === "batch" || document.activeElement === document.body) ref.current?.focus();
+  }, [feedback]);
+
   if (!feedback) return null;
+  const focusable = { ref, tabIndex: -1, "data-testid": "check-in-feedback" } as const;
 
   if (feedback.kind === "error") {
     return (
       <div
+        {...focusable}
         role="alert"
         className="flex items-start justify-between gap-4 rounded-xl border-2 border-red-500/60 bg-red-500/10 p-4 text-red-100"
       >
@@ -65,6 +79,7 @@ export function CheckInFeedbackBanner({
   if (feedback.kind === "queued") {
     return (
       <div
+        {...focusable}
         role="status"
         className="flex items-start justify-between gap-4 rounded-xl border-2 border-sky-500/60 bg-sky-500/10 p-4 text-sky-100"
       >
@@ -80,11 +95,50 @@ export function CheckInFeedbackBanner({
     );
   }
 
+  if (feedback.kind === "batch") {
+    const { tally } = feedback;
+    const tone = batchTone(tally);
+    return (
+      <div
+        {...focusable}
+        role="status"
+        className={cn(
+          "flex items-start justify-between gap-4 rounded-xl border-2 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
+          tone === "ok" && "border-emerald-500/60 bg-emerald-500/10 text-emerald-100",
+          tone === "warn" && "border-amber-500/60 bg-amber-500/10 text-amber-100",
+          tone === "info" && "border-sky-500/60 bg-sky-500/10 text-sky-100",
+        )}
+      >
+        <div className="space-y-1">
+          <p className="text-lg font-semibold">{batchMessage(tally)}</p>
+          {tally.queued > 0 ? (
+            <p>Kuyruğa alınan girişler henüz sunucuda ONAYLANMADI; bağlantı gelince otomatik gönderilir.</p>
+          ) : null}
+          {tally.failed > 0 ? (
+            <p>
+              Reddedilen biletler gönderilemeyen girişler listesinde nedenleriyle görünür. Ödemesi sonradan tamamlanan bilet
+              için kodu yeniden okutun.
+            </p>
+          ) : null}
+        </div>
+        <CloseButton
+          onClose={onClose}
+          className={cn(
+            tone === "ok" && "text-emerald-200 hover:bg-emerald-500/20",
+            tone === "warn" && "text-amber-200 hover:bg-amber-500/20",
+            tone === "info" && "text-sky-200 hover:bg-sky-500/20",
+          )}
+        />
+      </div>
+    );
+  }
+
   const { result } = feedback;
   const success = feedback.kind === "success";
   const Icon = success ? CheckCircle2 : AlertTriangle;
   return (
     <div
+      {...focusable}
       role="status"
       className={
         success
@@ -97,9 +151,7 @@ export function CheckInFeedbackBanner({
         <div className="space-y-1">
           <p className="text-lg font-semibold">{success ? "Giriş yapıldı" : "Bu misafir zaten giriş yaptı"}</p>
           <p className="text-2xl font-bold text-white">Masa {result.tableLabel}</p>
-          <p>
-            {result.guestName ?? "Misafir"} · {result.guestCount} kişi
-          </p>
+          <p>{resultLine(result)}</p>
           {!success ? (
             <p className="text-sm">
               {formatTime(result.checkedInAt)}

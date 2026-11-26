@@ -15,10 +15,12 @@ import { CameraScanner } from "../scanner/camera-scanner";
 import type { EventStats } from "../stats";
 import { CheckInFeedbackBanner } from "./check-in-feedback";
 import { ConsoleTabs, panelDomId, tabDomId, type ConsoleTabDef } from "./console-tabs";
+import { GateSelect } from "./gate-select";
 import { GuestSearch } from "./guest-search";
 import { HistoryPanel } from "./history-panel";
 import { ScanPanel } from "./scan-panel";
 import { StatsPanel } from "./stats-panel";
+import { useGate } from "./use-gate";
 import { unwrap, useCheckIn } from "./use-check-in";
 import { WalkInForm } from "./walk-in-form";
 
@@ -61,7 +63,8 @@ function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: 
       if (synced > 0) setSyncNote(`${synced} giriş sunucuya eşitlendi`);
     }, []),
   );
-  const { submit, pending, feedback, setFeedback, clear, onEvents } = useCheckIn(eventId, queue);
+  const { gate, setGate } = useGate();
+  const { submit, submitMany, pending, feedback, setFeedback, clear, onEvents } = useCheckIn(eventId, queue, gate);
   useEffect(() => {
     handlers.current = onEvents;
   }, [onEvents]);
@@ -108,13 +111,16 @@ function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: 
 
   return (
     <div className="space-y-5">
-      <p className="flex items-center gap-2 text-xs text-slate-400" role="status" aria-live="polite">
-        <span
-          aria-hidden="true"
-          className={`h-2 w-2 rounded-full ${stream === "open" ? "animate-pulse bg-emerald-500" : "bg-amber-500"}`}
-        />
-        {STREAM_LABEL[stream]}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="flex items-center gap-2 text-xs text-slate-400" role="status" aria-live="polite">
+          <span
+            aria-hidden="true"
+            className={`h-2 w-2 rounded-full ${stream === "open" ? "animate-pulse bg-emerald-500" : "bg-amber-500"}`}
+          />
+          {STREAM_LABEL[stream]}
+        </p>
+        <GateSelect gate={gate} onChange={setGate} />
+      </div>
       <StatsPanel stats={stats.data} stale={stats.isFetching} />
       <div aria-live="assertive">
         <CheckInFeedbackBanner feedback={feedback} onClose={clear} />
@@ -143,6 +149,11 @@ function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: 
           canWrite={canWrite}
           pending={pending}
           onCheckIn={(reservationId) => submit({ reservationId })}
+          failedTicketIds={queue.failed.flatMap((i) =>
+            i.eventId === eventId && "ticketId" in i.target ? [i.target.ticketId] : [],
+          )}
+          onCheckInTicket={(ticketId) => submit({ ticketId })}
+          onCheckInTickets={(ids) => submitMany(ids.map((ticketId) => ({ ticketId })))}
         />,
       )}
       {panel("history", <HistoryPanel eventId={eventId} />)}

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sendBatch } from "@/features/check-in/offline/transport";
-import { EVENT_ID, item, success, USER_ID, walkInItem } from "./helpers";
+import { EVENT_ID, item, success, ticketItem, USER_ID, walkInItem } from "./helpers";
 
 describe("sendBatch: walk-in öğesi", () => {
   it("walk-in hedefi kind=walk_in olarak, alanlarıyla ve aynı anahtar/zaman damgasıyla gönderilir", async () => {
@@ -89,5 +89,65 @@ describe("sendBatch", () => {
   it("yönlendirme (opaqueredirect) -> network benzeri yeniden deneme", async () => {
     const opaque = { type: "opaqueredirect", status: 0 } as unknown as Response;
     expect(await sendBatch([item()], fetchReturning(opaque))).toEqual({ kind: "network" });
+  });
+});
+
+describe("sendBatch: bilet ve kapı", () => {
+  const ticketData = {
+    outcome: "checked_in",
+    kind: "ticket",
+    reservationId: null,
+    ticketId: "t-1",
+    pnr: "ABCD2345",
+    gate: 2,
+    eventId: EVENT_ID,
+    guestName: "Bilet Sahibi",
+    guestCount: 1,
+    tableId: "tb1",
+    tableLabel: "B7",
+    checkedInAt: new Date(1_000).toISOString(),
+    checkedInBy: null,
+  };
+
+  it("bilet öğesi ticketId ve kapıyla gönderilir", async () => {
+    const t = ticketItem({ ticketId: "t-1", gate: 2, key: "k-1" });
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ results: [] }));
+    await sendBatch([t], fetchImpl);
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body.items).toEqual([
+      { eventId: EVENT_ID, idempotencyKey: "k-1", clientTimestamp: t.clientTimestamp, ticketId: "t-1", gate: 2 },
+    ]);
+  });
+
+  it("kapısız öğede gate alanı gönderilmez", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ results: [] }));
+    await sendBatch([ticketItem({ ticketId: "t-1" }), item()], fetchImpl);
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    for (const wire of body.items) expect(wire).not.toHaveProperty("gate");
+  });
+
+  it("bilet yanıtı (reservationId null, kind ticket) kuyrukta başarı olarak okunur", async () => {
+    const t = ticketItem({ ticketId: "t-1", gate: 2, key: "k-1" });
+    const fake: typeof fetch = async () =>
+      Response.json({ results: [{ idempotencyKey: "k-1", result: { ok: true, data: ticketData } }] });
+    const outcome = await sendBatch([t], fake);
+    expect(outcome.kind).toBe("results");
+    if (outcome.kind !== "results") return;
+    const result = outcome.results[0]!.result;
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toMatchObject({ kind: "ticket", ticketId: "t-1", reservationId: null, pnr: "ABCD2345", gate: 2 });
+  });
+
+  it("eski biçimli yanıt (kind yok) rezervasyon olarak okunur", async () => {
+    const legacy: Record<string, unknown> = { ...ticketData };
+    for (const field of ["kind", "ticketId", "pnr", "gate"]) delete legacy[field];
+    const fake: typeof fetch = async () =>
+      Response.json({ results: [{ idempotencyKey: "k-1", result: { ok: true, data: { ...legacy, reservationId: "r1" } } }] });
+    const outcome = await sendBatch([item({ key: "k-1" })], fake);
+    if (outcome.kind !== "results") throw new Error("results bekleniyordu");
+    const result = outcome.results[0]!.result;
+    if (!result.ok) throw new Error("başarı bekleniyordu");
+    expect(result.data).toMatchObject({ kind: "reservation", ticketId: null, pnr: null, gate: null });
   });
 });

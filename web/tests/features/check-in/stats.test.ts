@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eventStats } from "@/features/check-in/service";
+import { toEventStats } from "@/features/check-in/stats";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { createCustomer, createEvent, createReservation, createTable } from "../../helpers/factories";
 import { actorOf, expectDomain } from "./fixtures";
@@ -62,7 +63,15 @@ describe("eventStats", () => {
       checkInPercentage: 25,
       expectedGuests: 14,
       checkedInGuests: 5,
+      ticketsIssued: 0,
+      ticketsCheckedIn: 0,
     });
+  });
+
+  it("toEventStats bilet sayılarını taşır; verilmezse 0", () => {
+    const counts = { pending: 1, confirmed: 2, checkedIn: 1, cancelled: 0, noShow: 0, expectedGuests: 8, checkedInGuests: 2 };
+    expect(toEventStats(counts)).toMatchObject({ ticketsIssued: 0, ticketsCheckedIn: 0, totalExpected: 4, remaining: 3, checkInPercentage: 25 });
+    expect(toEventStats(counts, { issued: 5, checkedIn: 3 })).toMatchObject({ ticketsIssued: 5, ticketsCheckedIn: 3, totalExpected: 4, checkInPercentage: 25 });
   });
 
   it("boş etkinlik sıfır döner; olmayan etkinlik not_found", async () => {

@@ -9,6 +9,13 @@ const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === 
 
 const id = z.uuid("Geçersiz kimlik");
 
+const gate = z
+  .number("Kapı numarası 1 ile 9 arasında olmalıdır")
+  .int("Kapı numarası 1 ile 9 arasında olmalıdır")
+  .min(1, "Kapı numarası 1 ile 9 arasında olmalıdır")
+  .max(9, "Kapı numarası 1 ile 9 arasında olmalıdır")
+  .optional();
+
 const guestCount = z.coerce
   .number("Kişi sayısı giriniz")
   .int("Kişi sayısı tam sayı olmalıdır")
@@ -27,11 +34,13 @@ export const checkInInput = z
     token: z.string().trim().min(1, "QR kod boş").max(200, "QR kod çok uzun").optional(),
     legacyHash: z.string().trim().min(1, "QR kod boş").max(128, "QR kod çok uzun").optional(),
     reservationId: id.optional(),
+    ticketId: id.optional(),
+    gate,
     clientTimestamp: z.iso.datetime({ offset: true, message: "Geçersiz zaman damgası" }).optional(),
   })
-  .refine((v) => [v.token, v.legacyHash, v.reservationId].filter((x) => x !== undefined).length === 1, {
+  .refine((v) => [v.token, v.legacyHash, v.reservationId, v.ticketId].filter((x) => x !== undefined).length === 1, {
     path: ["token"],
-    message: "QR kod, eski QR hash'i ya da rezervasyon kimliğinden tam olarak biri verilmelidir",
+    message: "QR kod, eski QR hash'i, rezervasyon kimliği ya da bilet kimliğinden tam olarak biri verilmelidir",
   });
 export type CheckInInput = z.input<typeof checkInInput>;
 
@@ -44,6 +53,7 @@ export const walkInInput = z.object({
     .min(1, "Misafir adı zorunludur")
     .max(100, "Misafir adı en fazla 100 karakter olabilir"),
   guestCount,
+  gate,
   guestPhone: z.preprocess(
     blankToUndefined,
     z
@@ -80,3 +90,9 @@ export const searchGuestsInput = z.object({
   q: z.preprocess(blankToUndefined, z.string().trim().max(100, "Arama en fazla 100 karakter olabilir").optional()),
 });
 export type SearchGuestsInput = z.infer<typeof searchGuestsInput>;
+
+export const findOrderInput = z.object({
+  eventId: id,
+  pnr: z.string().trim().min(1, "PNR giriniz").max(32, "PNR çok uzun"),
+});
+export type FindOrderInput = z.infer<typeof findOrderInput>;

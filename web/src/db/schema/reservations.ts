@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   foreignKey,
@@ -8,6 +9,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  smallint,
   text,
   uniqueIndex,
   uuid,
@@ -19,6 +21,7 @@ import { users } from "./auth";
 import { createdOnly, currency, money, pk, timestamps, tstz } from "./columns";
 import { eventTables, events } from "./events";
 import { customers } from "./people";
+import { tickets } from "./ticketing";
 
 export const reservationStatus = pgEnum("reservation_status", RESERVATION_STATUSES);
 
@@ -63,6 +66,8 @@ export const reservations = pgTable(
     isPaid: boolean("is_paid").notNull().default(false),
     checkedInAt: tstz("checked_in_at"),
     checkedInBy: uuid("checked_in_by").references(() => users.id, { onDelete: "set null" }),
+    /** Girişin yapıldığı kapı (1–9); kapı seçilmemişse ya da eski kayıtta boş. */
+    checkInGate: smallint("check_in_gate"),
     ...timestamps(),
   },
   (t) => [
@@ -82,6 +87,7 @@ export const reservations = pgTable(
       .where(sql.raw(`status IN (${ACTIVE_STATUS_LIST})`)),
     check("reservations_guest_count_range", sql`${t.guestCount} BETWEEN 1 AND 50`),
     check("reservations_total_amount_non_negative", sql`${t.totalAmount} >= 0`),
+    check("reservations_gate_range", sql`${t.checkInGate} BETWEEN 1 AND 9`),
     index("reservations_event_table_idx").on(t.eventId, t.tableId),
     index("reservations_event_status_idx").on(t.eventId, t.status),
     index("reservations_customer_id_idx").on(t.customerId),
@@ -103,6 +109,11 @@ export const checkInEvents = pgTable(
     id: pk(),
     // QR çözülemediyse (not_found) rezervasyon yoktur.
     reservationId: uuid("reservation_id").references(() => reservations.id, { onDelete: "restrict" }),
+    // Bilet girişinde hedef bilettir; bir kayıt en çok bir hedefe bağlanır (aşağıdaki kısıt).
+    // Tembel başvuru: ticketing ↔ reservations döngüsel içe aktarmaya karşı.
+    ticketId: uuid("ticket_id").references((): AnyPgColumn => tickets.id, { onDelete: "restrict" }),
+    /** Denemenin yapıldığı kapı (1–9); kapısız cihazda ya da eski kayıtta boş. */
+    gate: smallint("gate"),
     idempotencyKey: text("idempotency_key").notNull().unique(),
     clientTimestamp: tstz("client_timestamp"),
     actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
@@ -116,5 +127,8 @@ export const checkInEvents = pgTable(
   (t) => [
     index("check_in_events_reservation_id_idx").on(t.reservationId),
     index("check_in_events_actor_id_idx").on(t.actorId),
+    index("check_in_events_ticket_id_idx").on(t.ticketId),
+    check("check_in_events_gate_range", sql`${t.gate} BETWEEN 1 AND 9`),
+    check("check_in_events_single_target", sql`${t.reservationId} IS NULL OR ${t.ticketId} IS NULL`),
   ],
 );

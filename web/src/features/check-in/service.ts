@@ -14,12 +14,14 @@ import {
   markCheckedIn,
   publishCheckIn,
   readCheckIn,
-  resolveReservation,
+  resolveTarget,
   walkInFingerprint,
   type CheckInSuccess,
   type ReservationRef,
 } from "./internal";
+import { checkInSuccessSchema } from "./result-schema";
 import { checkInInput, walkInOnceInput, type CheckInInput, type WalkInOnceInput } from "./schemas";
+import { checkInTicket } from "./ticket-check-in";
 import { registerWalkIn } from "./walk-in-service";
 
 export type { CheckInOutcome, CheckInSuccess } from "./internal";
@@ -30,17 +32,7 @@ export { eventStats, searchGuests, recentCheckIns, listCheckInEvents, type Event
 const storedResultSchema = z.union([
   z.object({
     ok: z.literal(true),
-    data: z.object({
-      outcome: z.enum(["checked_in", "already_checked_in"]),
-      reservationId: z.string(),
-      eventId: z.string(),
-      guestName: z.string().nullable(),
-      guestCount: z.number(),
-      tableId: z.string(),
-      tableLabel: z.string(),
-      checkedInAt: z.string(),
-      checkedInBy: z.object({ id: z.string(), username: z.string() }).nullable(),
-    }),
+    data: checkInSuccessSchema,
   }),
   z.object({
     ok: z.literal(false),
@@ -54,7 +46,8 @@ function refOf(input: z.infer<typeof checkInInput>): ReservationRef {
   if (input.token !== undefined) return { kind: "token", value: input.token };
   if (input.legacyHash !== undefined) return { kind: "legacyHash", value: input.legacyHash };
   if (input.reservationId !== undefined) return { kind: "reservationId", value: input.reservationId };
-  throw new DomainError("invalid", "QR kod veya rezervasyon belirtilmedi");
+  if (input.ticketId !== undefined) return { kind: "ticketId", value: input.ticketId };
+  throw new DomainError("invalid", "QR kod, rezervasyon ya da bilet belirtilmedi");
 }
 
 function asDomainError(error: unknown): DomainError | null {
@@ -125,18 +118,31 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
         clientTimestamp,
         outcome: "not_found",
         requestFingerprint: print,
+        gate: input.gate ?? null,
       })
       .onConflictDoNothing({ target: checkInEvents.idempotencyKey })
       .returning({ id: checkInEvents.id });
     if (!claimed) return replay(tx, actor, input, print);
 
-    const found: { reservationId: string | null } = { reservationId: null };
+    const found: { reservationId: string | null; ticketId: string | null } = { reservationId: null, ticketId: null };
     let stored: StoredResult;
     try {
       stored = await tx.transaction(async (sp): Promise<StoredResult> => {
         const event = await lockEvent(sp, actor, input.eventId);
         assertCheckInOpen(event);
-        const reservationId = await resolveReservation(sp, event.id, ref);
+        const target = await resolveTarget(sp, event.id, ref);
+        if (target.kind === "ticket") {
+          found.ticketId = target.id;
+          const data = await checkInTicket(sp, {
+            ticketId: target.id,
+            event,
+            actorId: actor.id,
+            clientTimestamp,
+            gate: input.gate ?? null,
+          });
+          return { ok: true, data };
+        }
+        const reservationId = target.id;
         found.reservationId = reservationId;
 
         const changed = await markCheckedIn(sp, {
@@ -144,6 +150,7 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
           event,
           actorId: actor.id,
           clientTimestamp,
+          gate: input.gate ?? null,
         });
         const { status, response } = await readCheckIn(
           sp,
@@ -168,6 +175,7 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
       .update(checkInEvents)
       .set({
         reservationId: found.reservationId,
+        ticketId: found.ticketId,
         outcome: logOutcome(stored),
         response: stored,
       })
@@ -200,6 +208,7 @@ export async function registerWalkInOnce(db: Executor, actor: Actor, raw: WalkIn
         clientTimestamp,
         outcome: "not_found",
         requestFingerprint: print,
+        gate: input.gate ?? null,
       })
       .onConflictDoNothing({ target: checkInEvents.idempotencyKey })
       .returning({ id: checkInEvents.id });

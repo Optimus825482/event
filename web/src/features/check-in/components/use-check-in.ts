@@ -8,6 +8,7 @@ import type { CheckInSuccess } from "../internal";
 import type { SettledEvent, WalkInTarget } from "../offline/queue-core";
 import type { OfflineQueue } from "../offline/use-offline-queue";
 import type { ScannedCode } from "../scan-code";
+import { tallyBatch, type BatchTally } from "./batch-feedback";
 
 export type QueuedReason = "network" | "server" | "auth";
 
@@ -15,9 +16,10 @@ export type QueuedReason = "network" | "server" | "auth";
 export type CheckInFeedback =
   | { kind: "success" | "already"; result: CheckInSuccess }
   | { kind: "queued"; reason: QueuedReason }
+  | { kind: "batch"; tally: BatchTally }
   | { kind: "error"; code: string; message: string };
 
-export type CheckInTarget = ScannedCode | { reservationId: string } | { walkIn: WalkInTarget };
+export type CheckInTarget = ScannedCode | { reservationId: string } | { ticketId: string } | { walkIn: WalkInTarget };
 
 /** Sorgu işlevleri için: başarısız action sonucunu TanStack Query hatasına çevirir. */
 export function unwrap<T>(result: ActionResult<T>): T {
@@ -47,10 +49,12 @@ export function useRefreshEvent(eventId: string) {
  * kuyruktan kaldırılır (hata listesinde ikinci kez görünmez). Kuyruğa alınan öğenin SONRAKİ sonucu
  * bandı ezmez; sayaç ve hata listesinde görünür.
  */
-export function useCheckIn(eventId: string, queue: OfflineQueue) {
+export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | null = null) {
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<CheckInFeedback | null>(null);
   const own = useRef(new Set<string>());
+  /** Toplu gönderimde beklenen anahtarlar ve onlara ait olaylar (tek tek bant gösterilmez). */
+  const batch = useRef<{ keys: Set<string>; events: SettledEvent[] } | null>(null);
   const refresh = useRefreshEvent(eventId);
 
   /** Kuyruk olaylarını işler; sonradan (bu ekranda gösterilmeden) eşitlenen giriş sayısını döndürür. */
@@ -59,8 +63,15 @@ export function useCheckIn(eventId: string, queue: OfflineQueue) {
       let changed = false;
       let syncedLater = 0;
       for (const event of events) {
-        const mine = own.current.delete(event.item.idempotencyKey);
+        const key = event.item.idempotencyKey;
         if (event.type === "done") changed = true;
+        if (batch.current) {
+          // Anahtarlar yazımdan sonra bilinir: aradaki olaylar da toplanır, sayım anahtara göre süzülür.
+          // Reddedilen toplu öğe kuyrukta kalır; "Gönderilemeyen girişler" listesinde nedeniyle görünür.
+          batch.current.events.push(event);
+          if (batch.current.keys.has(key)) continue;
+        }
+        const mine = own.current.delete(key);
         // Çevrimiçi reddedilen giriş yalnızca bantta gösterilir; "Gönderilemeyen girişler" listesi
         // çevrimdışı kuyruktan geçen öğeler içindir.
         if (mine && event.type === "failed") void queue.dismiss(event.item.idempotencyKey);
@@ -92,7 +103,7 @@ export function useCheckIn(eventId: string, queue: OfflineQueue) {
       setPending(true);
       void (async () => {
         try {
-          const item = await queue.enqueue(eventId, target);
+          const item = await queue.enqueue(eventId, target, { gate });
           if (!navigator.onLine) {
             setFeedback({ kind: "queued", reason: "network" });
             return;
@@ -114,8 +125,43 @@ export function useCheckIn(eventId: string, queue: OfflineQueue) {
         }
       })();
     },
-    [eventId, queue],
+    [eventId, queue, gate],
   );
 
-  return { submit, pending, feedback, setFeedback, clear: () => setFeedback(null), onEvents };
+  const submitMany = useCallback(
+    (targets: readonly { ticketId: string }[]) => {
+      if (targets.length === 0) return;
+      setPending(true);
+      void (async () => {
+        try {
+          const collected = { keys: new Set<string>(), events: [] as SettledEvent[] };
+          batch.current = collected;
+          try {
+            const items = await queue.enqueueMany(eventId, targets, { gate });
+            const keys = items.map((i) => i.idempotencyKey);
+            for (const k of keys) collected.keys.add(k);
+            if (!navigator.onLine) {
+              setFeedback({ kind: "batch", tally: tallyBatch(keys, []) });
+              return;
+            }
+            await queue.flushNow();
+            setFeedback({ kind: "batch", tally: tallyBatch(keys, collected.events) });
+          } finally {
+            batch.current = null;
+          }
+        } catch {
+          setFeedback({
+            kind: "error",
+            code: "error",
+            message: "Girişler kuyruğa yazılamadı; tarayıcı depolaması kullanılamıyor",
+          });
+        } finally {
+          setPending(false);
+        }
+      })();
+    },
+    [eventId, queue, gate],
+  );
+
+  return { submit, submitMany, pending, feedback, setFeedback, clear: () => setFeedback(null), onEvents };
 }

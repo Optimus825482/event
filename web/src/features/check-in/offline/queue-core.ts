@@ -18,7 +18,7 @@ import type { CheckInSuccess } from "../internal";
 export type WalkInTarget = { tableId: string; guestName: string; guestCount: number; guestPhone?: string };
 
 /** `walkIn`: kapıda kayıt + giriş (ayrı öğe türü, aynı kuyruk, aynı anahtar/sahip kuralları). */
-export type QueueTarget = { token: string } | { legacyHash: string } | { reservationId: string } | { walkIn: WalkInTarget };
+export type QueueTarget = { token: string } | { legacyHash: string } | { reservationId: string } | { ticketId: string } | { walkIn: WalkInTarget };
 
 export type ItemKind = "check_in" | "walk_in";
 
@@ -40,6 +40,8 @@ export type QueueItem = {
   ownerId: string | null;
   eventId: string;
   target: QueueTarget;
+  /** Kapı numarası; öğe oluşturulurken sabitlenir. Eski kayıtlarda alan yoktur (kapısız). */
+  gate?: number | null;
   /** Tarama anı (ISO); tekrar gönderimlerde değişmez. */
   clientTimestamp: string;
   /** Ekleme sırası: (enqueuedAt, seq, anahtar). */
@@ -88,6 +90,7 @@ export function createItem(input: {
   target: QueueTarget;
   clientTimestamp: string;
   now: number;
+  gate?: number | null;
 }): QueueItem {
   sequence += 1;
   return {
@@ -95,6 +98,7 @@ export function createItem(input: {
     ownerId: input.ownerId,
     eventId: input.eventId,
     target: input.target,
+    gate: input.gate ?? null,
     clientTimestamp: input.clientTimestamp,
     enqueuedAt: input.now,
     seq: sequence,

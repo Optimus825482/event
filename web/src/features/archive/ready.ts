@@ -1,1 +1,1 @@
-export const ARCHIVE_READY = false;
+export const ARCHIVE_READY = true;
