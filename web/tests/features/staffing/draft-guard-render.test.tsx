@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaStep } from "@/features/staffing/components/loca-step";
 import { SectionHeadsCard } from "@/features/staffing/components/section-heads-card";
@@ -65,9 +65,11 @@ describe("taslak kirliyken doğrudan sunucuya yazan düğmeler", () => {
 
   const candidates = [{ staffId: "s1", fullName: "Ali" }];
 
-  it("SectionHeadsCard: kirli taslakta düğme kapalı (seçim değişse bile), not bağlı", () => {
+  it("SectionHeadsCard: kirli taslakta düğme kapalı (seçim değişse bile), not bağlı", async () => {
     renderIn(<SectionHeadsCard eventId={EVENT} heads={[]} candidates={candidates} canEdit />, true);
     screen.getByLabelText("Ali").click();
+    // Seçim gerçekten değişti: düğmeyi kapalı tutan yalnızca taslak koruması olmalı.
+    await waitFor(() => expect(screen.getByLabelText("Ali")).toBeChecked());
     const button = screen.getByRole("button", { name: "Kaydet" });
     expect(button).toBeDisabled();
     expect(button.getAttribute("aria-describedby")).toBe(screen.getByText(DRAFT_DIRTY_NOTE).id);

@@ -8,7 +8,7 @@ import { adminActor, memberActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { createShortReview } from "../../helpers/fnb";
-import { setupEvent } from "./helpers";
+import { makeActor, setupEvent } from "./helpers";
 
 const PRIVATE = "GİZLİ-ÖZEL-NOT-XYZ";
 
@@ -108,5 +108,18 @@ describe("personel seçici geçmiş değerlendirme ipucu", () => {
     await db.update(events).set({ reviewHistoryVisible: true }).where(eq(events.id, event.id));
     const org = await getOrganization(db, actor, event.id);
     expect(org.reviewHints[staffId]).toMatchObject({ reviewCount: 1, averageScore: 80, lastEventName: "E1" });
+  });
+
+  it("getOrganization: staff:view var staff:edit yok → reviewHints boş (anahtar açık, geçmiş değerlendirme var)", async () => {
+    const { actor, event, staffId, reviewer } = await setup();
+    const e1 = await pastEvent(actor.id, "E1", "2026-01-10T18:00:00Z");
+    await createShortReview(db, { eventId: e1.id, staffId, reviewerId: reviewer.id, overallRating: 4 });
+    await db.update(events).set({ reviewHistoryVisible: true }).where(eq(events.id, event.id));
+    // Kontrol: düzenleme izinli yönetici ipucunu görür.
+    expect((await getOrganization(db, actor, event.id)).reviewHints[staffId]).toBeDefined();
+    const viewer = await makeActor(memberActor("fnb", { staff: "v---" }));
+    const org = await getOrganization(db, viewer, event.id);
+    expect(org.staff.map((s) => s.id)).toContain(staffId);
+    expect(org.reviewHints).toEqual({});
   });
 });

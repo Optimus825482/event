@@ -147,6 +147,27 @@ describe("hiyerarşik değerlendirme akışları", () => {
     expect(await listReviewableEvents(db, w.actors.H)).toEqual([]);
   });
 
+  it("süpervizör değişince eski süpervizörün erişimi biter; yenisi eskisinin taslağına dokunmaz", async () => {
+    const input = { ...lists, eventId: w.event.id, staffId: w.W3.id, ratings: FULL_RATINGS };
+    await saveReviewDraft(db, w.actors.S, input);
+    const S2 = await f.createStaff(db, { fullName: "Yeni Süpervizör" });
+    const s2 = await makeLeader(S2.id);
+    await db.update(tableGroups).set({ supervisorStaffId: S2.id }).where(eq(tableGroups.id, w.G.id));
+
+    await expectForbidden(saveReviewDraft(db, w.actors.S, input));
+    await expectForbidden(completeReview(db, w.actors.S, { eventId: w.event.id, staffId: w.W3.id }));
+    await expectForbidden(getReviewBoard(db, w.actors.S, w.event.id));
+    expect(await listReviewableEvents(db, w.actors.S)).toEqual([]);
+
+    const res = await completeAllReviews(db, s2, { eventId: w.event.id });
+    expect(res).toMatchObject({ completed: 0, incomplete: 0, skipped: 0, notification: null });
+    expect((await rowOf(w, w.W3.id, w.actors.S.id))?.isCompleted).toBe(false);
+    expect(await rowOf(w, w.W3.id, s2.id)).toBeUndefined();
+    // Yeni süpervizör kendi taslağını yazabilir.
+    await saveReviewDraft(db, s2, input);
+    expect(await rowOf(w, w.W3.id, s2.id)).toBeDefined();
+  });
+
   it("tümünü tamamla yetkisi kalkan taslağı atlar", async () => {
     await saveReviewDraft(db, w.actors.S, { ...lists, eventId: w.event.id, staffId: w.W3.id, ratings: FULL_RATINGS });
     await saveReviewDraft(db, w.actors.S, { ...lists, eventId: w.event.id, staffId: w.W1.id, ratings: FULL_RATINGS });
