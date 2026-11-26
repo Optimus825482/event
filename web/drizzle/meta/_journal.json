@@ -134,6 +134,13 @@
       "when": 1795681540231,
       "tag": "0018_faz4_masa_satis_tahsis",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795692795839,
+      "tag": "0019_faz5_finans",
+      "breakpoints": true
     }
   ]
 }
