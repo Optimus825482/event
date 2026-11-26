@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { GroupSupervisorField, useSupervisorName } from "./group-supervisor-field";
+import { GroupSupervisorField, SupervisorLabel, useSupervisorInfo } from "./group-supervisor-field";
 import { useOrganization } from "./store";
 
 /**
@@ -21,11 +21,11 @@ export function LocaSupervisorCell({
   canEdit: boolean;
 }) {
   const group = useOrganization((s) => (groupId ? s.groups.find((g) => g.id === groupId) : undefined));
-  const name = useSupervisorName(group?.supervisorStaffId ?? null, savedName);
+  const info = useSupervisorInfo(group?.supervisorStaffId ?? null, savedName);
   if (!groupId) return <>—</>;
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <span className="min-w-0 break-words">{group ? (name ?? "—") : (savedName ?? "—")}</span>
+      {group ? info ? <SupervisorLabel info={info} /> : <span>—</span> : <span className="min-w-0 break-words">{savedName ?? "—"}</span>}
       {canEdit && group ? (
         <Dialog>
           <DialogTrigger asChild>

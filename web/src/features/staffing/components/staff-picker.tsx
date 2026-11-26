@@ -28,6 +28,7 @@ export function StaffPicker({
   roles = NO_ROLES,
   hints,
   compact = false,
+  selectedId = null,
   pickLabel = "Ekle",
 }: {
   availability: (pick: Pick<StaffPick, "staffId" | "shiftId">) => Availability;
@@ -38,6 +39,8 @@ export function StaffPicker({
   hints?: Record<string, ReviewHint>;
   /** Tek kişi seçimi (ör. süpervizör): vardiya ve görev alanları gizlenir, vardiyasız/görevsiz seçilir. */
   compact?: boolean;
+  /** Seçili kişi (tek kişi seçimi): satırda "Seçili" ile işaretlenir. */
+  selectedId?: string | null;
   /** Satır düğmesinin metni; erişilebilir adı `${ad} ${pickLabel}` (küçük harfle) olur. */
   pickLabel?: string;
 }) {
@@ -88,10 +91,13 @@ export function StaffPicker({
             const a = availability({ staffId: p.id, shiftId: shiftId || null });
             const hint = hints?.[p.id];
             return (
-              <li key={p.id} className="flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-700/50">
+              <li key={p.id} aria-current={p.id === selectedId ? "true" : undefined} className="flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-700/50">
                 <span className="min-w-0 flex-1 break-words text-slate-200">
                   {p.fullName} <span className="text-xs text-slate-500">({p.sicilNo})</span>
                 </span>
+                {p.id === selectedId ? (
+                  <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs text-blue-300">Seçili</span>
+                ) : null}
                 {hint ? (
                   <span
                     className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300"

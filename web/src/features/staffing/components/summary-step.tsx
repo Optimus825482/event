@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { saveOrganizationAction } from "../actions";
 import type { SectionHead } from "../section-heads-service";
 import { Section } from "./bits";
-import { useSupervisorName } from "./group-supervisor-field";
+import { SupervisorLabel, useSupervisorInfo } from "./group-supervisor-field";
 import { SectionHeadsCard } from "./section-heads-card";
 import { toSavePayload, useOrganization, useOrganizationStoreApi } from "./store";
 
@@ -20,13 +20,19 @@ function detailsOf(fieldErrors: Record<string, string[]> | undefined): string[] 
 }
 
 function SupervisorName({ staffId }: { staffId: string | null }) {
-  const name = useSupervisorName(staffId);
-  return <span className="text-muted-foreground">{name ? `Süpervizör: ${name}` : "Süpervizör yok"}</span>;
+  const info = useSupervisorInfo(staffId);
+  if (!info) return <span className="text-muted-foreground">Süpervizör yok</span>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-muted-foreground">
+      Süpervizör: <SupervisorLabel info={info} />
+    </span>
+  );
 }
 
 /** Adım 5: kontrol listesi ve tek transaction'lık kayıt. */
 export function SummaryStep({ eventId, readOnly, sectionHeads }: { eventId: string; readOnly: boolean; sectionHeads: SectionHead[] }) {
   const staff = useOrganization((s) => s.reference.staff);
+  const supervisorNames = useOrganization((s) => s.reference.supervisorNames);
   const router = useRouter();
   const store = useOrganizationStoreApi();
   const teams = useOrganization((s) => s.teams);
@@ -49,6 +55,9 @@ export function SummaryStep({ eventId, readOnly, sectionHeads }: { eventId: stri
     ...(tables.filter((t) => !t.isLoca && !served.has(t.id)).length > 0
       ? [`${tables.filter((t) => !t.isLoca && !served.has(t.id)).length} masaya personel atanmadı (localar hariç)`]
       : []),
+    ...groups
+      .filter((g) => g.supervisorStaffId && !staff.some((p) => p.id === g.supervisorStaffId))
+      .map((g) => `"${g.name}" grubunun süpervizörü pasif: ${supervisorNames[g.supervisorStaffId ?? ""] ?? "bilinmeyen personel"}`),
     ...extras.filter((e) => e.fullName.trim() === "").map(() => "Adı boş ekstra personel var"),
   ];
 

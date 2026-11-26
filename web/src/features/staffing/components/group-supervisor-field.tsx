@@ -1,15 +1,34 @@
 "use client";
 
 import { UserX } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StaffPicker } from "./staff-picker";
 import { useOrganization } from "./store";
 
-/** Süpervizörün adı: etkin personel listesinde yoksa (pasifleşmiş) `fallback`, o da yoksa genel metin; seçilmemişse null. */
-export function useSupervisorName(supervisorStaffId: string | null, fallback?: string | null): string | null {
+export type SupervisorInfo = { name: string; inactive: boolean };
+
+/**
+ * Süpervizörün adı ve durumu. Etkin personel listesinde yoksa (pasifleşmiş) kayıtlı gerçek adı `Pasif` işaretiyle
+ * döner; kayıtlı ad da yoksa `fallback`, o da yoksa genel metin. Seçilmemişse null.
+ */
+export function useSupervisorInfo(supervisorStaffId: string | null, fallback?: string | null): SupervisorInfo | null {
   const staff = useOrganization((s) => s.reference.staff);
+  const names = useOrganization((s) => s.reference.supervisorNames);
   if (!supervisorStaffId) return null;
-  return staff.find((p) => p.id === supervisorStaffId)?.fullName ?? fallback ?? "Aktif olmayan personel";
+  const active = staff.find((p) => p.id === supervisorStaffId);
+  if (active) return { name: active.fullName, inactive: false };
+  return { name: names?.[supervisorStaffId] ?? fallback ?? "Bilinmeyen personel", inactive: true };
+}
+
+/** Ad ve (pasifse) "Pasif" rozeti. */
+export function SupervisorLabel({ info }: { info: SupervisorInfo }) {
+  return (
+    <>
+      <span className="min-w-0 break-words">{info.name}</span>
+      {info.inactive ? <Badge variant="secondary">Pasif</Badge> : null}
+    </>
+  );
 }
 
 /**
@@ -20,15 +39,15 @@ export function GroupSupervisorField({ groupId, readOnly }: { groupId: string; r
   const group = useOrganization((s) => s.groups.find((g) => g.id === groupId));
   const hints = useOrganization((s) => s.reference.reviewHints);
   const setSupervisor = useOrganization((s) => s.setGroupSupervisor);
-  const name = useSupervisorName(group?.supervisorStaffId ?? null);
+  const info = useSupervisorInfo(group?.supervisorStaffId ?? null);
   if (!group) return null;
 
   return (
     <section className="space-y-2" aria-label="Süpervizör">
       <h3 className="text-sm font-medium text-white">Süpervizör</h3>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="min-w-0 break-words text-slate-200">{name ?? "Süpervizör yok"}</span>
-        {name && !readOnly ? (
+      <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
+        {info ? <SupervisorLabel info={info} /> : <span>Süpervizör yok</span>}
+        {info && !readOnly ? (
           <Button size="sm" variant="ghost" onClick={() => setSupervisor(group.id, null)}>
             <UserX aria-hidden className="size-4" />
             Süpervizörü kaldır
@@ -38,6 +57,7 @@ export function GroupSupervisorField({ groupId, readOnly }: { groupId: string; r
       {readOnly ? null : (
         <StaffPicker
           compact
+          selectedId={group.supervisorStaffId}
           pickLabel="Süpervizör seç"
           hints={hints}
           availability={() => ({ ok: true, existingId: null })}

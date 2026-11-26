@@ -155,6 +155,13 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
 
   const [locaRows, sectionHeads] = await Promise.all([listLocaStaffing(db, actor, eventId), listSectionHeads(db, actor, eventId)]);
   const locaStaffing = await withSupervisorNames(db, locaRows);
+  // Grup süpervizörlerinin gerçek adları (pasifleşmiş olanlar etkin personel listesinde yoktur ama adıyla gösterilir).
+  const supervisorIds = [...new Set(groupRows.flatMap((g) => (g.supervisorStaffId ? [g.supervisorStaffId] : [])))];
+  const supervisorNames: Record<string, string> = {};
+  if (supervisorIds.length > 0) {
+    const found = await db.select({ id: staffTable.id, fullName: staffTable.fullName }).from(staffTable).where(inArray(staffTable.id, supervisorIds));
+    for (const r of found) supervisorNames[r.id] = r.fullName;
+  }
 
   return {
     event: { id: event.id, name: event.name, status: event.status, startsAt: event.startsAt },
@@ -223,6 +230,8 @@ export async function getOrganization(db: Db | Tx, actor: Actor, eventId: string
     servicePointRoles: points.map((p) => ({ servicePointId: p.id, roles: pointRoles.get(p.id)?.roles ?? [] })),
     shifts,
     staff: activeStaff.map((s) => ({ id: s.id, fullName: s.fullName, sicilNo: s.sicilNo, color: s.color })),
+    /** Süpervizör kimliği → kayıtlı ad (pasif süpervizör dahil). */
+    supervisorNames,
     /** Personel kimliği → geçmiş değerlendirme ipucu (anahtar kapalı ya da izin yoksa boş). */
     reviewHints,
     /** "Localar" adımı: loca masaları, grupları, süpervizörleri ve personeli. */

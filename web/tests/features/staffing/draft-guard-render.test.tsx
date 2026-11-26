@@ -28,6 +28,7 @@ function org(): Organization {
     shifts: [],
     staff: [],
     reviewHints: {},
+    supervisorNames: {},
     locaStaffing: [],
     sectionHeads: [],
   };

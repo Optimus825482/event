@@ -38,7 +38,7 @@ export type Draft = {
 };
 
 export type OrganizationState = Draft & {
-  reference: Pick<Organization, "tables" | "staff" | "shifts" | "servicePoints" | "reviewHints">;
+  reference: Pick<Organization, "tables" | "staff" | "shifts" | "servicePoints" | "reviewHints" | "supervisorNames">;
   step: WizardStepId;
   dirty: boolean;
   /** Taslak değişikliklerinin geri al / yinele geçmişi (adım ve referans veri dahil değil). */
@@ -143,7 +143,7 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
       });
     return {
       ...draftOf(org),
-      reference: { tables: org.tables, staff: org.staff, shifts: org.shifts, servicePoints: org.servicePoints, reviewHints: org.reviewHints },
+      reference: { tables: org.tables, staff: org.staff, shifts: org.shifts, servicePoints: org.servicePoints, reviewHints: org.reviewHints, supervisorNames: org.supervisorNames },
       step: "groups",
       dirty: false,
       history: emptyHistory<Draft>(),
@@ -161,7 +161,7 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
       reset: (next) =>
         set({
           ...draftOf(next),
-          reference: { tables: next.tables, staff: next.staff, shifts: next.shifts, servicePoints: next.servicePoints, reviewHints: next.reviewHints },
+          reference: { tables: next.tables, staff: next.staff, shifts: next.shifts, servicePoints: next.servicePoints, reviewHints: next.reviewHints, supervisorNames: next.supervisorNames },
           dirty: false,
           history: emptyHistory<Draft>(),
         }),

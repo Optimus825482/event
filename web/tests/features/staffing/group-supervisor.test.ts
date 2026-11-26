@@ -91,3 +91,26 @@ describe("grup süpervizörü (sunucu)", () => {
     expect(await supervisorOf(event.id)).toEqual([people[0]!.id]);
   });
 });
+
+describe("grup süpervizörü: güncelleme yolu", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("var olan grubun süpervizörü etkin olmayan birine değiştirilemez (A etkinken de, A pasifken de)", async () => {
+    const { actor, event, people } = await setupEvent();
+    const saved = await saveTableGroups(db, actor, {
+      eventId: event.id,
+      groups: [{ name: "G1", supervisorStaffId: people[0]!.id, tableIds: [] }],
+    });
+    const groupId = saved.groups[0]!.id;
+    const gone = await f.createStaff(db, { status: "inactive" });
+    const change = (id: string) =>
+      saveTableGroups(db, actor, { eventId: event.id, groups: [{ id: groupId, name: "G1", supervisorStaffId: id, tableIds: [] }] });
+    await expectDomain(change(gone.id), "conflict");
+    // A pasifleşse bile B (pasif) seçimi reddedilir; yalnızca değişmeyen değer hoş görülür.
+    await db.update(staff).set({ status: "inactive" }).where(eq(staff.id, people[0]!.id));
+    await expectDomain(change(gone.id), "conflict");
+    expect(await supervisorOf(event.id)).toEqual([people[0]!.id]);
+  });
+});
