@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { asc, eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/check-in/route";
+import { db } from "@/db/client";
+import { tickets } from "@/db/schema";
 import { memberActor } from "../../helpers/actors";
 import { setupTestDb, truncateAll } from "../../helpers/db";
+import { addPaidOrder, ticketedEvent, ticketLog, ticketRow } from "../../helpers/door";
 import { loginAs } from "../realtime/helpers";
 import { bookedGuest, customerRow, key, reservationRow, setReservationStatus } from "./fixtures";
 
@@ -220,4 +224,69 @@ describe("POST /api/check-in", () => {
     });
     expect((await reservationRow(b.reservation.id)).status).toBe("confirmed");
   });
+
+  type BatchJson = { results: Array<{ idempotencyKey: string | null; result: { ok: boolean; data?: Record<string, unknown> } }> };
+
+  it("toplu istek: siparişin üç bileti tek istekte, bilet başına ayrı anahtarla girer", async () => {
+    const te = await ticketedEvent();
+    const door = await loginAs(memberActor("casino", { check_in: "vc--" }));
+    const items = te.tickets.map((t) => ({ eventId: te.event.id, idempotencyKey: key(), ticketId: t.ticketId, gate: 1 }));
+    const res = await post({ items }, { cookie: door.cookie });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as BatchJson;
+    expect(json.results).toHaveLength(3);
+    for (const r of json.results) {
+      expect(r.result.ok).toBe(true);
+      expect(r.result.data).toMatchObject({ kind: "ticket", outcome: "checked_in" });
+    }
+    for (const t of te.tickets) {
+      const row = await ticketRow(t.ticketId);
+      expect(row.checkedInAt).not.toBeNull();
+      expect(row.checkInGate).toBe(1);
+    }
+  });
+
+  it("toplu isteğin aynen tekrarı (kaybolan yanıt): aynı sonuçlar, bilet başına tek kayıt", async () => {
+    const te = await ticketedEvent();
+    const door = await loginAs(memberActor("casino", { check_in: "vc--" }));
+    const items = te.tickets.map((t) => ({ eventId: te.event.id, idempotencyKey: key(), ticketId: t.ticketId }));
+    const first = (await (await post({ items }, { cookie: door.cookie })).json()) as BatchJson;
+    const second = (await (await post({ items }, { cookie: door.cookie })).json()) as BatchJson;
+    expect(second.results).toEqual(first.results);
+    for (const t of te.tickets) expect(await ticketLog(t.ticketId)).toHaveLength(1);
+  });
+
+  it("kapı gecesi yükü: üç kapıdan 50'şer öğelik eşzamanlı toplu istek", async () => {
+    const te = await ticketedEvent({ seats: [1] });
+    for (let i = 0; i < 10; i++) await addPaidOrder(te.event.id, [{ label: `Y${i}`, quantity: 10 }]);
+    const all = await db
+      .select({ id: tickets.id })
+      .from(tickets)
+      .where(eq(tickets.eventId, te.event.id))
+      .orderBy(asc(tickets.createdAt), asc(tickets.id));
+    // İlk bilet ticketedEvent'ten; yük için 100 bilet kullanılır.
+    const ids = all.slice(0, 100).map((t) => t.id);
+    expect(ids).toHaveLength(100);
+    const sessions = await Promise.all([1, 2, 3].map(() => loginAs(memberActor("casino", { check_in: "vc--" }))));
+    const batch = (list: string[], gate: number) => list.map((id) => ({ eventId: te.event.id, idempotencyKey: key(), ticketId: id, gate }));
+    const first50 = ids.slice(0, 50);
+    const rest = ids.slice(50);
+    const responses = await Promise.all([
+      post({ items: batch(first50, 1) }, { cookie: sessions[0]!.cookie }),
+      post({ items: batch(first50, 2) }, { cookie: sessions[1]!.cookie }),
+      post({ items: batch(rest, 3) }, { cookie: sessions[2]!.cookie }),
+    ]);
+    expect(responses.map((r) => r.status)).toEqual([200, 200, 200]);
+    const results = (await Promise.all(responses.map((r) => r.json() as Promise<BatchJson>))).flatMap((j) => j.results);
+    expect(results).toHaveLength(150);
+    expect(results.every((r) => r.result.ok)).toBe(true);
+    const counts: Record<string, number> = {};
+    for (const r of results) {
+      const o = String(r.result.data?.outcome);
+      counts[o] = (counts[o] ?? 0) + 1;
+    }
+    expect(counts).toEqual({ checked_in: 100, already_checked_in: 50 });
+    const rows = await db.select({ at: tickets.checkedInAt }).from(tickets).where(eq(tickets.eventId, te.event.id));
+    expect(rows.filter((r) => r.at !== null)).toHaveLength(100);
+  }, 60_000);
 });
