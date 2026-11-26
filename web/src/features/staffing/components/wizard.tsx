@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, ClipboardList, FolderOpen, Layers, UserCog, UserPlus, Users } from "lucide-react";
-import { useEffect, useState, type ComponentType } from "react";
+import { Check, ChevronLeft, ChevronRight, ClipboardList, FolderOpen, Layers, Sofa, UserCog, UserPlus, Users } from "lucide-react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { AssignmentsStep } from "./assignments-step";
 import { ExtraStaffStep } from "./extra-staff-step";
 import { GroupsStep } from "./groups-step";
 import { HistoryControls } from "./history-controls";
+import { LocaStep } from "./loca-step";
 import { createOrganizationStore, OrganizationStoreContext, useOrganization, WIZARD_STEPS, type WizardStepId } from "./store";
 import { SummaryStep } from "./summary-step";
 import { TeamsStep } from "./teams-step";
@@ -18,6 +19,7 @@ import { TutorialDialog } from "./tutorial-dialog";
 
 const STEP_ICONS: Record<WizardStepId, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
   groups: Layers,
+  loca: Sofa,
   teams: Users,
   assignments: UserCog,
   extra: UserPlus,
@@ -42,9 +44,18 @@ export function TeamOrganizationWizard({ data }: { data: TeamOrganizationData })
 
 function Stepper({ current, onSelect }: { current: WizardStepId; onSelect: (id: WizardStepId) => void }) {
   const index = WIZARD_STEPS.findIndex((s) => s.id === current);
+  const nav = useRef<HTMLElement>(null);
+  // Dar ekranda adımlar yatay kaydırılır (sayfa değil); etkin adım görünür tutulur.
+  useEffect(() => {
+    const box = nav.current;
+    const el = box?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (!box || !el) return;
+    const offset = el.getBoundingClientRect().left - box.getBoundingClientRect().left;
+    box.scrollLeft += offset - (box.clientWidth - el.offsetWidth) / 2;
+  }, [current]);
   return (
-    <nav aria-label="Sihirbaz adımları">
-      <ol className="flex items-start justify-center">
+    <nav ref={nav} aria-label="Sihirbaz adımları" className="overflow-x-auto">
+      <ol className="mx-auto flex w-max items-start">
         {WIZARD_STEPS.map((s, i) => {
           const active = i === index;
           const done = i < index;
@@ -127,10 +138,11 @@ function WizardBody({ data }: { data: TeamOrganizationData }) {
       </div>
 
       {step === "groups" ? <GroupsStep readOnly={readOnly} plan={data.plan} /> : null}
+      {step === "loca" ? <LocaStep rows={data.organization.locaStaffing} eventId={eventId} canEdit={!readOnly} /> : null}
       {step === "teams" ? <TeamsStep readOnly={readOnly} /> : null}
       {step === "assignments" ? <AssignmentsStep readOnly={readOnly} /> : null}
       {step === "extra" ? <ExtraStaffStep readOnly={readOnly} /> : null}
-      {step === "summary" ? <SummaryStep eventId={eventId} readOnly={readOnly} /> : null}
+      {step === "summary" ? <SummaryStep eventId={eventId} readOnly={readOnly} sectionHeads={data.organization.sectionHeads} /> : null}
 
       <div className="flex justify-between">
         <Button

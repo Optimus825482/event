@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Availability, StaffPick } from "../group-staff";
+import type { ReviewHint } from "../review-hints";
 import type { RoleRequirement } from "../service-point-roles";
 import { NativeSelect, hhmm, orNull } from "./bits";
 import { CustomTimeField } from "./custom-time-field";
@@ -25,11 +26,23 @@ export function StaffPicker({
   onPick,
   defaultRole = "",
   roles = NO_ROLES,
+  hints,
+  compact = false,
+  selectedId = null,
+  pickLabel = "Ekle",
 }: {
   availability: (pick: Pick<StaffPick, "staffId" | "shiftId">) => Availability;
   onPick: (pick: StaffPick) => void;
   defaultRole?: string;
   roles?: readonly RoleRequirement[];
+  /** Geçmiş değerlendirme ipuçları (yalnızca yetkili aktör ve açık anahtar için dolu gelir). */
+  hints?: Record<string, ReviewHint>;
+  /** Tek kişi seçimi (ör. süpervizör): vardiya ve görev alanları gizlenir, vardiyasız/görevsiz seçilir. */
+  compact?: boolean;
+  /** Seçili kişi (tek kişi seçimi): satırda "Seçili" ile işaretlenir. */
+  selectedId?: string | null;
+  /** Satır düğmesinin metni; erişilebilir adı `${ad} ${pickLabel}` (küçük harfle) olur. */
+  pickLabel?: string;
 }) {
   const { staff, shifts } = useOrganization((s) => s.reference);
   const [query, setQuery] = useState("");
@@ -44,7 +57,7 @@ export function StaffPicker({
 
   return (
     <div className="space-y-2 rounded-lg border border-slate-700 p-3">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className={compact ? "grid gap-2" : "grid gap-2 sm:grid-cols-3"}>
         <div className="relative">
           <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <Input
@@ -56,15 +69,19 @@ export function StaffPicker({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <NativeSelect aria-label="Eklenecek vardiya" value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
-          <option value="">Vardiyasız</option>
-          {shifts.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} ({hhmm(s.startTime)}–{hhmm(s.endTime)})
-            </option>
-          ))}
-        </NativeSelect>
-        <RoleField label="Eklenecek görev" value={role} roles={roles} onChange={setRole} />
+        {compact ? null : (
+          <>
+            <NativeSelect aria-label="Eklenecek vardiya" value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+              <option value="">Vardiyasız</option>
+              {shifts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({hhmm(s.startTime)}–{hhmm(s.endTime)})
+                </option>
+              ))}
+            </NativeSelect>
+            <RoleField label="Eklenecek görev" value={role} roles={roles} onChange={setRole} />
+          </>
+        )}
       </div>
       {staff.length === 0 ? (
         <p className="text-xs text-slate-400">Aktif personel yok.</p>
@@ -72,17 +89,29 @@ export function StaffPicker({
         <ul className="max-h-64 space-y-1 overflow-y-auto" aria-label="Eklenebilecek personel">
           {matches.slice(0, MAX_LISTED).map((p) => {
             const a = availability({ staffId: p.id, shiftId: shiftId || null });
+            const hint = hints?.[p.id];
             return (
-              <li key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-700/50">
-                <span className="flex-1 text-slate-200">
+              <li key={p.id} aria-current={p.id === selectedId ? "true" : undefined} className="flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-700/50">
+                <span className="min-w-0 flex-1 break-words text-slate-200">
                   {p.fullName} <span className="text-xs text-slate-500">({p.sicilNo})</span>
                 </span>
+                {p.id === selectedId ? (
+                  <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs text-blue-300">Seçili</span>
+                ) : null}
+                {hint ? (
+                  <span
+                    className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300"
+                    title={hintTitle(hint)}
+                  >
+                    {`Ort. ${hint.averageScore} · ${hint.reviewCount} değ.`}
+                  </span>
+                ) : null}
                 {a.ok ? null : <span className="text-xs text-slate-400">{a.reason}</span>}
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={!a.ok}
-                  aria-label={`${p.fullName} ekle`}
+                  aria-label={`${p.fullName} ${pickLabel.toLocaleLowerCase("tr")}`}
                   onClick={() =>
                     onPick({
                       staffId: p.id,
@@ -94,7 +123,7 @@ export function StaffPicker({
                   }
                 >
                   <UserPlus aria-hidden className="size-4" />
-                  Ekle
+                  {pickLabel}
                 </Button>
               </li>
             );
@@ -107,6 +136,13 @@ export function StaffPicker({
       )}
     </div>
   );
+}
+
+/** Rozetin açıklaması: son etkinlik adı ve doluysa sonraki etkinlik notu. */
+function hintTitle(hint: ReviewHint): string {
+  const last = `Son etkinlik: ${hint.lastEventName}`;
+  return hint.lastNextEventNotes ? `${last}
+Sonraki etkinlik notu: ${hint.lastNextEventNotes}` : last;
 }
 
 /** Atanmış personel satırı: ad, vardiya, düzenlenebilir görev, özel saat ve çıkarma düğmesi. */

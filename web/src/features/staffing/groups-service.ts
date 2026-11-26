@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { assignmentTables, eventStaffAssignments, tableGroupTables, tableGroups, teams } from "@/db/schema";
+import { assignmentTables, eventStaffAssignments, eventTables, staff, tableGroupTables, tableGroups, teams } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
@@ -23,6 +23,24 @@ export async function assertTeamsInEvent(tx: Tx, eventId: string, teamIds: Array
   if (rows.length !== ids.length) throw new DomainError("conflict", STAFFING_MESSAGES.teamNotInEvent);
 }
 
+/**
+ * Süpervizör etkin bir personel olmalıdır. Karar: etkinliğe atanmış olması gerekmez (yetki
+ * çekirdeği süpervizörü yalnızca grup kaydından okur) ve bir kişi birden çok grubu denetleyebilir.
+ * Grubun zaten kayıtlı süpervizörü sonradan pasifleşmişse değişmediği sürece reddedilmez; böylece
+ * diğer değişiklikler kaydedilebilir. Yeni ya da değişen seçim etkin olmak zorundadır.
+ */
+async function assertSupervisorsActive(tx: Tx, input: GroupInput[], current: Map<string, string | null>) {
+  const wanted = unique(
+    input.flatMap((g) => (g.supervisorStaffId && g.supervisorStaffId !== (g.id ? current.get(g.id) : null) ? [g.supervisorStaffId] : [])),
+  );
+  if (wanted.length === 0) return;
+  const rows = await tx
+    .select({ id: staff.id })
+    .from(staff)
+    .where(and(inArray(staff.id, wanted), eq(staff.status, "active")));
+  if (rows.length !== wanted.length) throw new DomainError("conflict", STAFFING_MESSAGES.supervisorNotActive);
+}
+
 function groupValues(eventId: string, group: GroupInput, index: number) {
   return {
     eventId,
@@ -34,6 +52,33 @@ function groupValues(eventId: string, group: GroupInput, index: number) {
     sortOrder: group.sortOrder ?? index,
     notes: group.notes ?? null,
   };
+}
+
+/** Loca grubu yalnızca loca masalarını, standart grup yalnızca loca olmayanları içerir (istek başına, hiçbir şey yazılmadan). */
+async function assertGroupTypesMatchTables(tx: Tx, eventId: string, input: GroupInput[]) {
+  const ids = unique(input.flatMap((g) => g.tableIds));
+  if (ids.length === 0) return;
+  const rows = await tx
+    .select({ id: eventTables.id, label: eventTables.label, isLoca: eventTables.isLoca })
+    .from(eventTables)
+    .where(and(eq(eventTables.eventId, eventId), inArray(eventTables.id, ids)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const notLoca = new Set<string>();
+  const loca = new Set<string>();
+  for (const group of input) {
+    for (const tableId of group.tableIds) {
+      const table = byId.get(tableId);
+      if (!table) continue;
+      if (group.groupType === "loca" && !table.isLoca) notLoca.add(table.label);
+      if (group.groupType !== "loca" && table.isLoca) loca.add(table.label);
+    }
+  }
+  if (notLoca.size > 0) {
+    throw new DomainError("conflict", `Loca grubuna yalnızca loca masaları eklenebilir: ${[...notLoca].sort().join(", ")}`);
+  }
+  if (loca.size > 0) {
+    throw new DomainError("conflict", `Loca masaları yalnızca loca grubuna eklenebilir: ${[...loca].sort().join(", ")}`);
+  }
 }
 
 /**
@@ -55,8 +100,13 @@ export async function applyGroups(tx: Tx, eventId: string, input: GroupInput[]):
     eventId,
     input.map((g) => g.teamId),
   );
+  await assertGroupTypesMatchTables(tx, eventId, input);
 
-  const existing = await tx.select({ id: tableGroups.id }).from(tableGroups).where(eq(tableGroups.eventId, eventId));
+  const existing = await tx
+    .select({ id: tableGroups.id, supervisorStaffId: tableGroups.supervisorStaffId })
+    .from(tableGroups)
+    .where(eq(tableGroups.eventId, eventId));
+  await assertSupervisorsActive(tx, input, new Map(existing.map((e) => [e.id, e.supervisorStaffId])));
   const { keep, deleteIds } = splitKept(input, existing);
   if (deleteIds.length > 0) await tx.delete(tableGroups).where(inArray(tableGroups.id, deleteIds));
 

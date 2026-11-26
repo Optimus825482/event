@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GROUP_TYPES, type GroupType } from "./group-types";
 import { MAX_ROLE_COUNT, MAX_ROLES_PER_POINT, normalizeRole, overrideTimesError } from "./service-point-roles";
 
 /** Form alanları boş string gönderebilir; boş değer "yok" demektir. */
@@ -95,7 +96,7 @@ export const groupInputSchema = z.object({
   color,
   teamId: optionalId,
   supervisorStaffId: optionalId,
-  groupType: text(50),
+  groupType: z.enum(GROUP_TYPES, { error: "Geçersiz grup tipi" }).default("standard"),
   sortOrder,
   notes: text(1000),
   tableIds: idList,
@@ -107,6 +108,8 @@ const groupList = z
   .refine((g) => uniqueBy(g, (x) => x.id), "Aynı grup iki kez gönderilmiş");
 
 export const saveTableGroupsSchema = z.object({ eventId, groups: groupList });
+
+export const groupUngroupedLocasSchema = z.object({ eventId });
 
 export const assignTeamToGroupSchema = z.object({ eventId, groupId: id, teamId: optionalId });
 
@@ -242,8 +245,10 @@ export const deleteTemplateSchema = z.object({ id });
 /** Servis girdileri (ayrıştırılmış biçim); servisler testlerden ve sunucu kodundan doğrudan çağrılır. */
 export type TeamInput = z.infer<typeof teamInputSchema>;
 export type SaveTeamsInput = { eventId: string; teams: TeamInput[] };
-export type GroupInput = z.infer<typeof groupInputSchema>;
+/** Grup tipi verilmezse "standard" sayılır (şema varsayılanı); servis çağrıları tipi atlayabilir. */
+export type GroupInput = Omit<z.infer<typeof groupInputSchema>, "groupType"> & { groupType?: GroupType };
 export type SaveTableGroupsInput = { eventId: string; groups: GroupInput[] };
+export type GroupUngroupedLocasInput = z.infer<typeof groupUngroupedLocasSchema>;
 export type AssignTeamToGroupInput = z.infer<typeof assignTeamToGroupSchema>;
 export type AssignmentInput = z.infer<typeof assignmentInputSchema>;
 export type SaveAssignmentsInput = { eventId: string; types?: AssignmentType[]; assignments: AssignmentInput[] };

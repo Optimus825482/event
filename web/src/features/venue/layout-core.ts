@@ -179,6 +179,36 @@ async function assertCapacityCoversReservations(
   }
 }
 
+/** Bir masa masa grubundayken loca bayrağı değişemez (loca grubu yalnızca loca masalarını içerir). */
+async function assertGroupedLocaFlagsUnchanged(
+  tx: Tx,
+  eventId: string,
+  updates: Array<NormalizedTable & { id: string }>,
+  existingById: Map<string, { isLoca: boolean }>,
+): Promise<void> {
+  const flipped = updates.filter((t) => existingById.get(t.id)?.isLoca !== t.isLoca);
+  if (flipped.length === 0) return;
+  const grouped = await tx
+    .select({ tableId: tableGroupTables.tableId })
+    .from(tableGroupTables)
+    .where(
+      and(
+        eq(tableGroupTables.eventId, eventId),
+        inArray(
+          tableGroupTables.tableId,
+          flipped.map((t) => t.id),
+        ),
+      ),
+    );
+  if (grouped.length === 0) return;
+  const inGroup = new Set(grouped.map((r) => r.tableId));
+  const labels = flipped.filter((t) => inGroup.has(t.id)).map((t) => t.label).sort();
+  throw new DomainError(
+    "conflict",
+    `Gruptaki masanın loca durumu değiştirilemez; önce masayı gruptan çıkarın: ${labels.join(", ")}`,
+  );
+}
+
 export type WriteLayoutResult = {
   tables: EventTableRow[];
   totalCapacity: number;
@@ -202,7 +232,7 @@ export async function writeLayout(
   const decor = normalizeDecor(rawDecor);
 
   const existing = await tx
-    .select({ id: eventTables.id, label: eventTables.label, capacity: eventTables.capacity })
+    .select({ id: eventTables.id, label: eventTables.label, capacity: eventTables.capacity, isLoca: eventTables.isLoca })
     .from(eventTables)
     .where(eq(eventTables.eventId, eventId));
   const existingById = new Map(existing.map((row) => [row.id, row]));
@@ -226,6 +256,7 @@ export async function writeLayout(
       `Rezervasyonu veya personel ataması olan masalar silinemez: ${quoteList(labels)}. Hiçbir değişiklik kaydedilmedi.`,
     );
   }
+  await assertGroupedLocaFlagsUnchanged(tx, eventId, updates, existingById);
   await assertCapacityCoversReservations(tx, eventId, updates);
   await assertTableTypesExist(tx, tables);
   await syncBarServicePoints(tx, eventId, decor);

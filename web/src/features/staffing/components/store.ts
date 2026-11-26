@@ -17,6 +17,7 @@ export type DraftPointRoles = Organization["servicePointRoles"][number];
 
 export const WIZARD_STEPS = [
   { id: "groups", title: "Masa Grupları", description: "Masaları gruplara ayırın" },
+  { id: "loca", title: "Localar", description: "Loca grupları ve personeli" },
   { id: "teams", title: "Ekipler", description: "Ekipleri kurun ve gruplara bağlayın" },
   { id: "assignments", title: "Personel Atama", description: "Masa, özel görev ve servis noktası" },
   { id: "extra", title: "Ekstra Personel", description: "Kadro dışı geçici personel" },
@@ -37,7 +38,7 @@ export type Draft = {
 };
 
 export type OrganizationState = Draft & {
-  reference: Pick<Organization, "tables" | "staff" | "shifts" | "servicePoints">;
+  reference: Pick<Organization, "tables" | "staff" | "shifts" | "servicePoints" | "reviewHints" | "supervisorNames">;
   step: WizardStepId;
   dirty: boolean;
   /** Taslak değişikliklerinin geri al / yinele geçmişi (adım ve referans veri dahil değil). */
@@ -57,6 +58,8 @@ export type OrganizationState = Draft & {
   clearGroupTables: (groupId: string) => void;
   /** Grubu ekibe bağlar; grup ekibin rengini alır, gruptaki masaların atamaları ekibe geçer. */
   setGroupTeam: (groupId: string, teamId: string | null) => void;
+  /** Grubun süpervizörünü seçer; `null` kaldırır. Yalnızca taslağı değiştirir, kayıt "Tümünü kaydet" ile yapılır. */
+  setGroupSupervisor: (groupId: string, staffId: string | null) => void;
   addTeam: () => void;
   updateTeam: (id: string, patch: Partial<DraftTeam>) => void;
   removeTeam: (id: string) => void;
@@ -140,7 +143,7 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
       });
     return {
       ...draftOf(org),
-      reference: { tables: org.tables, staff: org.staff, shifts: org.shifts, servicePoints: org.servicePoints },
+      reference: { tables: org.tables, staff: org.staff, shifts: org.shifts, servicePoints: org.servicePoints, reviewHints: org.reviewHints, supervisorNames: org.supervisorNames },
       step: "groups",
       dirty: false,
       history: emptyHistory<Draft>(),
@@ -158,7 +161,7 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
       reset: (next) =>
         set({
           ...draftOf(next),
-          reference: { tables: next.tables, staff: next.staff, shifts: next.shifts, servicePoints: next.servicePoints },
+          reference: { tables: next.tables, staff: next.staff, shifts: next.shifts, servicePoints: next.servicePoints, reviewHints: next.reviewHints, supervisorNames: next.supervisorNames },
           dirty: false,
           history: emptyHistory<Draft>(),
         }),
@@ -211,6 +214,12 @@ export function createOrganizationStore(org: Organization): StoreApi<Organizatio
               ? s.assignments.map((a) => (a.tableIds.some((t) => group.tableIds.includes(t)) ? { ...a, teamId: team.id } : a))
               : s.assignments,
           };
+        }),
+      setGroupSupervisor: (groupId, staffId) =>
+        change((s) => {
+          const group = s.groups.find((g) => g.id === groupId);
+          if (!group || group.supervisorStaffId === staffId) return {};
+          return { groups: replaceById(s.groups, groupId, { supervisorStaffId: staffId }) };
         }),
       addTeam: () =>
         change((s) => ({

@@ -14,7 +14,7 @@ import { isRoleAllowed, overrideTimesError } from "./service-point-roles";
 import { loadServicePointRoles } from "./service-point-roles-service";
 import type { ApplyTemplateInput, AssignmentInput, CreateTemplateInput, DeleteTemplateInput, GroupInput, TeamInput } from "./schemas";
 import { applyTeams } from "./teams-service";
-import { templateSnapshotSchema, type TableRef, type TemplateSnapshot } from "./template-snapshot";
+import { normalizeGroupType, templateSnapshotSchema, type TableRef, type TemplateSnapshot } from "./template-snapshot";
 import { isAdmin } from "@/features/auth/scope";
 
 const NOT_FOUND = "Şablon bulunamadı";
@@ -72,7 +72,7 @@ export async function createOrganizationTemplate(
     groups: org.groups.map((g) => ({
       name: g.name,
       color: g.color,
-      groupType: g.groupType,
+      groupType: normalizeGroupType(g.groupType),
       sortOrder: g.sortOrder,
       notes: g.notes,
       teamKey: g.teamId,

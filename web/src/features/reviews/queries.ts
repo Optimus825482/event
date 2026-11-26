@@ -1,16 +1,19 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { events, staff, staffPerformanceReviews, teamMembers, teams } from "@/db/schema";
-import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
-import { authorizeReviewsGate, loadReviewEvent, type ReviewRow } from "./service";
+import { reviewEventIds, reviewableStaff, type ReviewBasis } from "./authority";
+import { reviewableByEvent } from "./leader-scope";
+import { authorizeEventScope, authorizeReviewsGate, loadReviewEvent, type ReviewRow } from "./service";
+import type { ReviewFormKind } from "./form-kinds";
 import { RATING_KEYS, type RatingBand, type RatingKey } from "./score";
-import { ownTeamOnly } from "@/features/auth/scope";
 
 type Executor = Db | Tx;
 
 export type ReviewView = {
   id: string;
+  formKind: ReviewFormKind;
+  overallRating: number | null;
   score: number;
   band: RatingBand;
   ratings: Record<RatingKey, number | null>;
@@ -24,7 +27,7 @@ export type ReviewView = {
   updatedAt: string;
 };
 
-export type BoardMember = { staffId: string; fullName: string; review: ReviewView | null };
+export type BoardMember = { staffId: string; fullName: string; bases: ReviewBasis[]; review: ReviewView | null };
 export type BoardTeam = { id: string; name: string; color: string; members: BoardMember[] };
 export type ReviewBoard = {
   event: { id: string; name: string; startsAt: string; status: string; reviewEnabled: boolean };
@@ -45,6 +48,8 @@ export type ReviewableEvent = {
 function toView(row: ReviewRow): ReviewView {
   return {
     id: row.id,
+    formKind: row.formKind as ReviewFormKind,
+    overallRating: row.overallRating,
     score: row.score,
     band: row.rating,
     ratings: Object.fromEntries(RATING_KEYS.map((key) => [key, row[key]])) as Record<RatingKey, number | null>,
@@ -59,54 +64,76 @@ function toView(row: ReviewRow): ReviewView {
   };
 }
 
-/** Aktörün değerlendirebileceği ekipler: lider yalnızca kendi ekibini görür. */
-async function visibleTeams(executor: Executor, actor: Actor, eventIds?: string[]) {
-  const conditions = [eq(teams.isActive, true)];
-  if (eventIds) conditions.push(inArray(teams.eventId, eventIds));
-  if (ownTeamOnly(actor)) {
-    if (!actor.staffId) return [];
-    conditions.push(eq(teams.leaderStaffId, actor.staffId));
+/** Hiçbir etkin ekipte olmayan değerlendirilebilir personelin listelendiği sahte ekip. */
+export const OUTSIDE_TEAM = { id: "ekip-disi", name: "Ekip dışı personel", color: "#64748b" } as const;
+
+type TeamRef = { id: string; name: string; color: string };
+type Grouped = { team: TeamRef; staffIds: string[] };
+
+/** Etkinliklerin etkin ekipleri (`sortOrder, name`) ve her ekibin kişileri (üyeler + lider). */
+async function teamsWithPeople(executor: Executor, eventIds: string[]) {
+  if (eventIds.length === 0) return [];
+  const teamRows = await executor
+    .select({ id: teams.id, eventId: teams.eventId, name: teams.name, color: teams.color, leaderStaffId: teams.leaderStaffId })
+    .from(teams)
+    .where(and(eq(teams.isActive, true), inArray(teams.eventId, eventIds)))
+    .orderBy(asc(teams.sortOrder), asc(teams.name));
+  const memberRows =
+    teamRows.length === 0
+      ? []
+      : await executor
+          .select({ teamId: teamMembers.teamId, staffId: teamMembers.staffId })
+          .from(teamMembers)
+          .where(
+            inArray(
+              teamMembers.teamId,
+              teamRows.map((t) => t.id),
+            ),
+          );
+  return teamRows.map((t) => {
+    const people = new Set(memberRows.filter((m) => m.teamId === t.id).map((m) => m.staffId));
+    if (t.leaderStaffId) people.add(t.leaderStaffId);
+    return { team: { id: t.id, name: t.name, color: t.color }, eventId: t.eventId, people };
+  });
+}
+
+/**
+ * Değerlendirilebilir personeli ekiplere dağıtır: her kişi içinde bulunduğu ilk ekipte bir kez yer alır;
+ * hiçbir ekipte olmayanlar `OUTSIDE_TEAM` altında. Boş ekipler dönmez.
+ */
+function groupByTeam(
+  eventTeams: { team: TeamRef; people: Set<string> }[],
+  reviewable: ReadonlyMap<string, ReviewBasis[]>,
+): Grouped[] {
+  const placed = new Set<string>();
+  const groups: Grouped[] = [];
+  for (const { team, people } of eventTeams) {
+    const ids = [...people].filter((id) => reviewable.has(id) && !placed.has(id));
+    for (const id of ids) placed.add(id);
+    if (ids.length > 0) groups.push({ team, staffIds: ids });
   }
-  return executor.select().from(teams).where(and(...conditions)).orderBy(asc(teams.sortOrder), asc(teams.name));
+  const outside = [...reviewable.keys()].filter((id) => !placed.has(id));
+  if (outside.length > 0) groups.push({ team: { ...OUTSIDE_TEAM }, staffIds: outside });
+  return groups;
 }
 
-async function membersOf(executor: Executor, teamRows: { id: string; leaderStaffId: string | null }[]) {
-  if (teamRows.length === 0) return [];
-  const rows = await executor
-    .select({ teamId: teamMembers.teamId, staffId: staff.id, fullName: staff.fullName })
-    .from(teamMembers)
-    .innerJoin(staff, eq(staff.id, teamMembers.staffId))
-    .where(
-      inArray(
-        teamMembers.teamId,
-        teamRows.map((t) => t.id),
-      ),
-    )
-    .orderBy(asc(staff.fullName));
-  const leaderOf = new Map(teamRows.map((t) => [t.id, t.leaderStaffId]));
-  // Lider kendini değerlendirmez; listeden çıkarılır.
-  return rows.filter((r) => leaderOf.get(r.teamId) !== r.staffId);
-}
-
-/** Değerlendirilecek ekip üyesi olan etkinlikler (en yeni önce). */
+/** Değerlendirilecek personeli olan etkinlikler (en yeni önce); sayılar panodaki kümeden hesaplanır. */
 export async function listReviewableEvents(executor: Executor, actor: Actor): Promise<ReviewableEvent[]> {
   authorizeReviewsGate(actor, "view");
-  const baseTeams = await visibleTeams(executor, actor);
-  const eventIds = [...new Set(baseTeams.flatMap((t) => (t.eventId ? [t.eventId] : [])))];
+  const eventIds = await reviewEventIds(executor, actor);
   if (eventIds.length === 0) return [];
 
-  const eventRows = await executor
+  const allowed = await executor
     .select()
     .from(events)
     .where(inArray(events.id, eventIds))
     .orderBy(desc(events.startsAt))
     .limit(100);
-  const allowed = eventRows;
   if (allowed.length === 0) return [];
-  const allowedIds = new Set(allowed.map((e) => e.id));
-  const teamRows = baseTeams.filter((t) => t.eventId && allowedIds.has(t.eventId));
+  const allowedIds = allowed.map((e) => e.id);
+  const reviewable = await reviewableByEvent(executor, actor, allowedIds);
+  const eventTeams = await teamsWithPeople(executor, allowedIds);
 
-  const members = await membersOf(executor, teamRows);
   const completed = await executor
     .select({ eventId: staffPerformanceReviews.eventId, staffId: staffPerformanceReviews.staffId })
     .from(staffPerformanceReviews)
@@ -114,72 +141,77 @@ export async function listReviewableEvents(executor: Executor, actor: Actor): Pr
       and(
         eq(staffPerformanceReviews.reviewerId, actor.id),
         eq(staffPerformanceReviews.isCompleted, true),
-        inArray(staffPerformanceReviews.eventId, [...allowedIds]),
+        inArray(staffPerformanceReviews.eventId, allowedIds),
       ),
     );
   const completedKeys = new Set(completed.map((c) => `${c.eventId}:${c.staffId}`));
-  const teamEvent = new Map(teamRows.map((t) => [t.id, t.eventId]));
 
   return allowed.map((e) => {
-    const eventTeams = teamRows.filter((t) => t.eventId === e.id);
-    const eventMembers = members.filter((m) => teamEvent.get(m.teamId) === e.id);
+    const set = reviewable.get(e.id) ?? new Map<string, ReviewBasis[]>();
+    const groups = groupByTeam(
+      eventTeams.filter((t) => t.eventId === e.id),
+      set,
+    );
     return {
       id: e.id,
       name: e.name,
       startsAt: e.startsAt.toISOString(),
       status: e.status,
       reviewEnabled: e.reviewEnabled,
-      teamCount: eventTeams.length,
-      memberCount: eventMembers.length,
-      completedCount: eventMembers.filter((m) => completedKeys.has(`${e.id}:${m.staffId}`)).length,
+      teamCount: groups.length,
+      memberCount: set.size,
+      completedCount: [...set.keys()].filter((id) => completedKeys.has(`${e.id}:${id}`)).length,
     };
   });
 }
 
-/** Etkinliğin ekipleri, üyeleri ve aktörün kendi değerlendirmeleri. Lider yalnızca kendi ekibini görür. */
+/**
+ * Etkinlikte aktörün değerlendirebildiği personel, ekiplere göre gruplu, ve aktörün kendi değerlendirmeleri.
+ * Hiyerarşi aktörü bu etkinlikte kimseyi değerlendiremiyorsa reddedilir.
+ */
 export async function getReviewBoard(executor: Executor, actor: Actor, eventId: string): Promise<ReviewBoard> {
   authorizeReviewsGate(actor, "view");
   const event = await loadReviewEvent(executor, actor, eventId);
-  const teamRows = await visibleTeams(executor, actor, [eventId]);
-  // Lider bu etkinlikte ekip yönetmiyorsa: kaynak sahipliği olmadan görüntüleme reddedilir.
-  if (teamRows.length === 0 && ownTeamOnly(actor)) authorize(actor, "reviews", "view", {});
-  if (teamRows.length === 0 && !ownTeamOnly(actor)) {
-    return { event: toEvent(event), teams: [] };
-  }
-  for (const team of teamRows) {
-    authorize(actor, "reviews", "view", team.leaderStaffId ? { teamLeaderStaffId: team.leaderStaffId } : {});
-  }
+  const reviewable = await reviewableStaff(executor, actor, eventId);
+  authorizeEventScope(actor, "view", reviewable);
+  if (reviewable.size === 0) return { event: toEvent(event), teams: [] };
 
-  const members = await membersOf(executor, teamRows);
-  const reviewRows =
-    members.length === 0
-      ? []
-      : await executor
-          .select()
-          .from(staffPerformanceReviews)
-          .where(
-            and(
-              eq(staffPerformanceReviews.eventId, eventId),
-              eq(staffPerformanceReviews.reviewerId, actor.id),
-              inArray(
-                staffPerformanceReviews.staffId,
-                members.map((m) => m.staffId),
-              ),
-            ),
-          );
+  const staffIds = [...reviewable.keys()];
+  const people = await executor
+    .select({ id: staff.id, fullName: staff.fullName })
+    .from(staff)
+    .where(inArray(staff.id, staffIds))
+    .orderBy(asc(staff.fullName));
+  const nameOf = new Map(people.map((p) => [p.id, p.fullName]));
+  const order = new Map(people.map((p, i) => [p.id, i]));
+  const reviewRows = await executor
+    .select()
+    .from(staffPerformanceReviews)
+    .where(
+      and(
+        eq(staffPerformanceReviews.eventId, eventId),
+        eq(staffPerformanceReviews.reviewerId, actor.id),
+        inArray(staffPerformanceReviews.staffId, staffIds),
+      ),
+    );
   const reviewByStaff = new Map(reviewRows.map((r) => [r.staffId, r]));
+  const groups = groupByTeam(await teamsWithPeople(executor, [eventId]), reviewable);
 
   return {
     event: toEvent(event),
-    teams: teamRows.map((t) => ({
-      id: t.id,
-      name: t.name,
-      color: t.color,
-      members: members
-        .filter((m) => m.teamId === t.id)
-        .map((m) => {
-          const review = reviewByStaff.get(m.staffId);
-          return { staffId: m.staffId, fullName: m.fullName, review: review ? toView(review) : null };
+    teams: groups.map(({ team, staffIds: ids }) => ({
+      ...team,
+      members: ids
+        .filter((id) => nameOf.has(id))
+        .sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0))
+        .map((id) => {
+          const review = reviewByStaff.get(id);
+          return {
+            staffId: id,
+            fullName: nameOf.get(id) ?? "",
+            bases: reviewable.get(id) ?? [],
+            review: review ? toView(review) : null,
+          };
         }),
     })),
   };

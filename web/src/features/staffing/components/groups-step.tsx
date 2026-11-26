@@ -10,6 +10,7 @@ import type { FloorPlanData } from "@/features/venue/plan-types";
 import { groupCoverage, groupPlanColors, groupPlanStatuses, UNGROUPED_PLAN_COLOR, withDraftGroups } from "../group-plan";
 import { Chip, EmptyState, Section, Swatch } from "./bits";
 import { GroupStaffDialog } from "./group-staff-dialog";
+import { GroupSupervisorLine } from "./group-supervisor-line";
 import { useOrganization } from "./store";
 
 /** Adım 1: masaları gruplara ayırma (alan planında masaya tıklayarak). Bir masa yalnızca tek grupta olabilir. */
@@ -71,6 +72,7 @@ export function GroupsStep({ readOnly, plan }: { readOnly: boolean; plan: FloorP
                   <Badge variant="secondary">{g.tableIds.length} masa</Badge>
                   <GroupStaffDialog group={g} readOnly={readOnly} />
                 </div>
+                <GroupSupervisorLine group={g} />
                 {g.id === activeId && !readOnly ? (
                   <div className="flex items-center gap-2">
                     <Input

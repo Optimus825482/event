@@ -166,3 +166,24 @@ describe("staffing action'ları", () => {
     expect(await tablesOfGroup(groupId)).toEqual([tables[0]!.id]);
   });
 });
+
+describe("getOrganization loca ve kısım sorumlusu verisi", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("loca satırına süpervizör adı (locada atanmış olmasa da) ve kısım sorumlularını ekler", async () => {
+    const actor = await makeActor();
+    const event = await f.createEvent(db, { organizerId: actor.id });
+    const loca = await f.createTable(db, event.id, { label: "L1", x: 0, y: 0, isLoca: true });
+    const sup = await f.createStaff(db, { fullName: "Süpervizör Sema" });
+    await saveTableGroups(db, actor, {
+      eventId: event.id,
+      groups: [{ name: "Loca A", groupType: "loca", supervisorStaffId: sup.id, tableIds: [loca.id] }],
+    });
+    const org = await getOrganization(db, actor, event.id);
+    expect(org.locaStaffing).toHaveLength(1);
+    expect(org.locaStaffing[0]).toMatchObject({ label: "L1", groupName: "Loca A", supervisorStaffId: sup.id, supervisorName: "Süpervizör Sema" });
+    expect(org.sectionHeads).toEqual([]);
+  });
+});

@@ -27,8 +27,8 @@ export default async function LeaderTeamPage() {
       {teams.length === 0 ? (
         <EmptyState
           icon={<UsersRound />}
-          title="Henüz bir takımınız yok"
-          description="Bir etkinlikte ekip lideri olarak atandığınızda takımınız burada görünür."
+          title="Gösterilecek ekip yok"
+          description="Ekip lideri olduğunuz ekipler burada listelenir. Süpervizör ya da kısım sorumlusuysanız değerlendireceğiniz personele etkinlik sayfasından ulaşabilirsiniz."
         />
       ) : (
         <>

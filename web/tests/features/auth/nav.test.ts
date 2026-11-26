@@ -16,11 +16,11 @@ describe("NAV_ITEMS", () => {
       ["/fnb", "Etkinlikler", "venues", "fnb"],
       ["/venues", "Yerleşim Şablonları", "venues", "fnb"],
       ["/staff", "Ekipler", "staff", "fnb"],
-      ["/leader", "Ekip Panosu", "reviews", "fnb"],
-      ["/leader/events", "Ekip Etkinlikleri", "reviews", "fnb"],
-      ["/leader/team", "Ekibim", "reviews", "fnb"],
-      ["/leader/reviews", "Değerlendirmeler", "reviews", "fnb"],
-      ["/leader/reports", "Raporlar", "reviews", "fnb"],
+      ["/fnb/team", "Ekip Panosu", "reviews", "fnb"],
+      ["/fnb/team/events", "Ekip Etkinlikleri", "reviews", "fnb"],
+      ["/fnb/team/members", "Ekibim", "reviews", "fnb"],
+      ["/fnb/team/reviews", "Değerlendirmeler", "reviews", "fnb"],
+      ["/fnb/team/reports", "Raporlar", "reviews", "fnb"],
       ["/reservations", "Rezervasyonlar", "reservations", "casino"],
       ["/customers", "Müşteriler", "customers", "casino"],
       ["/guests", "Misafirler", "customers", "casino"],
@@ -82,11 +82,11 @@ describe("departman grupları", () => {
       "/fnb",
       "/venues",
       "/staff",
-      "/leader",
-      "/leader/events",
-      "/leader/team",
-      "/leader/reviews",
-      "/leader/reports",
+      "/fnb/team",
+      "/fnb/team/events",
+      "/fnb/team/members",
+      "/fnb/team/reviews",
+      "/fnb/team/reports",
       "/check-in",
       "/notifications",
     ]);
@@ -94,7 +94,7 @@ describe("departman grupları", () => {
 
   it("staffId'li F&B kullanıcısı ekip öğelerini görür", () => {
     const a = memberActor("fnb", { reviews: "vce-" }, { staffId: "s1" });
-    expect(hrefs(a)).toEqual(["/leader", "/leader/events", "/leader/team", "/leader/reviews", "/leader/reports"]);
+    expect(hrefs(a)).toEqual(["/fnb/team", "/fnb/team/events", "/fnb/team/members", "/fnb/team/reviews", "/fnb/team/reports"]);
   });
 
   it("staffId'siz F&B kullanıcısı ekip öğelerini görmez", () => {
@@ -103,7 +103,7 @@ describe("departman grupları", () => {
 
   it("kendi ekibiyle sınırlı kullanıcı, izin verilen F&B öğeleriyle ekip öğelerini birlikte görür", () => {
     const a = memberActor("fnb", { reviews: "v---", venues: "v---", staff: "v---" }, { staffId: "s1" });
-    expect(hrefs(a)).toEqual(["/venues", "/staff", "/leader", "/leader/events", "/leader/team", "/leader/reviews", "/leader/reports"]);
+    expect(hrefs(a)).toEqual(["/venues", "/staff", "/fnb/team", "/fnb/team/events", "/fnb/team/members", "/fnb/team/reviews", "/fnb/team/reports"]);
   });
 
   it("events:view olmayan F&B kullanıcısı /fnb görmez, /venues görür", () => {
@@ -176,7 +176,7 @@ describe("görünen her öğe erişilebilir bir sayfaya gider", () => {
     it(`${name}: her görünür öğe için görüntüleme izni vardır ve grup kapsamı uyar`, () => {
       for (const group of visibleNavGroups(actor)) {
         for (const item of group.items) {
-          const resource = item.module === "reviews" && actor.staffId ? { teamLeaderStaffId: actor.staffId } : undefined;
+          const resource = item.module === "reviews" && actor.staffId ? { reviewerStaffIds: [actor.staffId] } : undefined;
           expect(can(actor, item.module, "view", resource), `${item.href}`).toBe(true);
           if (item.alsoRequires) expect(can(actor, item.alsoRequires, "view"), `${item.href} ek izin`).toBe(true);
           if (group.departments !== null && actor.role === "user") {

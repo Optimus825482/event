@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GROUP_TYPES, type GroupType } from "./group-types";
 import { ASSIGNMENT_TYPES } from "./schemas";
 
 /**
@@ -29,10 +30,15 @@ export const templateTeamSchema = z.object({
     .default([]),
 });
 
+/** Tanınmayan (eski/bozuk) grup tipi "standard" sayılır. */
+export function normalizeGroupType(value: string): GroupType {
+  return (GROUP_TYPES as readonly string[]).includes(value) ? (value as GroupType) : "standard";
+}
+
 export const templateGroupSchema = z.object({
   name: z.string().min(1),
   color: z.string(),
-  groupType: z.string().default("standard"),
+  groupType: z.string().default("standard").transform(normalizeGroupType),
   sortOrder: z.number().int().default(0),
   notes: nullableText,
   teamKey: z.string().nullish(),

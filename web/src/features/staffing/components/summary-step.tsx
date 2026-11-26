@@ -6,7 +6,10 @@ import { AlertTriangle, Layers, Save, UserCog, UserPlus, Users } from "lucide-re
 import { StatCard } from "@/components/layout/stat-card";
 import { Button } from "@/components/ui/button";
 import { saveOrganizationAction } from "../actions";
+import type { SectionHead } from "../section-heads-service";
 import { Section } from "./bits";
+import { SupervisorLabel, useSupervisorInfo } from "./group-supervisor-field";
+import { SectionHeadsCard } from "./section-heads-card";
 import { toSavePayload, useOrganization, useOrganizationStoreApi } from "./store";
 
 type Status = { kind: "ok" | "error"; message: string; details?: string[] } | null;
@@ -16,8 +19,20 @@ function detailsOf(fieldErrors: Record<string, string[]> | undefined): string[] 
   return Object.entries(fieldErrors).flatMap(([field, messages]) => messages.map((m) => `${field}: ${m}`));
 }
 
+function SupervisorName({ staffId }: { staffId: string | null }) {
+  const info = useSupervisorInfo(staffId);
+  if (!info) return <span className="text-muted-foreground">Süpervizör yok</span>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-muted-foreground">
+      Süpervizör: <SupervisorLabel info={info} />
+    </span>
+  );
+}
+
 /** Adım 5: kontrol listesi ve tek transaction'lık kayıt. */
-export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: boolean }) {
+export function SummaryStep({ eventId, readOnly, sectionHeads }: { eventId: string; readOnly: boolean; sectionHeads: SectionHead[] }) {
+  const staff = useOrganization((s) => s.reference.staff);
+  const supervisorNames = useOrganization((s) => s.reference.supervisorNames);
   const router = useRouter();
   const store = useOrganizationStoreApi();
   const teams = useOrganization((s) => s.teams);
@@ -40,6 +55,9 @@ export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: 
     ...(tables.filter((t) => !t.isLoca && !served.has(t.id)).length > 0
       ? [`${tables.filter((t) => !t.isLoca && !served.has(t.id)).length} masaya personel atanmadı (localar hariç)`]
       : []),
+    ...groups
+      .filter((g) => g.supervisorStaffId && !staff.some((p) => p.id === g.supervisorStaffId))
+      .map((g) => `"${g.name}" grubunun süpervizörü pasif: ${supervisorNames[g.supervisorStaffId ?? ""] ?? "bilinmeyen personel"}`),
     ...extras.filter((e) => e.fullName.trim() === "").map(() => "Adı boş ekstra personel var"),
   ];
 
@@ -78,6 +96,28 @@ export function SummaryStep({ eventId, readOnly }: { eventId: string; readOnly: 
           <p className="text-sm text-muted-foreground">Uyarı yok.</p>
         )}
       </Section>
+
+      <Section title="Süpervizörler">
+        {groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Grup yok.</p>
+        ) : (
+          <ul className="space-y-1 text-sm" aria-label="Grup süpervizörleri">
+            {groups.map((g) => (
+              <li key={g.id} className="flex flex-wrap gap-x-2">
+                <span className="font-medium">{g.name || "Adsız grup"}</span>
+                <SupervisorName staffId={g.supervisorStaffId} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <SectionHeadsCard
+        eventId={eventId}
+        heads={sectionHeads}
+        candidates={staff.map((p) => ({ staffId: p.id, fullName: p.fullName }))}
+        canEdit={!readOnly}
+      />
 
       {readOnly ? (
         <p className="text-sm text-muted-foreground">Bu etkinlikte değişiklik yapılamaz (yetki ya da etkinlik durumu).</p>

@@ -3,6 +3,7 @@ import type { ActionOptions } from "@/lib/action";
 import { autoAssign, saveAssignments } from "./assignments-service";
 import { saveExtraStaff } from "./extra-staff-service";
 import { assignTeamToGroup, saveTableGroups } from "./groups-service";
+import { groupUngroupedLocas } from "./loca-plan";
 import { saveOrganization } from "./organization-service";
 import {
   applyTemplateSchema,
@@ -10,6 +11,7 @@ import {
   autoAssignSchema,
   createTemplateSchema,
   deleteTemplateSchema,
+  groupUngroupedLocasSchema,
   saveAssignmentsSchema,
   saveExtraStaffSchema,
   saveOrganizationSchema,
@@ -47,6 +49,12 @@ export const staffingActionDefs = {
     verb: "edit",
     input: assignTeamToGroupSchema,
     handler: async ({ actor, input, db }) => assignTeamToGroup(db, actor, input),
+  }),
+  groupUngroupedLocas: def({
+    module: "staff",
+    verb: "edit",
+    input: groupUngroupedLocasSchema,
+    handler: async ({ actor, input, db }) => groupUngroupedLocas(db, actor, input),
   }),
   saveAssignments: def({
     module: "staff",

@@ -1,0 +1,389 @@
+import { and, eq } from "drizzle-orm";
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "@/db/client";
+import { assignmentTables, eventSectionHeads, eventStaffAssignments, staffPerformanceReviews, tableGroups, tableGroupTables } from "@/db/schema";
+import { getLeaderDashboard, getLeaderEventDetail, getMemberPerformance } from "@/features/reviews/leader-queries";
+import { scopedMembers, scopedTeams } from "@/features/reviews/leader-scope";
+import { REVIEW_MESSAGES } from "@/features/reviews/labels";
+import { getReviewBoard, listReviewableEvents, type ReviewBoard } from "@/features/reviews/queries";
+import { completeAllReviews, completeReview, saveReviewDraft } from "@/features/reviews/service";
+import { managerActor } from "../../helpers/actors";
+import { truncateAll } from "../../helpers/db";
+import * as f from "../../helpers/factories";
+import { addTeamMember, assignStaffToTables, createSectionHead, createShortReview, createTeam } from "../../helpers/fnb";
+import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, makeLeader } from "./helpers";
+
+const lists = { strengths: [], improvements: [], recommendedTrainings: [] };
+
+/**
+ * Etkinlik E (değerlendirme açık): ekip T (lider C; üyeler W1, W2); masa grubu G (süpervizör S, ekip T,
+ * masalar A1, A2); W3 ekipsiz, A1'e atanmış; kısım sorumlusu H.
+ */
+async function setupWorld() {
+  const manager = await makeActor(managerActor("fnb"));
+  const event = await f.createEvent(db, { organizerId: manager.id, reviewEnabled: true });
+
+  const C = await f.createStaff(db, { fullName: "Kaptan C" });
+  const W1 = await f.createStaff(db, { fullName: "Garson W1" });
+  const W2 = await f.createStaff(db, { fullName: "Garson W2" });
+  const S = await f.createStaff(db, { fullName: "Süpervizör S" });
+  const W3 = await f.createStaff(db, { fullName: "Garson W3" });
+  const H = await f.createStaff(db, { fullName: "Kısım H" });
+
+  const T = await createTeam(db, { eventId: event.id, leaderStaffId: C.id, name: "T" });
+  await addTeamMember(db, T.id, W1.id);
+  await addTeamMember(db, T.id, W2.id);
+
+  const A1 = await f.createTable(db, event.id, { label: "A1" });
+  const A2 = await f.createTable(db, event.id, { label: "A2" });
+  const G = await f.createTableGroup(db, event.id, { name: "G", supervisorStaffId: S.id, teamId: T.id });
+  await db.insert(tableGroupTables).values([
+    { eventId: event.id, tableGroupId: G.id, tableId: A1.id },
+    { eventId: event.id, tableGroupId: G.id, tableId: A2.id },
+  ]);
+  const { assignmentId: w3Assignment } = await assignStaffToTables(db, {
+    eventId: event.id,
+    staffId: W3.id,
+    tableIds: [A1.id],
+  });
+  await createSectionHead(db, { eventId: event.id, staffId: H.id });
+
+  const actors = {
+    C: await makeLeader(C.id),
+    S: await makeLeader(S.id),
+    H: await makeLeader(H.id),
+  };
+  return { manager, event, C, W1, W2, S, W3, H, T, G, w3Assignment, actors };
+}
+
+type World = Awaited<ReturnType<typeof setupWorld>>;
+
+function boardIndex(board: ReviewBoard) {
+  return board.teams.flatMap((t) => t.members.map((m) => ({ team: t.name, teamId: t.id, ...m })));
+}
+
+async function rowOf(w: World, staffId: string, reviewerId: string) {
+  const [row] = await db
+    .select()
+    .from(staffPerformanceReviews)
+    .where(
+      and(
+        eq(staffPerformanceReviews.eventId, w.event.id),
+        eq(staffPerformanceReviews.staffId, staffId),
+        eq(staffPerformanceReviews.reviewerId, reviewerId),
+      ),
+    );
+  return row;
+}
+
+describe("hiyerarşik değerlendirme akışları", () => {
+  let w: World;
+
+  beforeEach(async () => {
+    await truncateAll();
+    w = await setupWorld();
+  });
+
+  it("süpervizör grubundaki ekipsiz personeli kaydeder ve tamamlar", async () => {
+    await saveReviewDraft(db, w.actors.S, { ...lists, eventId: w.event.id, staffId: w.W3.id, ratings: FULL_RATINGS });
+    const { review } = await completeReview(db, w.actors.S, { eventId: w.event.id, staffId: w.W3.id });
+    expect(review.isCompleted).toBe(true);
+  });
+
+  it("kaptan ekipsiz personeli değerlendiremez", async () => {
+    await expectForbidden(
+      saveReviewDraft(db, w.actors.C, { ...lists, eventId: w.event.id, staffId: w.W3.id, ratings: FULL_RATINGS }),
+    );
+    expect(await rowOf(w, w.W3.id, w.actors.C.id)).toBeUndefined();
+  });
+
+  it("kısım sorumlusu panoda herkesi görür, kendini görmez; ekipsiz personel 'Ekip dışı personel' altında", async () => {
+    const board = await getReviewBoard(db, w.actors.H, w.event.id);
+    const all = boardIndex(board);
+    expect(all.map((m) => m.staffId).sort()).toEqual([w.C.id, w.W1.id, w.W2.id, w.S.id, w.W3.id].sort());
+    expect(all.find((m) => m.staffId === w.H.id)).toBeUndefined();
+    expect(board.teams.map((t) => t.name)).toEqual(["T", "Ekip dışı personel"]);
+    const outside = board.teams[1];
+    expect(outside).toMatchObject({ id: "ekip-disi", name: "Ekip dışı personel", color: "#64748b" });
+    expect(outside?.members.map((m) => m.staffId).sort()).toEqual([w.S.id, w.W3.id].sort());
+    expect(all.find((m) => m.staffId === w.W3.id)?.bases).toEqual(["section_head"]);
+    // Kaptan kendi ekibinin lideri olarak ekibin altında görünür.
+    expect(all.find((m) => m.staffId === w.C.id)?.team).toBe("T");
+
+    const [listed] = await listReviewableEvents(db, w.actors.H);
+    expect(listed).toMatchObject({ id: w.event.id, teamCount: 2, memberCount: 5, completedCount: 0 });
+  });
+
+  it("iki dayanaklı değerlendirici tek satır üretir ve panoda personel bir kez görünür", async () => {
+    await db.update(tableGroups).set({ supervisorStaffId: w.C.id }).where(eq(tableGroups.id, w.G.id));
+    // W1 ikinci bir ekipte de: panoda yalnızca ilk ekipte (sortOrder, ad) görünür.
+    const T9 = await createTeam(db, { eventId: w.event.id, name: "Z Ekibi" });
+    await addTeamMember(db, T9.id, w.W1.id);
+
+    const input = { ...lists, eventId: w.event.id, staffId: w.W1.id, ratings: FULL_RATINGS };
+    await saveReviewDraft(db, w.actors.C, input);
+    await saveReviewDraft(db, w.actors.C, { ...input, ratings: { ...FULL_RATINGS, communication: 1 } });
+    const rows = await db
+      .select()
+      .from(staffPerformanceReviews)
+      .where(and(eq(staffPerformanceReviews.eventId, w.event.id), eq(staffPerformanceReviews.staffId, w.W1.id)));
+    expect(rows).toHaveLength(1);
+
+    const all = boardIndex(await getReviewBoard(db, w.actors.C, w.event.id));
+    const w1 = all.filter((m) => m.staffId === w.W1.id);
+    expect(w1).toHaveLength(1);
+    expect(w1[0]).toMatchObject({ team: "T", bases: ["captain", "supervisor"] });
+    expect(w1[0]?.review?.ratings.communication).toBe(1);
+    expect(all.find((m) => m.staffId === w.C.id)).toBeUndefined();
+  });
+
+  it("kısım sorumluluğu kaldırılınca sonraki istekte erişim biter", async () => {
+    const input = { ...lists, eventId: w.event.id, staffId: w.W1.id, ratings: FULL_RATINGS };
+    await saveReviewDraft(db, w.actors.H, input);
+    await db.delete(eventSectionHeads).where(eq(eventSectionHeads.staffId, w.H.id));
+    await expectForbidden(saveReviewDraft(db, w.actors.H, input));
+    await expectForbidden(completeReview(db, w.actors.H, { eventId: w.event.id, staffId: w.W1.id }));
+    await expectForbidden(getReviewBoard(db, w.actors.H, w.event.id));
+    expect(await listReviewableEvents(db, w.actors.H)).toEqual([]);
+  });
+
+  it("süpervizör değişince eski süpervizörün erişimi biter; yenisi eskisinin taslağına dokunmaz", async () => {
+    const input = { ...lists, eventId: w.event.id, staffId: w.W3.id, ratings: FULL_RATINGS };
+    await saveReviewDraft(db, w.actors.S, input);
+    const S2 = await f.createStaff(db, { fullName: "Yeni Süpervizör" });
+    const s2 = await makeLeader(S2.id);
+    await db.update(tableGroups).set({ supervisorStaffId: S2.id }).where(eq(tableGroups.id, w.G.id));
+
+    await expectForbidden(saveReviewDraft(db, w.actors.S, input));
+    await expectForbidden(completeReview(db, w.actors.S, { eventId: w.event.id, staffId: w.W3.id }));
+    await expectForbidden(getReviewBoard(db, w.actors.S, w.event.id));
+    expect(await listReviewableEvents(db, w.actors.S)).toEqual([]);
+
+    const res = await completeAllReviews(db, s2, { eventId: w.event.id });
+    expect(res).toMatchObject({ completed: 0, incomplete: 0, skipped: 0, notification: null });
+    expect((await rowOf(w, w.W3.id, w.actors.S.id))?.isCompleted).toBe(false);
+    expect(await rowOf(w, w.W3.id, s2.id)).toBeUndefined();
+    // Yeni süpervizör kendi taslağını yazabilir.
+    await saveReviewDraft(db, s2, input);
+    expect(await rowOf(w, w.W3.id, s2.id)).toBeDefined();
+  });
+
+  it("tümünü tamamla yetkisi kalkan taslağı atlar", async () => {
+    await saveReviewDraft(db, w.actors.S, { ...lists, eventId: w.event.id, staffId: w.W3.id, ratings: FULL_RATINGS });
+    await saveReviewDraft(db, w.actors.S, { ...lists, eventId: w.event.id, staffId: w.W1.id, ratings: FULL_RATINGS });
+    await db.delete(eventStaffAssignments).where(eq(eventStaffAssignments.id, w.w3Assignment));
+
+    const res = await completeAllReviews(db, w.actors.S, { eventId: w.event.id });
+    expect(res).toMatchObject({ completed: 1, incomplete: 0, skipped: 1 });
+    expect((await rowOf(w, w.W3.id, w.actors.S.id))?.isCompleted).toBe(false);
+    expect((await rowOf(w, w.W1.id, w.actors.S.id))?.isCompleted).toBe(true);
+  });
+
+  it("kısa taslak puansızken tamamlanamaz, puanlıyken tamamlanır", async () => {
+    const draft = await createShortReview(db, {
+      eventId: w.event.id,
+      staffId: w.W3.id,
+      reviewerId: w.actors.S.id,
+      overallRating: null,
+      isCompleted: false,
+    });
+    const err = await expectDomain(completeReview(db, w.actors.S, { eventId: w.event.id, staffId: w.W3.id }), "invalid");
+    expect(err.message).toBe(REVIEW_MESSAGES.incompleteShort);
+
+    await db
+      .update(staffPerformanceReviews)
+      .set({ overallRating: 4, score: 80 })
+      .where(eq(staffPerformanceReviews.id, draft.id));
+    const { review } = await completeReview(db, w.actors.S, { eventId: w.event.id, staffId: w.W3.id });
+    expect(review.isCompleted).toBe(true);
+
+    // Toplu tamamlama da aynı kuralı izler.
+    await createShortReview(db, {
+      eventId: w.event.id,
+      staffId: w.W1.id,
+      reviewerId: w.actors.S.id,
+      overallRating: null,
+      isCompleted: false,
+    });
+    await createShortReview(db, {
+      eventId: w.event.id,
+      staffId: w.W2.id,
+      reviewerId: w.actors.S.id,
+      overallRating: 5,
+      isCompleted: false,
+    });
+    expect(await completeAllReviews(db, w.actors.S, { eventId: w.event.id })).toMatchObject({
+      completed: 1,
+      incomplete: 1,
+      skipped: 0,
+    });
+  });
+
+  it("kısa taslak ayrıntılı formla kaydedilince 'full' olur; tamamlık 8 kategoriye göre", async () => {
+    await createShortReview(db, {
+      eventId: w.event.id,
+      staffId: w.W1.id,
+      reviewerId: w.actors.C.id,
+      overallRating: 4,
+      isCompleted: false,
+    });
+    const input = { ...lists, eventId: w.event.id, staffId: w.W1.id, ratings: { communication: 5 } };
+    await saveReviewDraft(db, w.actors.C, input);
+    expect(await rowOf(w, w.W1.id, w.actors.C.id)).toMatchObject({ formKind: "full", overallRating: null });
+    await expectDomain(completeReview(db, w.actors.C, { eventId: w.event.id, staffId: w.W1.id }), "invalid");
+
+    await saveReviewDraft(db, w.actors.C, { ...input, ratings: FULL_RATINGS });
+    const { review } = await completeReview(db, w.actors.C, { eventId: w.event.id, staffId: w.W1.id });
+    expect(review).toMatchObject({ formKind: "full", overallRating: null, isCompleted: true });
+  });
+
+  it("eski ayrıntılı satır panoda aynen görünür", async () => {
+    await db.insert(staffPerformanceReviews).values({
+      staffId: w.W1.id,
+      eventId: w.event.id,
+      reviewerId: w.actors.C.id,
+      score: 77,
+      rating: "good",
+      ...FULL_RATINGS,
+      isCompleted: true,
+    });
+    const member = boardIndex(await getReviewBoard(db, w.actors.C, w.event.id)).find((m) => m.staffId === w.W1.id);
+    expect(member?.review).toMatchObject({ formKind: "full", overallRating: null, score: 77, isCompleted: true });
+    expect(member?.review?.ratings).toEqual(FULL_RATINGS);
+  });
+
+  it("bildirim bağlantısı yeni rotadadır", async () => {
+    await saveReviewDraft(db, w.actors.C, { ...lists, eventId: w.event.id, staffId: w.W1.id, ratings: FULL_RATINGS });
+    await saveReviewDraft(db, w.actors.C, { ...lists, eventId: w.event.id, staffId: w.W2.id, ratings: FULL_RATINGS });
+    const { notification } = await completeReview(db, w.actors.C, { eventId: w.event.id, staffId: w.W1.id });
+    expect(notification.actionUrl).toBe(`/fnb/team/reviews/${w.event.id}`);
+    const all = await completeAllReviews(db, w.actors.C, { eventId: w.event.id });
+    expect(all.notification?.actionUrl).toBe(`/fnb/team/reviews/${w.event.id}`);
+  });
+
+  it("staffId'siz F&B kullanıcısı hiçbir ekip görmez", async () => {
+    // Kapı staffId'siz kullanıcıyı baştan eler: hiçbir ekip dönmez (kapalı başarısızlık).
+    await expectForbidden(scopedTeams(db, await makeLeader(null)));
+  });
+
+  it("ekip kapsamı: yalnızca değerlendirilebilir personeli içeren ekipler ve yalnızca o üyeler", async () => {
+    const Q = await createTeam(db, { eventId: w.event.id, name: "Q" });
+    const W5 = await f.createStaff(db, { fullName: "Garson W5" });
+    await addTeamMember(db, Q.id, W5.id);
+
+    const forC = await scopedTeams(db, w.actors.C);
+    expect(forC.map((t) => t.name)).toEqual(["T"]);
+    expect((await scopedMembers(db, forC)).map((m) => m.fullName)).toEqual(["Garson W1", "Garson W2"]);
+
+    const forS = await scopedTeams(db, w.actors.S);
+    expect(forS.map((t) => t.name)).toEqual(["T"]);
+    // Süpervizör kaptanı da değerlendirir: lider ekibin altında listelenir.
+    expect((await scopedMembers(db, forS)).map((m) => m.fullName)).toEqual(["Garson W1", "Garson W2", "Kaptan C"]);
+
+    const forH = await scopedTeams(db, w.actors.H);
+    expect(forH.map((t) => t.name).sort()).toEqual(["Q", "T"]);
+    // scopedTeams'ten gelmeyen ekip listesi hiçbir üye açmaz.
+    expect(await scopedMembers(db, forH.map((t) => ({ ...t })))).toEqual([]);
+  });
+});
+
+describe("kapı varlık denetiminden önce (olmayan etkinlik / liste dışı personel)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("hiyerarşi aktörü olmayan etkinlikte Forbidden alır; yönetici not_found", async () => {
+    const w = await setupWorld();
+    const eventId = crypto.randomUUID();
+    await expectForbidden(getReviewBoard(db, w.actors.S, eventId));
+    await expectForbidden(completeAllReviews(db, w.actors.S, { eventId }));
+    await expectDomain(getReviewBoard(db, w.manager, eventId), "not_found");
+    await expectDomain(completeAllReviews(db, w.manager, { eventId }), "not_found");
+  });
+
+  it("liste dışı personel: süpervizör Forbidden, yönetici not_found", async () => {
+    const w = await setupWorld();
+    const stranger = await f.createStaff(db, { fullName: "Yabancı" });
+    const input = { eventId: w.event.id, staffId: stranger.id, ratings: FULL_RATINGS, ...lists };
+    await expectForbidden(saveReviewDraft(db, w.actors.S, input));
+    await expectForbidden(completeReview(db, w.actors.S, { eventId: w.event.id, staffId: stranger.id }));
+    await expectDomain(saveReviewDraft(db, w.manager, input), "not_found");
+  });
+});
+
+describe("ekipsiz değerlendirici (loca süpervizörü) lider sayfaları", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function locaWorld() {
+    const manager = await makeActor(managerActor("fnb"));
+    const event = await f.createEvent(db, {
+      organizerId: manager.id,
+      reviewEnabled: true,
+      startsAt: new Date("2027-06-01T18:00:00Z"),
+    });
+    const S = await f.createStaff(db, { fullName: "Loca Süpervizörü" });
+    const W = await f.createStaff(db, { fullName: "Loca Garsonu" });
+    const L1 = await f.createTable(db, event.id, { label: "L1" });
+    const G = await f.createTableGroup(db, event.id, { name: "Loca", supervisorStaffId: S.id });
+    await db.insert(tableGroupTables).values({ eventId: event.id, tableGroupId: G.id, tableId: L1.id });
+    await assignStaffToTables(db, { eventId: event.id, staffId: W.id, tableIds: [L1.id] });
+    // Başka etkinlikte başka bir süpervizör.
+    const otherEvent = await f.createEvent(db, { organizerId: manager.id, startsAt: new Date("2027-07-01T18:00:00Z") });
+    const S2 = await f.createStaff(db, { fullName: "Başka Süpervizör" });
+    const W2 = await f.createStaff(db, { fullName: "Başka Garson" });
+    const L2 = await f.createTable(db, otherEvent.id, { label: "L2" });
+    const G2 = await f.createTableGroup(db, otherEvent.id, { name: "Loca 2", supervisorStaffId: S2.id });
+    await db.insert(tableGroupTables).values({ eventId: otherEvent.id, tableGroupId: G2.id, tableId: L2.id });
+    await assignStaffToTables(db, { eventId: otherEvent.id, staffId: W2.id, tableIds: [L2.id] });
+    return { event, otherEvent, S, W, L1, W2, supervisor: await makeLeader(S.id), supervisor2: await makeLeader(S2.id) };
+  }
+
+  it("panoda etkinlik ve bekleyen değerlendirme sayılır", async () => {
+    const x = await locaWorld();
+    const d = await getLeaderDashboard(db, x.supervisor, new Date("2027-01-01T00:00:00Z"));
+    expect(d).toMatchObject({ teamCount: 0, eventCount: 1, pendingReviewEvents: 1 });
+    expect(d.next?.id).toBe(x.event.id);
+    expect(d.upcoming.map((e) => e.id)).toEqual([x.event.id]);
+  });
+
+  it("etkinlik ayrıntısı 'Ekip dışı personel' altında personeli ve masasını gösterir", async () => {
+    const x = await locaWorld();
+    const detail = await getLeaderEventDetail(db, x.supervisor, x.event.id);
+    expect(detail.event.id).toBe(x.event.id);
+    const outside = detail.teams.find((t) => t.name === "Ekip dışı personel");
+    expect(outside?.members.map((m) => m.staffId)).toEqual([x.W.id]);
+    expect(outside?.members[0]?.tableIds).toEqual([x.L1.id]);
+    expect(outside?.tableIds).toEqual([x.L1.id]);
+    expect(detail.memberCount).toBe(1);
+    // Yalnızca değerlendirilebilir personel: başka etkinlikteki personel görünmez.
+    expect(JSON.stringify(detail)).not.toContain(x.W2.id);
+    await expectDomain(getLeaderEventDetail(db, x.supervisor2, x.event.id), "not_found");
+    await expectDomain(getLeaderEventDetail(db, x.supervisor, x.otherEvent.id), "not_found");
+  });
+
+  it("ekip dışı personelin masaları yalnızca etkin atamalardan gelir", async () => {
+    const x = await locaWorld();
+    const L7 = await f.createTable(db, x.event.id, { label: "L7" });
+    // Aynı personel için ikinci (vardiyalı) atama; pasife alınır.
+    const shift = await f.createShift(db, {});
+    const second = await f.createAssignment(db, { eventId: x.event.id, staffId: x.W.id, shiftId: shift.id });
+    await db.insert(assignmentTables).values({ eventId: x.event.id, assignmentId: second.id, tableId: L7.id });
+    const assignmentId = second.id;
+    await db.update(eventStaffAssignments).set({ isActive: false }).where(eq(eventStaffAssignments.id, assignmentId));
+    const detail = await getLeaderEventDetail(db, x.supervisor, x.event.id);
+    const outside = detail.teams.find((t) => t.name === "Ekip dışı personel");
+    expect(outside?.tableIds).toEqual([x.L1.id]);
+    expect(detail.assignedTableIds).not.toContain(L7.id);
+    expect(detail.tableLabels[L7.id]).toBeUndefined();
+  });
+
+  it("üye performansı ekipsiz ama değerlendirilebilir personel için açılır", async () => {
+    const x = await locaWorld();
+    const perf = await getMemberPerformance(db, x.supervisor, x.W.id);
+    expect(perf).toMatchObject({ staffId: x.W.id, teams: [], reviewCount: 0 });
+    await expectDomain(getMemberPerformance(db, x.supervisor, x.W2.id), "not_found");
+    await expectDomain(getMemberPerformance(db, x.supervisor, x.S.id), "not_found");
+  });
+});

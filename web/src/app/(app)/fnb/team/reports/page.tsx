@@ -29,7 +29,7 @@ export default async function LeaderReportsPage() {
       {report.teamCount === 0 ? (
         <EmptyState
           title="Rapor için takım yok"
-          description="Bir etkinlikte ekip lideri olarak atandığınızda raporlar burada görünür."
+          description="Bir etkinlikte ekip lideri, süpervizör ya da kısım sorumlusu olarak atandığınızda raporlar burada görünür."
         />
       ) : (
         <div className="space-y-6">

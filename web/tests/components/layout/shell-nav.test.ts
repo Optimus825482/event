@@ -32,11 +32,11 @@ describe("buildShellNav", () => {
     const nav = buildShellNav(visibleNavGroups(memberActor("fnb", { reviews: "v---" }, { staffId: "s1" })));
     expect(nav.modules).toHaveLength(1);
     expect(nav.modules[0]?.items.map((i) => i.href)).toEqual([
-      "/leader",
-      "/leader/events",
-      "/leader/team",
-      "/leader/reviews",
-      "/leader/reports",
+      "/fnb/team",
+      "/fnb/team/events",
+      "/fnb/team/members",
+      "/fnb/team/reviews",
+      "/fnb/team/reports",
     ]);
   });
 

@@ -11,10 +11,11 @@ function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOption
 }
 
 /**
- * Lider `reviews` modülünde yalnızca kendi ekibi için yetkilidir; eylem kapısında aktörün kendi
- * ekibi kaynak olarak verilir. Hedef personelin gerçekten o ekipte olduğu serviste denetlenir.
+ * Hiyerarşi aktörü (`ownTeamOnly`) `reviews` modülünde yalnızca değerlendirici olduğu personel için
+ * yetkilidir; eylem kapısında aktörün kendisi değerlendirici olarak verilir (yalnızca kapı). Hedef
+ * personeli gerçekten değerlendirip değerlendiremeyeceği serviste `assertCanReview` ile denetlenir.
  */
-const RESOURCE = ({ actor }: { actor: Actor }) => (actor.staffId ? { teamLeaderStaffId: actor.staffId } : {});
+const RESOURCE = ({ actor }: { actor: Actor }) => (actor.staffId ? { reviewerStaffIds: [actor.staffId] } : {});
 const EDIT_GATE = { module: "reviews", verb: "edit", resource: RESOURCE } as const;
 /**
  * Kaydetme yeni taslak (`create`) ya da güncelleme (`edit`) olabilir; hangisi olduğunu servis kayda

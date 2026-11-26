@@ -16,9 +16,10 @@ import type { Actor } from "@/features/auth/session";
 import { getFloorPlan } from "@/features/venue/plan-service";
 import type { FloorPlanData } from "@/features/venue/plan-types";
 import { DomainError } from "@/lib/action";
-import { scopedMembers, scopedTeams, type ScopedMember, type ScopedTeam } from "./leader-scope";
+import { reviewableByEvent, scopedMembers, scopedTeams, type ScopedTeam } from "./leader-scope";
 import { average, categoryAverages, countdownParts, trendOf, type Trend } from "./leader-stats";
-import { listReviewableEvents, type ReviewableEvent } from "./queries";
+import { reviewEventIds, reviewableStaff } from "./authority";
+import { OUTSIDE_TEAM, listReviewableEvents, type ReviewableEvent } from "./queries";
 import { RATING_KEYS, ratingBand, type RatingBand, type RatingKey } from "./score";
 
 type Executor = Db | Tx;
@@ -55,6 +56,14 @@ function eventRefs(teamRows: ScopedTeam[]): LeaderEventRef[] {
   return [...seen.values()];
 }
 
+function unionRefs(refs: LeaderEventRef[], reviewable: ReviewableEvent[]): LeaderEventRef[] {
+  const seen = new Map(refs.map((r) => [r.id, r]));
+  for (const e of reviewable) {
+    if (!seen.has(e.id)) seen.set(e.id, { id: e.id, name: e.name, startsAt: e.startsAt, status: e.status });
+  }
+  return [...seen.values()];
+}
+
 function isUpcoming(event: LeaderEventRef, now: Date): boolean {
   return UPCOMING.has(event.status) && new Date(event.startsAt).getTime() >= now.getTime();
 }
@@ -67,9 +76,11 @@ export async function getLeaderDashboard(
 ): Promise<LeaderDashboard> {
   const teamRows = await scopedTeams(executor, actor);
   const members = await scopedMembers(executor, teamRows);
-  const refs = eventRefs(teamRows);
+  // Ekipsiz değerlendiriciler (loca süpervizörü, ekipsiz etkinlikte kısım sorumlusu) de etkinlik sayar:
+  // etkinlikler ekiplerin ve değerlendirilebilir etkinliklerin birleşimidir.
+  const reviewable = await listReviewableEvents(executor, actor);
+  const refs = unionRefs(eventRefs(teamRows), reviewable);
   const upcoming = refs.filter((e) => isUpcoming(e, now)).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  const reviewable = teamRows.length === 0 ? [] : await listReviewableEvents(executor, actor);
   return {
     teamCount: teamRows.length,
     memberCount: new Set(members.map((m) => m.staffId)).size,
@@ -116,9 +127,9 @@ export type LeaderEventDetail = {
 };
 
 /** Ekibin masaları: ekibe bağlı masa grupları ile üyelerin bu etkinlikteki atamalarının birleşimi. */
-async function loadTableLinks(executor: Executor, eventId: string, teamRows: ScopedTeam[], members: ScopedMember[]) {
+async function loadTableLinks(executor: Executor, eventId: string, teamRows: ScopedTeam[], staffIds: string[]) {
   const teamIds = teamRows.map((t) => t.id);
-  const memberIds = [...new Set(members.map((m) => m.staffId))];
+  const memberIds = [...new Set(staffIds)];
   const groupRows =
     teamIds.length === 0
       ? []
@@ -134,13 +145,20 @@ async function loadTableLinks(executor: Executor, eventId: string, teamRows: Sco
           .select({ staffId: eventStaffAssignments.staffId, tableId: assignmentTables.tableId })
           .from(eventStaffAssignments)
           .innerJoin(assignmentTables, eq(assignmentTables.assignmentId, eventStaffAssignments.id))
-          .where(and(eq(eventStaffAssignments.eventId, eventId), inArray(eventStaffAssignments.staffId, memberIds)));
+          .where(
+            and(
+              eq(eventStaffAssignments.eventId, eventId),
+              eq(eventStaffAssignments.isActive, true),
+              inArray(eventStaffAssignments.staffId, memberIds),
+            ),
+          );
   return { groupRows, assignmentRows };
 }
 
 /**
- * Atanan etkinlik ayrıntısı. Etkinlikte aktörün kapsamında ekip yoksa `not_found`
- * (lider başkasının etkinliğini göremez; var olup olmadığı da sızmaz).
+ * Atanan etkinlik ayrıntısı. Aktörün etkinlikte değerlendirebildiği kimse yoksa `not_found`
+ * (lider başkasının etkinliğini göremez; var olup olmadığı da sızmaz). Hiçbir ekipte olmayan
+ * değerlendirilebilir personel (ör. loca süpervizörünün personeli) "Ekip dışı personel" altında gelir.
  */
 export async function getLeaderEventDetail(
   executor: Executor,
@@ -148,12 +166,26 @@ export async function getLeaderEventDetail(
   eventId: string,
 ): Promise<LeaderEventDetail> {
   const teamRows = (await scopedTeams(executor, actor)).filter((t) => t.eventId === eventId);
-  const [first] = teamRows;
-  if (!first || !first.eventName || !first.eventStartsAt || !first.eventStatus) {
-    throw new DomainError("not_found", NOT_FOUND_EVENT);
-  }
+  const reviewable = await reviewableStaff(executor, actor, eventId);
+  if (reviewable.size === 0) throw new DomainError("not_found", NOT_FOUND_EVENT);
+  const [event] = await executor
+    .select({ name: events.name, startsAt: events.startsAt, status: events.status })
+    .from(events)
+    .where(eq(events.id, eventId));
+  if (!event) throw new DomainError("not_found", NOT_FOUND_EVENT);
+
   const members = await scopedMembers(executor, teamRows);
-  const { groupRows, assignmentRows } = await loadTableLinks(executor, eventId, teamRows, members);
+  const inTeams = new Set(members.map((m) => m.staffId));
+  const outsideIds = [...reviewable.keys()].filter((id) => !inTeams.has(id));
+  const outsidePeople =
+    outsideIds.length === 0
+      ? []
+      : await executor
+          .select({ staffId: staff.id, fullName: staff.fullName, color: staff.color })
+          .from(staff)
+          .where(inArray(staff.id, outsideIds))
+          .orderBy(asc(staff.fullName));
+  const { groupRows, assignmentRows } = await loadTableLinks(executor, eventId, teamRows, [...inTeams, ...outsideIds]);
 
   const tablesOfStaff = (staffId: string) => [
     ...new Set(assignmentRows.filter((a) => a.staffId === staffId).map((a) => a.tableId)),
@@ -175,6 +207,14 @@ export async function getLeaderEventDetail(
       tableIds: [...new Set([...groupTables, ...memberTables])],
     };
   });
+  if (outsidePeople.length > 0) {
+    const outsideMembers = outsidePeople.map((p) => ({ ...p, tableIds: tablesOfStaff(p.staffId) }));
+    teamsView.push({
+      ...OUTSIDE_TEAM,
+      members: outsideMembers,
+      tableIds: [...new Set(outsideMembers.flatMap((m) => m.tableIds))],
+    });
+  }
   const assignedTableIds = [...new Set(teamsView.flatMap((t) => t.tableIds))];
 
   const labelRows =
@@ -200,9 +240,9 @@ export async function getLeaderEventDetail(
   const plan = await getFloorPlan(executor, actor, eventId);
 
   return {
-    event: { id: eventId, name: first.eventName, startsAt: first.eventStartsAt.toISOString(), status: first.eventStatus },
+    event: { id: eventId, name: event.name, startsAt: event.startsAt.toISOString(), status: event.status },
     teams: teamsView,
-    memberCount: new Set(members.map((m) => m.staffId)).size,
+    memberCount: inTeams.size + outsidePeople.length,
     assignedTableIds,
     tableLabels: Object.fromEntries(labelRows.map((r) => [r.id, r.label])),
     guestCount: guestRows.reduce((sum, r) => sum + r.guestCount, 0),
@@ -295,7 +335,14 @@ function ratingsOf(row: ReviewRatings): ReviewRatings {
   return Object.fromEntries(RATING_KEYS.map((k) => [k, row[k]])) as ReviewRatings;
 }
 
-/** Ekip üyesinin performans analizi. Üye aktörün ekiplerinde değilse `not_found`. */
+async function isReviewableAnywhere(executor: Executor, actor: Actor, staffId: string): Promise<boolean> {
+  const eventIds = await reviewEventIds(executor, actor);
+  if (eventIds.length === 0) return false;
+  const byEvent = await reviewableByEvent(executor, actor, eventIds);
+  return [...byEvent.values()].some((map) => map.has(staffId));
+}
+
+/** Ekip üyesinin performans analizi. Üye aktörün ekiplerinde ve değerlendirilebilir kümesinde değilse `not_found`. */
 export async function getMemberPerformance(
   executor: Executor,
   actor: Actor,
@@ -303,7 +350,10 @@ export async function getMemberPerformance(
 ): Promise<MemberPerformance> {
   const teamRows = await scopedTeams(executor, actor);
   const memberships = (await scopedMembers(executor, teamRows)).filter((m) => m.staffId === staffId);
-  if (memberships.length === 0) throw new DomainError("not_found", NOT_FOUND_MEMBER);
+  // Ekipsiz ama herhangi bir etkinlikte değerlendirilebilen personel de açılır (ekip listesi boş kalır).
+  if (memberships.length === 0 && !(await isReviewableAnywhere(executor, actor, staffId))) {
+    throw new DomainError("not_found", NOT_FOUND_MEMBER);
+  }
   const [person] = await executor
     .select({ fullName: staff.fullName, sicilNo: staff.sicilNo })
     .from(staff)

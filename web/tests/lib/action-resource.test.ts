@@ -7,7 +7,7 @@ import { truncateAll } from "../helpers/db";
 import { createStaff } from "../helpers/factories";
 import { makeLeader } from "../features/reviews/helpers";
 
-const input = z.object({ teamLeaderStaffId: z.uuid() });
+const input = z.object({ reviewerStaffId: z.uuid() });
 
 function actionFor(actor: Actor) {
   return createAction({ getActor: async () => actor }).defineAction;
@@ -28,29 +28,29 @@ describe("defineAction resource seçeneği", () => {
     // leader reviews/delete yetkisine sahip değil; girdi de geçersiz: forbidden gelmeli.
     const run = actionFor(leader)({ module: "reviews", verb: "delete", input, handler });
 
-    expect(await run({ teamLeaderStaffId: "geçersiz" })).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await run({ reviewerStaffId: "geçersiz" })).toMatchObject({ ok: false, code: "forbidden" });
     expect(handler).not.toHaveBeenCalled();
   });
 
   it("resource varken girdi önce doğrulanır, çözülen kaynak authorize'a geçirilir", async () => {
     const resource = vi.fn(({ input: parsed }: { input: z.infer<typeof input> }) => ({
-      teamLeaderStaffId: parsed.teamLeaderStaffId,
+      reviewerStaffIds: [parsed.reviewerStaffId],
     }));
     const handler = vi.fn(async () => "ok");
     const run = actionFor(leader)({ module: "reviews", verb: "view", input, resource, handler });
 
     // Geçersiz girdi: yetki sorusuna gelmeden invalid.
-    expect(await run({ teamLeaderStaffId: "geçersiz" })).toMatchObject({ ok: false, code: "invalid" });
+    expect(await run({ reviewerStaffId: "geçersiz" })).toMatchObject({ ok: false, code: "invalid" });
     expect(resource).not.toHaveBeenCalled();
 
-    // Lider kendi ekibinin kaynağında yetkili.
-    expect(await run({ teamLeaderStaffId: ownStaffId })).toEqual({ ok: true, data: "ok" });
-    expect(resource).toHaveBeenCalledWith({ actor: leader, input: { teamLeaderStaffId: ownStaffId } });
+    // Lider kendini değerlendirici veren kaynakta yetkili.
+    expect(await run({ reviewerStaffId: ownStaffId })).toEqual({ ok: true, data: "ok" });
+    expect(resource).toHaveBeenCalledWith({ actor: leader, input: { reviewerStaffId: ownStaffId } });
     expect(handler).toHaveBeenCalledTimes(1);
 
-    // Başka liderin ekibi: forbidden, handler çalışmaz.
+    // Başka kişi değerlendirici: forbidden, handler çalışmaz.
     const otherStaffId = (await createStaff(db, { fullName: "Lider İki" })).id;
-    expect(await run({ teamLeaderStaffId: otherStaffId })).toMatchObject({ ok: false, code: "forbidden" });
+    expect(await run({ reviewerStaffId: otherStaffId })).toMatchObject({ ok: false, code: "forbidden" });
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });

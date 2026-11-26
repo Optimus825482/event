@@ -23,6 +23,10 @@ function fakeOrganization(): Organization {
     servicePointRoles: [{ servicePointId: SP, roles: [] }],
     shifts: [],
     staff: [{ id: P1, fullName: "Ali Veli", sicilNo: "001", color: null }],
+    reviewHints: {},
+    supervisorNames: {},
+    locaStaffing: [],
+    sectionHeads: [],
   };
 }
 

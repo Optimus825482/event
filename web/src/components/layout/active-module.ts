@@ -20,7 +20,7 @@ export function findActiveGroup(groups: readonly ShellGroup[], pathname: string)
 
 /**
  * Bir öğe, yola tam uyduğunda ya da yolun öncülü olduğu hâlde daha uzun bir kardeş öğe
- * (ör. /leader ve /leader/events) yola uymuyorsa etkindir.
+ * (ör. /fnb/team ve /fnb/team/events) yola uymuyorsa etkindir.
  */
 export function isItemActive(pathname: string, item: ShellItem, siblings: readonly ShellItem[] = []): boolean {
   if (!pathMatches(pathname, item.href)) return false;
@@ -44,7 +44,9 @@ const ROUTE_LABELS: Record<string, string> = {
   staff: "Ekipler",
   venues: "Şablonlar",
   templates: "Davetiye Şablonları",
-  leader: "Lider",
+  team: "Ekip Panosu",
+  reports: "Raporlar",
+  members: "Ekibim",
   reviews: "Değerlendirmeler",
   notifications: "Bildirimler",
   admin: "Yönetim",
@@ -75,6 +77,9 @@ export function buildCrumbs(pathname: string, linkable: ReadonlySet<string>): Cr
     const href = `/${segments.slice(0, index + 1).join("/")}`;
     const isId = ID_SEGMENT.test(segment);
     const isLast = index === segments.length - 1;
+    // Modül kökü (/fnb) başka bir sayfanın üstündeyse kırıntı olmaz: rozet modülü zaten söyler ve
+    // "Etkinlikler" bağlantısı ekip sayfalarının üst sayfası değildir.
+    if (segment === "fnb" && index === 0 && !isLast) return;
     const label = isId ? "Detay" : (ROUTE_LABELS[segment] ?? humanize(segment));
     crumbs.push({ label, href: !isLast && (isId || linkable.has(href)) ? href : null });
   });

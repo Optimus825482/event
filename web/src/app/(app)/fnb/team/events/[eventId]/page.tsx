@@ -18,6 +18,7 @@ import {
 import { orNotFound } from "@/features/reviews/leader-page";
 import { getLeaderEventDetail } from "@/features/reviews/leader-queries";
 import { canUseLeaderPanel } from "@/features/reviews/leader-scope";
+import { REVIEW_ROUTES } from "@/features/reviews/routes";
 import { isUuid } from "@/lib/identifiers";
 
 export const metadata: Metadata = { title: "Etkinlik | Lider | EventFlow" };
@@ -31,7 +32,7 @@ export default async function LeaderEventPage({ params }: { params: Promise<{ ev
 
   return (
     <div className="mx-auto max-w-6xl">
-      <Link href="/leader/events" className="text-sm text-slate-400 hover:text-cyan-300 hover:underline">
+      <Link href={REVIEW_ROUTES.events} className="text-sm text-slate-400 hover:text-cyan-300 hover:underline">
         Etkinlikler
       </Link>
       <PageHeader
@@ -42,7 +43,7 @@ export default async function LeaderEventPage({ params }: { params: Promise<{ ev
           <>
             <EventStatusBadge status={detail.event.status} />
             <Button asChild variant="outline" size="sm">
-              <Link href={`/leader/reviews/${detail.event.id}`}>Değerlendir</Link>
+              <Link href={REVIEW_ROUTES.reviewBoard(detail.event.id)}>Değerlendir</Link>
             </Button>
           </>
         }
@@ -84,7 +85,7 @@ export default async function LeaderEventPage({ params }: { params: Promise<{ ev
                   <ul className="space-y-1">
                     {team.members.map((m) => (
                       <li key={m.staffId} className="flex items-center justify-between gap-2 text-sm">
-                        <Link href={`/leader/team/${m.staffId}`} className="text-slate-300 hover:text-cyan-300 hover:underline">
+                        <Link href={REVIEW_ROUTES.member(m.staffId)} className="text-slate-300 hover:text-cyan-300 hover:underline">
                           {m.fullName}
                         </Link>
                         <span className="text-xs text-slate-500">

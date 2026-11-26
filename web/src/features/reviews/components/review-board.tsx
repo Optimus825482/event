@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { BAND_LABELS } from "../labels";
-import type { BoardMember, ReviewBoard } from "../queries";
+import type { BoardMember, ReviewBoard, ReviewView } from "../queries";
 import { CompleteAllButton } from "./complete-all-button";
 import { ReviewForm } from "./review-form";
 import { ReviewSummary } from "./review-summary";
@@ -18,19 +18,34 @@ function StatusBadge({ member }: { member: BoardMember }) {
   return <Badge variant="secondary">Taslak</Badge>;
 }
 
+/** Salt okunur görünüm: kısa form yalnızca yıldız ve notları gösterir, ayrıntılı form tüm kategorileri. */
+function ReadOnlyReview({ review }: { review: ReviewView }) {
+  if (review.formKind !== "short") return <ReviewSummary review={review} />;
+  return (
+    <div className="space-y-2 text-sm">
+      <p>
+        Genel puan: <strong>{review.overallRating === null ? "-" : `${review.overallRating} / 5`}</strong> (
+        {BAND_LABELS[review.band]})
+      </p>
+      {review.comment ? <p>Kısa not: {review.comment}</p> : null}
+      {review.nextEventNotes ? <p>Sonraki etkinlik notu: {review.nextEventNotes}</p> : null}
+    </div>
+  );
+}
+
 function MemberReview({ eventId, member, writable }: { eventId: string; member: BoardMember; writable: boolean }) {
   const review = member.review;
   if (review?.isCompleted) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">Bu değerlendirme tamamlandı ve kilitlendi.</p>
-        <ReviewSummary review={review} />
+        <ReadOnlyReview review={review} />
       </div>
     );
   }
   if (!writable) {
     return review ? (
-      <ReviewSummary review={review} />
+      <ReadOnlyReview review={review} />
     ) : (
       <p className="text-sm text-muted-foreground">Bu etkinlik için değerlendirme sistemi kapalı.</p>
     );

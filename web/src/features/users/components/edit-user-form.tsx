@@ -10,18 +10,28 @@ import type { ActionResult } from "@/lib/action";
 import { updateUserAction } from "../actions";
 import { ACCESS_MESSAGES } from "../access-rules";
 import { ROLE_CHOICES, usesDepartments } from "../form-model";
-import type { UserDetail } from "../queries";
+import type { LinkableStaff, UserDetail } from "../queries";
 import { Field, FormStatus, SELECT_CLASS, toFormState, type FormState } from "./field";
+import { StaffLinkField } from "./staff-link-field";
 import { AccessFields, type AccessValue } from "./membership-fields";
 
 const UPDATED_MESSAGE = "Kullanıcı güncellendi";
 
-export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (message: string) => void }) {
+export function EditUserForm({
+  user,
+  onDone,
+  staffOptions = [],
+}: {
+  user: UserDetail;
+  onDone?: (message: string) => void;
+  staffOptions?: readonly LinkableStaff[];
+}) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(null);
   const [role, setRole] = useState<Role>(user.role);
+  const [staffId, setStaffId] = useState<string | null>(user.staffId);
   const [access, setAccess] = useState<AccessValue>({ memberships: user.memberships, grants: user.permissions });
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -40,6 +50,7 @@ export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (mes
         name: String(data.get("name") ?? ""),
         email: String(data.get("email") ?? ""),
         role,
+        staffId,
         phone: String(data.get("phone") ?? ""),
         position: String(data.get("position") ?? ""),
         ...(withDepartments ? { memberships: access.memberships, permissions: access.grants } : {}),
@@ -85,6 +96,13 @@ export function EditUserForm({ user, onDone }: { user: UserDetail; onDone?: (mes
       <Field id="position" label="Görev" errors={errors?.position}>
         <Input id="position" name="position" defaultValue={user.position ?? ""} />
       </Field>
+      <StaffLinkField
+        options={staffOptions}
+        value={staffId}
+        onChange={setStaffId}
+        selfId={user.id}
+        errors={errors?.staffId}
+      />
       {usesDepartments(role) ? <AccessFields value={access} onChange={setAccess} /> : null}
       <div className="flex items-end gap-3 sm:col-span-2 in-data-[slot=dialog-content]:sticky in-data-[slot=dialog-content]:bottom-0 in-data-[slot=dialog-content]:z-10 in-data-[slot=dialog-content]:-mx-6 in-data-[slot=dialog-content]:-mb-6 in-data-[slot=dialog-content]:border-t in-data-[slot=dialog-content]:bg-background in-data-[slot=dialog-content]:px-6 in-data-[slot=dialog-content]:py-4">
         <Button type="submit" disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">

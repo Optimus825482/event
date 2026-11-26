@@ -87,8 +87,8 @@ describe("admin", () => {
     }
   });
 
-  it("admin ekip kaynağından bağımsızdır", () => {
-    expect(can(admin(), "reviews", "edit", { teamLeaderStaffId: "baska" })).toBe(true);
+  it("admin değerlendirici kaynağından bağımsızdır", () => {
+    expect(can(admin(), "reviews", "edit", { reviewerStaffIds: ["baska"] })).toBe(true);
   });
 });
 
@@ -132,19 +132,31 @@ describe("departman kuralları", () => {
     expect(() => authorize(user([m("fnb", "assistant")]), "staff", "delete")).toThrow(ForbiddenError);
   });
 
-  it("F&B kullanıcısı yalnızca kendi ekibinin değerlendirmesine erişir", () => {
+  it("F&B kullanıcısı yalnızca değerlendirici kümesinde olduğu personele erişir", () => {
     const a = user([m("fnb", "member")], { reviews: "vce-" }, "s1");
-    expect(can(a, "reviews", "view", { teamLeaderStaffId: "s1" })).toBe(true);
-    expect(can(a, "reviews", "view", { teamLeaderStaffId: "s2" })).toBe(false);
+    expect(can(a, "reviews", "view", { reviewerStaffIds: ["s0", "s1"] })).toBe(true);
+    expect(can(a, "reviews", "view", { reviewerStaffIds: ["s2"] })).toBe(false);
+    expect(can(a, "reviews", "view", { reviewerStaffIds: [] })).toBe(false);
     expect(can(a, "reviews", "view")).toBe(false);
   });
 
-  it("staffId'siz F&B kullanıcısı hiçbir ekibe erişemez", () => {
-    expect(can(user([m("fnb", "member")], { reviews: "vced" }), "reviews", "view", { teamLeaderStaffId: "s1" })).toBe(false);
+  it("eski teamLeaderStaffId alanı tanınmaz: kapalı başarısız olur", () => {
+    const a = user([m("fnb", "member")], { reviews: "vce-" }, "s1");
+    expect(can(a, "reviews", "view", { teamLeaderStaffId: "s1" } as never)).toBe(false);
   });
 
-  it("F&B yöneticisi tüm ekiplere erişir", () => {
-    expect(can(user([m("fnb", "manager")]), "reviews", "edit", { teamLeaderStaffId: "s9" })).toBe(true);
+  it("staffId'siz F&B kullanıcısı kümede olmasa da erişemez", () => {
+    const noStaff = user([m("fnb", "member")], { reviews: "vce-" });
+    expect(can(noStaff, "reviews", "view", { reviewerStaffIds: [] })).toBe(false);
+  });
+
+  it("kümedeki kullanıcı izin satırında olmayan fiili alamaz", () => {
+    const a = user([m("fnb", "member")], { reviews: "vce-" }, "s1");
+    expect(can(a, "reviews", "delete", { reviewerStaffIds: ["s1"] })).toBe(false);
+  });
+
+  it("F&B yöneticisi tüm personele erişir", () => {
+    expect(can(user([m("fnb", "manager")]), "reviews", "edit", { reviewerStaffIds: [] })).toBe(true);
   });
 
   it("izin satırı kısıt değildir: yöneticinin açık bayrakları kapatan satırı yok sayılır", () => {

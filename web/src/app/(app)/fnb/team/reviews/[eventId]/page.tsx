@@ -10,6 +10,7 @@ import { getReviewBoard } from "@/features/reviews/queries";
 import { DomainError } from "@/lib/action";
 import { isUuid } from "@/lib/identifiers";
 import { ownTeamOnly } from "@/features/auth/scope";
+import { REVIEW_ROUTES } from "@/features/reviews/routes";
 
 export const metadata: Metadata = { title: "Ekip değerlendirmesi | EventFlow" };
 
@@ -30,7 +31,7 @@ export default async function ReviewBoardPage({ params }: { params: Promise<{ ev
 
   return (
     <div className="mx-auto max-w-4xl">
-      <Link href="/leader/reviews" className="text-sm text-slate-400 hover:text-cyan-300 hover:underline">
+      <Link href={REVIEW_ROUTES.reviews} className="text-sm text-slate-400 hover:text-cyan-300 hover:underline">
         Değerlendirmeler
       </Link>
       <PageHeader className="mt-2" title={board.event.name} description="Ekip üyelerini değerlendirin" />

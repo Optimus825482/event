@@ -68,11 +68,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/fnb", label: "Etkinlikler", module: "venues", alsoRequires: "events", group: "fnb", icon: "calendar" },
   { href: "/venues", label: "Yerleşim Şablonları", module: "venues", group: "fnb", icon: "layout-template" },
   { href: "/staff", label: "Ekipler", module: "staff", group: "fnb", icon: "users" },
-  { href: "/leader", label: "Ekip Panosu", module: "reviews", group: "fnb", icon: "layout-dashboard" },
-  { href: "/leader/events", label: "Ekip Etkinlikleri", module: "reviews", group: "fnb", icon: "calendar" },
-  { href: "/leader/team", label: "Ekibim", module: "reviews", group: "fnb", icon: "users" },
-  { href: "/leader/reviews", label: "Değerlendirmeler", module: "reviews", group: "fnb", icon: "star" },
-  { href: "/leader/reports", label: "Raporlar", module: "reviews", group: "fnb", icon: "bar-chart" },
+  { href: "/fnb/team", label: "Ekip Panosu", module: "reviews", group: "fnb", icon: "layout-dashboard" },
+  { href: "/fnb/team/events", label: "Ekip Etkinlikleri", module: "reviews", group: "fnb", icon: "calendar" },
+  { href: "/fnb/team/members", label: "Ekibim", module: "reviews", group: "fnb", icon: "users" },
+  { href: "/fnb/team/reviews", label: "Değerlendirmeler", module: "reviews", group: "fnb", icon: "star" },
+  { href: "/fnb/team/reports", label: "Raporlar", module: "reviews", group: "fnb", icon: "bar-chart" },
   { href: "/reservations", label: "Rezervasyonlar", module: "reservations", group: "casino", icon: "ticket" },
   { href: "/customers", label: "Müşteriler", module: "customers", group: "casino", icon: "user-round" },
   { href: "/guests", label: "Misafirler", module: "customers", group: "casino", icon: "contact" },
@@ -113,11 +113,11 @@ export function visibleNavGroups(actor: PolicyActor): NavGroupView[] {
   );
 }
 
-// `reviews` modülünde kendi ekibiyle sınırlı aktör yalnızca kendi ekibini görür; menüde modülün görünmesi için
-// aktörün kendi ekibi varsayılır. Gerçek sahiplik denetimi sayfa/action içinde yapılır.
+// `reviews` modülünde kendi ekibiyle sınırlı aktör yalnızca değerlendirebildiklerini görür; menüde modülün
+// görünmesi için aktörün bir değerlendirici olduğu varsayılır. Gerçek denetim sayfa/action içinde yapılır.
 function navResource(actor: PolicyActor, module: Module) {
   if (module === "reviews" && ownTeamOnly(actor) && actor.staffId !== null) {
-    return { teamLeaderStaffId: actor.staffId };
+    return { reviewerStaffIds: [actor.staffId] };
   }
   return undefined;
 }

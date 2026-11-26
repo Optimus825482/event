@@ -8,6 +8,7 @@ import { db } from "@/db/client";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { formatDateTime, LeaderStat } from "@/features/reviews/components/leader-ui";
 import { listReviewableEvents } from "@/features/reviews/queries";
+import { REVIEW_ROUTES } from "@/features/reviews/routes";
 
 export const metadata: Metadata = { title: "Değerlendirmeler | EventFlow" };
 
@@ -38,14 +39,14 @@ export default async function ReviewsPage() {
       {events.length === 0 ? (
         <EmptyState
           title="Değerlendirilecek etkinlik yok"
-          description="Değerlendirilecek ekip üyesi olan bir etkinlik yok. Bir etkinlikte ekip lideri olarak atandığınızda burada görünür."
+          description="Değerlendirilecek ekip üyesi olan bir etkinlik yok. Bir etkinlikte ekip lideri, süpervizör ya da kısım sorumlusu olarak atandığınızda burada görünür."
         />
       ) : (
         <ul className="space-y-3">
           {events.map((event) => (
             <li key={event.id}>
               <Link
-                href={`/leader/reviews/${event.id}`}
+                href={REVIEW_ROUTES.reviewBoard(event.id)}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 transition-colors hover:border-cyan-500/40 hover:bg-slate-800 focus-visible:outline-2"
               >
                 <div className="space-y-1">
