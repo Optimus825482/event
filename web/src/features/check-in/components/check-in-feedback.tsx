@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-react";
 import Link from "next/link";
+import { batchMessage } from "./batch-feedback";
 import type { CheckInFeedback, QueuedReason } from "./use-check-in";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 
@@ -74,6 +75,30 @@ export function CheckInFeedbackBanner({
             <p className="text-lg font-semibold">{QUEUED_TITLE[feedback.reason]}</p>
             <p>Bu giriş henüz sunucuda ONAYLANMADI. Bağlantı gelince otomatik gönderilir; bekleyen sayısı aşağıda görünür.</p>
           </div>
+        </div>
+        <CloseButton onClose={onClose} className="text-sky-200 hover:bg-sky-500/20" />
+      </div>
+    );
+  }
+
+  if (feedback.kind === "batch") {
+    const { tally } = feedback;
+    return (
+      <div
+        role="status"
+        className="flex items-start justify-between gap-4 rounded-xl border-2 border-sky-500/60 bg-sky-500/10 p-4 text-sky-100"
+      >
+        <div className="space-y-1">
+          <p className="text-lg font-semibold">{batchMessage(tally)}</p>
+          {tally.queued > 0 ? (
+            <p>Kuyruğa alınan girişler henüz sunucuda ONAYLANMADI; bağlantı gelince otomatik gönderilir.</p>
+          ) : null}
+          {tally.failed > 0 ? (
+            <p>
+              Reddedilen biletler gönderilemeyen girişler listesinde nedenleriyle görünür. Ödemesi sonradan tamamlanan bilet
+              için kodu yeniden okutun.
+            </p>
+          ) : null}
         </div>
         <CloseButton onClose={onClose} className="text-sky-200 hover:bg-sky-500/20" />
       </div>

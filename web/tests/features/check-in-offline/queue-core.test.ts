@@ -5,6 +5,7 @@ import {
   claim,
   heldAside,
   itemKind,
+  migrateStoredItem,
   ownedBy,
   recoverInterrupted,
   retryFailed,
@@ -13,7 +14,7 @@ import {
   type BatchOutcome,
   type QueueItem,
 } from "@/features/check-in/offline/queue-core";
-import { item, OTHER_USER_ID, success, USER_ID, walkInItem } from "./helpers";
+import { item, OTHER_USER_ID, success, ticketItem, USER_ID, walkInItem } from "./helpers";
 
 describe("walk-in öğesi (ayrı tür)", () => {
   it("itemKind hedeften türetilir; walk-in da aynı anahtar/sahip/sıra kurallarını taşır", () => {
@@ -256,5 +257,32 @@ describe("ownedBy / heldAside", () => {
     expect(ownedBy(all, USER_ID)).toEqual([mine]);
     expect(heldAside(all, USER_ID).map((i) => i.idempotencyKey)).toEqual([theirs.idempotencyKey, unknown.idempotencyKey]);
     expect(heldAside(all, null).map((i) => i.idempotencyKey)).toEqual(all.slice(0, 3).map((i) => i.idempotencyKey));
+  });
+});
+
+describe("bilet hedefi ve kapı", () => {
+  it("bilet hedefi check_in öğesidir; kapı öğede saklanır", () => {
+    const i = ticketItem({ ticketId: "t-1", gate: 2 });
+    expect(itemKind(i)).toBe("check_in");
+    expect(i.gate).toBe(2);
+  });
+
+  it("yeniden denemelerde anahtar, zaman damgası ve kapı değişmez", () => {
+    const first = ticketItem({ ticketId: "t-1", gate: 2 });
+    const [sent1] = claim([first], 2_000);
+    const out = applyOutcome([sent1!], { kind: "network" }, { now: 2_000, random: 0.5 });
+    const [sent2] = claim(out.items, 100_000);
+    expect(sent2!.idempotencyKey).toBe(first.idempotencyKey);
+    expect(sent2!.clientTimestamp).toBe(first.clientTimestamp);
+    expect(sent2!.gate).toBe(2);
+    expect(sent2!.target).toEqual({ ticketId: "t-1" });
+    expect(sent2!.attempts).toBe(2);
+  });
+
+  it("kapı alanı olmayan eski öğe olduğu gibi gönderilebilir", () => {
+    const legacy = item();
+    delete (legacy as { gate?: number | null }).gate;
+    expect(migrateStoredItem(legacy)).toBe(legacy);
+    expect(selectDue([legacy], 5_000, 25)).toEqual([legacy]);
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createFlusher, createMemoryStore, type QueueStore } from "@/features/check-in/offline/flusher";
 import type { BatchOutcome, QueueItem, SettledEvent } from "@/features/check-in/offline/queue-core";
 import { migrateStoredItem } from "@/features/check-in/offline/queue-core";
-import { item, OTHER_USER_ID, success, USER_ID } from "./helpers";
+import { item, OTHER_USER_ID, success, ticketItem, USER_ID } from "./helpers";
 
 function okFor(items: readonly QueueItem[]): BatchOutcome {
   return {
@@ -325,5 +325,47 @@ describe("flusher", () => {
       const owned = item();
       expect(migrateStoredItem(owned)).toBe(owned);
     });
+  });
+});
+
+describe("flusher: bilet öğeleri", () => {
+  it("kaybolan yanıttan sonra bilet öğesi AYNI anahtarla yeniden gönderilir", async () => {
+    const calls: Array<{ key: string; gate: number | null | undefined }> = [];
+    let n = 0;
+    const { store, flusher, events } = setup(async (items) => {
+      n += 1;
+      calls.push({ key: items[0]!.idempotencyKey, gate: items[0]!.gate });
+      return n === 1 ? { kind: "network" } : okFor(items);
+    });
+    await store.putMany([ticketItem({ ticketId: "t-1", gate: 3 })]);
+    await flusher.flush();
+    await flusher.flush({ ignoreBackoff: true });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(calls[0]);
+    expect(calls[0]!.gate).toBe(3);
+    expect(events.filter((e) => e.type === "done")).toHaveLength(1);
+    expect(await store.getAll()).toEqual([]);
+  });
+
+  it("on bilet tek toplu istekte gider", async () => {
+    const sizes: number[] = [];
+    const store = createMemoryStore();
+    const events: SettledEvent[] = [];
+    const flusher = createFlusher({
+      store,
+      send: async (items) => {
+        sizes.push(items.length);
+        return okFor(items);
+      },
+      currentUserId: () => USER_ID,
+      now: () => 10_000,
+      random: () => 0.5,
+      tryLock: createTryLock(),
+      onEvents: (e) => events.push(...e),
+    });
+    await store.putMany(Array.from({ length: 10 }, (_, i) => ticketItem({ ticketId: `t-${i}` })));
+    await flusher.flush();
+    expect(sizes).toEqual([10]);
+    expect(events.filter((e) => e.type === "done")).toHaveLength(10);
   });
 });
