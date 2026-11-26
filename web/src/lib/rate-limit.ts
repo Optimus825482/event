@@ -95,6 +95,11 @@ export type PgRateLimiterOptions = {
   random?: () => number;
   /** Hata günlüğü; varsayılan `logError`. */
   onError?: (error: unknown) => void;
+  /**
+   * Veritabanı hatasında davranış: "open" (varsayılan) isteği geçirir, "closed" reddeder
+   * (`retryAfterSeconds` = pencere uzunluğu). Kaba kuvvete açık uçlar "closed" kullanmalıdır.
+   */
+  onFailure?: "open" | "closed";
 };
 
 export type PgRateLimiter = AsyncRateLimiter & {
@@ -147,7 +152,7 @@ export function createPgRateLimiter(options: PgRateLimiterOptions): PgRateLimite
         return { allowed: false, retryAfterSeconds: Math.min(windowSeconds, Math.max(1, row.retry_after)) };
       } catch (error) {
         onError(error);
-        return { allowed: true };
+        return options.onFailure === "closed" ? { allowed: false, retryAfterSeconds: windowSeconds } : { allowed: true };
       }
     },
   };
