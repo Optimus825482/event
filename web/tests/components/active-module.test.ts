@@ -55,7 +55,6 @@ describe("buildCrumbs F&B ekip yolları", () => {
 
   it("ekip üyesi sayfası kırıntıları Türkçe ve menü etiketleriyle aynıdır", () => {
     expect(buildCrumbs(`/fnb/team/members/${id}`, navLinks)).toEqual([
-      { label: "Etkinlikler", href: "/fnb" },
       { label: "Ekip Panosu", href: "/fnb/team" },
       { label: "Ekibim", href: "/fnb/team/members" },
       { label: "Detay", href: null },
@@ -64,9 +63,16 @@ describe("buildCrumbs F&B ekip yolları", () => {
     expect(navLabel("/fnb/team/members")).toBe("Ekibim");
   });
 
+  it("raporlar sayfası Türkçe etiketlenir; /fnb tek başına Etkinlikler kalır", () => {
+    expect(buildCrumbs("/fnb/team/reports", navLinks)).toEqual([
+      { label: "Ekip Panosu", href: "/fnb/team" },
+      { label: "Raporlar", href: null },
+    ]);
+    expect(buildCrumbs("/fnb", navLinks)).toEqual([{ label: "Etkinlikler", href: null }]);
+  });
+
   it("değerlendirme kurulu kırıntıları Türkçe ve menü etiketiyle aynıdır", () => {
     expect(buildCrumbs(`/fnb/team/reviews/${id}`, navLinks)).toEqual([
-      { label: "Etkinlikler", href: "/fnb" },
       { label: "Ekip Panosu", href: "/fnb/team" },
       { label: "Değerlendirmeler", href: "/fnb/team/reviews" },
       { label: "Detay", href: null },

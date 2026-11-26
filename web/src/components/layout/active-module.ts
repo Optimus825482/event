@@ -45,6 +45,7 @@ const ROUTE_LABELS: Record<string, string> = {
   venues: "Şablonlar",
   templates: "Davetiye Şablonları",
   team: "Ekip Panosu",
+  reports: "Raporlar",
   members: "Ekibim",
   reviews: "Değerlendirmeler",
   notifications: "Bildirimler",
@@ -76,6 +77,9 @@ export function buildCrumbs(pathname: string, linkable: ReadonlySet<string>): Cr
     const href = `/${segments.slice(0, index + 1).join("/")}`;
     const isId = ID_SEGMENT.test(segment);
     const isLast = index === segments.length - 1;
+    // Modül kökü (/fnb) başka bir sayfanın üstündeyse kırıntı olmaz: rozet modülü zaten söyler ve
+    // "Etkinlikler" bağlantısı ekip sayfalarının üst sayfası değildir.
+    if (segment === "fnb" && index === 0 && !isLast) return;
     const label = isId ? "Detay" : (ROUTE_LABELS[segment] ?? humanize(segment));
     crumbs.push({ label, href: !isLast && (isId || linkable.has(href)) ? href : null });
   });
