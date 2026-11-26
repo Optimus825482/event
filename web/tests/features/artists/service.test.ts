@@ -109,4 +109,24 @@ describe("sanatçı servisi", () => {
     expect(await listArtists(db, actor, { search: "100%" })).toHaveLength(0);
     await expect(listArtists(db, managerActor("fnb"))).rejects.toBeInstanceOf(ForbiddenError);
   });
+
+  it("aramada %, _ joker değil, düz metindir", async () => {
+    await createArtist(db, actor, { name: "A_B" });
+    await createArtist(db, actor, { name: "AXB" });
+    const names = async (search: string) => (await listArtists(db, actor, { search })).map((r) => r.name);
+    expect(await names("a_b")).toEqual(["A_B"]);
+    expect(await names("_")).toEqual(["A_B"]);
+    expect(await names("%")).toEqual([]);
+  });
+
+  it("eşzamanlı aynı ad: biri conflict", async () => {
+    const results = await Promise.allSettled([
+      createArtist(db, actor, { name: "Tarkan" }),
+      createArtist(db, actor, { name: "tarkan" }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((r) => r.status === "rejected");
+    expect(rejected).toMatchObject({ reason: { code: "conflict", message: "Bu adla bir sanatçı zaten kayıtlı" } });
+    expect(await db.select().from(artists)).toHaveLength(1);
+  });
 });

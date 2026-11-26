@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, like } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { artists, eventArchives } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
@@ -98,7 +98,7 @@ export async function listArtists(
   const key = filter.search ? artistNameKey(filter.search) : "";
   const conditions = [
     filter.includeInactive ? undefined : eq(artists.isActive, true),
-    key ? sql`${artists.nameKey} like ${`%${escapeLike(key)}%`} escape '\'` : undefined,
+    key ? like(artists.nameKey, `%${escapeLike(key)}%`) : undefined,
   ];
   return ex
     .select()
