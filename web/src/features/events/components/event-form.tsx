@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { APP_TIME_ZONE, dateToZonedWallClock, zonedWallClockToDate } from "@/lib/time-zone";
 import { EVENT_TYPE_SUGGESTIONS } from "../board";
+import { listArtistOptionsAction } from "@/features/artists/actions";
 import { createEventAction, updateEventAction } from "../actions";
 
 export type EventFormValues = {
@@ -79,6 +81,16 @@ export function EventForm({ event, onSaved, onCancel, submitLabel, idPrefix = ""
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const id = (name: string) => `${idPrefix}${name}`;
+  // Öneriler yüklenemezse (yetkisiz/hata) alan serbest metin olarak çalışır; hata gösterilmez.
+  const artistOptions = useQuery({
+    queryKey: ["artist-options"],
+    queryFn: async () => {
+      const result = await listArtistOptionsAction({});
+      return result.ok ? result.data : [];
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -172,10 +184,20 @@ export function EventForm({ event, onSaved, onCancel, submitLabel, idPrefix = ""
         <input
           id={id("artistName")}
           name="artistName"
+          list={id("artistList")}
           placeholder="Örn. Sanatçı veya grup adı"
           defaultValue={event?.artistName ?? ""}
+          aria-describedby={id("artistHelp")}
           className={eventInputClass}
         />
+        <datalist id={id("artistList")}>
+          {(artistOptions.data ?? []).map((artist) => (
+            <option key={artist.id} value={artist.name} />
+          ))}
+        </datalist>
+        <p id={id("artistHelp")} className="text-xs text-slate-400">
+          Kayıtlı sanatçılardan seçin ya da serbest yazın
+        </p>
       </Field>
       <label className="flex items-center gap-2 text-sm text-slate-300">
         <input type="checkbox" name="reservationEnabled" defaultChecked={event?.reservationEnabled ?? true} />
