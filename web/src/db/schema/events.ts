@@ -18,6 +18,8 @@ import {
 import { EVENT_STATUSES } from "../../domain/event-status";
 import { PLANNING_STAGES } from "../../domain/planning-stage";
 import type { SaleCategory, TableAllocation } from "../../domain/seating";
+// `archive.ts` de bu dosyadan `events`'i alır; döngü yalnızca tembel `references(() => …)` içinde kullanılır.
+import { artists } from "./archive";
 import { users } from "./auth";
 import { tableTypes } from "./catalog";
 import { pk, timestamps, tstz } from "./columns";
@@ -64,8 +66,10 @@ export const events = pgTable(
     reservationEnabled: boolean("reservation_enabled").notNull().default(true),
     planningStage: planningStage("planning_stage").notNull().default("defined"),
     stageChangedAt: tstz("stage_changed_at"),
-    /** Serbest metin sanatçı adı; sanatçı kaydı gelince ilişkiye çevrilecek. */
+    /** Sanatçının görünen adı / anlık görüntü; kayıt bağlıysa kaydın yazımıyla doldurulur. */
     artistName: text("artist_name"),
+    /** Sanatçı kaydı; boşsa sanatçı yalnızca serbest metindir. */
+    artistId: uuid("artist_id").references(() => artists.id, { onDelete: "set null" }),
     ...timestamps(),
   },
   (t) => [
@@ -73,6 +77,7 @@ export const events = pgTable(
     index("events_organizer_id_idx").on(t.organizerId, t.startsAt),
     index("events_status_starts_at_idx").on(t.status, t.startsAt),
     index("events_venue_template_id_idx").on(t.venueTemplateId),
+    index("events_artist_id_idx").on(t.artistId),
   ],
 );
 

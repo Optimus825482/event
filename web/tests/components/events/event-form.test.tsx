@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render as baseRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { createEventAction, updateEventAction } = vi.hoisted(() => ({
@@ -12,6 +14,12 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
 import { EventForm, type EventFormValues } from "@/features/events/components/event-form";
+
+/** EventForm sanatçı önerileri için useQuery kullanır; her görünümü kendi istemcisiyle sarar. */
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return baseRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const base: EventFormValues = {
   id: "11111111-1111-4111-8111-111111111111",
