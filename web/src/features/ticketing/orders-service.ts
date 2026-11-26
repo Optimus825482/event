@@ -1,18 +1,24 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { eventTables, events, orders, tableSeatSlots, tickets, type OrderStatus } from "@/db/schema";
+import { eventTables, events, orders, paymentAttempts, tableSeatSlots, tickets, type OrderStatus } from "@/db/schema";
 import type { SaleCategory } from "@/domain/seating";
+import { normalizeEmail } from "@/features/customers/normalize";
 import { publish } from "@/features/realtime/publish";
 import { lockEvent } from "@/features/reservations/internal";
+import { signQrToken } from "@/features/reservations/qr-token";
 import { MAX_ORDER_TABLES, SALES_ERROR_MESSAGES, type SalesErrorCode } from "@/features/sales-api/contract";
 import { getSeatPrices } from "@/features/seating/prices";
 import { getSaleSettings } from "@/features/seating/settings-service";
 import { DomainError, type DomainErrorCode } from "@/lib/action";
+import { logError } from "@/lib/log";
+import { nameKey } from "@/lib/name-key";
 import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import { SALES_ACTOR } from "./internal";
 import { lineTotal, sumMoney } from "./money";
-import type { PaymentProvider } from "./payment/provider";
+import type { PaymentProvider, PaymentRequest } from "./payment/provider";
 import { activeProvider } from "./payment/registry";
+import { generatePnr, parsePnr } from "./pnr";
 import { saleStateOf } from "./sale-state";
 
 export type HoldItem = { tableId: string; quantity: number };
@@ -362,6 +368,169 @@ export async function releaseHold(db: Db, orderId: string): Promise<void> {
     await tx.update(orders).set({ status: "expired" }).where(eq(orders.id, order.id));
     await expireTicketsOf(tx, [order.id]);
   });
+}
+
+export type PayInput = {
+  buyer: { firstName: string; lastName: string; email: string; phone?: string };
+  acceptTerms: true;
+  payment: PaymentRequest;
+};
+
+const PNR_ATTEMPTS = 5;
+
+type PayOutcome = { kind: "already_paid" } | { kind: "declined" } | { kind: "paid" };
+
+/**
+ * Siparişin ödemesi. Sağlayıcı çağrısı sipariş kilidi altında yapılır: eşzamanlı yinelemeler kilitte
+ * bekler, kilidi alınca siparişi `paid` görür ve sağlayıcıyı yeniden çağırmadan aynı görünümü alır.
+ *
+ * Kilit sırası (sistem geneli): siparişin masaları kilitsiz okunur (bir siparişin masa kümesi değişmez) →
+ * etkinlik `FOR SHARE` → masalar tek sorguda kimlik artan `FOR UPDATE` → sipariş `FOR UPDATE` → biletler.
+ * Masa kilidi, süresi ödemenin ortasında dolan siparişi aynı masayı tutan `createHold`'un süpürmesine
+ * karşı korur: süpürme masa kilidinden sonra çalıştığından ödeme commit edilene dek bekler, sonra `paid`
+ * satırı atlar. Durum ve süre kilitler alındıktan sonra DB saatiyle (`clock_timestamp()`) doğrulanır.
+ */
+export async function payOrder(db: Db, orderId: string, input: PayInput, deps: OrderDeps = {}): Promise<OrderView> {
+  const provider = deps.provider !== undefined ? deps.provider : activeProvider();
+  if (provider === null || provider.id !== input.payment.provider) throw new SalesError("payments_disabled");
+  const email = normalizeEmail(input.buyer.email);
+  const firstName = input.buyer.firstName.trim();
+  const lastName = input.buyer.lastName.trim();
+  const lastNameKey = nameKey(lastName);
+  if (email === null || input.acceptTerms !== true || firstName === "" || lastNameKey === "") {
+    throw new SalesError("invalid");
+  }
+  const phone = input.buyer.phone?.trim() || null;
+  const makePnr = deps.generatePnr ?? generatePnr;
+
+  const outcome = await db.transaction(async (tx): Promise<PayOutcome> => {
+    const [ref] = await tx.select({ eventId: orders.eventId }).from(orders).where(eq(orders.id, orderId));
+    if (!ref) throw new SalesError("order_not_found");
+    const tableRows = await tx
+      .selectDistinct({ tableId: tickets.tableId })
+      .from(tickets)
+      .where(eq(tickets.orderId, orderId));
+    const tableIds = tableRows.map((r) => r.tableId).sort();
+
+    await lockEvent(tx, SALES_ACTOR, ref.eventId);
+    if (tableIds.length > 0) {
+      await tx
+        .select({ id: eventTables.id })
+        .from(eventTables)
+        .where(inArray(eventTables.id, tableIds))
+        .orderBy(asc(eventTables.id))
+        .for("update");
+    }
+    const [order] = await tx
+      .select({
+        id: orders.id,
+        status: orders.status,
+        totalAmount: orders.totalAmount,
+        currency: orders.currency,
+        live: sql<boolean>`${orders.holdExpiresAt} > clock_timestamp()`,
+      })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .for("update");
+    if (!order) throw new SalesError("order_not_found");
+    if (order.status === "paid") return { kind: "already_paid" };
+    if (order.status === "expired" || !order.live) throw new SalesError("hold_expired");
+
+    const result = await provider.start({
+      orderId,
+      amount: order.totalAmount,
+      currency: order.currency,
+      request: input.payment,
+    });
+    await tx.insert(paymentAttempts).values({
+      orderId,
+      provider: provider.id,
+      outcome: result.outcome,
+      amount: order.totalAmount,
+      currency: order.currency,
+      providerRef: result.providerRef,
+      isDemo: provider.isDemo,
+    });
+    if (result.outcome !== "approved") return { kind: "declined" };
+
+    for (let attempt = 1; ; attempt += 1) {
+      const pnr = makePnr();
+      try {
+        // Kayıt noktası: PNR çakışması dış işlemi bozmaz, yeni kodla yeniden denenir.
+        await tx.transaction(async (sp) => {
+          await sp
+            .update(orders)
+            .set({
+              status: "paid",
+              pnr,
+              paidAt: sql`clock_timestamp()`,
+              buyerFirstName: firstName,
+              buyerLastName: lastName,
+              buyerLastNameKey: lastNameKey,
+              buyerEmail: email,
+              buyerPhone: phone,
+              termsAcceptedAt: sql`clock_timestamp()`,
+              paymentProvider: provider.id,
+              isDemo: provider.isDemo,
+            })
+            .where(eq(orders.id, orderId));
+        });
+        break;
+      } catch (error) {
+        const pnrClash = pgCodeOf(error) === "23505" && pgConstraintOf(error) === "orders_pnr_uq";
+        if (!pnrClash) throw error;
+        if (attempt >= PNR_ATTEMPTS) throw new Error(`PNR ${PNR_ATTEMPTS} denemede üretilemedi`);
+      }
+    }
+
+    const held = await tx
+      .select({ id: tickets.id })
+      .from(tickets)
+      .where(and(eq(tickets.orderId, orderId), eq(tickets.status, "held")))
+      .orderBy(asc(tickets.id))
+      .for("update");
+    for (const ticket of held) {
+      await tx
+        .update(tickets)
+        .set({ status: "issued", qrToken: signQrToken(ticket.id) })
+        .where(eq(tickets.id, ticket.id));
+    }
+    await publish(tx, { type: "order.paid", eventId: ref.eventId, id: orderId });
+    for (const tableId of tableIds) await publish(tx, { type: "seats.changed", eventId: ref.eventId, id: tableId });
+    return { kind: "paid" };
+  });
+
+  if (outcome.kind === "declined") throw new SalesError("payment_declined");
+  if (outcome.kind === "paid" && deps.onPaid) {
+    try {
+      deps.onPaid(orderId);
+    } catch (error) {
+      logError("ticketing.onPaid", error);
+    }
+  }
+  return viewOrThrow(db, orderId);
+}
+
+const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest();
+// PNR bulunamadığında da aynı karşılaştırma yapılır: yanıt süresi PNR'ın varlığını sızdırmaz.
+const DUMMY_KEY_DIGEST = sha256("\u0000pnr-not-found");
+
+/** PNR + soyadıyla ödenmiş siparişi bulur; biçim ve harf duyarsız. Eşleşme yoksa `null`. */
+export async function findOrderByPnr(
+  ex: Db | Tx,
+  input: { pnr: string; lastName: string },
+): Promise<{ orderId: string; eventId: string } | null> {
+  const pnr = parsePnr(input.pnr);
+  if (pnr === null) return null;
+  const [row] = await ex
+    .select({ id: orders.id, eventId: orders.eventId, key: orders.buyerLastNameKey })
+    .from(orders)
+    .where(and(eq(orders.pnr, pnr), eq(orders.status, "paid")));
+  const wanted = nameKey(input.lastName);
+  const stored = row?.key ? sha256(row.key) : DUMMY_KEY_DIGEST;
+  const same = timingSafeEqual(sha256(wanted), stored);
+  if (!row || !row.key || wanted === "" || !same) return null;
+  return { orderId: row.id, eventId: row.eventId };
 }
 
 /**
