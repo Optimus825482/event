@@ -1,4 +1,4 @@
-import { ArrowLeft, FileSpreadsheet, Plus, Ticket } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, LayoutGrid, Plus, Ticket } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/layout/empty-state";
@@ -84,6 +84,10 @@ export default async function EventReservationsPage({ params, searchParams }: { 
               <MarkNoShowsButton eventId={event.id} candidates={statusCounts.pending + statusCounts.confirmed} />
             ) : null}
             {recipients ? <InvitationDialog recipients={recipients} canSend={can(actor, "invitations", "edit")} /> : null}
+            <Link href={`/reservations/${eventId}/allocation`} className={buttonVariants({ variant: "outline" })}>
+              <LayoutGrid />
+              Masa tahsisi
+            </Link>
             {canCreate ? (
               <Link href={`/import/reservations/${eventId}`} className={buttonVariants({ variant: "outline" })}>
                 <FileSpreadsheet />
@@ -191,6 +195,7 @@ export default async function EventReservationsPage({ params, searchParams }: { 
               canOverrideBlacklist={isAdmin(actor)}
               items={items.map((r) => ({
                 id: r.id,
+                bookingCode: r.bookingCode,
                 status: r.status,
                 guestName: r.guestName,
                 customerName: r.customerName,

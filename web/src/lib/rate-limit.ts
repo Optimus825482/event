@@ -95,6 +95,11 @@ export type PgRateLimiterOptions = {
   random?: () => number;
   /** Hata günlüğü; varsayılan `logError`. */
   onError?: (error: unknown) => void;
+  /**
+   * Veritabanı hatasında davranış. `"open"` (varsayılan): istek geçer. `"closed"`: istek reddedilir
+   * (`retryAfterSeconds` en çok 60); kaba kuvvete açık uçlar (ör. PNR arama) için.
+   */
+  onFailure?: "open" | "closed";
 };
 
 export type PgRateLimiter = AsyncRateLimiter & {
@@ -117,6 +122,7 @@ export function createPgRateLimiter(options: PgRateLimiterOptions): PgRateLimite
   const pruneProbability = options.pruneProbability ?? 0.01;
   const random = options.random ?? Math.random;
   const onError = options.onError ?? ((error: unknown) => logError("rate-limit", error));
+  const onFailure = options.onFailure ?? "open";
 
   async function prune(): Promise<number> {
     const result = await db.execute(
@@ -147,6 +153,7 @@ export function createPgRateLimiter(options: PgRateLimiterOptions): PgRateLimite
         return { allowed: false, retryAfterSeconds: Math.min(windowSeconds, Math.max(1, row.retry_after)) };
       } catch (error) {
         onError(error);
+        if (onFailure === "closed") return { allowed: false, retryAfterSeconds: Math.min(windowSeconds, 60) };
         return { allowed: true };
       }
     },

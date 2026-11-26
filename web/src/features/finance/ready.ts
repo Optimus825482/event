@@ -1,1 +1,1 @@
-export const FINANCE_READY = false;
+export const FINANCE_READY = true;

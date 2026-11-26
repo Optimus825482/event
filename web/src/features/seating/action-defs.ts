@@ -1,11 +1,14 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { db } from "@/db/client";
 import { publishNotifications } from "@/features/notifications/publish";
 import type { ActionOptions } from "@/lib/action";
 import { allocateToCasino, releaseFromCasino, setSaleAllocation } from "./allocation-service";
 import { classifyTables } from "./classification-service";
 import { allocationInputSchema, classifyTablesSchema, saleAllocationSchema, saleSettingsSchema } from "./schemas";
+import { getSeatingOverview } from "./queries";
 import { saveSaleSettings } from "./settings-service";
+
+const overviewInput = z.object({ eventId: z.uuid("Geçersiz etkinlik") });
 
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
   return options;
@@ -47,5 +50,19 @@ export const seatingActionDefs = {
     verb: "edit",
     input: saleAllocationSchema,
     handler: async ({ actor, input }) => setSaleAllocation(db, actor, input),
+  }),
+  /** Entertainment ekranı: masa genel bakışı (`ticketing:view`). */
+  overview: def({
+    module: "ticketing",
+    verb: "view",
+    input: overviewInput,
+    handler: async ({ actor, input }) => getSeatingOverview(db, actor, input.eventId),
+  }),
+  /** Casino ekranı: aynı genel bakış (`reservations:view`; Casino'nun `ticketing` izni yoktur). */
+  casinoOverview: def({
+    module: "reservations",
+    verb: "view",
+    input: overviewInput,
+    handler: async ({ actor, input }) => getSeatingOverview(db, actor, input.eventId),
   }),
 };

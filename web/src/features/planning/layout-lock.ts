@@ -8,6 +8,7 @@ import type { Db, Tx } from "@/db/client";
 import { eventTables, reservations } from "@/db/schema";
 import { isLayoutLockedStage, type PlanningStage } from "@/domain/planning-stage";
 import { ACTIVE_RESERVATION_STATUSES } from "@/domain/reservation-status";
+import { getSeatOccupancy } from "@/features/ticketing/occupancy";
 import { DomainError } from "@/lib/action";
 
 export type CommitmentReason = "reservation" | "casino_allocation" | "ticket";
@@ -35,6 +36,19 @@ export const casinoAllocationCommitments: CommitmentSource = async (ex, eventId)
 };
 
 /**
+ * Etkin biletler: tutulan (`pending`, süresi dolmamış) ve satılan (`issued`); koltuk sayısı toplamdır.
+ * Süresi dolmuş ama süpürülmemiş tutma sayılmaz. Bilet yazıcısı (`createHold`) etkinliği `FOR SHARE` tutar.
+ */
+export const ticketCommitments: CommitmentSource = async (ex, eventId) => {
+  const occupancy = await getSeatOccupancy(ex, eventId);
+  return [...occupancy.entries()].map(([tableId, o]) => ({
+    tableId,
+    reason: "ticket" as const,
+    seats: o.held + o.issued,
+  }));
+};
+
+/**
  * Taahhüt kaynakları. Faz 6 `ticket` kaynağını bu diziye ekler.
  *
  * SÖZLEŞME: taahhüt satırı yazan her yeni yazıcı, yazmadan önce etkinlik satırını `FOR SHARE`
@@ -43,7 +57,11 @@ export const casinoAllocationCommitments: CommitmentSource = async (ex, eventId)
  * kapanır. Kilidi atlayan bir yazıcı, kilidin dondurmaya çalıştığı masanın kaydedilen düzenle
  * eşzamanlı taşınmasına yol açar. Kaynağı diziye eklemek tek başına yetmez.
  */
-export const COMMITMENT_SOURCES: readonly CommitmentSource[] = [reservationCommitments, casinoAllocationCommitments];
+export const COMMITMENT_SOURCES: readonly CommitmentSource[] = [
+  reservationCommitments,
+  casinoAllocationCommitments,
+  ticketCommitments,
+];
 
 export type TableCommitment = { tableId: string; reasons: CommitmentReason[]; minCapacity: number };
 
