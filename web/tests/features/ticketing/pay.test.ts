@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db/client";
-import { orders, paymentAttempts } from "@/db/schema";
+import { events, orders, paymentAttempts } from "@/db/schema";
 import { verifyQrToken } from "@/features/reservations/qr-token";
 import { getOrderView, payOrder, releaseHold } from "@/features/ticketing/orders-service";
 import type { PaymentProvider } from "@/features/ticketing/payment/provider";
 import { truncateAll } from "../../helpers/db";
+import { setStage } from "../../helpers/planning";
 import { setFinalPrices } from "../../helpers/seating";
 import { createPaidOrder, createPendingHold, expireOrder } from "../../helpers/ticketing";
 import { watchEvents } from "../realtime/emitted";
@@ -125,6 +126,53 @@ describe("ödeme", () => {
     expect((await getOrderView(db, hold.orderId))?.status).toBe("pending");
     expect((await activeTickets(a1!.id)).every((t) => t.status === "held")).toBe(true);
     expect(await db.select().from(paymentAttempts)).toHaveLength(0);
+  });
+
+  it("ödenmiş siparişin yinelemesi sağlayıcı kapalı ya da farklı olsa da aynı görünümü döner", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const hold = await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }] });
+    const first = await payOrder(db, hold.orderId, approve);
+    const disabled = await payOrder(db, hold.orderId, approve, { provider: null });
+    const { provider, start } = spyProvider({ id: "other" });
+    const other = await payOrder(db, hold.orderId, approve, { provider });
+    for (const view of [disabled, other]) {
+      expect(view).toMatchObject({ orderId: hold.orderId, status: "paid", pnr: first.pnr });
+      expect(new Set(view.tickets.map((t) => t.qrPayload))).toEqual(new Set(first.tickets.map((t) => t.qrPayload)));
+    }
+    expect(start).toHaveBeenCalledTimes(0);
+    expect(await db.select().from(paymentAttempts)).toHaveLength(1);
+  });
+
+  it.each(["cancelled", "draft"] as const)(
+    "tutmadan sonra etkinlik %s olursa ödeme sales_closed; bilet, PNR ve deneme yok",
+    async (status) => {
+      const {
+        event,
+        tables: [a1],
+      } = await saleEvent();
+      const { provider, start } = spyProvider();
+      const hold = await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }] });
+      await db.update(events).set({ status }).where(eq(events.id, event.id));
+      expect((await caughtSales(payOrder(db, hold.orderId, approve, { provider }))).salesCode).toBe("sales_closed");
+      expect(start).toHaveBeenCalledTimes(0);
+      const [row] = await db.select().from(orders).where(eq(orders.id, hold.orderId));
+      expect(row).toMatchObject({ status: "pending", pnr: null });
+      expect((await activeTickets(a1!.id)).every((t) => t.status === "held" && t.qrToken === null)).toBe(true);
+      expect(await db.select().from(paymentAttempts)).toHaveLength(0);
+    },
+  );
+
+  it("satış aşaması sales_closed olsa da canlı tutma ödenebilir (T13)", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const hold = await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }] });
+    await setStage(db, event.id, "sales_closed");
+    expect((await payOrder(db, hold.orderId, approve)).status).toBe("paid");
   });
 
   it("is_demo sağlayıcıdan gelir, sabit yazılmaz", async () => {
