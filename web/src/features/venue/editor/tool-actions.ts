@@ -14,6 +14,8 @@ export type ToolCtx = {
   shapeOf: ShapeOf;
   gridSize: number;
   snapEnabled: boolean;
+  /** Donmuş masa anahtarları: sabitlenmiş gibi taşınmaz (kullanıcı sabitlemeyi kaldırsa da). */
+  frozenKeys: ReadonlySet<string>;
 };
 
 export type MoveOutcome =
@@ -35,6 +37,7 @@ export function compareTables(a: EditorTable, b: EditorTable): number {
 export function applyMoves(ctx: ToolCtx, placements: readonly Placement[], opts: { snap: boolean }): MoveOutcome {
   const pinned = new Set([
     ...ctx.tables.filter((t) => t.isPinned).map((t) => t.key),
+    ...ctx.frozenKeys,
     ...ctx.elements.filter((e) => e.isPinned === true).map((e) => decorItemKey(e.id)),
   ]);
   const wanted = placements.filter((p) => !pinned.has(p.key));
@@ -164,7 +167,7 @@ function arrangeTargets(ctx: ToolCtx, requireSelection: boolean): { targets: Edi
   const chosen = ctx.tables.filter((t) => selected.has(t.key));
   const scoped = chosen.length > 0 && chosen.length < ctx.tables.length;
   const pool = chosen.length > 0 || requireSelection ? chosen : ctx.tables;
-  return { targets: pool.filter((t) => !t.isPinned).sort(compareTables), scoped };
+  return { targets: pool.filter((t) => !t.isPinned && !ctx.frozenKeys.has(t.key)).sort(compareTables), scoped };
 }
 
 type FloorRun = { fixed: ReturnType<typeof fixedBoxes>; floorTargets: readonly EditorTable[]; lowest: boolean };
@@ -224,7 +227,7 @@ export function spaceTables(ctx: ToolCtx, gap: number): ArrangeOutcome {
 /** Seçili (sabitlenmemiş) öğeleri grup olarak yatay ortalar; çakışma doğarsa reddedilir. */
 export function centreSelectionHorizontally(ctx: ToolCtx): MoveOutcome {
   const selected = new Set(ctx.selection);
-  const items = layoutItems(ctx.tables, ctx.elements, ctx.shapeOf).filter((i) => selected.has(i.key) && !i.pinned);
+  const items = layoutItems(ctx.tables, ctx.elements, ctx.shapeOf).filter((i) => selected.has(i.key) && !i.pinned && !ctx.frozenKeys.has(i.key));
   const dx = horizontalCentreDelta(
     items.map((i) => i.box),
     ctx.canvas,

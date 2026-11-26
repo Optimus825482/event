@@ -1,3 +1,4 @@
+import { movableKeys, type EditorLock } from "../editor/lock";
 import { decorKey, isDecorKey, type EditorStore, type MoveResult } from "../editor/store";
 
 export type NoticeKind = "ok" | "error";
@@ -14,8 +15,8 @@ export function reportMove(result: MoveResult, notify: Notify): void {
   }
 }
 
-export function runAutoAlign(store: EditorStore, notify: Notify): void {
-  const r = store.getState().autoAlign();
+export function runAutoAlign(store: EditorStore, notify: Notify, lock: EditorLock): void {
+  const r = store.getState().autoAlign(lock.frozen);
   if (r.moved === 0 && r.unplaced.length === 0) {
     notify("ok", "Hizalanacak masa yok (sabit masalar hariç) ya da masalar zaten hizalı.");
     return;
@@ -26,25 +27,25 @@ export function runAutoAlign(store: EditorStore, notify: Notify): void {
   notify(r.unplaced.length > 0 ? "error" : "ok", head + unplacedSuffix(r.unplaced));
 }
 
-export function runSnapToCells(store: EditorStore, notify: Notify): void {
-  const r = store.getState().snapToCells();
+export function runSnapToCells(store: EditorStore, notify: Notify, lock: EditorLock): void {
+  const r = store.getState().snapToCells(lock.frozen);
   notify(
     r.unplaced.length > 0 ? "error" : "ok",
     `${r.moved} masa ızgara hücre merkezine hizalandı (çakışmasız).` + unplacedSuffix(r.unplaced),
   );
 }
 
-export function runSpacing(store: EditorStore, gap: number, notify: Notify): void {
-  const count = selectedTableKeys(store).length;
-  const r = store.getState().setSpacing(gap);
+export function runSpacing(store: EditorStore, gap: number, notify: Notify, lock: EditorLock): void {
+  const count = movableKeys(lock, store.getState().tables, selectedTableKeys(store)).length;
+  const r = store.getState().setSpacing(gap, lock.frozen);
   notify(
     r.unplaced.length > 0 ? "error" : "ok",
     `${count} masa arasındaki aralık ${gap}px olarak ayarlandı.` + unplacedSuffix(r.unplaced),
   );
 }
 
-export function runCenterHorizontally(store: EditorStore, notify: Notify, keys?: readonly string[]): void {
-  const r = store.getState().centerHorizontally(keys);
+export function runCenterHorizontally(store: EditorStore, notify: Notify, lock: EditorLock, keys?: readonly string[]): void {
+  const r = store.getState().centerHorizontally(keys, lock.frozen);
   if (r.ok) notify("ok", "Yatay olarak ortalandı.");
   else if (r.reason === "collision") notify("error", "Ortalanamadı: başka bir öğeyle çakışıyor.");
   else notify("error", "Ortalanacak (sabitlenmemiş) seçili öğe yok.");
@@ -87,7 +88,11 @@ export function runToggleVip(store: EditorStore, keys: readonly string[], notify
   notify("ok", vip ? `${tableKeys.length} masa VIP yapıldı.` : `${tableKeys.length} masadan VIP kaldırıldı.`);
 }
 
-export function runDelete(store: EditorStore, notify: Notify): void {
-  const { blocked } = store.getState().deleteSelection();
-  if (blocked.length > 0) notify("error", `Rezervasyonu veya ataması olan masalar silinemez: ${blocked.join(", ")}`);
+export function runDelete(store: EditorStore, notify: Notify, lock: EditorLock): void {
+  const { blocked, frozen } = store.getState().deleteSelection(lock.frozen);
+  const parts = [
+    ...(frozen.length > 0 ? [`Taahhütlü (rezervasyonlu) masalar silinemez: ${frozen.join(", ")}`] : []),
+    ...(blocked.length > 0 ? [`Rezervasyonu veya ataması olan masalar silinemez: ${blocked.join(", ")}`] : []),
+  ];
+  if (parts.length > 0) notify("error", parts.join(" "));
 }

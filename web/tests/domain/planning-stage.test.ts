@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { notificationType } from "@/db/schema";
 import {
   isLayoutLockedStage,
   PLANNING_STAGES,
   planTransition,
   STAGE_LABELS,
+  STAGE_NOTIFICATION_TYPES,
   STAGE_RULES,
 } from "@/domain/planning-stage";
 
@@ -82,5 +84,10 @@ describe("planlama aşamaları", () => {
 
   it("kilit yalnızca satışta ve satış kapalıyken", () => {
     expect(PLANNING_STAGES.filter(isLayoutLockedStage)).toEqual(["on_sale", "sales_closed"]);
+  });
+
+  it("aşama bildirim türleri notification_type enum'una sabitlenir (sapma ilk geçişte 22P02 verir)", () => {
+    const used = [...STAGE_NOTIFICATION_TYPES, ...Object.values(STAGE_RULES).map((r) => r.advanceType)];
+    for (const type of used) expect(notificationType.enumValues).toContain(type);
   });
 });

@@ -8,6 +8,7 @@ import { FNB_LIST_LIMIT, listEventsForFnb } from "@/features/events/fnb-list";
 import { managerActor, memberActor, noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { setStage } from "../../helpers/planning";
 
 const DAY = 86_400_000;
 /** Şimdiki yerel saatten (APP_TIME_ZONE) yerel gün başlangıcı; uygulamadan bağımsız hesap. */
@@ -31,6 +32,19 @@ describe("listEventsForFnb", () => {
     await truncateAll();
   });
 
+  it("aşamayı döner; yeni etkinlik `defined` başlar", async () => {
+    const staged = await f.createEvent(db, { name: "Aşamalı", startsAt: inDays(3) });
+    await setStage(db, staged.id, "layout_ready");
+    await f.createEvent(db, { name: "Yeni", startsAt: inDays(4) });
+
+    const { rows } = await listEventsForFnb(db, managerActor("fnb"));
+
+    expect(rows.map((r) => [r.name, r.planningStage])).toEqual([
+      ["Aşamalı", "layout_ready"],
+      ["Yeni", "defined"],
+    ]);
+  });
+
   it("yaklaşan etkinlikleri tarihe göre listeler; yerleşimi ve ekip sayısını bildirir", async () => {
     const withLayout = await f.createEvent(db, {
       name: "Yerleşimli",
@@ -51,11 +65,13 @@ describe("listEventsForFnb", () => {
     expect(rows[0]).toMatchObject({
       id: bare.id,
       hasLayout: false,
+      tableCount: 0,
       teamCount: 0,
     });
     expect(rows[1]).toMatchObject({
       id: withLayout.id,
       hasLayout: true,
+      tableCount: 1,
       teamCount: 2,
     });
     expect(rows[1]?.startsAt).toBeInstanceOf(Date);

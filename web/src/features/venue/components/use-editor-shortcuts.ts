@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
+import type { EditorLock } from "../editor/lock";
 import type { EditorStore } from "../editor/store";
-import { reportMove, type Notify } from "./editor-commands";
+import { reportMove, runDelete, type Notify } from "./editor-commands";
 
 type Options = {
   store: EditorStore;
   enabled: boolean;
   onSave: () => void;
-  onBlocked: (labels: string[]) => void;
   notify: Notify;
+  lock: EditorLock;
 };
 
 function isTyping(target: EventTarget | null): boolean {
@@ -18,7 +19,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /** Klavye kısayolları: V/L seç, H kaydır, Sil, Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z), Ctrl+A, Ctrl+D, Ctrl+S, oklar, Esc. */
-export function useEditorShortcuts({ store, enabled, onSave, onBlocked, notify }: Options): void {
+export function useEditorShortcuts({ store, enabled, onSave, notify, lock }: Options): void {
   useEffect(() => {
     if (!enabled) return;
     function onKey(e: KeyboardEvent) {
@@ -45,8 +46,7 @@ export function useEditorShortcuts({ store, enabled, onSave, onBlocked, notify }
       } else if (e.key === "Delete" || e.key === "Backspace") {
         if (s.selection.length === 0) return;
         e.preventDefault();
-        const { blocked } = s.deleteSelection();
-        if (blocked.length > 0) onBlocked(blocked);
+        runDelete(store, notify, lock);
       } else if (!mod && !e.altKey && key === "v") {
         s.setTool("select");
       } else if (!mod && !e.altKey && key === "l") {
@@ -66,5 +66,5 @@ export function useEditorShortcuts({ store, enabled, onSave, onBlocked, notify }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, enabled, onSave, onBlocked, notify]);
+  }, [store, enabled, onSave, notify, lock]);
 }

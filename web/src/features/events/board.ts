@@ -1,4 +1,5 @@
 import type { EventStatus } from "@/domain/event-status";
+import type { PlanningStage } from "@/domain/planning-stage";
 import { zonedDayStart } from "@/lib/time-zone";
 
 const DAY_MS = 86_400_000;
@@ -37,6 +38,8 @@ export type BoardEvent = {
   startsAt: Date;
   endsAt: Date | null;
   eventType: string | null;
+  artistName: string | null;
+  planningStage: PlanningStage;
   reservationEnabled: boolean;
   reservationCount: number;
   tableCount: number;

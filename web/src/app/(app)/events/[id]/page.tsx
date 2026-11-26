@@ -4,12 +4,14 @@ import { PageContainer } from "@/components/ui/PageContainer";
 import { can } from "@/features/auth/policy";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { eventTypeBadge } from "@/features/events/board";
-import { CountdownBanner, EventSummaryCards } from "@/features/events/components/event-detail-parts";
+import { ArtistLine, CountdownBanner, EventSummaryCards } from "@/features/events/components/event-detail-parts";
 import { EventActions } from "@/features/events/components/event-actions";
 import { EventForm } from "@/features/events/components/event-form";
 import { ReviewToggles } from "@/features/events/components/review-toggles";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import { loadEventDetail } from "@/features/events/queries";
+import { PlanningStagePanel } from "@/features/planning/components/stage-panel";
+import { loadPlanningPanel } from "@/features/planning/queries";
 import { PlanPreviewCard } from "@/features/venue/components/plan-preview-card";
 import { loadEventPlanPreview } from "@/features/venue/queries";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
@@ -26,10 +28,11 @@ const statCard = "rounded-xl border border-slate-700 bg-slate-800/50 p-4";
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [actor, { event, tables }, preview] = await Promise.all([
+  const [actor, { event, tables }, preview, planning] = await Promise.all([
     requirePolicyActor(),
     loadEventDetail(id),
     loadEventPlanPreview(id),
+    loadPlanningPanel(id),
   ]);
   const now = new Date();
   const canEdit = can(actor, "events", "edit");
@@ -60,6 +63,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
             {dateFormat.format(event.startsAt)}
             {event.endsAt ? ` – ${dateFormat.format(event.endsAt)}` : ""}
           </p>
+          <ArtistLine artistName={event.artistName} />
           {event.description ? <p className="max-w-3xl text-sm text-slate-300">{event.description}</p> : null}
           <EventActions
             id={event.id}
@@ -69,6 +73,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
             deletable={event.status === "draft" && event.reservationCount === 0}
           />
         </div>
+
+        {planning ? <PlanningStagePanel state={planning} /> : null}
 
         <CountdownBanner startsAt={event.startsAt} endsAt={event.endsAt} closed={closed} now={now} />
 
@@ -135,6 +141,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                   startsAt: event.startsAt.toISOString(),
                   endsAt: event.endsAt ? event.endsAt.toISOString() : null,
                   eventType: event.eventType,
+                  artistName: event.artistName,
                   reservationEnabled: event.reservationEnabled,
                 }}
               />

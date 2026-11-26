@@ -6,11 +6,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from "@/lib/utils";
 import { SPACING_MAX, SPACING_MIN, SPACING_PRESETS } from "../editor/arrange";
 import { runSpacing, selectedTableKeys, type Notify } from "./editor-commands";
-import { useEditorStore } from "./editor-context";
+import { useEditorLock, useEditorStore } from "./editor-context";
 
 /** "Aralık Ayarla": seçili masalar arasındaki boşluk (0–40 px). */
 export function SpacingDialog({ onClose, notify }: { onClose: () => void; notify: Notify }) {
   const store = useEditorStore();
+  const lock = useEditorLock();
   const [gap, setGap] = useState(16);
   const sliderId = useId();
   const count = selectedTableKeys(store).length;
@@ -62,7 +63,7 @@ export function SpacingDialog({ onClose, notify }: { onClose: () => void; notify
             className="bg-blue-600 text-white hover:bg-blue-700"
             disabled={count < 2}
             onClick={() => {
-              runSpacing(store, gap, notify);
+              runSpacing(store, gap, notify, lock);
               onClose();
             }}
           >

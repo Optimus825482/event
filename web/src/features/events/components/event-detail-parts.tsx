@@ -4,6 +4,12 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { countdownParts } from "../board";
 
+/** Sanatçı satırı: yalnızca sanatçı adı doluysa gösterilir. */
+export function ArtistLine({ artistName }: { artistName: string | null | undefined }) {
+  if (!artistName) return null;
+  return <p className="text-sm text-slate-300">Sanatçı: {artistName}</p>;
+}
+
 /** Geri sayım şeridi: kalan gün/saat/dakika; başlamış etkinlik için kısa bir durum cümlesi. */
 export function CountdownBanner({ startsAt, endsAt, closed, now }: { startsAt: Date; endsAt: Date | null; closed: boolean; now: Date }) {
   const parts = countdownParts(startsAt, now);

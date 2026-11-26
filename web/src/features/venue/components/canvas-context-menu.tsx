@@ -16,7 +16,7 @@ import { isLineKey, lineKey } from "../editor/lines";
 import { decorKey, isDecorKey } from "../editor/store";
 import type { DecorKind } from "../schemas";
 import { runCenterHorizontally, runDelete, runTogglePin, runToggleVip, type Notify } from "./editor-commands";
-import { useEditor, useEditorStore } from "./editor-context";
+import { useEditor, useEditorLock, useEditorStore } from "./editor-context";
 
 export type ContextTarget = { kind: "canvas"; world: Point } | { kind: "table"; key: string } | { kind: "decor"; key: string } | { kind: "line"; key: string };
 
@@ -80,6 +80,7 @@ function CanvasItems({ world, notify, onOpenAdd }: { world: Point; notify: Notif
 
 function DecorItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
   const store = useEditorStore();
+  const lock = useEditorLock();
   const element = useEditor((s) => s.elements.find((e) => decorKey(e.id) === itemKey));
   if (!element) return null;
   const pinned = element.isPinned === true;
@@ -87,7 +88,7 @@ function DecorItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
     <>
       <ContextMenuLabel className="text-xs font-normal text-muted-foreground">{element.label || DECOR_NAMES[element.kind]}</ContextMenuLabel>
       <ContextMenuSeparator />
-      <Item icon={<Maximize2 className="size-4 text-blue-400" />} onSelect={() => runCenterHorizontally(store, notify, [itemKey])}>
+      <Item icon={<Maximize2 className="size-4 text-blue-400" />} onSelect={() => runCenterHorizontally(store, notify, lock, [itemKey])}>
         Yatay Ortala
       </Item>
       <Item icon={<Settings className="size-4 text-purple-400" />} onSelect={() => store.getState().select([itemKey])}>
@@ -114,7 +115,7 @@ function DecorItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
         icon={<Trash2 className="size-4" />}
         onSelect={() => {
           store.getState().select([itemKey]);
-          runDelete(store, notify);
+          runDelete(store, notify, lock);
         }}
       >
         Sil
@@ -125,6 +126,7 @@ function DecorItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
 
 function LineItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
   const store = useEditorStore();
+  const lock = useEditorLock();
   const selection = useEditor((s) => s.selection);
   const exists = useEditor((s) => s.lines.some((l) => lineKey(l.id) === itemKey));
   if (!exists) return null;
@@ -136,7 +138,7 @@ function LineItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
       <Item testId="line-context-duplicate" icon={<Copy className="size-4 text-emerald-400" />} onSelect={() => store.getState().duplicateSelection()} count={count}>
         Çoğalt
       </Item>
-      <Item testId="line-context-delete" danger icon={<Trash2 className="size-4" />} onSelect={() => runDelete(store, notify)} count={count}>
+      <Item testId="line-context-delete" danger icon={<Trash2 className="size-4" />} onSelect={() => runDelete(store, notify, lock)} count={count}>
         Sil
       </Item>
     </>
@@ -145,6 +147,7 @@ function LineItems({ itemKey, notify }: { itemKey: string; notify: Notify }) {
 
 function TableItems({ itemKey, notify, onOpenSpacing }: { itemKey: string; notify: Notify; onOpenSpacing: () => void }) {
   const store = useEditorStore();
+  const lock = useEditorLock();
   const selection = useEditor((s) => s.selection);
   const table = useEditor((s) => s.tables.find((t) => t.key === itemKey));
   const tables = useEditor((s) => s.tables);
@@ -179,7 +182,7 @@ function TableItems({ itemKey, notify, onOpenSpacing }: { itemKey: string; notif
       <Item icon={<Crown className={vip ? "size-4 text-amber-400" : "size-4"} />} onSelect={() => runToggleVip(store, keys, notify)} count={tableCount}>
         {vip ? "VIP Kaldır" : "VIP Yap"}
       </Item>
-      <Item danger icon={<Trash2 className="size-4" />} onSelect={() => runDelete(store, notify)} count={keys.length}>
+      <Item danger icon={<Trash2 className="size-4" />} onSelect={() => runDelete(store, notify, lock)} count={keys.length}>
         Sil
       </Item>
     </>

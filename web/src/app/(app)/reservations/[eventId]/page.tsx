@@ -7,6 +7,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { RESERVATION_STATUSES, type ReservationStatus } from "@/domain/reservation-status";
 import { can } from "@/features/auth/policy";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
+import { PlanningStagePanel } from "@/features/planning/components/stage-panel";
+import { loadPlanningPanel } from "@/features/planning/queries";
 import { InvitationDialog } from "@/features/reservations/components/invitation-dialog";
 import { MarkNoShowsButton } from "@/features/reservations/components/mark-no-shows-button";
 import { ReservationList } from "@/features/reservations/components/reservation-list";
@@ -48,7 +50,7 @@ export default async function EventReservationsPage({ params, searchParams }: { 
   const data = await loadReservationList(eventId, { q, status, page: first(sp.page) });
   const mapData = mapView ? await loadReservationMap(eventId) : null;
   const { actor, event, items, total, page, pageSize, statusCounts } = data;
-  const recipients = await loadInvitationRecipients(actor, eventId);
+  const [recipients, planning] = await Promise.all([loadInvitationRecipients(actor, eventId), loadPlanningPanel(eventId)]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const canEdit = can(actor, "reservations", "edit");
   const canCreate = can(actor, "reservations", "create");
@@ -102,6 +104,8 @@ export default async function EventReservationsPage({ params, searchParams }: { 
           </>
         }
       />
+
+      {planning ? <PlanningStagePanel state={planning} compact /> : null}
 
       {event.status === "active" ? (
         <p role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-300">
