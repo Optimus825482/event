@@ -3,16 +3,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /** Dönem seçimi: GET formu (sunucu bileşeni; adres paylaşılabilir). */
-export function PeriodForm({ from, to }: { from: string; to: string }) {
+export function PeriodForm({ from, to, errorId }: { from: string; to: string; errorId?: string }) {
+  const invalid = errorId ? { "aria-invalid": true as const, "aria-describedby": errorId } : {};
   return (
     <form action="/reports" method="get" className="flex flex-wrap items-end gap-3">
       <div className="space-y-1.5">
         <Label htmlFor="period-from">Başlangıç</Label>
-        <Input id="period-from" type="date" name="from" defaultValue={from} className="border-slate-500" />
+        <Input id="period-from" type="date" name="from" defaultValue={from} className="border-slate-500" {...invalid} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="period-to">Bitiş</Label>
-        <Input id="period-to" type="date" name="to" defaultValue={to} className="border-slate-500" />
+        <Input id="period-to" type="date" name="to" defaultValue={to} className="border-slate-500" {...invalid} />
       </div>
       <Button type="submit">Raporu getir</Button>
     </form>

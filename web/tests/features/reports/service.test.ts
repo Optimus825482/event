@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { ForbiddenError } from "@/features/auth/errors";
-import { getPeriodReport } from "@/features/reports/service";
+import { assertCanViewReports, getPeriodReport } from "@/features/reports/service";
 import { managerActor } from "../../helpers/actors";
 import { insertArchive } from "../../helpers/archive";
 import { truncateAll } from "../../helpers/db";
@@ -77,5 +77,10 @@ describe("dönem raporu", () => {
     await expect(getPeriodReport(db, managerActor("fnb"), { from: "2027-05-01", to: "2027-05-31" })).rejects.toBeInstanceOf(
       ForbiddenError,
     );
+  });
+
+  it("geçersiz dönem olsa bile arşiv izni olmayan sayfa kapısında reddedilir", () => {
+    expect(() => assertCanViewReports(managerActor("fnb"))).toThrow(ForbiddenError);
+    expect(() => assertCanViewReports(actor)).not.toThrow();
   });
 });

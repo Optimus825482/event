@@ -7,7 +7,7 @@ import { requirePolicyActor } from "@/features/auth/permissions";
 import { PeriodForm } from "@/features/reports/components/period-form";
 import { PeriodTable } from "@/features/reports/components/period-table";
 import { defaultPeriod, periodSchema } from "@/features/reports/period";
-import { getPeriodReport } from "@/features/reports/service";
+import { assertCanViewReports, getPeriodReport } from "@/features/reports/service";
 
 export const metadata: Metadata = { title: "Raporlar | EventFlow" };
 
@@ -16,6 +16,7 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 
 export default async function ReportsPage({ searchParams }: { searchParams: SearchParams }) {
   const actor = await requirePolicyActor();
+  assertCanViewReports(actor);
   const params = await searchParams;
   const fallback = defaultPeriod(new Date());
   const input = { from: first(params.from)?.trim() || fallback.from, to: first(params.to)?.trim() || fallback.to };
@@ -38,9 +39,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
           ) : null
         }
       />
-      <PeriodForm from={input.from} to={input.to} />
+      <PeriodForm from={input.from} to={input.to} errorId={errors.length > 0 ? "period-error" : undefined} />
       {errors.length > 0 ? (
-        <div role="alert" className="rounded-lg border border-red-700 p-3 text-sm text-red-800 dark:border-red-300 dark:text-red-200">
+        <div id="period-error" role="alert" className="rounded-lg border border-red-700 p-3 text-sm text-red-800 dark:border-red-300 dark:text-red-200">
           {errors.join(" ")}
         </div>
       ) : null}

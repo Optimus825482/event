@@ -11,10 +11,10 @@ import { createArtistAction, updateArtistAction } from "../actions";
 
 export type EditableArtist = { id: string; name: string; genre: string | null; notes: string | null; isActive: boolean };
 
-function FieldError({ messages }: { messages: string[] | undefined }) {
+function FieldError({ id, messages }: { id: string; messages: string[] | undefined }) {
   if (!messages || messages.length === 0) return null;
   return (
-    <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+    <p id={id} role="alert" className="text-sm text-red-700 dark:text-red-300">
       {messages.join(" ")}
     </p>
   );
@@ -27,6 +27,9 @@ export function ArtistForm({ artist }: { artist?: EditableArtist }) {
   const { pending, failure, run } = useRunAction();
   const errors = failure?.fieldErrors ?? {};
   const prefix = artist ? `artist-${artist.id}` : "artist-new";
+
+  const a11y = (field: "name" | "genre" | "notes") =>
+    errors[field]?.length ? { "aria-invalid": true as const, "aria-describedby": `${prefix}-${field}-error` } : {};
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,18 +60,18 @@ export function ArtistForm({ artist }: { artist?: EditableArtist }) {
     <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
       <div className="space-y-1.5">
         <Label htmlFor={`${prefix}-name`}>Ad</Label>
-        <Input id={`${prefix}-name`} name="name" required maxLength={200} defaultValue={artist?.name ?? ""} className={FIELD} />
-        <FieldError messages={errors.name} />
+        <Input id={`${prefix}-name`} name="name" {...a11y("name")} required maxLength={200} defaultValue={artist?.name ?? ""} className={FIELD} />
+        <FieldError id={`${prefix}-name-error`} messages={errors.name} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor={`${prefix}-genre`}>Tür</Label>
-        <Input id={`${prefix}-genre`} name="genre" maxLength={100} defaultValue={artist?.genre ?? ""} className={FIELD} />
-        <FieldError messages={errors.genre} />
+        <Input id={`${prefix}-genre`} name="genre" {...a11y("genre")} maxLength={100} defaultValue={artist?.genre ?? ""} className={FIELD} />
+        <FieldError id={`${prefix}-genre-error`} messages={errors.genre} />
       </div>
       <div className="space-y-1.5 sm:col-span-2">
         <Label htmlFor={`${prefix}-notes`}>Not</Label>
-        <Textarea id={`${prefix}-notes`} name="notes" maxLength={2000} defaultValue={artist?.notes ?? ""} className={FIELD} />
-        <FieldError messages={errors.notes} />
+        <Textarea id={`${prefix}-notes`} name="notes" {...a11y("notes")} maxLength={2000} defaultValue={artist?.notes ?? ""} className={FIELD} />
+        <FieldError id={`${prefix}-notes-error`} messages={errors.notes} />
       </div>
       {artist ? (
         <div className="flex items-center gap-2 sm:col-span-2">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEMO_NOTICE, formatMoney, formatRate } from "@/features/archive/format";
+import { DEMO_NOTICE, formatMoney, formatRate, isNegativeAmount } from "@/features/archive/format";
 
 describe("arşiv biçimleme", () => {
   it.each([
@@ -17,6 +17,11 @@ describe("arşiv biçimleme", () => {
     [0, "%0"],
     [null, "—"],
   ] as const)("formatRate(%j) = %j", (rate, text) => expect(formatRate(rate)).toBe(text));
+
+  it.each([["-879.25", true], ["-0.00", false], ["0.00", false], ["12.50", false]] as const)(
+    "isNegativeAmount(%j) = %j",
+    (amount, expected) => expect(isNegativeAmount(amount)).toBe(expected),
+  );
 
   it("demo ibaresi sözleşmedeki metindir", () => expect(DEMO_NOTICE).toBe("DEMO - gerçek ödeme alınmadı"));
 });

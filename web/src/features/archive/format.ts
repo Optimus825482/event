@@ -21,5 +21,5 @@ export function formatRate(rate: number | null): string {
 
 /** İşaretli tutar eksi ile mi başlıyor (negatif net görsel ayrımı için). */
 export function isNegativeAmount(amount: string): boolean {
-  return amount.startsWith("-");
+  return amount.startsWith("-") && /[1-9]/.test(amount);
 }
