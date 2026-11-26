@@ -189,11 +189,15 @@ export function ReviewForm({ eventId, staffId, review }: Props) {
     return field instanceof HTMLTextAreaElement ? field.value : "";
   }
 
-  /** Ayrıntılı formdan çıkarken silinecek veri var mı: puan, madde listeleri ya da özel notlar. */
+  /**
+   * Geçişte kaybolacak veri var mı: puanlar, madde listeleri ve özel nottaki kaydedilmemiş değişiklik.
+   * Kayıtlı özel not kısa kayıtta korunur (`saveShortReview` yazmaz), bu yüzden sayılmaz.
+   */
   function hasDiscardable(): boolean {
     if (hasScores) return true;
     if (kind === "short") return false;
-    return ["strengths", "improvements", "recommendedTrainings", "privateNotes"].some((name) => textOf(name).trim() !== "");
+    if (["strengths", "improvements", "recommendedTrainings"].some((name) => textOf(name).trim() !== "")) return true;
+    return textOf("privateNotes").trim() !== (review?.privateNotes ?? "").trim();
   }
 
   function switchKind() {
@@ -380,7 +384,7 @@ export function ReviewForm({ eventId, staffId, review }: Props) {
         description={
           kind === "short"
             ? "Girilen puan silinecek; kısa not ve sonraki etkinlik notu korunur. Devam edilsin mi?"
-            : "Girilen puanlar, madde listeleri ve özel notlar silinecek; yorum ve sonraki etkinlik notu korunur. Devam edilsin mi?"
+            : "Girilen puanlar ve madde listeleri silinecek, kaydedilmemiş özel not değişiklikleri kaybolur; yorum, sonraki etkinlik notu ve kayıtlı özel not korunur. Devam edilsin mi?"
         }
         confirmText="Devam et"
         onConfirm={switchKind}

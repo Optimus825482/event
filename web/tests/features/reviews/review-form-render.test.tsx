@@ -72,11 +72,16 @@ describe("form türü değişimi onayı", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
-  it("özel notlar da onay gerektirir; yorum tek başına gerektirmez (taşınır)", () => {
+  it("kayıtlı özel not kısa kayıtta korunur: onay gerekmez; yazılıp kaydedilmemiş özel not onay ister", () => {
     const { unmount } = render(<ReviewForm {...IDS} review={fullReview({ privateNotes: "Gizli" })} />);
     fireEvent.click(switchLink());
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
     unmount();
+    render(<ReviewForm {...IDS} review={fullReview({ privateNotes: "Gizli" })} />);
+    fireEvent.change(screen.getByLabelText("Özel notlar"), { target: { value: "Gizli, değişti" } });
+    fireEvent.click(switchLink());
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("kaydedilmemiş özel not");
+    cleanup();
     render(<ReviewForm {...IDS} review={fullReview({ comment: "İyi" })} />);
     fireEvent.click(switchLink());
     expect(screen.queryByRole("alertdialog")).toBeNull();

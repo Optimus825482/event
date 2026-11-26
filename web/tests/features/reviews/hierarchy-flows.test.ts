@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { eventSectionHeads, eventStaffAssignments, staffPerformanceReviews, tableGroups, tableGroupTables } from "@/db/schema";
+import { assignmentTables, eventSectionHeads, eventStaffAssignments, staffPerformanceReviews, tableGroups, tableGroupTables } from "@/db/schema";
 import { getLeaderDashboard, getLeaderEventDetail, getMemberPerformance } from "@/features/reviews/leader-queries";
 import { scopedMembers, scopedTeams } from "@/features/reviews/leader-scope";
 import { REVIEW_MESSAGES } from "@/features/reviews/labels";
@@ -361,6 +361,22 @@ describe("ekipsiz değerlendirici (loca süpervizörü) lider sayfaları", () =>
     expect(JSON.stringify(detail)).not.toContain(x.W2.id);
     await expectDomain(getLeaderEventDetail(db, x.supervisor2, x.event.id), "not_found");
     await expectDomain(getLeaderEventDetail(db, x.supervisor, x.otherEvent.id), "not_found");
+  });
+
+  it("ekip dışı personelin masaları yalnızca etkin atamalardan gelir", async () => {
+    const x = await locaWorld();
+    const L7 = await f.createTable(db, x.event.id, { label: "L7" });
+    // Aynı personel için ikinci (vardiyalı) atama; pasife alınır.
+    const shift = await f.createShift(db, {});
+    const second = await f.createAssignment(db, { eventId: x.event.id, staffId: x.W.id, shiftId: shift.id });
+    await db.insert(assignmentTables).values({ eventId: x.event.id, assignmentId: second.id, tableId: L7.id });
+    const assignmentId = second.id;
+    await db.update(eventStaffAssignments).set({ isActive: false }).where(eq(eventStaffAssignments.id, assignmentId));
+    const detail = await getLeaderEventDetail(db, x.supervisor, x.event.id);
+    const outside = detail.teams.find((t) => t.name === "Ekip dışı personel");
+    expect(outside?.tableIds).toEqual([x.L1.id]);
+    expect(detail.assignedTableIds).not.toContain(L7.id);
+    expect(detail.tableLabels[L7.id]).toBeUndefined();
   });
 
   it("üye performansı ekipsiz ama değerlendirilebilir personel için açılır", async () => {

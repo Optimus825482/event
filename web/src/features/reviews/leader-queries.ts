@@ -145,7 +145,13 @@ async function loadTableLinks(executor: Executor, eventId: string, teamRows: Sco
           .select({ staffId: eventStaffAssignments.staffId, tableId: assignmentTables.tableId })
           .from(eventStaffAssignments)
           .innerJoin(assignmentTables, eq(assignmentTables.assignmentId, eventStaffAssignments.id))
-          .where(and(eq(eventStaffAssignments.eventId, eventId), inArray(eventStaffAssignments.staffId, memberIds)));
+          .where(
+            and(
+              eq(eventStaffAssignments.eventId, eventId),
+              eq(eventStaffAssignments.isActive, true),
+              inArray(eventStaffAssignments.staffId, memberIds),
+            ),
+          );
   return { groupRows, assignmentRows };
 }
 
