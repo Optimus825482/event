@@ -94,6 +94,13 @@ describe("satış API sözleşmesi", () => {
     expect(createOrderBodySchema.safeParse(create).success).toBe(true);
   });
 
+  it("tutma gövdesindeki kimlikler küçük harfe indirilir", () => {
+    const id = "A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D";
+    const parsed = createOrderBodySchema.parse({ eventId: id, items: [{ tableId: id, quantity: 1 }], clientKey: id });
+    const lower = id.toLowerCase();
+    expect(parsed).toEqual({ eventId: lower, items: [{ tableId: lower, quantity: 1 }], clientKey: lower });
+  });
+
   it("arama gövdesi fazladan alan kabul etmez", () => {
     expect(lookupBodySchema.safeParse({ pnr: "ABC", lastName: "Yılmaz" }).success).toBe(true);
     expect(lookupBodySchema.safeParse({ pnr: "ABC", lastName: "Yılmaz", email: "a@b.co" }).success).toBe(false);

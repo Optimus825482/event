@@ -73,6 +73,29 @@ describe("satış API sipariş uçları", () => {
     expect(orderResponseSchema.parse(await again.json()).orderId).toBe(order.orderId);
   });
 
+  it("büyük harfli kimliklerle yineleme aynı siparişi bulur", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const a = makeApi();
+    const clientKey = randomUUID();
+    const body = { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }], clientKey };
+    const first = await a.createOrder(req("POST", ORDERS, { body }));
+    expect(first.status).toBe(201);
+    const order = orderResponseSchema.parse(await first.json());
+    const upper = {
+      eventId: event.id.toUpperCase(),
+      items: [{ tableId: a1!.id.toUpperCase(), quantity: 2 }],
+      clientKey: clientKey.toUpperCase(),
+    };
+    const again = await a.createOrder(req("POST", ORDERS, { body: upper }));
+    expect(again.status).toBe(200);
+    const replay = orderResponseSchema.parse(await again.json());
+    expect(replay.orderId).toBe(order.orderId);
+    expect(replay.eventId).toBe(event.id);
+  });
+
   it("kural hataları koduyla ve ayrıntısıyla döner", async () => {
     const {
       event,
