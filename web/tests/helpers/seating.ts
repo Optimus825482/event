@@ -1,23 +1,13 @@
 import { inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { Tx } from "@/db/client";
 import type * as schema from "@/db/schema";
 import { eventSaleSettings, eventSeatPrices, eventTables } from "@/db/schema";
 import type { SaleCategory, TableAllocation } from "@/domain/seating";
+import { syncSeatSlots } from "@/features/seating/slots";
+import type { SaleSettings } from "@/features/seating/settings-service";
 
 type Db = Pick<NodePgDatabase<typeof schema>, "insert" | "update">;
-
-// SÖZLEŞME: Task2 — `SaleSettings` `@/features/seating/settings-service`'te doğar; Task 2 gerçek içe aktarmayla değiştirir.
-type SaleSettings = {
-  eventId: string;
-  sharedTables: boolean;
-  blockSingleLeftover: boolean;
-  locaOnline: boolean;
-  holdMinutes: number;
-  maxSeatsPerOrder: number;
-  saleStartsAt: Date | null;
-  saleEndsAt: Date | null;
-  currency: string;
-};
 
 /** Masaların tahsisini doğrudan günceller; yuva yaratmaz/silmez. Yalnızca test kurulumu içindir. */
 export async function setAllocation(
@@ -63,4 +53,10 @@ export async function setSaleSettings(
     return;
   }
   await insert.onConflictDoUpdate({ target: eventSaleSettings.eventId, set: fields });
+}
+
+/** Masaları online satışa açar: tahsisi `online` yapar ve sandalye yuvalarını eşitler. */
+export async function openOnline(tx: Tx, eventId: string, tableIds: string[]): Promise<void> {
+  await setAllocation(tx, tableIds, "online");
+  await syncSeatSlots(tx, eventId, tableIds);
 }
