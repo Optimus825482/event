@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { FloorPlan3D } from "@/features/venue/components/floor-plan-3d";
 import { FloorPlanView } from "@/features/venue/components/floor-plan-view";
 import type { FloorPlanData } from "@/features/venue/plan-types";
-import { cn } from "@/lib/utils";
+import { HIGHLIGHT_COLOR } from "../highlight";
 import { canOffer3d, readDeviceHints } from "../device";
 
-const HIGHLIGHT_COLOR = "#f59e0b";
 const FALLBACK_NOTE = "3B görünüm bu cihazda açılamadı; 2B plan gösteriliyor.";
 
 class Plan3DBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
@@ -56,7 +55,7 @@ export function PublicPlan({ plan, highlightIds, ariaLabel }: Props) {
         <Button
           type="button"
           variant="outline"
-          className={cn("h-11 self-start border-slate-400 text-foreground")}
+          className="h-11 self-start border-slate-400 text-foreground"
           onClick={() => setMode(show3d ? "2d" : "3d")}
         >
           {show3d ? "2B'ye dön" : "3B göster"}
