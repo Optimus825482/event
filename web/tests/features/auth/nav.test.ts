@@ -13,6 +13,9 @@ describe("NAV_ITEMS", () => {
       ["/dashboard", "Pano", "events", "entertainment"],
       ["/events", "Etkinlikler", "events", "entertainment"],
       ["/templates", "Davetiye Şablonları", "invitations", "entertainment"],
+      ["/archive", "Arşiv", "archive", "entertainment"],
+      ["/artists", "Sanatçılar", "archive", "entertainment"],
+      ["/reports", "Raporlar", "archive", "entertainment"],
       ["/fnb", "Etkinlikler", "venues", "fnb"],
       ["/venues", "Yerleşim Şablonları", "venues", "fnb"],
       ["/staff", "Ekipler", "staff", "fnb"],
@@ -31,7 +34,18 @@ describe("NAV_ITEMS", () => {
       ["/admin/settings", "Sistem Ayarları", "settings", "admin"],
       ["/notifications", "Bildirimler", "notifications", "general"],
     ]);
-    expect(NAV_ITEMS).toHaveLength(20);
+    expect(NAV_ITEMS).toHaveLength(23);
+  });
+
+  it("arşiv öğeleri hazır bayrağına bağlıdır ve bayrak kapalıyken kimseye görünmez", () => {
+    const items = NAV_ITEMS.filter((i) => i.module === "archive");
+    expect(items.map((i) => [i.href, i.label, i.icon, i.ready])).toEqual([
+      ["/archive", "Arşiv", "archive", false],
+      ["/artists", "Sanatçılar", "music", false],
+      ["/reports", "Raporlar", "bar-chart", false],
+    ]);
+    expect(hrefs(adminActor())).not.toContain("/archive");
+    expect(hrefs(managerActor("entertainment"))).not.toContain("/reports");
   });
 
   it("gruplar etiket, departman kapsamı ve ek önekleriyle tanımlıdır", () => {
@@ -114,7 +128,7 @@ describe("departman grupları", () => {
 
   it("admin altı grubun hepsini görür", () => {
     expect(groupKeys(adminActor())).toEqual(["entertainment", "fnb", "casino", "check_in", "admin", "general"]);
-    expect(hrefs(adminActor())).toEqual(NAV_ITEMS.map((i) => i.href));
+    expect(hrefs(adminActor())).toEqual(NAV_ITEMS.filter((i) => i.ready !== false).map((i) => i.href));
   });
 
   it("üyeliksiz kullanıcı hiçbir grup görmez", () => {

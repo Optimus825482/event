@@ -5,7 +5,7 @@ import { buildCsp, generateNonce } from "@/lib/csp";
 // gerçek doğrulama `(app)/layout.tsx` içinde `requireActor()` ile yapılır.
 const SESSION_COOKIES = ["better-auth.session_token", "__Secure-better-auth.session_token"];
 
-const PUBLIC_PREFIXES = ["/login", "/api/auth", "/api/health", "/i"];
+const PUBLIC_PREFIXES = ["/login", "/api/auth", "/api/health", "/i", "/api/sales", "/masam"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

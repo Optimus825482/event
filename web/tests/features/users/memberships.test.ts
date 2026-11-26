@@ -135,6 +135,9 @@ describe("kullanıcı oluşturma: üyelik ve izinler", () => {
       "reservations",
       "customers",
       "check_in",
+      "ticketing",
+      "finance",
+      "archive",
     ]);
     expect(setMembershipsSchema.safeParse({ id: crypto.randomUUID(), memberships: [] }).success).toBe(true);
   });

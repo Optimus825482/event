@@ -94,9 +94,9 @@ describe("admin", () => {
 
 const CASES: [string, PolicyActor, Partial<Row>][] = [
   ["entertainment yönetici", user([m("entertainment", "manager")]),
-    { events: "vced", invitations: "vced", notifications: "vced", venues: "v---", check_in: "vc--" }],
+    { events: "vced", invitations: "vced", notifications: "vced", venues: "v---", check_in: "vc--", ticketing: "vced", finance: "vced", archive: "vced" }],
   ["entertainment asistan", user([m("entertainment", "assistant")]),
-    { events: "vce-", invitations: "vce-", notifications: "vce-", venues: "v---", check_in: "vc--" }],
+    { events: "vce-", invitations: "vce-", notifications: "vce-", venues: "v---", check_in: "vc--", ticketing: "vce-", finance: "vce-", archive: "vce-" }],
   ["fnb yönetici", user([m("fnb", "manager")]),
     { events: "v---", venues: "vced", staff: "vced", reviews: "vced", check_in: "vc--", notifications: "v---" }],
   ["casino yönetici", user([m("casino", "manager")]),
@@ -125,6 +125,22 @@ describe("departman yetki matrisi", () => {
       }
     }
   }
+});
+
+describe("yeni modüller (Faz 4–9)", () => {
+  it("yeni modüller sıranın sonundadır", () => expect(MODULES.slice(-3)).toEqual(["ticketing", "finance", "archive"]));
+  it.each(["ticketing", "finance", "archive"] as const)("%s: Entertainment yöneticisi dört fiili de alır, asistan silemez", (mod) => {
+    for (const v of VERBS) expect(can(user([m("entertainment", "manager")]), mod, v)).toBe(true);
+    expect(can(user([m("entertainment", "assistant")]), mod, "edit")).toBe(true);
+    expect(can(user([m("entertainment", "assistant")]), mod, "delete")).toBe(false);
+  });
+  it.each(["fnb", "casino"] as const)("%s yöneticisi yeni modüllerin hiçbirini göremez", (d) => {
+    for (const mod of ["ticketing", "finance", "archive"] as const) expect(can(user([m(d, "manager")]), mod, "view")).toBe(false);
+  });
+  it("Entertainment kullanıcısı yalnızca izin satırındaki bayrağı alır", () => {
+    const a = user([m("entertainment", "member")], { ticketing: "v---" });
+    expect([can(a, "ticketing", "view"), can(a, "ticketing", "edit"), can(a, "finance", "view")]).toEqual([true, false, false]);
+  });
 });
 
 describe("departman kuralları", () => {

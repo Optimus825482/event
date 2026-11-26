@@ -1,4 +1,5 @@
 import {
+  Archive,
   BarChart3,
   Bell,
   CalendarDays,
@@ -6,6 +7,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Mail,
+  Music,
   ScanLine,
   Settings,
   Shield,
@@ -34,6 +36,8 @@ const ICONS: Record<NavIconName, LucideIcon> = {
   bell: Bell,
   "layout-dashboard": LayoutDashboard,
   "bar-chart": BarChart3,
+  archive: Archive,
+  music: Music,
 };
 
 export function NavIcon({ name, className }: { name: NavIconName; className?: string }) {

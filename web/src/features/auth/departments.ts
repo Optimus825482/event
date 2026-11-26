@@ -34,6 +34,9 @@ const CEILING: Record<Department, Ceiling> = {
     notifications: ["view", "create", "edit", "delete"],
     venues: ["view"],
     check_in: ["view", "create"],
+    ticketing: ["view", "create", "edit", "delete"],
+    finance: ["view", "create", "edit", "delete"],
+    archive: ["view", "create", "edit", "delete"],
   },
   fnb: {
     events: ["view"],

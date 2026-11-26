@@ -25,6 +25,10 @@ describe("launcherModules", () => {
     expect(cards(managerActor("casino"))[0]).toMatchObject({ key: "casino", href: "/reservations" });
   });
 
+  it("Entertainment kartının açıklaması yeni kapsamı anlatır", () => {
+    expect(cards(managerActor("entertainment"))[0]?.description).toBe("Etkinlik, masa sınıflandırma, satış, finans ve arşiv");
+  });
+
   it("panel adreslerine yönlendirir", () => {
     const hrefs = Object.fromEntries(cards(adminActor()).map((m) => [m.key, m.href]));
     expect(hrefs).toMatchObject({ entertainment: "/dashboard", fnb: "/fnb", casino: "/reservations", admin: "/admin", check_in: "/check-in" });

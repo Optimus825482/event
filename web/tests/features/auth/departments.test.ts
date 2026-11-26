@@ -17,22 +17,25 @@ const toVerbs = (notation: string): Verb[] =>
     .filter((ch) => ch !== "-")
     .map((ch) => VERB_CHARS[ch as keyof typeof VERB_CHARS]);
 
-// Tablo elle yazıldı: 11 modül × 3 departman.
+// Tablo elle yazıldı: 14 modül × 3 departman.
 const MATRIX: Record<Department, Record<Module, string>> = {
   entertainment: {
     events: "vced", invitations: "vced", notifications: "vced", venues: "v---",
     staff: "----", reviews: "----", reservations: "----", customers: "----",
     check_in: "vc--", users: "----", settings: "----",
+    ticketing: "vced", finance: "vced", archive: "vced",
   },
   fnb: {
     events: "v---", invitations: "----", notifications: "v---", venues: "vced",
     staff: "vced", reviews: "vced", reservations: "----", customers: "----",
     check_in: "vc--", users: "----", settings: "----",
+    ticketing: "----", finance: "----", archive: "----",
   },
   casino: {
     events: "v---", invitations: "----", notifications: "v---", venues: "v---",
     staff: "----", reviews: "----", reservations: "vced", customers: "vced",
     check_in: "vc--", users: "----", settings: "----",
+    ticketing: "----", finance: "----", archive: "----",
   },
 };
 

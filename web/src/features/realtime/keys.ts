@@ -13,6 +13,9 @@ export const realtimeKeys = {
   checkIns: (eventId: string) => ["events", eventId, "check-in"] as const,
   tables: (eventId: string) => ["events", eventId, "tables"] as const,
   stats: (eventId: string) => ["events", eventId, "stats"] as const,
+  seats: (eventId: string) => ["events", eventId, "seats"] as const,
+  orders: (eventId: string) => ["events", eventId, "orders"] as const,
+  sales: (eventId: string) => ["events", eventId, "sales"] as const,
   notifications: () => ["notifications"] as const,
 };
 
@@ -30,6 +33,14 @@ export function keysToInvalidate(event: RealtimeEvent | "resync", eventId: strin
       return [realtimeKeys.tables(eventId)];
     case "stats.updated":
       return [realtimeKeys.stats(eventId)];
+    case "allocation.changed":
+      return [realtimeKeys.tables(eventId), realtimeKeys.reservations(eventId), realtimeKeys.seats(eventId)];
+    case "seats.changed":
+      return [realtimeKeys.seats(eventId), realtimeKeys.tables(eventId)];
+    case "order.paid":
+      return [realtimeKeys.orders(eventId), realtimeKeys.stats(eventId), realtimeKeys.seats(eventId)];
+    case "sales.changed":
+      return [realtimeKeys.sales(eventId), realtimeKeys.event(eventId)];
     case "notification.created":
       return [realtimeKeys.notifications()];
   }

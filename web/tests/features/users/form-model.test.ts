@@ -17,6 +17,15 @@ function row(module: PermissionRow["module"], verbs: ("view" | "create" | "edit"
 }
 
 describe("permissionGrid", () => {
+  it("Entertainment kullanıcısı için izin tablosu yeni modülleri etiketleriyle içerir", () => {
+    const grid = permissionGrid([{ department: "entertainment", level: "member" }]);
+    expect(grid.slice(-3).map((r) => [r.module, r.label])).toEqual([
+      ["ticketing", "Bilet ve Satış"],
+      ["finance", "Finans"],
+      ["archive", "Arşiv ve Raporlar"],
+    ]);
+  });
+
   it("F&B kullanıcısı için tavandaki modülleri PERMISSION_MODULES sırasıyla verir", () => {
     const grid = permissionGrid([fnbMember]);
     expect(grid.map((g) => g.module)).toEqual(["events", "notifications", "venues", "staff", "reviews", "check_in"]);
