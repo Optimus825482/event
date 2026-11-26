@@ -153,6 +153,17 @@ describe("saveReviewDraft", () => {
     await expectDomain(completeReview(db, w.fnbManager, { ...ids, staffId: input.staffId }), "not_found");
   });
 
+  it("kendini hedefleyen rolsüz lider: var olan ve olmayan etkinlikte aynı Forbidden", async () => {
+    const w = await setupReviewWorld();
+    const X = await f.createStaff(db);
+    const x = await makeLeader(X.id);
+    const base = { ratings: FULL_RATINGS, strengths: [], improvements: [], recommendedTrainings: [] };
+    for (const eventId of [w.event.id, crypto.randomUUID()]) {
+      await expectForbidden(saveReviewDraft(db, x, { ...base, eventId, staffId: X.id }));
+      await expectForbidden(completeReview(db, x, { eventId, staffId: X.id }));
+    }
+  });
+
   it("kapsam dışı personel, değerlendirme kapalı etkinlikte de Forbidden (disabled değil)", async () => {
     const w = await setupReviewWorld({ reviewEnabled: false });
     await expectForbidden(

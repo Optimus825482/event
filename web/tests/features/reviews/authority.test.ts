@@ -181,6 +181,16 @@ describe("hiyerarşik değerlendirme yetkisi", () => {
     expect(await assertCanReview(db, w.manager, w.event.id, w.W1.id, "delete")).toEqual(["manager"]);
   });
 
+  it("kendini hedefleme: etkinlikte yetkisi yoksa conflict değil Forbidden (olmayan etkinlikle aynı)", async () => {
+    const X = await f.createStaff(db, { fullName: "Rolsüz" });
+    const x = await makeLeader(X.id);
+    // E'de X'in rolü yok; kendini hedeflese de etkinliğin var olduğu sızmamalı.
+    await expectForbidden(assertCanReview(db, x, w.event.id, X.id, "edit"));
+    await expectForbidden(assertCanReview(db, x, crypto.randomUUID(), X.id, "edit"));
+    // Yetkili aktör için self conflict korunur.
+    await expectDomain(assertCanReview(db, w.actors.S, w.event.id, w.S.id, "edit"), "conflict");
+  });
+
   it("değerlendirme izni olmayan kullanıcı kendisi için de ForbiddenError alır", async () => {
     const casino = managerActor("casino", { staffId: w.S.id });
     await expectForbidden(assertCanReview(db, casino, w.event.id, w.S.id, "edit"));

@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { staffPerformanceReviews } from "@/db/schema";
 import { saveReviewDraft } from "@/features/reviews/service";
+import * as f from "../../helpers/factories";
 import { RATING_KEYS } from "@/features/reviews/score";
 import { saveShortReview } from "@/features/reviews/short-review-service";
 import { noAccessActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
-import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, setupReviewWorld } from "./helpers";
+import { FULL_RATINGS, expectDomain, expectForbidden, makeActor, makeLeader, setupReviewWorld } from "./helpers";
 
 const short = (eventId: string, staffId: string, overallRating: number | null = 4) => ({
   eventId,
@@ -115,6 +116,14 @@ describe("saveShortReview", () => {
     const unknown = crypto.randomUUID();
     await expectForbidden(saveShortReview(db, w.leader, short(w.event.id, unknown)));
     await expectDomain(saveShortReview(db, w.fnbManager, short(w.event.id, unknown)), "not_found");
+  });
+
+  it("kendini hedefleyen rolsüz lider: var olan ve olmayan etkinlikte aynı Forbidden", async () => {
+    const w = await setupReviewWorld();
+    const X = await f.createStaff(db);
+    const x = await makeLeader(X.id);
+    await expectForbidden(saveShortReview(db, x, short(w.event.id, X.id)));
+    await expectForbidden(saveShortReview(db, x, short(crypto.randomUUID(), X.id)));
   });
 
   it("olmayan etkinlik: izinsiz ve hiyerarşi aktörü Forbidden, yönetici not_found", async () => {

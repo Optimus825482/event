@@ -323,7 +323,12 @@ export async function assertCanReview(
   // Modül izni olan aktöre (kendisi değerlendirici olsaydı izin alacak olana) açık "kendinizi..." hatası verilir;
   // izni olmayan aktör ForbiddenError alır, böylece izinsiz aktöre ek bilgi sızmaz.
   if (actor.staffId !== null && actor.staffId === staffId) {
-    if (can(actor, "reviews", verb, { reviewerStaffIds: [staffId] })) {
+    // Açık "kendinizi..." hatası yalnızca bu etkinlikte zaten yetkisi olan aktöre verilir; rolsüz aktör Forbidden
+    // alır, böylece kendini hedefleyerek etkinliğin var olup olmadığını öğrenemez.
+    const reviewerId = hierarchyReviewerId(actor);
+    const hasAuthorityHere =
+      seesWholeEvent(actor) || (reviewerId !== null && reviewableBy(h, reviewerId).size > 0);
+    if (hasAuthorityHere && can(actor, "reviews", verb, { reviewerStaffIds: [staffId] })) {
       throw new DomainError("conflict", REVIEW_MESSAGES.self);
     }
   }
