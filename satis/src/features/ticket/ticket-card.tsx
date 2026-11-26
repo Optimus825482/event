@@ -15,7 +15,7 @@ export function TicketCard({ index, total, tableLabel, qrSrc, className }: Props
       <h3 className="m-0 text-lg font-semibold text-gold">{`Bilet ${index} / ${total}`}</h3>
       <p className="m-0 text-ivory">{`Masa ${tableLabel}`}</p>
       {/* eslint-disable-next-line @next/next/no-img-element -- veri adresi; next/image gerekmez */}
-      <img src={qrSrc} alt={`Bilet ${index} QR kodu`} width={240} height={240} className="size-60 max-w-full rounded-lg" />
+      <img src={qrSrc} alt={`Bilet ${index} QR kodu`} width={240} height={240} className="h-auto w-60 max-w-full rounded-lg" />
     </li>
   );
 }

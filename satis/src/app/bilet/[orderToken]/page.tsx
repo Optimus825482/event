@@ -41,6 +41,14 @@ export default async function TicketPage({ params }: PageProps) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-6">
         <Notice tone="error">{messageFor(error)}</Notice>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <ButtonLink href={`/bilet/${orderToken}`} variant="gold">
+            Yeniden dene
+          </ButtonLink>
+          <ButtonLink href="/" variant="glass">
+            Ana sayfa
+          </ButtonLink>
+        </div>
       </main>
     );
   }

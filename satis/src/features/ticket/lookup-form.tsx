@@ -30,11 +30,17 @@ export function LookupForm() {
     try {
       const result = await lookupAction({ pnr, lastName });
       if (result.ok) {
-        router.push(`/bilet/${result.data.orderToken}`);
-        return;
+        try {
+          router.push(`/bilet/${result.data.orderToken}`);
+          return;
+        } catch {
+          setError(ERROR_MESSAGES.core_unreachable);
+        }
+      } else {
+        const known = Object.keys(result.fieldErrors ?? {}).some((key) => key === "pnr" || key === "lastName");
+        setFieldErrors(result.fieldErrors ?? {});
+        setError(known ? null : result.message);
       }
-      setFieldErrors(result.fieldErrors ?? {});
-      setError(result.fieldErrors ? null : result.message);
     } catch {
       setError(ERROR_MESSAGES.core_unreachable);
     }

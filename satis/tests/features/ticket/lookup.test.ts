@@ -11,11 +11,15 @@ let core: CoreClient;
 let ev: EventDetail;
 let pnr: string;
 let orderToken: string;
+let lastBody: unknown;
 let fetchImpl: (request: Request) => Promise<Response>;
 
 beforeEach(async () => {
   fake = createFakeCore();
-  fetchImpl = (request) => fake.handle(request);
+  fetchImpl = async (request) => {
+    if (request.url.endsWith("/orders/lookup")) lastBody = await request.clone().json();
+    return fake.handle(request);
+  };
   core = createCoreClient({ baseUrl: "http://core.test", secret: fake.secret, fetch: (i, init) => fetchImpl(new Request(i, init)) });
   ev = fake.addEvent();
   const table = ev.plan.tables.find((t) => t.label === "A1")!;
@@ -64,6 +68,12 @@ describe("lookupFlow", () => {
       message: "Çok fazla deneme yapıldı. 10 dakika sonra tekrar deneyin.",
       retryAfterSeconds: 600,
     });
+  });
+
+  it("PNR çekirdeğe boşluksuz, tiresiz ve büyük harfle gider", async () => {
+    await lookupFlow(core, { pnr: ` ${formatPnr(pnr).toLowerCase()} `, lastName: "Kaya" }, ctx);
+    const body = lastBody;
+    expect(body).toEqual({ pnr, lastName: "Kaya" });
   });
 
   it("arama güvenilir IP'yi iletir", async () => {

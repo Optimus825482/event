@@ -27,7 +27,7 @@ export async function lookupFlow(
     return { ok: false, code: "invalid", message: messageFor({ code: "invalid" }), fieldErrors };
   }
   try {
-    const found = await core.lookupOrder({ pnr: parsed.data.pnr, lastName: parsed.data.lastName }, ctx);
+    const found = await core.lookupOrder({ pnr: parsed.data.pnr.replace(/[\s-]/g, "").toUpperCase(), lastName: parsed.data.lastName }, ctx);
     return { ok: true, data: { orderToken: found.orderToken } };
   } catch (error) {
     const result = failure(error);
