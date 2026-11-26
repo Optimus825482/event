@@ -4,11 +4,13 @@ import type { ActionOptions } from "@/lib/action";
 import {
   checkInInput,
   eventIdInput,
+  findOrderInput,
   searchGuestsInput,
   updateGuestCountInput,
   walkInInput,
   walkInOnceInput,
 } from "./schemas";
+import { findOrderAtDoor } from "./order-lookup";
 import {
   checkIn,
   eventStats,
@@ -65,6 +67,12 @@ export const checkInActionDefs = {
     verb: "view",
     input: searchGuestsInput,
     handler: async ({ actor, input, db }) => searchGuests(db, actor, input),
+  }),
+  findOrder: def({
+    module: "check_in",
+    verb: "view",
+    input: findOrderInput,
+    handler: async ({ actor, input, db }) => findOrderAtDoor(db, actor, input),
   }),
   recentCheckIns: def({
     module: "check_in",

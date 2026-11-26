@@ -8,6 +8,7 @@ import { APP_TIME_ZONE } from "@/lib/time-zone";
 import type { SearchGuestsInput } from "./schemas";
 import { toEventStats, type EventStats } from "./stats";
 import { escapeLike } from "@/lib/identifiers";
+import { normalizeCode } from "@/lib/short-code";
 
 export type { EventStats } from "./stats";
 
@@ -90,6 +91,8 @@ function searchCondition(q: string): SQL | undefined {
       sql`regexp_replace(coalesce(${reservations.guestPhone}, ''), '\\D', '', 'g') like ${`%${digits}%`}`,
     );
   }
+  const code = normalizeCode(q);
+  if (code.length === 7 && code.startsWith("R")) conditions.push(eq(reservations.bookingCode, code));
   return or(...conditions);
 }
 
