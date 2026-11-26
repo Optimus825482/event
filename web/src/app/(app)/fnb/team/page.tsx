@@ -48,7 +48,7 @@ export default async function LeaderDashboardPage() {
         />
       </div>
 
-      {data.teamCount === 0 ? (
+      {data.teamCount === 0 && data.eventCount === 0 ? (
         <EmptyState
           icon={<UsersRound />}
           title="Henüz bir takımınız yok"

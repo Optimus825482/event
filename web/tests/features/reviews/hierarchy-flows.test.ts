@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { eventSectionHeads, eventStaffAssignments, staffPerformanceReviews, tableGroups, tableGroupTables } from "@/db/schema";
+import { getLeaderDashboard, getLeaderEventDetail, getMemberPerformance } from "@/features/reviews/leader-queries";
 import { scopedMembers, scopedTeams } from "@/features/reviews/leader-scope";
 import { REVIEW_MESSAGES } from "@/features/reviews/labels";
 import { getReviewBoard, listReviewableEvents, type ReviewBoard } from "@/features/reviews/queries";
@@ -286,5 +287,66 @@ describe("kapı varlık denetiminden önce (olmayan etkinlik / liste dışı per
     await expectForbidden(saveReviewDraft(db, w.actors.S, input));
     await expectForbidden(completeReview(db, w.actors.S, { eventId: w.event.id, staffId: stranger.id }));
     await expectDomain(saveReviewDraft(db, w.manager, input), "not_found");
+  });
+});
+
+describe("ekipsiz değerlendirici (loca süpervizörü) lider sayfaları", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function locaWorld() {
+    const manager = await makeActor(managerActor("fnb"));
+    const event = await f.createEvent(db, {
+      organizerId: manager.id,
+      reviewEnabled: true,
+      startsAt: new Date("2027-06-01T18:00:00Z"),
+    });
+    const S = await f.createStaff(db, { fullName: "Loca Süpervizörü" });
+    const W = await f.createStaff(db, { fullName: "Loca Garsonu" });
+    const L1 = await f.createTable(db, event.id, { label: "L1" });
+    const G = await f.createTableGroup(db, event.id, { name: "Loca", supervisorStaffId: S.id });
+    await db.insert(tableGroupTables).values({ eventId: event.id, tableGroupId: G.id, tableId: L1.id });
+    await assignStaffToTables(db, { eventId: event.id, staffId: W.id, tableIds: [L1.id] });
+    // Başka etkinlikte başka bir süpervizör.
+    const otherEvent = await f.createEvent(db, { organizerId: manager.id, startsAt: new Date("2027-07-01T18:00:00Z") });
+    const S2 = await f.createStaff(db, { fullName: "Başka Süpervizör" });
+    const W2 = await f.createStaff(db, { fullName: "Başka Garson" });
+    const L2 = await f.createTable(db, otherEvent.id, { label: "L2" });
+    const G2 = await f.createTableGroup(db, otherEvent.id, { name: "Loca 2", supervisorStaffId: S2.id });
+    await db.insert(tableGroupTables).values({ eventId: otherEvent.id, tableGroupId: G2.id, tableId: L2.id });
+    await assignStaffToTables(db, { eventId: otherEvent.id, staffId: W2.id, tableIds: [L2.id] });
+    return { event, otherEvent, S, W, L1, W2, supervisor: await makeLeader(S.id), supervisor2: await makeLeader(S2.id) };
+  }
+
+  it("panoda etkinlik ve bekleyen değerlendirme sayılır", async () => {
+    const x = await locaWorld();
+    const d = await getLeaderDashboard(db, x.supervisor, new Date("2027-01-01T00:00:00Z"));
+    expect(d).toMatchObject({ teamCount: 0, eventCount: 1, pendingReviewEvents: 1 });
+    expect(d.next?.id).toBe(x.event.id);
+    expect(d.upcoming.map((e) => e.id)).toEqual([x.event.id]);
+  });
+
+  it("etkinlik ayrıntısı 'Ekip dışı personel' altında personeli ve masasını gösterir", async () => {
+    const x = await locaWorld();
+    const detail = await getLeaderEventDetail(db, x.supervisor, x.event.id);
+    expect(detail.event.id).toBe(x.event.id);
+    const outside = detail.teams.find((t) => t.name === "Ekip dışı personel");
+    expect(outside?.members.map((m) => m.staffId)).toEqual([x.W.id]);
+    expect(outside?.members[0]?.tableIds).toEqual([x.L1.id]);
+    expect(outside?.tableIds).toEqual([x.L1.id]);
+    expect(detail.memberCount).toBe(1);
+    // Yalnızca değerlendirilebilir personel: başka etkinlikteki personel görünmez.
+    expect(JSON.stringify(detail)).not.toContain(x.W2.id);
+    await expectDomain(getLeaderEventDetail(db, x.supervisor2, x.event.id), "not_found");
+    await expectDomain(getLeaderEventDetail(db, x.supervisor, x.otherEvent.id), "not_found");
+  });
+
+  it("üye performansı ekipsiz ama değerlendirilebilir personel için açılır", async () => {
+    const x = await locaWorld();
+    const perf = await getMemberPerformance(db, x.supervisor, x.W.id);
+    expect(perf).toMatchObject({ staffId: x.W.id, teams: [], reviewCount: 0 });
+    await expectDomain(getMemberPerformance(db, x.supervisor, x.W2.id), "not_found");
+    await expectDomain(getMemberPerformance(db, x.supervisor, x.S.id), "not_found");
   });
 });

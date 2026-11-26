@@ -39,7 +39,7 @@ export default async function LeaderMemberPage({ params }: { params: Promise<{ s
       <PageHeader
         className="mt-2"
         title={perf.fullName}
-        description={`Sicil ${perf.sicilNo} · ${perf.teams.map((t) => t.name).join(", ")}`}
+        description={[`Sicil ${perf.sicilNo}`, ...(perf.teams.length > 0 ? [perf.teams.map((t) => t.name).join(", ")] : [])].join(" · ")}
       />
       {perf.reviewCount === 0 ? (
         <EmptyState

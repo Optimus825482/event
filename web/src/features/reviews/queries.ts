@@ -65,7 +65,7 @@ function toView(row: ReviewRow): ReviewView {
 }
 
 /** Hiçbir etkin ekipte olmayan değerlendirilebilir personelin listelendiği sahte ekip. */
-const OUTSIDE_TEAM = { id: "ekip-disi", name: "Ekip dışı personel", color: "#64748b" } as const;
+export const OUTSIDE_TEAM = { id: "ekip-disi", name: "Ekip dışı personel", color: "#64748b" } as const;
 
 type TeamRef = { id: string; name: string; color: string };
 type Grouped = { team: TeamRef; staffIds: string[] };
