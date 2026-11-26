@@ -14,13 +14,14 @@ import {
   markCheckedIn,
   publishCheckIn,
   readCheckIn,
-  resolveReservation,
+  resolveTarget,
   walkInFingerprint,
   type CheckInSuccess,
   type ReservationRef,
 } from "./internal";
 import { checkInSuccessSchema } from "./result-schema";
 import { checkInInput, walkInOnceInput, type CheckInInput, type WalkInOnceInput } from "./schemas";
+import { checkInTicket } from "./ticket-check-in";
 import { registerWalkIn } from "./walk-in-service";
 
 export type { CheckInOutcome, CheckInSuccess } from "./internal";
@@ -45,8 +46,8 @@ function refOf(input: z.infer<typeof checkInInput>): ReservationRef {
   if (input.token !== undefined) return { kind: "token", value: input.token };
   if (input.legacyHash !== undefined) return { kind: "legacyHash", value: input.legacyHash };
   if (input.reservationId !== undefined) return { kind: "reservationId", value: input.reservationId };
-  // Bilet girişi bir sonraki görevde işlenir.
-  throw new DomainError("invalid", "QR kod veya rezervasyon belirtilmedi");
+  if (input.ticketId !== undefined) return { kind: "ticketId", value: input.ticketId };
+  throw new DomainError("invalid", "QR kod, rezervasyon ya da bilet belirtilmedi");
 }
 
 function asDomainError(error: unknown): DomainError | null {
@@ -123,13 +124,25 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
       .returning({ id: checkInEvents.id });
     if (!claimed) return replay(tx, actor, input, print);
 
-    const found: { reservationId: string | null } = { reservationId: null };
+    const found: { reservationId: string | null; ticketId: string | null } = { reservationId: null, ticketId: null };
     let stored: StoredResult;
     try {
       stored = await tx.transaction(async (sp): Promise<StoredResult> => {
         const event = await lockEvent(sp, actor, input.eventId);
         assertCheckInOpen(event);
-        const reservationId = await resolveReservation(sp, event.id, ref);
+        const target = await resolveTarget(sp, event.id, ref);
+        if (target.kind === "ticket") {
+          found.ticketId = target.id;
+          const data = await checkInTicket(sp, {
+            ticketId: target.id,
+            event,
+            actorId: actor.id,
+            clientTimestamp,
+            gate: input.gate ?? null,
+          });
+          return { ok: true, data };
+        }
+        const reservationId = target.id;
         found.reservationId = reservationId;
 
         const changed = await markCheckedIn(sp, {
@@ -162,6 +175,7 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
       .update(checkInEvents)
       .set({
         reservationId: found.reservationId,
+        ticketId: found.ticketId,
         outcome: logOutcome(stored),
         response: stored,
       })
