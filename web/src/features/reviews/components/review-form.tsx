@@ -184,11 +184,20 @@ export function ReviewForm({ eventId, staffId, review }: Props) {
     }
   }
 
+  function textOf(name: string): string {
+    const field = formRef.current?.elements.namedItem(name);
+    return field instanceof HTMLTextAreaElement ? field.value : "";
+  }
+
+  /** Ayrıntılı formdan çıkarken silinecek veri var mı: puan, madde listeleri ya da özel notlar. */
+  function hasDiscardable(): boolean {
+    if (hasScores) return true;
+    if (kind === "short") return false;
+    return ["strengths", "improvements", "recommendedTrainings", "privateNotes"].some((name) => textOf(name).trim() !== "");
+  }
+
   function switchKind() {
-    const text = (name: string) => {
-      const field = formRef.current?.elements.namedItem(name);
-      return field instanceof HTMLTextAreaElement ? field.value : "";
-    };
+    const text = textOf;
     const next: ReviewFormKind = kind === "short" ? "full" : "short";
     const shared: Carry =
       kind === "short"
@@ -225,7 +234,7 @@ export function ReviewForm({ eventId, staffId, review }: Props) {
         <button
           type="button"
           disabled={pending}
-          onClick={() => (hasScores ? setSwitchOpen(true) : switchKind())}
+          onClick={() => (hasDiscardable() ? setSwitchOpen(true) : switchKind())}
           className="text-sm text-primary underline underline-offset-2 disabled:opacity-60"
         >
           {kind === "short" ? "Ayrıntılı forma geç" : "Kısa forma geç"}
@@ -368,7 +377,11 @@ export function ReviewForm({ eventId, staffId, review }: Props) {
         open={switchOpen}
         onOpenChange={setSwitchOpen}
         title={kind === "short" ? "Ayrıntılı forma geç" : "Kısa forma geç"}
-        description="Girilen puanlar silinecek. Devam edilsin mi?"
+        description={
+          kind === "short"
+            ? "Girilen puan silinecek; kısa not ve sonraki etkinlik notu korunur. Devam edilsin mi?"
+            : "Girilen puanlar, madde listeleri ve özel notlar silinecek; yorum ve sonraki etkinlik notu korunur. Devam edilsin mi?"
+        }
         confirmText="Devam et"
         onConfirm={switchKind}
       />
