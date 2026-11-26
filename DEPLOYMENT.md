@@ -225,7 +225,7 @@ adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify
 `/mesafeli-satis` şu anda **yer tutucudur** ve bunu sayfada açıkça yazar. Gerçek ödeme sağlayıcısı yoktur; demo dışında
 satış alınamaz.
 
-**Bilinen sınırlar:** canlı masa durumu en çok ~11 sn gecikir; plan 2B'dir (3B sahne bu fazda yok); CAPTCHA yok
+**Bilinen sınırlar:** canlı masa durumu en çok ~11 sn gecikir; plan varsayılan olarak 2B'dir; 3B görünüm WebGL gerektiren isteğe bağlı bir görünümdür (kamera ön ayarları yok); CAPTCHA yok
 (sözleşme risk 27).
 
 **Doğrulama durumu (satış sitesi):**
