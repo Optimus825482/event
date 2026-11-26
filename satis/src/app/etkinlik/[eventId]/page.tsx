@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Notice } from "@/components/ui/notice";
 import { buildPlanModel } from "@/features/plan/model";
+import { EventSales } from "@/features/plan/event-sales";
 import { PlanLegend } from "@/features/plan/plan-legend";
 import { PlanViewer } from "@/features/plan/plan-viewer";
 import { getReader } from "@/features/plan/read";
@@ -70,7 +71,11 @@ export default async function EventPage({ params }: PageProps) {
       <p className="text-muted">Fiyatlar sandalye başınadır; salon planından masa seçilir.</p>
       <PlanLegend prices={event.prices} currency={event.currency} />
       {availability ? (
-        <PlanViewer model={buildPlanModel(event.plan, event.prices, availability)} />
+        event.sale.state === "open" ? (
+          <EventSales event={event} initialAvailability={availability} />
+        ) : (
+          <PlanViewer model={buildPlanModel(event.plan, event.prices, availability)} />
+        )
       ) : (
         <Notice tone="error">Canlı masa durumu alınamadı. Sayfayı yenileyin.</Notice>
       )}

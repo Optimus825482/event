@@ -17,6 +17,8 @@ test("etkinlik sayfası planı kalan sandalyelerle gösterir ve taşmaz", async 
 test("yakınlaştırma düğmeleri planı büyütür, Sığdır geri getirir", async ({ page }) => {
   await page.goto(`/etkinlik/${gala.id}`);
   const a1 = page.getByRole("button", { name: /Masa A1/ });
+  // Sunucu çıktısı ölçek 1 ile gelir; istemci planı sığdırana kadar beklenir.
+  await expect.poll(async () => (await a1.boundingBox())!.width).toBeLessThan(40);
   const before = (await a1.boundingBox())!.width;
   await page.getByRole("button", { name: "Yakınlaştır" }).click();
   expect((await a1.boundingBox())!.width).toBeGreaterThan(before);
