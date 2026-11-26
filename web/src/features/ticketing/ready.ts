@@ -1,1 +1,1 @@
-export const TICKETING_READY = false;
+export const TICKETING_READY = true;

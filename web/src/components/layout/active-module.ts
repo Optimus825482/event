@@ -60,6 +60,7 @@ const ROUTE_LABELS: Record<string, string> = {
   allocation: "Masa tahsisi",
   tables: "Masalar ve Satış",
   finance: "Finans",
+  orders: "Siparişler",
 };
 
 export type Crumb = { label: string; href: string | null };

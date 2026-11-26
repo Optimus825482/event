@@ -392,7 +392,6 @@ type PayOutcome = { kind: "already_paid" } | { kind: "declined" } | { kind: "pai
  */
 export async function payOrder(db: Db, orderId: string, input: PayInput, deps: OrderDeps = {}): Promise<OrderView> {
   const provider = deps.provider !== undefined ? deps.provider : activeProvider();
-  if (provider === null || provider.id !== input.payment.provider) throw new SalesError("payments_disabled");
   const email = normalizeEmail(input.buyer.email);
   const firstName = input.buyer.firstName.trim();
   const lastName = input.buyer.lastName.trim();
@@ -412,7 +411,7 @@ export async function payOrder(db: Db, orderId: string, input: PayInput, deps: O
       .where(eq(tickets.orderId, orderId));
     const tableIds = tableRows.map((r) => r.tableId).sort();
 
-    await lockEvent(tx, SALES_ACTOR, ref.eventId);
+    const event = await lockEvent(tx, SALES_ACTOR, ref.eventId);
     if (tableIds.length > 0) {
       await tx
         .select({ id: eventTables.id })
@@ -433,7 +432,12 @@ export async function payOrder(db: Db, orderId: string, input: PayInput, deps: O
       .where(eq(orders.id, orderId))
       .for("update");
     if (!order) throw new SalesError("order_not_found");
+    // Ödenmiş siparişin yinelemesi sağlayıcı ve etkinlik durumundan bağımsız aynı görünümü alır.
     if (order.status === "paid") return { kind: "already_paid" };
+    if (provider === null || provider.id !== input.payment.provider) throw new SalesError("payments_disabled");
+    // Satış aşaması `sales_closed` olsa da canlı tutma ödenebilir (T13); ama etkinlik yayından kalktıysa
+    // (taslak, iptal, tamamlandı) ödeme alınmaz.
+    if (event.status !== "published" && event.status !== "active") throw new SalesError("sales_closed");
     if (order.status === "expired" || !order.live) throw new SalesError("hold_expired");
 
     const result = await provider.start({

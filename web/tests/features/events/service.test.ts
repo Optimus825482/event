@@ -19,6 +19,8 @@ import {
 import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { createPendingHold } from "../../helpers/ticketing";
+import { saleEvent } from "../ticketing/fixtures";
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
   return persistActor(db, actor);
@@ -153,6 +155,21 @@ describe("events service", () => {
       await expectDomain(deleteEvent(db, actor, { id: ev.id }), "conflict");
       const rows = await db.select().from(events).where(eq(events.id, ev.id));
       expect(rows).toHaveLength(1);
+    });
+
+    it("siparişi olan etkinlik silinemez", async () => {
+      const actor = await makeActor();
+      const {
+        event,
+        tables: [a1],
+      } = await saleEvent();
+      await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }] });
+      await db.update(events).set({ status: "draft" }).where(eq(events.id, event.id));
+      await expect(deleteEvent(db, actor, { id: event.id })).rejects.toMatchObject({
+        code: "conflict",
+        message: "Siparişi olan etkinlik silinemez",
+      });
+      expect(await db.select().from(events).where(eq(events.id, event.id))).toHaveLength(1);
     });
 
     it("iptal edilmiş rezervasyonu olan etkinlik de silinemez", async () => {
