@@ -1,0 +1,17 @@
+/node_modules
+/.next/
+/.next-e2e/
+/out/
+/build
+.env*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+/test-results/
+/playwright-report/
+/e2e/.state/
+/.next-check/
+/.next-cross/
+/test-results-cross/
+/e2e-cross/.state.json
+/.next-load/

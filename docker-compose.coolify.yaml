@@ -6,7 +6,14 @@
 # başlığıyla iletir; bu yüzden TRUSTED_IP_HEADER=x-real-ip verilmelidir.
 # Eski yığın: docker-compose.legacy.coolify.yaml (geri dönüş için).
 #
-# Zorunlu ortam değişkenleri eksikse `docker compose config` başarısız olur (${VAR:?...}).
+# `satis` (satis/): herkese açık satış sitesi; ikinci alan adı (SALES_SITE_URL) Coolify'da `satis` servisine :3000 ile
+# atanır. Çekirdeğe yalnızca iç ağdan `http://eventflow-core:3000` ile gider (web servisinin `default` ağındaki takma adı).
+# Çekirdeğin `/api/sales` yolu dışarıya `web` etiketleriyle kapatılır (yüksek öncelikli Traefik yönlendiricisi).
+# UYARI: bu etiketler kapsayıcıda denenmedi; dağıtım sonrası dışarıdan `curl https://<çekirdek alan adı>/api/sales/...`
+# ile yolun kapalı olduğu doğrulanmalıdır.
+#
+# `satis` varsayılan KAPALIDIR (profiles: ["satis"]); yalnızca COMPOSE_PROFILES=satis ile başlar. SALES_API_SECRET, SALES_SITE_URL ve
+# WEB_PUBLIC_HOST tanımsızsa ana yığın yine de dağıtılır (WEB_PUBLIC_HOST varsayılanı `sales-block.invalid`: kural hiçbir isteği eşlemez).
 
 # İmaj sunucuda, deploy edilen commit'in kaynağından derlenir (GitHub Actions / kayıt defteri yok): çalışan sürüm her
 # zaman deploy edilen commit'tir. Derleme `migrate` servisinde tanımlıdır; `web` ve `create-admin` aynı imajı kullanır.
@@ -119,14 +126,68 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - coolify
-      - default
+      coolify: {}
+      default:
+        # Paylaşılan `coolify` ağındaki başka `web` adlarıyla karışmasın: satis çekirdeğe bu takma adla gider.
+        aliases:
+          - eventflow-core
+    labels:
+      # İki router: TLS'siz router HTTPS isteklerini eşlemez, bu yüzden http ve https ayrı tanımlanır.
+      # `/api/sales` yolunu dışarıdan kapatır (içeriden satis doğrudan eventflow-core:3000'e gider). Kapsayıcıda denenmedi.
+      - traefik.http.middlewares.eventflow-sales-block.replacepath.path=/__satis-api-disaridan-kapali
+      - traefik.http.routers.eventflow-sales-block.rule=Host(`${WEB_PUBLIC_HOST:-sales-block.invalid}`) && PathPrefix(`/api/sales`)
+      - traefik.http.routers.eventflow-sales-block.priority=1000
+      - traefik.http.routers.eventflow-sales-block.entrypoints=http
+      - traefik.http.routers.eventflow-sales-block.middlewares=eventflow-sales-block
+      - traefik.http.routers.eventflow-sales-block.service=eventflow-sales-block
+      - traefik.http.routers.eventflow-sales-block-tls.rule=Host(`${WEB_PUBLIC_HOST:-sales-block.invalid}`) && PathPrefix(`/api/sales`)
+      - traefik.http.routers.eventflow-sales-block-tls.priority=1000
+      - traefik.http.routers.eventflow-sales-block-tls.entrypoints=https
+      - traefik.http.routers.eventflow-sales-block-tls.tls=true
+      - traefik.http.routers.eventflow-sales-block-tls.tls.certresolver=letsencrypt
+      - traefik.http.routers.eventflow-sales-block-tls.middlewares=eventflow-sales-block
+      - traefik.http.routers.eventflow-sales-block-tls.service=eventflow-sales-block
+      - traefik.http.services.eventflow-sales-block.loadbalancer.server.port=3000
     deploy:
       resources:
         limits:
           memory: 1G
         reservations:
           memory: 256M
+
+  # Herkese açık satış sitesi (satis/, standalone). Çekirdeğe iç ağdan gider; port yayınlanmaz.
+  satis:
+    profiles: ["satis"]
+    build:
+      context: ./satis
+      dockerfile: Dockerfile
+    image: eventflow-satis:coolify
+    pull_policy: build
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      CORE_API_URL: http://eventflow-core:3000
+      SALES_API_SECRET: ${SALES_API_SECRET:-}
+      SITE_URL: ${SALES_SITE_URL:-}
+      TRUSTED_IP_HEADER: ${TRUSTED_IP_HEADER:?TRUSTED_IP_HEADER zorunlu (Traefik arkasında x-real-ip)}
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(async (r) => { if (!r.ok) { console.error(r.status, await r.text()); process.exit(1); } }).catch((e) => { console.error(String(e)); process.exit(1); })"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks:
+      - coolify
+      - default
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
 volumes:
   web_postgres_data:

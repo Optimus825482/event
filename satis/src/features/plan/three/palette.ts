@@ -1,0 +1,30 @@
+import { COLORS } from "@/lib/theme";
+
+/** Balo salonu paleti (3B sahne): arayüz belirteçleri tema'dandır, salon malzemeleri burada. Bileşen dosyalarında ham renk yoktur. */
+export const BALLROOM = {
+  background: "#0d1018",
+  wall: "#252432",
+  gold: COLORS.gold,
+  goldBright: "#f0d068",
+  cream: "#ebe4d8",
+  stage: "#161924",
+  wood: "#3b271c",
+  deck: "#201d28",
+  dimmed: "#464b57",
+  loca: "#c99a3a",
+  chair: "#e5d8b8",
+  balcony: "#262330",
+  carpet: "#222534",
+  carpetLine: "rgba(212, 175, 55, 0.22)",
+  warmWhite: "#fff6e5",
+  warmLight: "#fff1d6",
+  warmPoint: "#ffe8a3",
+  hemiSky: "#fff8eb",
+  hemiGround: "#262838",
+  crystal: "#fff8e7",
+  crystalCore: "#fff8dc",
+  beamBlue: "#3b82f6",
+  areaFallback: "#64748b",
+  white: "#ffffff",
+  black: "#000000",
+} as const;
