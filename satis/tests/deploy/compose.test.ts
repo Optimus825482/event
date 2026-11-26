@@ -23,10 +23,9 @@ describe("dağıtım dosyaları", () => {
     expect(coolify).toMatch(/aliases:\s*\n\s*- eventflow-core/);
   });
 
-  it("coolify: /api/sales dışarıya kapalıdır", () => {
-    expect(coolify).toContain("eventflow-sales-block");
-    expect(coolify).toContain("PathPrefix(`/api/sales`)");
-    expect(coolify).toContain("${WEB_PUBLIC_HOST:-sales-block.invalid}");
+  it("coolify: özel Traefik etiketi yoktur (Coolify yönlendiricisiyle çakışıp canlıda döngü yaptı)", () => {
+    expect(coolify).not.toMatch(/^\s*- traefik\./m);
+    expect(coolify).not.toContain("replacepath");
   });
 
   it("satis servisi 'satis' profili arkasındadır (varsayılan kapalı)", () => {
@@ -40,19 +39,6 @@ describe("dağıtım dosyaları", () => {
     for (const text of [coolify, local]) {
       expect(text).not.toMatch(/\$\{(SALES_API_SECRET|SALES_SITE_URL|WEB_PUBLIC_HOST):\?/);
     }
-  });
-
-  it("coolify: engel hem http hem https router'ında vardır ve https olan tls=true taşır", () => {
-    const label = (router: string, key: string) =>
-      coolify.match(new RegExp(`traefik\.http\.routers\.${router}\.${key}=(.+)`))?.[1]?.trim();
-    expect(label("eventflow-sales-block", "entrypoints")).toBe("http");
-    expect(label("eventflow-sales-block-tls", "entrypoints")).toBe("https");
-    expect(label("eventflow-sales-block-tls", "tls")).toBe("true");
-    expect(label("eventflow-sales-block-tls", "rule")).toBeDefined();
-    expect(label("eventflow-sales-block-tls", "rule")).toBe(label("eventflow-sales-block", "rule"));
-    expect(label("eventflow-sales-block-tls", "priority")).toBe(label("eventflow-sales-block", "priority"));
-    expect(label("eventflow-sales-block-tls", "middlewares")).toBe(label("eventflow-sales-block", "middlewares"));
-    expect(label("eventflow-sales-block-tls", "service")).toBe(label("eventflow-sales-block", "service"));
   });
 
   it("hiçbir compose dosyasında NEXT_PUBLIC_ değişkeni yoktur", () => {

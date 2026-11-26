@@ -8,12 +8,10 @@
 #
 # `satis` (satis/): herkese açık satış sitesi; ikinci alan adı (SALES_SITE_URL) Coolify'da `satis` servisine :3000 ile
 # atanır. Çekirdeğe yalnızca iç ağdan `http://eventflow-core:3000` ile gider (web servisinin `default` ağındaki takma adı).
-# Çekirdeğin `/api/sales` yolu dışarıya `web` etiketleriyle kapatılır (yüksek öncelikli Traefik yönlendiricisi).
-# UYARI: bu etiketler kapsayıcıda denenmedi; dağıtım sonrası dışarıdan `curl https://<çekirdek alan adı>/api/sales/...`
-# ile yolun kapalı olduğu doğrulanmalıdır.
+# Çekirdeğin `/api/sales` yolu paylaşılan sırla (SALES_API_SECRET, en az 32 karakter) korunur; sır yoksa 503 döner.
 #
 # `satis` varsayılan KAPALIDIR (profiles: ["satis"]); yalnızca COMPOSE_PROFILES=satis ile başlar. SALES_API_SECRET, SALES_SITE_URL ve
-# WEB_PUBLIC_HOST tanımsızsa ana yığın yine de dağıtılır (WEB_PUBLIC_HOST varsayılanı `sales-block.invalid`: kural hiçbir isteği eşlemez).
+# WEB_PUBLIC_HOST tanımsızsa ana yığın yine de dağıtılır.
 
 # İmaj sunucuda, deploy edilen commit'in kaynağından derlenir (GitHub Actions / kayıt defteri yok): çalışan sürüm her
 # zaman deploy edilen commit'tir. Derleme `migrate` servisinde tanımlıdır; `web` ve `create-admin` aynı imajı kullanır.
@@ -131,23 +129,8 @@ services:
         # Paylaşılan `coolify` ağındaki başka `web` adlarıyla karışmasın: satis çekirdeğe bu takma adla gider.
         aliases:
           - eventflow-core
-    labels:
-      # İki router: TLS'siz router HTTPS isteklerini eşlemez, bu yüzden http ve https ayrı tanımlanır.
-      # `/api/sales` yolunu dışarıdan kapatır (içeriden satis doğrudan eventflow-core:3000'e gider). Kapsayıcıda denenmedi.
-      - traefik.http.middlewares.eventflow-sales-block.replacepath.path=/__satis-api-disaridan-kapali
-      - traefik.http.routers.eventflow-sales-block.rule=Host(`${WEB_PUBLIC_HOST:-sales-block.invalid}`) && PathPrefix(`/api/sales`)
-      - traefik.http.routers.eventflow-sales-block.priority=1000
-      - traefik.http.routers.eventflow-sales-block.entrypoints=http
-      - traefik.http.routers.eventflow-sales-block.middlewares=eventflow-sales-block
-      - traefik.http.routers.eventflow-sales-block.service=eventflow-sales-block
-      - traefik.http.routers.eventflow-sales-block-tls.rule=Host(`${WEB_PUBLIC_HOST:-sales-block.invalid}`) && PathPrefix(`/api/sales`)
-      - traefik.http.routers.eventflow-sales-block-tls.priority=1000
-      - traefik.http.routers.eventflow-sales-block-tls.entrypoints=https
-      - traefik.http.routers.eventflow-sales-block-tls.tls=true
-      - traefik.http.routers.eventflow-sales-block-tls.tls.certresolver=letsencrypt
-      - traefik.http.routers.eventflow-sales-block-tls.middlewares=eventflow-sales-block
-      - traefik.http.routers.eventflow-sales-block-tls.service=eventflow-sales-block
-      - traefik.http.services.eventflow-sales-block.loadbalancer.server.port=3000
+    # Özel Traefik etiketi yok: Coolify'ın yönlendiricisiyle çakışıp tüm istekleri yeniden yazdı (canlıda döngü).
+    # `/api/sales` paylaşılan sırla korunur; sır tanımsızsa uç 503 döner.
     deploy:
       resources:
         limits:

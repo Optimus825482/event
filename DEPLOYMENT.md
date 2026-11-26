@@ -44,12 +44,12 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 | `SALES_API_SECRET` | hayır (satış sitesi için evet) | Satış API'sinin ortak sırrı (en az 32 karakter; `openssl rand -base64 48`). Tanımsızsa çekirdek satış API'sini 503 ile kapalı tutar; yığın yine de dağıtılır |
 | `PAYMENT_PROVIDER` | hayır | `demo` \| `disabled`; varsayılan `disabled`. Başka değer açılışı durdurur. `demo` gerçek ödeme almaz |
 | `SALES_SITE_URL` | hayır (satış sitesi için evet) | Herkese açık satış sitesinin adresi, `https://` ile başlamalı (sondaki `/` atılır). Boş bırakılabilir (yalnızca e-posta bağlantısında kullanılır) |
-| `WEB_PUBLIC_HOST` | hayır (satış sitesi için evet) | Çekirdeğin herkese açık alan adı, şemasız (ör. `eventflow.example.com`); Traefik etiketi `/api/sales` yolunu dışarıya kapatır. Tanımsızsa varsayılan `sales-block.invalid` kullanılır (kural hiçbir isteği eşlemez) |
+| `WEB_PUBLIC_HOST` | hayır | Artık kullanılmıyor (Traefik engel etiketleri kaldırıldı; bkz. aşağıdaki not) |
 | `COMPOSE_PROFILES` | hayır | `satis` verilirse satış sitesi servisi de başlar; varsayılan boş (satış sitesi kapalı) |
 | `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 6 karakter; büyük harf, küçük harf ve rakam içermeli). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
 | `ADMIN_USERNAME` | hayır | Otomatik oluşturulan yöneticinin kullanıcı adı; varsayılan `admin` (büyük/küçük harf duyarlı) |
 
-> `/api/sales/*` Traefik'te dışarıya kapatılmıştır (`WEB_PUBLIC_HOST` etiketi); iç ağdan ise `SALES_API_SECRET` ile korunur. `PAYMENT_PROVIDER=demo` gerçek ödeme almaz; canlı satışta kullanılmaz.
+> `/api/sales/*` dışarıdan erişilebilir; yalnızca `SALES_API_SECRET` (en az 32 karakter) ile korunur, sır yoksa uç 503 döner. Traefik ile yol engelleme denendi, Coolify'ın kendi yönlendiricisiyle çakışıp tüm istekleri yeniden yazdığı için kaldırıldı. `PAYMENT_PROVIDER=demo` gerçek ödeme almaz; canlı satışta kullanılmaz.
 
 `UPLOAD_DIR` compose içinde `/data/uploads` olarak sabittir (adlandırılmış volume). Uygulama `NODE_ENV=production` iken
 `BETTER_AUTH_URL` (https) ve `TRUSTED_IP_HEADER` olmadan açılmaz.
@@ -205,7 +205,7 @@ sorunsuz dağıtılır; satış API'si çekirdekte 503 ile kapalı kalır.
 
 **Satış sitesini açmak için** Coolify'da şunları tanımlayın:
 
-1. `SALES_API_SECRET` (en az 32 karakter; `web` ve `satis` için aynı değer), `SALES_SITE_URL` (`https://...`), `WEB_PUBLIC_HOST` (şemasız) ve `COMPOSE_PROFILES=satis`.
+1. `SALES_API_SECRET` (en az 32 karakter; `web` ve `satis` için aynı değer), `SALES_SITE_URL` (`https://...`) ve `COMPOSE_PROFILES=satis`.
 2. `satis` servisine satış alan adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify uygulaması açmayın).
 3. Yeniden dağıtın. Deploy sırası: veritabanı -> `migrate` -> `web` -> `satis`. Bu fazda çekirdekte şema/migration değişikliği yoktur.
 
@@ -220,7 +220,7 @@ başlar ve üç değişken de tanımlı olmalıdır).
 | `COMPOSE_PROFILES` | compose | `satis` olduğunda satış sitesi servisi başlar |
 | `SALES_API_SECRET` | `web` + `satis` | Paylaşılan sır, en az 32 karakter (`openssl rand -base64 48`). İki serviste aynı değer. Değişirse iki servis birlikte yeniden başlatılır |
 | `SALES_SITE_URL` | `web` (e-posta bağlantısı) + `satis` (`SITE_URL`) | Satış sitesinin herkese açık adresi, `https://` ile |
-| `WEB_PUBLIC_HOST` | compose (Traefik etiketi) | Çekirdeğin alan adı, şemasız (ör. `eventflow.example.com`); `/api/sales` yolunu dışarıya kapatır. Varsayılan `sales-block.invalid` |
+| `WEB_PUBLIC_HOST` | (kullanılmıyor) | Traefik engel etiketleri kaldırıldı |
 | `TRUSTED_IP_HEADER` | `web` + `satis` | Zaten tanımlı (`x-real-ip`) |
 | `PAYMENT_PROVIDER` | `web` | `demo` ya da `disabled`. Üretim varsayılanı `disabled`: satış kapalı görünür. Demo satış için açıkça `demo` verilmelidir; **demo ile alınan biletler gerçek ödeme değildir** ve her yüzeyde "DEMO - gerçek ödeme alınmadı" yazar |
 
@@ -232,10 +232,8 @@ Ortak `coolify` ağındaki diğer kapsayıcılar `satis:3000` ve `web:3000` adre
 **Dağıtım sonrası doğrulama (sahibi yapar):**
 
 1. `https://<satış-alan-adı>/api/health` -> `{"status":"ok"}`.
-2. Yalıtım: `curl -i https://<çekirdek-alan-adı>/api/sales/v1/events` JSON `401 unauthorized` **dönmemelidir**. Beklenen:
-   404 ya da giriş sayfasına yönlendirme. 401 JSON dönüyorsa Traefik etiketleri etkisizdir, yol dışarıya açıktır ve tek
-   koruma paylaşılan sırdır: bildirin. **Traefik etiketleri (`eventflow-sales-block*`) kapsayıcıda denenmedi**; bu
-   kontrol ilk dağıtımdan sonra mutlaka yapılmalıdır.
+2. Satış API'si: `curl -i https://<çekirdek-alan-adı>/api/sales/v1/events` sırsız istekte JSON `401 unauthorized` döner (sır
+   tanımsızsa `503`). Yol dışarıdan erişilebilir ve paylaşılan sırla korunur; sırrı kimseyle paylaşmayın.
 3. Satış sitesinde bir etkinlik görünüyor, demo ile bir bilet alınabiliyor, e-posta geliyor (SMTP ayarlıysa).
 
 **Canlı satıştan önce yapılacaklar (sahibi):** KVKK aydınlatma metni ve mesafeli satış sözleşmesi sağlanmalı; `/kvkk` ve
