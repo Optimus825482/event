@@ -16,7 +16,7 @@ import type { Actor } from "@/features/auth/session";
 import { getFloorPlan } from "@/features/venue/plan-service";
 import type { FloorPlanData } from "@/features/venue/plan-types";
 import { DomainError } from "@/lib/action";
-import { reviewableByEvent, scopedMembers, scopedTeams, type ScopedMember, type ScopedTeam } from "./leader-scope";
+import { reviewableByEvent, scopedMembers, scopedTeams, type ScopedTeam } from "./leader-scope";
 import { average, categoryAverages, countdownParts, trendOf, type Trend } from "./leader-stats";
 import { reviewEventIds, reviewableStaff } from "./authority";
 import { OUTSIDE_TEAM, listReviewableEvents, type ReviewableEvent } from "./queries";
