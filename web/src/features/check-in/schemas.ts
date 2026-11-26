@@ -90,3 +90,9 @@ export const searchGuestsInput = z.object({
   q: z.preprocess(blankToUndefined, z.string().trim().max(100, "Arama en fazla 100 karakter olabilir").optional()),
 });
 export type SearchGuestsInput = z.infer<typeof searchGuestsInput>;
+
+export const findOrderInput = z.object({
+  eventId: id,
+  pnr: z.string().trim().min(1, "PNR giriniz").max(32, "PNR çok uzun"),
+});
+export type FindOrderInput = z.infer<typeof findOrderInput>;
