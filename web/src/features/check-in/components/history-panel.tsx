@@ -33,7 +33,7 @@ export function HistoryPanel({ eventId }: { eventId: string }) {
       ) : (
         <ul className="divide-y divide-slate-700 rounded-xl border border-slate-700 bg-slate-800">
           {recent.data.map((r) => (
-            <li key={r.reservationId} className="flex items-center justify-between gap-3 p-3 text-sm">
+            <li key={r.id} className="flex items-center justify-between gap-3 p-3 text-sm">
               <div className="flex min-w-0 items-center gap-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
                   <CheckCircle2 className="h-4 w-4" aria-hidden="true" />

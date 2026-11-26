@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
-import { customers, eventTables, events, reservations } from "@/db/schema";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
+import { customers, eventTables, events, orders, reservations, tickets } from "@/db/schema";
 import type { ReservationStatus } from "@/domain/reservation-status";
 import type { Actor } from "@/features/auth/session";
 import { MSG, type Executor } from "@/features/reservations/internal";
+import { getSalesTotals } from "@/features/ticketing/stats";
 import { DomainError } from "@/lib/action";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 import type { SearchGuestsInput } from "./schemas";
@@ -53,15 +54,20 @@ export async function eventStats(db: Executor, actor: Actor, eventId: string): P
     .where(eq(events.id, eventId))
     .groupBy(events.id);
   if (!row) throw new DomainError("not_found", MSG.eventNotFound);
-  return toEventStats({
-    pending: row.pending,
-    confirmed: row.confirmed,
-    checkedIn: row.checkedIn,
-    cancelled: row.cancelled,
-    noShow: row.noShow,
-    expectedGuests: row.expectedGuests,
-    checkedInGuests: row.checkedInGuests,
-  });
+  const sales = await getSalesTotals(db, eventId);
+  return toEventStats(
+    {
+      pending: row.pending,
+      confirmed: row.confirmed,
+      checkedIn: row.checkedIn,
+      cancelled: row.cancelled,
+      noShow: row.noShow,
+      expectedGuests: row.expectedGuests,
+      checkedInGuests: row.checkedInGuests,
+    },
+    // Demo biletler de kapıdan girer; `issued` demo hariç olduğundan ayrıca eklenir.
+    { issued: sales.issued + sales.demoIssued, checkedIn: sales.checkedIn },
+  );
 }
 
 export type GuestRow = {
@@ -140,14 +146,17 @@ export async function searchGuests(db: Executor, actor: Actor, input: SearchGues
 }
 
 export type RecentCheckIn = {
-  reservationId: string;
+  /** Liste anahtarı: rezervasyon ya da bilet kimliği. */
+  id: string;
+  kind: "reservation" | "ticket";
+  reservationId: string | null;
   guestName: string;
   tableLabel: string;
   guestCount: number;
   checkedInAt: string | null;
 };
 
-/** Son giriş yapanlar (en yeni önce). */
+/** Son giriş yapanlar: rezervasyon ve bilet girişleri tek listede (en yeni önce). */
 export async function recentCheckIns(
   db: Executor,
   actor: Actor,
@@ -155,7 +164,7 @@ export async function recentCheckIns(
   limit = 10,
 ): Promise<RecentCheckIn[]> {
   const event = await assertEventAccess(db, actor, eventId);
-  const rows = await db
+  const reservationRows = await db
     .select({
       reservationId: reservations.id,
       guestName: sql<string>`coalesce(${reservations.guestName}, ${customers.fullName})`,
@@ -172,10 +181,49 @@ export async function recentCheckIns(
     .where(and(eq(reservations.eventId, event.id), eq(reservations.status, "checked_in")))
     .orderBy(sql`${reservations.checkedInAt} desc nulls last`, desc(reservations.id))
     .limit(limit);
-  return rows.map((r) => ({
-    ...r,
-    checkedInAt: r.checkedInAt?.toISOString() ?? null,
-  }));
+  const ticketRows = await db
+    .select({
+      ticketId: tickets.id,
+      firstName: orders.buyerFirstName,
+      lastName: orders.buyerLastName,
+      tableLabel: eventTables.label,
+      checkedInAt: tickets.checkedInAt,
+    })
+    .from(tickets)
+    .innerJoin(orders, eq(orders.id, tickets.orderId))
+    .innerJoin(eventTables, and(eq(eventTables.eventId, tickets.eventId), eq(eventTables.id, tickets.tableId)))
+    .where(and(eq(tickets.eventId, event.id), eq(tickets.status, "issued"), isNotNull(tickets.checkedInAt)))
+    .orderBy(desc(tickets.checkedInAt), desc(tickets.id))
+    .limit(limit);
+  const merged: RecentCheckIn[] = [
+    ...reservationRows.map((r) => ({
+      id: r.reservationId,
+      kind: "reservation" as const,
+      reservationId: r.reservationId,
+      guestName: r.guestName,
+      tableLabel: r.tableLabel,
+      guestCount: r.guestCount,
+      checkedInAt: r.checkedInAt?.toISOString() ?? null,
+    })),
+    ...ticketRows.map((t) => ({
+      id: t.ticketId,
+      kind: "ticket" as const,
+      reservationId: null,
+      guestName:
+        [t.firstName, t.lastName].filter((p) => p && p.trim() !== "").join(" ") || "Bilet",
+      tableLabel: t.tableLabel,
+      guestCount: 1,
+      checkedInAt: t.checkedInAt?.toISOString() ?? null,
+    })),
+  ];
+  // ISO dizgeleri aynı biçimde olduğundan sözcük sırası zaman sırasıdır; zamansız satırlar sona.
+  merged.sort((a, b) => {
+    if (a.checkedInAt === b.checkedInAt) return a.id < b.id ? 1 : -1;
+    if (a.checkedInAt === null) return 1;
+    if (b.checkedInAt === null) return -1;
+    return a.checkedInAt < b.checkedInAt ? 1 : -1;
+  });
+  return merged.slice(0, limit);
 }
 
 export type CheckInEvent = {
