@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 
 import { expect, test } from "./support/fixtures";
 import { reservationCount, withDb } from "./support/db";
-import { addTablesAndSave, createEvent, publishEvent } from "./support/ui";
+import { addTablesAndSave, allocateAllToCasino, createEvent, publishEvent } from "./support/ui";
 
 const EVENT_NAME = "E2E Excel İçe Aktarma";
 
@@ -13,6 +13,7 @@ test.describe("Excel içe aktarma", () => {
       { label: "X1", capacity: 4 },
       { label: "X2", capacity: 6 },
     ]);
+    await allocateAllToCasino(page, eventId);
     await publishEvent(page, eventId);
 
     await page.goto(`/import/reservations/${eventId}`);

@@ -3,12 +3,15 @@ import type { Db, Tx } from "@/db/client";
 import { eventTables, tableGroups } from "@/db/schema";
 import type { EventStatus } from "@/domain/event-status";
 import type { PlanningStage } from "@/domain/planning-stage";
+import { SALE_CATEGORY_LABELS } from "@/domain/seating";
+import { categoriesMissingFinalPrice } from "@/features/finance/price-service";
 
 export const PRECONDITION_MESSAGES = {
   noTables: "Yerleşimde en az bir masa olmalı",
   noTableGroups: "En az bir masa grubu oluşturulmalı",
   notSellable: "Satış yalnızca yayımlanmış ya da aktif etkinlikte açılabilir",
   noOnlineTables: "Satışa açık en az bir masa olmalı",
+  missingFinalPrice: (labels: readonly string[]) => `Kesin fiyatı girilmemiş kategori var: ${labels.join(", ")}`,
 } as const;
 
 async function exists(ex: Db | Tx, table: typeof eventTables | typeof tableGroups, eventId: string): Promise<boolean> {
@@ -49,6 +52,12 @@ export async function checkPreconditions(
       if (event.status !== "published" && event.status !== "active") blockers.push(PRECONDITION_MESSAGES.notSellable);
       if (!(await hasOnlineTable(ex, event.id))) blockers.push(PRECONDITION_MESSAGES.noOnlineTables);
       return blockers;
+    }
+    case "priced": {
+      const missing = await categoriesMissingFinalPrice(ex, event.id);
+      return missing.length === 0
+        ? []
+        : [PRECONDITION_MESSAGES.missingFinalPrice(missing.map((c) => SALE_CATEGORY_LABELS[c]))];
     }
     default:
       return [];

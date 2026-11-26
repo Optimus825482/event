@@ -7,9 +7,11 @@ import { eventTypeBadge } from "@/features/events/board";
 import { ArtistLine, CountdownBanner, EventSummaryCards } from "@/features/events/components/event-detail-parts";
 import { EventActions } from "@/features/events/components/event-actions";
 import { EventForm } from "@/features/events/components/event-form";
+import { EventSectionNav } from "@/features/events/components/event-section-nav";
 import { ReviewToggles } from "@/features/events/components/review-toggles";
 import { EVENT_STATUS_LABELS } from "@/features/events/labels";
 import { loadEventDetail } from "@/features/events/queries";
+import { visibleEventSections } from "@/features/events/sections";
 import { PlanningStagePanel } from "@/features/planning/components/stage-panel";
 import { loadPlanningPanel } from "@/features/planning/queries";
 import { PlanPreviewCard } from "@/features/venue/components/plan-preview-card";
@@ -73,6 +75,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
             deletable={event.status === "draft" && event.reservationCount === 0}
           />
         </div>
+
+        <EventSectionNav eventId={event.id} sections={visibleEventSections(actor)} active="overview" />
 
         {planning ? <PlanningStagePanel state={planning} /> : null}
 

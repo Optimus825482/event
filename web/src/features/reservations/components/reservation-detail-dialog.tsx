@@ -8,6 +8,7 @@ import { ReservationStatusBadge } from "./status-badge";
 
 export type ReservationRowData = {
   id: string;
+  bookingCode: string;
   status: ReservationStatus;
   guestName: string | null;
   customerName: string | null;

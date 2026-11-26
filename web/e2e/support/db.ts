@@ -73,3 +73,31 @@ export async function checkedInCount(eventName: string): Promise<number> {
     return Number(res.rows[0]?.n ?? "0");
   });
 }
+
+/** Etkinlik adı ve masa etiketiyle masanın isimsiz sandalye yuvası sayısı (yalnızca online masalarda bulunur). */
+export async function seatSlotCount(eventName: string, tableLabel: string): Promise<number> {
+  return withDb(async (pool) => {
+    const res = await pool.query<{ n: string }>(
+      `select count(s.id)::text as n
+         from event_tables t
+         join events e on e.id = t.event_id
+         left join table_seat_slots s on s.table_id = t.id
+        where e.name = $1 and t.label = $2`,
+      [eventName, tableLabel],
+    );
+    return Number(res.rows[0]?.n ?? "0");
+  });
+}
+
+/** Etkinlik adı ve masa etiketiyle masanın tahsis durumu (pending, casino, online, closed). */
+export async function tableAllocation(eventName: string, tableLabel: string): Promise<string> {
+  return withDb(async (pool) => {
+    const res = await pool.query<{ allocation: string }>(
+      "select t.allocation from event_tables t join events e on e.id = t.event_id where e.name = $1 and t.label = $2",
+      [eventName, tableLabel],
+    );
+    const row = res.rows[0];
+    if (!row) throw new Error(`Masa bulunamadı: ${eventName} / ${tableLabel}`);
+    return row.allocation;
+  });
+}

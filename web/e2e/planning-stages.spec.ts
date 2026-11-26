@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
 import { withDb } from "./support/db";
-import { EMPTY_STATE, expect, loginAs, test } from "./support/fixtures";
+import { createManager, openSession, type Dept } from "./support/departments";
+import { expect, test } from "./support/fixtures";
 import { addTablesAndSave, createEvent, fillReservation, publishEvent } from "./support/ui";
 
 // Senaryo tek etkinliğin aşama zincirini sırayla yürütür: her adım bir öncekinin sonucuna dayanır.
@@ -13,7 +14,6 @@ const EVENT_NAME = "E2E Aşama Zinciri";
 // Parolalar her koşuda rastgele üretilir; yalnızca bellekte yaşar.
 const PASSWORD = `Ps1-${randomBytes(12).toString("base64url")}`;
 
-type Dept = { username: string; fullName: string; label: string };
 const ENT: Dept = { username: "e2e-plan-ent-yonetici", fullName: "Ent Yönetici", label: "Entertainment" };
 const FNB: Dept = { username: "e2e-plan-fnb-yonetici", fullName: "Fnb Yönetici", label: "Food & Beverage" };
 const CASINO: Dept = { username: "e2e-plan-casino-yonetici", fullName: "Casino Yönetici", label: "Casino" };
@@ -22,27 +22,11 @@ let eventId = "";
 const contexts: BrowserContext[] = [];
 const pages = new Map<string, Page>();
 
-async function createManager(admin: Page, dept: Dept): Promise<void> {
-  await admin.goto("/admin/users");
-  await admin.getByRole("button", { name: "Yeni kullanıcı" }).click();
-  await admin.getByLabel("Kullanıcı adı", { exact: true }).fill(dept.username);
-  await admin.getByLabel("Ad soyad").fill(dept.fullName);
-  await admin.getByLabel("Rol", { exact: true }).selectOption({ label: "Departman kullanıcısı" });
-  await admin.getByLabel(dept.label, { exact: true }).check();
-  await admin.getByLabel(`${dept.label} düzeyi`).selectOption({ label: "Yönetici" });
-  await admin.getByLabel("Parola", { exact: true }).fill(PASSWORD);
-  await admin.getByRole("button", { name: "Kullanıcı oluştur" }).click();
-  await expect(admin.getByRole("status").filter({ hasText: "Kullanıcı oluşturuldu" })).toBeVisible();
-}
-
 async function sessionFor(browser: Browser, dept: Dept): Promise<Page> {
   const cached = pages.get(dept.username);
   if (cached) return cached;
-  const context = await browser.newContext({ storageState: EMPTY_STATE });
+  const { context, page } = await openSession(browser, dept, PASSWORD);
   contexts.push(context);
-  const page = await context.newPage();
-  await loginAs(page, dept.username, PASSWORD);
-  await expect(page.getByRole("navigation", { name: "Ana menü" })).toBeVisible();
   pages.set(dept.username, page);
   return page;
 }
@@ -110,7 +94,7 @@ test.afterAll(async () => {
 
 test.describe("Planlama aşamaları", () => {
   test("yönetici üç departman yöneticisi ve bir etkinlik oluşturur", async ({ page }) => {
-    for (const dept of [ENT, FNB, CASINO]) await createManager(page, dept);
+    for (const dept of [ENT, FNB, CASINO]) await createManager(page, dept, PASSWORD);
     eventId = await createEvent(page, EVENT_NAME);
     // Yeni etkinlik `defined` aşamasındadır ve panel ayrıntıda görünür.
     await expect(currentStep(page)).toContainText("Tanımlandı");
@@ -161,9 +145,29 @@ test.describe("Planlama aşamaları", () => {
     await expect(currentStep(ent)).toContainText("Masalar sınıflandı");
 
     // Sıradaki işin sahibi Casino: bildirimi ve etkinlik sayfasındaki düğmesi vardır.
+    // Casino yalnızca T1'i ayırır; T2 beklemede kalır ve Entertainment onu satışa açacaktır.
+    await casino.goto(`/reservations/${eventId}/allocation`);
+    await casino.getByLabel("T1 masasını seç").check();
+    await casino.getByRole("button", { name: "Casino'ya ayır" }).click();
+    await expect(casino.getByRole("status").filter({ hasText: "1 masa Casino'ya ayrıldı" })).toBeVisible();
+
     await casino.goto(`/events/${eventId}`);
     await stageButton(casino, "Casino tahsisi tamam olarak işaretle");
     await expect(currentStep(casino)).toContainText("Casino tahsisi tamam");
+
+    // T2 satılabilir (beklemede) kaldığı için Standart kategorisinin kesin fiyatı olmadan "Fiyatlandı" geçilemez.
+    // (Satılabilir masa kalmasaydı engel çıkmaz ve bu doğrulama atlanırdı.)
+    await ent.goto(`/events/${eventId}`);
+    const panel = ent.getByRole("region", { name: "Planlama aşaması" });
+    await expect(panel).toContainText("Kesin fiyatı girilmemiş kategori var: Standart");
+
+    // Kesin fiyat Finans ekranından girilir; ardından aşama geçilir.
+    await ent.goto(`/events/${eventId}/finance`);
+    await expect(ent.getByText("Kesin fiyat gerekli")).toBeVisible();
+    await ent.getByLabel("Standart kesin fiyat").fill("1500");
+    await ent.getByRole("button", { name: "Fiyatları kaydet" }).click();
+    await expect(ent.locator('[aria-live="polite"]').getByText("Fiyatlar kaydedildi", { exact: true })).toBeVisible();
+    await expect(ent.getByText("Kesin fiyat gerekli")).toHaveCount(0);
 
     await ent.goto(`/events/${eventId}`);
     await stageButton(ent, "Fiyatlandı olarak işaretle");
@@ -178,6 +182,12 @@ test.describe("Planlama aşamaları", () => {
     await page.goto(`/reservations/${eventId}/new`);
     await fillReservation(page, { table: "T1", guests: 2, name: "Kilitli Misafir", phone: "5321110099" });
     await page.waitForURL(new RegExp(`/reservations/${eventId}/[0-9a-f-]{36}$`));
+
+    // T2 taahhütsüz kalır: Entertainment onu "Masalar ve Satış" ekranında online satışa açar.
+    await ent.goto(`/events/${eventId}/tables`);
+    await ent.getByLabel("T2 masasını seç").check();
+    await ent.getByRole("button", { name: "Satışa aç" }).click();
+    await expect(ent.getByRole("row").filter({ hasText: "T2" })).toContainText("Online satış");
 
     await ent.goto(`/events/${eventId}`);
     await stageButton(ent, "Satışı aç");

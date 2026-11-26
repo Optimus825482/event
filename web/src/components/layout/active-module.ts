@@ -57,6 +57,9 @@ const ROUTE_LABELS: Record<string, string> = {
   import: "İçe Aktarma",
   assignments: "Atamalar",
   template: "Şablon",
+  allocation: "Masa tahsisi",
+  tables: "Masalar ve Satış",
+  finance: "Finans",
 };
 
 export type Crumb = { label: string; href: string | null };
