@@ -186,6 +186,9 @@ export async function createHoldWithOutcome(
         .orderBy(asc(eventTables.id))
         .for("update");
 
+      // Süresi dolmuş tutmalar yuvayı hâlâ dolu gösterir: masa kilitleri tutulurken, saymadan önce süpür.
+      await sweepStaleHolds(tx, { eventId, tableIds });
+
       // Aynı anahtarla eşzamanlı yineleme masa kilidinde bekledi; kilit sonrası anlık görüntüde öncekinin
       // siparişi görünür. Yer kalmamış olsa da yineleme `seats_unavailable` değil aynı siparişi almalı.
       const duplicate = await orderIdByClientKey(tx, clientKey, eventId);
@@ -272,6 +275,93 @@ export async function createHoldWithOutcome(
 
 export async function createHold(db: Db, input: HoldInput, deps: OrderDeps = {}): Promise<OrderView> {
   return (await createHoldWithOutcome(db, input, deps)).order;
+}
+
+export type SweepScope = { eventId?: string; tableIds?: readonly string[] };
+
+/**
+ * Verilen siparişlerin biletlerini bırakır (`expired`, yuvasız) ve etkilenen her masa için `seats.changed`
+ * yayar. Çağıran sipariş satırlarını kilitlemiş ve `expired` yapmış olmalı (kilit sırası: sipariş → bilet).
+ */
+async function expireTicketsOf(tx: Tx, orderIds: readonly string[]): Promise<void> {
+  if (orderIds.length === 0) return;
+  const freed = await tx
+    .update(tickets)
+    .set({ status: "expired", seatSlotId: null })
+    .where(and(inArray(tickets.orderId, [...orderIds]), eq(tickets.status, "held")))
+    .returning({ eventId: tickets.eventId, tableId: tickets.tableId });
+  const touched = new Map<string, string>();
+  for (const row of freed) touched.set(row.tableId, row.eventId);
+  const ordered = [...touched.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  for (const [id, eventId] of ordered) await publish(tx, { type: "seats.changed", eventId, id });
+}
+
+/**
+ * İşlem içinde süpürme. Kilit sırası: sistem geneli sıranın (etkinlik → masalar → sipariş → bilet) sipariş
+ * ve bilet adımları; `createHold` bunu masa kilitlerinden sonra çağırır. Siparişler tek sorguda kimlik
+ * artan `FOR UPDATE` ile kilitlenir: farklı kapsamlarla eşzamanlı süpürmeler aynı siparişlere aynı sırayla
+ * gelir ve kilitlenmez. Bekleyen kilit (ör. eşzamanlı bırakma) bırakılınca satır yeniden değerlendirilir;
+ * artık `pending` değilse atlanır. Başka masadaki biletler o masanın kilidi alınmadan bırakılır: bu yalnızca
+ * yuvayı boşaltır, o masada kilit tutan tutma en kötü bayat (dolu) okur ve fazla satış oluşmaz.
+ */
+async function sweepStaleHolds(tx: Tx, scope: SweepScope = {}): Promise<number> {
+  if (scope.tableIds && scope.tableIds.length === 0) return 0;
+  const conditions = [sql`o.status = 'pending'`, sql`o.hold_expires_at <= clock_timestamp()`];
+  if (scope.eventId !== undefined) conditions.push(sql`o.event_id = ${scope.eventId}`);
+  if (scope.tableIds) {
+    const ids = sql.join(
+      scope.tableIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    );
+    conditions.push(sql`exists (select 1 from tickets t where t.order_id = o.id and t.table_id in (${ids}))`);
+  }
+  const locked = await tx.execute<{ id: string }>(sql`
+    select o.id from orders o
+     where ${sql.join(conditions, sql` and `)}
+     order by o.id
+       for update of o
+  `);
+  const lockedIds = locked.rows.map((r) => r.id);
+  if (lockedIds.length === 0) return 0;
+  // Kilit beklenip satır yeniden değerlendirildiyse koşul zaten doğrulandı; yine de durum koşulu korunur.
+  const expired = await tx
+    .update(orders)
+    .set({ status: "expired" })
+    .where(and(inArray(orders.id, lockedIds), eq(orders.status, "pending")))
+    .returning({ id: orders.id });
+  const expiredIds = expired.map((r) => r.id);
+  await expireTicketsOf(tx, expiredIds);
+  return expiredIds.length;
+}
+
+/**
+ * Süresi dolmuş (`pending`, `hold_expires_at <= clock_timestamp()`) ve kapsama giren siparişleri ve tüm
+ * biletlerini (başka masadakiler dahil) `expired` yapar; süresi dolan sipariş sayısını döner. `tableIds`
+ * verilirse yalnızca o masalardan birinde bileti olan siparişler; kapsam yoksa tüm etkinlikler.
+ */
+export async function expireStaleHolds(ex: Db | Tx, scope: SweepScope = {}): Promise<number> {
+  // `Tx` üzerinde `transaction` bir kayıt noktası açar; dış işlemin kilitleri ve sırası korunur.
+  return ex.transaction((tx) => sweepStaleHolds(tx, scope));
+}
+
+/**
+ * Tutmayı hemen bırakır: sipariş `expired`, biletler `expired` + yuvasız, masa başına `seats.changed`.
+ * Zaten `expired` ise hiçbir şey yapmaz (süresi dolmuş ama süpürülmemiş `pending` satır da bırakılır).
+ * Kilit sırası sipariş → bilet; etkinlik ve masa kilidi almaz: yalnızca yuva boşaltır, fazla satış doğuramaz.
+ */
+export async function releaseHold(db: Db, orderId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [order] = await tx
+      .select({ id: orders.id, status: orders.status })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .for("update");
+    if (!order) throw new SalesError("order_not_found");
+    if (order.status === "paid") throw new SalesError("already_paid");
+    if (order.status === "expired") return;
+    await tx.update(orders).set({ status: "expired" }).where(eq(orders.id, order.id));
+    await expireTicketsOf(tx, [order.id]);
+  });
 }
 
 /**
