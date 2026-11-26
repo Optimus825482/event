@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { createOrganizationStore, toSavePayload } from "@/features/staffing/components/store";
 import { getOrganization, saveOrganization } from "@/features/staffing/organization-service";
+import { draftWriteBlock } from "@/features/staffing/draft-guard";
 import { saveOrganizationSchema } from "@/features/staffing/schemas";
 import { truncateAll } from "../../helpers/db";
 import { setupEvent } from "./helpers";
@@ -26,6 +27,8 @@ describe("sihirbaz deposu: grup süpervizörü", () => {
 
     s().setGroupSupervisor(group.id, people[0]!.id);
     expect(s().dirty).toBe(true);
+    // Kaydedilmemiş süpervizör seçimi doğrudan sunucuya yazan düğmeleri kilitler.
+    expect(draftWriteBlock(s().dirty).blocked).toBe(true);
     expect(s().groups[0]?.supervisorStaffId).toBe(people[0]!.id);
     expect(toSavePayload(event.id, s()).groups[0]?.supervisorStaffId).toBe(people[0]!.id);
 
