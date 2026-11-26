@@ -17,11 +17,20 @@ import { adminActor, managerActor, noAccessActor, persistActor } from "../../hel
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { listTransitions, setStage } from "../../helpers/planning";
+import { openOnline } from "../../helpers/seating";
+import { watchEvents } from "../realtime/emitted";
 
 async function eventWithTable(o: Parameters<typeof f.createEvent>[1] = {}) {
   const event = await f.createEvent(db, o);
   await f.createTable(db, event.id);
   return event;
+}
+
+/** Satış açma önkoşulu için en az bir online masa ekler. */
+async function addOnlineTable(eventId: string) {
+  const table = await f.createTable(db, eventId, { allocation: "pending" });
+  await db.transaction((tx) => openOnline(tx, eventId, [table.id]));
+  return table;
 }
 
 async function stageOf(eventId: string): Promise<PlanningStage> {
@@ -64,6 +73,7 @@ describe("transitionStage", () => {
     expect((await listTransitions(db, event.id))[0]?.note).toBeNull();
 
     const closed = await eventWithTable({ status: "published" });
+    await addOnlineTable(closed.id);
     await setStage(db, closed.id, "sales_closed");
     await transitionStage(db, ent, { eventId: closed.id, expected: "sales_closed", kind: "reopen", note: "gizli not" });
     expect((await listTransitions(db, closed.id))[0]?.note).toBeNull();
@@ -205,6 +215,7 @@ describe("transitionStage", () => {
 
   it("taslak etkinlikte satış açılamaz → conflict 'Satış yalnızca yayımlanmış ya da aktif etkinlikte açılabilir'", async () => {
     const event = await eventWithTable();
+    await addOnlineTable(event.id);
     await setStage(db, event.id, "priced");
     await expectDomain(
       transitionStage(db, ent, { eventId: event.id, expected: "priced", kind: "advance" }),
@@ -212,6 +223,60 @@ describe("transitionStage", () => {
       "Satış yalnızca yayımlanmış ya da aktif etkinlikte açılabilir",
     );
     await expectNothingWritten(event.id, "priced");
+  });
+
+  it("online masa yokken satış açılamaz", async () => {
+    const event = await eventWithTable({ status: "published" });
+    await setStage(db, event.id, "priced");
+    await expectDomain(
+      transitionStage(db, ent, { eventId: event.id, expected: "priced", kind: "advance" }),
+      "conflict",
+      "Satışa açık en az bir masa olmalı",
+    );
+    await expectNothingWritten(event.id, "priced");
+  });
+
+  it("taslak ve online masasız etkinlikte iki önkoşul birlikte döner", async () => {
+    const event = await eventWithTable();
+    await setStage(db, event.id, "priced");
+    await expectDomain(
+      transitionStage(db, ent, { eventId: event.id, expected: "priced", kind: "advance" }),
+      "conflict",
+      "Satış yalnızca yayımlanmış ya da aktif etkinlikte açılabilir Satışa açık en az bir masa olmalı",
+    );
+  });
+
+  it("yeniden açmada da online masa aranır", async () => {
+    const event = await eventWithTable({ status: "active" });
+    await setStage(db, event.id, "sales_closed");
+    await expectDomain(
+      transitionStage(db, ent, { eventId: event.id, expected: "sales_closed", kind: "reopen" }),
+      "conflict",
+      "Satışa açık en az bir masa olmalı",
+    );
+    await expectNothingWritten(event.id, "sales_closed");
+  });
+
+  it("satış açma ve kapama sales.changed yayar; diğer geçişler yaymaz", async () => {
+    const event = await eventWithTable({ status: "published" });
+    await addOnlineTable(event.id);
+    const watch = await watchEvents(event.id);
+    try {
+      await watch.discardSetup();
+      await transitionStage(db, fnb, { eventId: event.id, expected: "defined", kind: "advance" });
+      expect(await watch.settled()).not.toContain("sales.changed");
+
+      await setStage(db, event.id, "priced");
+      await watch.discardSetup();
+      await transitionStage(db, ent, { eventId: event.id, expected: "priced", kind: "advance" });
+      expect(await watch.settled()).toContain("sales.changed");
+
+      await watch.discardSetup();
+      await transitionStage(db, ent, { eventId: event.id, expected: "on_sale", kind: "advance" });
+      expect(await watch.settled()).toContain("sales.changed");
+    } finally {
+      watch.stop();
+    }
   });
 
   it("iptal edilmiş etkinlikte aşama değişmez → conflict; bildirim yok", async () => {
@@ -226,6 +291,7 @@ describe("transitionStage", () => {
 
   it("satış kapalıyken yeniden açma: on_sale, herkese sales_opened", async () => {
     const event = await eventWithTable({ status: "active" });
+    await addOnlineTable(event.id);
     await setStage(db, event.id, "sales_closed");
     const result = await transitionStage(db, ent, { eventId: event.id, expected: "sales_closed", kind: "reopen" });
 
@@ -271,6 +337,15 @@ describe("getPlanningState", () => {
 
     await expect(getPlanningState(db, noAccessActor(), empty.id)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(getPlanningState(db, fnb, crypto.randomUUID())).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("getPlanningState fiyatlandı aşamasında eksik online masayı engel olarak listeler", async () => {
+    const ent = await persistActor(db, managerActor("entertainment"));
+    const event = await eventWithTable({ status: "published" });
+    await setStage(db, event.id, "priced");
+    expect((await getPlanningState(db, ent, event.id)).blockers).toEqual(["Satışa açık en az bir masa olmalı"]);
+    await addOnlineTable(event.id);
+    expect((await getPlanningState(db, ent, event.id)).blockers).toEqual([]);
   });
 
   it("geçmiş en yeni önce sıralanır ve aktör adını taşır", async () => {

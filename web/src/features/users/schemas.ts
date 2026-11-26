@@ -19,6 +19,9 @@ export const PERMISSION_MODULES = [
   "reservations",
   "customers",
   "check_in",
+  "ticketing",
+  "finance",
+  "archive",
 ] as const;
 
 const id = z.uuid("Geçersiz kimlik");

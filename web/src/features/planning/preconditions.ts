@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, tableGroups } from "@/db/schema";
 import type { EventStatus } from "@/domain/event-status";
@@ -8,6 +8,7 @@ export const PRECONDITION_MESSAGES = {
   noTables: "Yerleşimde en az bir masa olmalı",
   noTableGroups: "En az bir masa grubu oluşturulmalı",
   notSellable: "Satış yalnızca yayımlanmış ya da aktif etkinlikte açılabilir",
+  noOnlineTables: "Satışa açık en az bir masa olmalı",
 } as const;
 
 async function exists(ex: Db | Tx, table: typeof eventTables | typeof tableGroups, eventId: string): Promise<boolean> {
@@ -15,6 +16,15 @@ async function exists(ex: Db | Tx, table: typeof eventTables | typeof tableGroup
     .select({ one: sql<number>`1` })
     .from(table)
     .where(eq(table.eventId, eventId))
+    .limit(1);
+  return row !== undefined;
+}
+
+async function hasOnlineTable(ex: Db | Tx, eventId: string): Promise<boolean> {
+  const [row] = await ex
+    .select({ one: sql<number>`1` })
+    .from(eventTables)
+    .where(and(eq(eventTables.eventId, eventId), eq(eventTables.allocation, "online")))
     .limit(1);
   return row !== undefined;
 }
@@ -34,8 +44,12 @@ export async function checkPreconditions(
       return (await exists(ex, eventTables, event.id)) ? [] : [PRECONDITION_MESSAGES.noTables];
     case "staffing_ready":
       return (await exists(ex, tableGroups, event.id)) ? [] : [PRECONDITION_MESSAGES.noTableGroups];
-    case "on_sale":
-      return event.status === "published" || event.status === "active" ? [] : [PRECONDITION_MESSAGES.notSellable];
+    case "on_sale": {
+      const blockers: string[] = [];
+      if (event.status !== "published" && event.status !== "active") blockers.push(PRECONDITION_MESSAGES.notSellable);
+      if (!(await hasOnlineTable(ex, event.id))) blockers.push(PRECONDITION_MESSAGES.noOnlineTables);
+      return blockers;
+    }
     default:
       return [];
   }

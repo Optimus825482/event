@@ -19,6 +19,9 @@ export const MODULE_LABELS: Record<(typeof PERMISSION_MODULES)[number], string> 
   invitations: "Davetiyeler",
   notifications: "Bildirimler",
   reviews: "Değerlendirmeler",
+  ticketing: "Bilet ve Satış",
+  finance: "Finans",
+  archive: "Arşiv ve Raporlar",
 };
 
 /** Fiil sırası ve `PermissionRow` bayrakları. */

@@ -4,7 +4,7 @@ import { expect, type Browser, type BrowserContext, type Page } from "@playwrigh
 
 import { watchCspViolations } from "./csp";
 import { adminPassword, adminUsername, EMPTY_STATE, loginAs } from "./fixtures";
-import { addTablesAndSave, createEvent, fillReservation, publishEvent } from "./ui";
+import { addTablesAndSave, allocateAllToCasino, createEvent, fillReservation, publishEvent } from "./ui";
 
 export type Session = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
@@ -35,6 +35,7 @@ export async function seedEvent(browser: Browser, spec: SeedSpec): Promise<Offli
       ...Array.from({ length: spec.freeTables }, (_, i) => ({ label: `W${i + 1}`, capacity: 4 })),
     ];
     await addTablesAndSave(page, eventId, tables);
+    await allocateAllToCasino(page, eventId);
     await publishEvent(page, eventId);
     for (const [i, name] of spec.guests.entries()) {
       await page.goto(`/reservations/${eventId}/new`);

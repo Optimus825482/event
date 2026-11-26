@@ -145,4 +145,14 @@ describe("check-in action'ları", () => {
     });
     expect(recent.ok && recent.data.map((r) => r.guestName)).toEqual(["Zeynep Kaya"]);
   });
+
+  it("freeTables yalnızca rezervasyonsuz casino masalarını listeler", async () => {
+    const { event } = await bookedGuest();
+    const free = await createTable(db, event.id, { label: "F1", capacity: 4, allocation: "casino" });
+    await createTable(db, event.id, { label: "F2", capacity: 4, allocation: "pending" });
+    await createTable(db, event.id, { label: "F3", capacity: 4, allocation: "online" });
+    const controller = await actorOf(memberActor("casino", { check_in: "vc--" }));
+    const result = await as(controller)(checkInActionDefs.freeTables)({ eventId: event.id });
+    expect(result.ok && result.data.map((t) => t.id)).toEqual([free.id]);
+  });
 });

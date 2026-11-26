@@ -3,6 +3,7 @@ import { eventTables, events, reservations } from "@/db/schema";
 import type { ReservationStatus } from "@/domain/reservation-status";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
+import type { TableAllocation } from "@/domain/seating";
 import { ACTIVE_STATUSES, MSG, type Executor } from "./internal";
 import { verifyQrToken } from "./qr-token";
 
@@ -12,6 +13,7 @@ export type AvailableTable = {
   capacity: number;
   isLoca: boolean;
   tableTypeId: string | null;
+  allocation: TableAllocation;
   /** Masadaki aktif rezervasyon (yoksa `null`). */
   reservationId: string | null;
   available: boolean;
@@ -49,13 +51,14 @@ export async function availableTables(
       capacity: eventTables.capacity,
       isLoca: eventTables.isLoca,
       tableTypeId: eventTables.tableTypeId,
+      allocation: eventTables.allocation,
       reservationId: reservations.id,
     })
     .from(eventTables)
     .leftJoin(reservations, and(...joinOn))
     .where(eq(eventTables.eventId, input.eventId))
     .orderBy(asc(eventTables.label));
-  return rows.map((row) => ({ ...row, available: row.reservationId === null }));
+  return rows.map((row) => ({ ...row, available: row.allocation === "casino" && row.reservationId === null }));
 }
 
 export type QrLookup = {

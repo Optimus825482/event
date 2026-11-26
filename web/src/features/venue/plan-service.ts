@@ -55,6 +55,8 @@ export async function getFloorPlan(db: Db | Tx, actor: Actor, eventId: string): 
       shape: shapeOf(type?.shape),
       color: type?.color ?? null,
       group: groupOf.get(row.id) ?? null,
+      category: row.saleCategory,
+      allocation: row.allocation,
     };
   });
   return { eventName: event.name, canvas: { width: decor.width, height: decor.height }, tables, decor: decor.elements, lines: decor.lines ?? [] };

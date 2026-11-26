@@ -20,6 +20,10 @@ export const REALTIME_EVENT_TYPES = [
   "table.updated",
   "stats.updated",
   "notification.created",
+  "allocation.changed",
+  "seats.changed",
+  "order.paid",
+  "sales.changed",
 ] as const;
 
 export type RealtimeEventType = (typeof REALTIME_EVENT_TYPES)[number];
@@ -40,6 +44,10 @@ export const realtimeEventSchema = z.union([
   eventScoped("guest.checked_in"),
   eventScoped("table.updated"),
   eventScoped("stats.updated"),
+  eventScoped("allocation.changed"),
+  eventScoped("seats.changed"),
+  eventScoped("order.paid"),
+  eventScoped("sales.changed"),
   z.strictObject({ type: z.literal("notification.created"), eventId: z.uuid(), id: recordId.optional(), at }),
   z.strictObject({
     type: z.literal("notification.created"),

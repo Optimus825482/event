@@ -15,6 +15,9 @@ export const MODULES = [
   "check_in",
   "reviews",
   "notifications",
+  "ticketing",
+  "finance",
+  "archive",
 ] as const;
 export const VERBS = ["view", "create", "edit", "delete"] as const;
 

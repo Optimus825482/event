@@ -118,6 +118,8 @@ export async function migrateEvents(ctx: Ctx): Promise<void> {
         size: t.size,
         floor: t.floor,
         sortNumber: t.sortNumber,
+        // Eski sistemde her masa Casino rezervasyonuna açıktı; taşınan masalar Casino'ya tahsisli doğar.
+        allocation: "casino",
         createdAt: r.date("createdAt") ?? undefined,
         updatedAt: r.date("updatedAt") ?? undefined,
       });

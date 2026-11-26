@@ -17,6 +17,7 @@ import {
 // drizzle-kit tsconfig yol takma adlarını çözmeyebilir; göreli içe aktarım.
 import { EVENT_STATUSES } from "../../domain/event-status";
 import { PLANNING_STAGES } from "../../domain/planning-stage";
+import type { SaleCategory, TableAllocation } from "../../domain/seating";
 import { users } from "./auth";
 import { tableTypes } from "./catalog";
 import { pk, timestamps, tstz } from "./columns";
@@ -97,15 +98,29 @@ export const eventTables = pgTable(
     floor: smallint("floor").notNull().default(1),
     /** Sayısal sıralama anahtarı (etiketten bağımsız). */
     sortNumber: integer("sort_number"),
+    /** Satış kategorisi (`SALE_CATEGORIES`); fiyat kategoriye göre belirlenir. */
+    saleCategory: text("sale_category").$type<SaleCategory>().notNull().default("standard"),
+    /** Satılabilir sandalye sayısı; null = kapasite. */
+    sellableSeats: integer("sellable_seats"),
+    /** Tahsis (`TABLE_ALLOCATIONS`): masanın Casino'ya mı online satışa mı ayrıldığı. */
+    allocation: text("allocation").$type<TableAllocation>().notNull().default("pending"),
     ...timestamps(),
   },
   (t) => [
     check("event_tables_capacity_positive", sql`${t.capacity} > 0`),
+    check("event_tables_sale_category_valid", sql`${t.saleCategory} IN ('standard', 'premium', 'vip')`),
+    check(
+      "event_tables_sellable_within_capacity",
+      sql`${t.sellableSeats} IS NULL OR (${t.sellableSeats} >= 1 AND ${t.sellableSeats} <= ${t.capacity})`,
+    ),
+    check("event_tables_allocation_valid", sql`${t.allocation} IN ('pending', 'casino', 'online', 'closed')`),
     check("event_tables_floor_range", sql`${t.floor} BETWEEN 1 AND 9`),
     unique("event_tables_event_label_uq").on(t.eventId, t.label),
     // Bağlı tabloların bileşik yabancı anahtarı (event_id, table_id) için hedef:
     // bir masa yalnızca kendi etkinliğinin satırlarınca referans alınabilir.
     unique("event_tables_event_id_id_uq").on(t.eventId, t.id),
+    // Tahsise bağlı bileşik yabancı anahtarların hedefi (rezervasyon → casino, yuva → online).
+    unique("event_tables_event_id_id_allocation_uq").on(t.eventId, t.id, t.allocation),
     index("event_tables_table_type_id_idx").on(t.tableTypeId),
   ],
 );

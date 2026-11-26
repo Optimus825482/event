@@ -79,6 +79,9 @@ export const permissionModule = pgEnum("permission_module", [
   "invitations",
   "notifications",
   "reviews",
+  "ticketing",
+  "finance",
+  "archive",
 ]);
 
 export const userPermissions = pgTable(

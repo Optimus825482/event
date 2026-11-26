@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 // drizzle-kit tsconfig yol takma adlarını çözmeyebilir; göreli içe aktarım.
 import { ACTIVE_RESERVATION_STATUSES, RESERVATION_STATUSES } from "../../domain/reservation-status";
+import { randomBookingCode } from "../../lib/short-code";
 import { users } from "./auth";
 import { createdOnly, currency, money, pk, timestamps, tstz } from "./columns";
 import { eventTables, events } from "./events";
@@ -44,6 +45,18 @@ export const reservations = pgTable(
     specialRequests: text("special_requests"),
     status: reservationStatus("status").notNull().default("pending"),
     qrToken: text("qr_token").notNull().unique(),
+    /** Müşteriye söylenen kısa rezervasyon kodu (`R` + 6 karakter). */
+    bookingCode: text("booking_code")
+      .notNull()
+      .unique("reservations_booking_code_uq")
+      .$defaultFn(() => randomBookingCode()),
+    /**
+     * Etkin rezervasyonda 'casino', değilse null (üretilmiş sütun). `reservations_casino_table_fk` ile
+     * etkin rezervasyonun masası yalnızca Casino'ya tahsisli olabilir; null iken FK denetlenmez.
+     */
+    allocationLock: text("allocation_lock").generatedAlwaysAs(
+      sql.raw(`CASE WHEN status IN (${ACTIVE_STATUS_LIST}) THEN 'casino' END`),
+    ),
     legacyQrHash: text("legacy_qr_hash").unique(),
     totalAmount: money("total_amount"),
     currency: currency(),
@@ -57,6 +70,11 @@ export const reservations = pgTable(
       name: "reservations_event_table_fk",
       columns: [t.eventId, t.tableId],
       foreignColumns: [eventTables.eventId, eventTables.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "reservations_casino_table_fk",
+      columns: [t.eventId, t.tableId, t.allocationLock],
+      foreignColumns: [eventTables.eventId, eventTables.id, eventTables.allocation],
     }).onDelete("restrict"),
     // Çifte rezervasyon veritabanında imkânsız: bir masada aynı anda tek aktif rezervasyon.
     uniqueIndex("reservations_active_table_uq")

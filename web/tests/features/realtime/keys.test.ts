@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { decodeRealtimeEvent, encodeRealtimeEvent, RealtimePayloadError } from "@/features/realtime/events";
 import { keysToInvalidate, realtimeKeys } from "@/features/realtime/keys";
 
 const eventId = "6f1c1d3e-0000-4000-8000-000000000001";
@@ -14,6 +15,23 @@ describe("realtimeKeys / keysToInvalidate", () => {
     ]) {
       expect(key.slice(0, 2)).toEqual(realtimeKeys.event(eventId));
     }
+  });
+
+  it("yeni olay türleri sözleşmedeki anahtarları geçersiz kılar", () => {
+    const k = realtimeKeys;
+    expect(keysToInvalidate({ type: "allocation.changed", eventId, at }, eventId)).toEqual([k.tables(eventId), k.reservations(eventId), k.seats(eventId)]);
+    expect(keysToInvalidate({ type: "seats.changed", eventId, at }, eventId)).toEqual([k.seats(eventId), k.tables(eventId)]);
+    expect(keysToInvalidate({ type: "order.paid", eventId, at }, eventId)).toEqual([k.orders(eventId), k.stats(eventId), k.seats(eventId)]);
+    expect(keysToInvalidate({ type: "sales.changed", eventId, at }, eventId)).toEqual([k.sales(eventId), k.event(eventId)]);
+    expect(k.seats(eventId)).toEqual(["events", eventId, "seats"]);
+    expect(k.orders(eventId)).toEqual(["events", eventId, "orders"]);
+    expect(k.sales(eventId)).toEqual(["events", eventId, "sales"]);
+  });
+
+  it("yeni olaylar kodlanır; etkinliksiz yük reddedilir", () => {
+    const payload = encodeRealtimeEvent({ type: "seats.changed", eventId });
+    expect(decodeRealtimeEvent(payload)).toMatchObject({ type: "seats.changed", eventId });
+    expect(() => encodeRealtimeEvent({ type: "sales.changed" } as never)).toThrow(RealtimePayloadError);
   });
 
   it("olay türüne göre geçersiz kılınacak anahtarlar", () => {

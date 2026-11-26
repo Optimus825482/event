@@ -26,7 +26,7 @@ async function loadContext(db: Executor, actor: Actor, eventId: string) {
   const event = await getEventOrThrow(db, eventId);
   assertBookable(event);
   const tables = await db
-    .select({ id: eventTables.id, label: eventTables.label, capacity: eventTables.capacity })
+    .select({ id: eventTables.id, label: eventTables.label, capacity: eventTables.capacity, allocation: eventTables.allocation })
     .from(eventTables)
     .where(eq(eventTables.eventId, event.id));
   return { event, tables, index: new TableIndex(tables) };
@@ -51,11 +51,15 @@ export async function previewReservationImport(
     .where(and(eq(reservations.eventId, event.id), inArray(reservations.status, [...ACTIVE_STATUSES])));
   const taken = new Set(active.map((r) => r.tableId));
   const capacity = new Map(tables.map((t) => [t.id, t.capacity]));
+  const allocation = new Map(tables.map((t) => [t.id, t.allocation]));
 
   const rows = parsed.map((row): PreviewResult["rows"][number] => {
     const check = checkReservationRow(event.id, index, row);
     const summary = [row.tableLabel, row.guestName, row.guestCount && `${row.guestCount} kişi`].filter(Boolean).join(" · ");
     if (!check.ok) return { row: row.row, status: "error", message: check.message, summary };
+    if (allocation.get(check.table.id) !== "casino") {
+      return { row: row.row, status: "error", message: MSG.notCasinoTable, summary };
+    }
     const limit = capacity.get(check.table.id) ?? 0;
     if (check.input.guestCount > limit) {
       return {

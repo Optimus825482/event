@@ -6,6 +6,7 @@ import { DomainError } from "@/lib/action";
 import {
   assertBookable,
   assertCapacity,
+  assertCasinoTable,
   assertEventOpen,
   assertNotBlacklisted,
   bumpTotalReservations,
@@ -63,6 +64,7 @@ export async function changeReservationStatus(
     } else if (from === "cancelled") {
       assertBookable(event);
       const table = await lockTable(tx, event.id, reservation.tableId);
+      assertCasinoTable(table);
       assertCapacity(reservation.guestCount, table);
       const [customer] = await tx
         .select({ isBlacklisted: customers.isBlacklisted })

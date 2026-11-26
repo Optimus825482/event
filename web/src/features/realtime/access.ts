@@ -11,14 +11,19 @@ export type StreamAccess =
 
 /**
  * Akışa bağlanma yetkisi (yalnızca bağlantı anında değerlendirilir):
- * oturum yoksa 401; `check_in:view` veya `reservations:view` yoksa 403;
+ * oturum yoksa 401; `check_in:view`, `reservations:view`, `ticketing:view` ve `venues:view` yoksa 403;
  * etkinlik yoksa 404.
  */
 export async function authorizeStream(requestHeaders: Headers, eventId: string): Promise<StreamAccess> {
   const actor = await getActorFromHeaders(requestHeaders);
   if (!actor) return { ok: false, status: 401, message: "Oturum gerekli" };
 
-  if (!can(actor, "check_in", "view") && !can(actor, "reservations", "view")) {
+  if (
+    !can(actor, "check_in", "view") &&
+    !can(actor, "reservations", "view") &&
+    !can(actor, "ticketing", "view") &&
+    !can(actor, "venues", "view")
+  ) {
     return { ok: false, status: 403, message: "Bu işlem için yetkiniz yok" };
   }
 

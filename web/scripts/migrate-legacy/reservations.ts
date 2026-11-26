@@ -61,7 +61,8 @@ export async function migrateReservations(
         ph = {
           ref,
           reservationIds: [],
-          row: { id, eventId, label, capacity: guests.value, x: 0, y: 0, rotation: 0, isLoca: false },
+          // Yer tutucu masa da rezervasyon taşıdığı için Casino'ya tahsislidir.
+          row: { id, eventId, label, capacity: guests.value, x: 0, y: 0, rotation: 0, isLoca: false, allocation: "casino" },
         };
         // byLegacyId'ye eklenmez: aynı referansı kullanan sonraki rezervasyonlar da yetim olarak raporlanır.
         placeholders.set(key, ph);

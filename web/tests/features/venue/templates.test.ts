@@ -17,6 +17,7 @@ import { DomainError } from "@/lib/action";
 import { adminActor, managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { setAllocation } from "../../helpers/seating";
 
 async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
@@ -76,6 +77,7 @@ describe("applyVenueTemplate", () => {
     const m1 = saved.tables.find((t) => t.label === "M1");
     if (!m1) throw new Error("masa yok");
     const customer = await f.createCustomer(db);
+    await setAllocation(db, [m1.id], "casino");
     const reservation = await f.createReservation(db, { eventId: event.id, tableId: m1.id, customerId: customer.id });
     const template = await insertTemplate(actor.id);
 
@@ -273,6 +275,7 @@ describe("şablon: masa nitelikleri", () => {
     const table = saved.tables[0];
     if (!table) throw new Error("masa yok");
     const customer = await f.createCustomer(db);
+    await setAllocation(db, [table.id], "casino");
     await f.createReservation(db, { eventId: event.id, tableId: table.id, customerId: customer.id });
     const tpl = await insertTemplate(actor.id);
     const res = await applyVenueTemplate(db, actor, { eventId: event.id, templateId: tpl.id });

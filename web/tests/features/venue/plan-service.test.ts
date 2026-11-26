@@ -33,6 +33,18 @@ describe("getFloorPlan", () => {
     expect(plan.tables).toMatchObject([{ label: "A1", capacity: 6, x: 100, y: 200, isLoca: true, shape: "round", color: null }]);
   });
 
+  it("plan masaları kategori ve tahsis taşır", async () => {
+    const admin = await actorOf("admin");
+    const event = await createEvent(db);
+    await createTable(db, event.id, { label: "A1", saleCategory: "vip", allocation: "online" });
+    await createTable(db, event.id, { label: "A2", saleCategory: "standard", allocation: "casino" });
+    const plan = await getFloorPlan(db, admin, event.id);
+    expect(plan.tables.map((t) => [t.label, t.category, t.allocation]).sort()).toEqual([
+      ["A1", "vip", "online"],
+      ["A2", "standard", "casino"],
+    ]);
+  });
+
   it("F&B yöneticisi başkasının oluşturduğu etkinliğin planını görür", async () => {
     const owner = await actorOf("fnbManager");
     const other = await actorOf("fnbManager");

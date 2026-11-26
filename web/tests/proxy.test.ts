@@ -45,6 +45,14 @@ describe("proxy", () => {
     },
   );
 
+  it.each(["/api/sales/v1/events", "/masam", "/masam/abc"])("%s çerezsiz erişilebilir", (path) => {
+    const res = proxy(request(path));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("/masamx korunur", () => expect(proxy(request("/masamx")).status).toBe(307));
+
   it("/login ile başlayan ama farklı yollar korunur", () => {
     expect(proxy(request("/loginx")).status).toBe(307);
   });

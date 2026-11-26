@@ -46,13 +46,19 @@ describe("GET /api/events/[eventId]/stream", () => {
 
   it("check_in:view ve reservations:view izni olmayan kullanıcı 403 alır", async () => {
     const event = await createEvent(db);
-    const outsider = await loginAs(memberActor("fnb", { venues: "vced" }));
+    const outsider = await loginAs(memberActor("fnb", { staff: "vced" }));
     expect((await connect(event.id, outsider.cookie).response).status).toBe(403);
 
     // Kullanıcıda iki modülün görüntüleme izni kapalıysa 403.
     const staff = await loginAs(memberActor("casino", { check_in: "----", reservations: "----" }));
     expect((await connect(event.id, staff.cookie).response).status).toBe(403);
     expect(listenerCount()).toBe(0);
+  });
+
+  it("venues:view izni olan kullanıcı akışa bağlanır", async () => {
+    const event = await createEvent(db);
+    const planner = await loginAs(memberActor("fnb", { venues: "v---" }));
+    expect((await connect(event.id, planner.cookie).response).status).toBe(200);
   });
 
   it("olmayan etkinlik ve geçersiz kimlik 404 olur", async () => {

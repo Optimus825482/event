@@ -19,7 +19,7 @@ const DEFINITIONS: readonly LauncherDefinition[] = [
   {
     key: "entertainment",
     name: "Entertainment",
-    description: "Etkinlik oluşturma, pano ve davetiye şablonları",
+    description: "Etkinlik, masa sınıflandırma, satış, finans ve arşiv",
     icon: "calendar",
     accent: "blue",
   },

@@ -92,4 +92,10 @@ describe("buildCrumbs", () => {
       { label: "Yerleşim Planı", href: null },
     ]);
   });
+
+  it("tahsis ve masalar segmentleri Türkçe etiket alır", () => {
+    const id = "3f2c1a9e-1111-4222-8333-444455556666";
+    expect(buildCrumbs(`/reservations/${id}/allocation`, new Set()).at(-1)?.label).toBe("Masa tahsisi");
+    expect(buildCrumbs(`/events/${id}/tables`, new Set()).at(-1)?.label).toBe("Masalar ve Satış");
+  });
 });

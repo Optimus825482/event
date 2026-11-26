@@ -1,3 +1,4 @@
+import { ARCHIVE_READY } from "@/features/archive/ready";
 import type { Department } from "./departments";
 import { can, type Module, type PolicyActor } from "./policy";
 import { inDepartment, isAdmin, ownTeamOnly } from "./scope";
@@ -21,7 +22,9 @@ export type NavIconName =
   | "table"
   | "bell"
   | "layout-dashboard"
-  | "bar-chart";
+  | "bar-chart"
+  | "archive"
+  | "music";
 
 export type NavItem = {
   href: string;
@@ -32,6 +35,8 @@ export type NavItem = {
   alsoRequires?: Module;
   group: NavGroupKey;
   icon: NavIconName;
+  /** `false` ise sayfa henüz yayında değildir; öğe kimseye (admin dâhil) gösterilmez. */
+  ready?: boolean;
 };
 
 export type NavGroup = {
@@ -65,6 +70,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Pano", module: "events", group: "entertainment", icon: "layout-template" },
   { href: "/events", label: "Etkinlikler", module: "events", group: "entertainment", icon: "calendar" },
   { href: "/templates", label: "Davetiye Şablonları", module: "invitations", group: "entertainment", icon: "mail" },
+  { href: "/archive", label: "Arşiv", module: "archive", group: "entertainment", icon: "archive", ready: ARCHIVE_READY },
+  { href: "/artists", label: "Sanatçılar", module: "archive", group: "entertainment", icon: "music", ready: ARCHIVE_READY },
+  { href: "/reports", label: "Raporlar", module: "archive", group: "entertainment", icon: "bar-chart", ready: ARCHIVE_READY },
   { href: "/fnb", label: "Etkinlikler", module: "venues", alsoRequires: "events", group: "fnb", icon: "calendar" },
   { href: "/venues", label: "Yerleşim Şablonları", module: "venues", group: "fnb", icon: "layout-template" },
   { href: "/staff", label: "Ekipler", module: "staff", group: "fnb", icon: "users" },
@@ -98,6 +106,7 @@ function groupAllows(actor: PolicyActor, group: NavGroup): boolean {
 /** Aktörün grubunu görebildiği ve `view` yetkisi olan menü öğeleri (liste sırası korunur). */
 export function visibleNavItems(actor: PolicyActor): NavItem[] {
   return NAV_ITEMS.filter((item) => {
+    if (item.ready === false) return false;
     const group = GROUPS_BY_KEY.get(item.group);
     if (!group || !groupAllows(actor, group)) return false;
     if (item.alsoRequires && !can(actor, item.alsoRequires, "view")) return false;
