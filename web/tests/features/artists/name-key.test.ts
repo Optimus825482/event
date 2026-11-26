@@ -8,11 +8,11 @@ describe("artistNameKey", () => {
     ["Işıl", "IŞIL"],
     ["2Cellos", "2CELLOS"],
     ["Mor ve Ötesi", "MOR VE ÖTESİ"],
-    ["Sezen Aksu", "SEZEN AKSU"],
-    ["Sezen	Aksu", "SEZEN AKSU"],
+    ["Sezen\u00A0Aksu", "SEZEN AKSU"],
+    ["Sezen\tAksu", "SEZEN AKSU"],
     ["ılık", "ILIK"],
-    ["İlhan", "İLHAN"],
-    ["Se​zen", "SEZEN"],
+    ["I\u0307lhan", "İLHAN"],
+    ["Se\u200Bzen", "SEZEN"],
   ] as const)("artistNameKey(%j) = %j", (input, key) => expect(artistNameKey(input)).toBe(key));
 
   it("yazım farkı aynı anahtarı verir", () =>
