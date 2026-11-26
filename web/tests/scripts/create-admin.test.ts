@@ -100,6 +100,18 @@ describe("scripts/create-admin.mjs (üretim imajındaki düz Node betiği)", () 
     expect(res.stderr).toContain("--reset");
   });
 
+  it("kurala uymayan parola: yönetici yokken çıkış 1, etkin yönetici varken çıkış 2 (dağıtım bozulmaz)", async () => {
+    const weak = "hepsikucukharf";
+    expect(run(["ilk"], { ADMIN_PASSWORD: weak }).status).toBe(1);
+    expect(run(["ilk"], { ADMIN_PASSWORD: "Abc12" }).status).toBe(1);
+    expect(await db.select().from(users)).toHaveLength(0);
+    expect(run(["ilk"], { ADMIN_PASSWORD: "Abc123" }).status).toBe(0);
+    const res = run(["ilk"], { ADMIN_PASSWORD: weak });
+    expect(res.status).toBe(2);
+    expect(res.stdout + res.stderr).not.toContain(weak);
+    expect(run(["--reset", "ilk"], { ADMIN_PASSWORD: weak }).status).toBe(1);
+  });
+
   it("geçersiz girdide çıkış 1 verir ve parolayı hiçbir çıktıya yazmaz", async () => {
     const short = "kisa-parola";
     const res = run(["ilk"], { ADMIN_PASSWORD: short });

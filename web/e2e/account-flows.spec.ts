@@ -9,7 +9,7 @@ import { EMPTY_STATE, expect, loginAs, test } from "./support/fixtures";
 import { createEvent } from "./support/ui";
 
 const suffix = () => randomBytes(3).toString("hex");
-const randomPassword = () => `Hp-${randomBytes(12).toString("base64url")}`;
+const randomPassword = () => `Hp1-${randomBytes(12).toString("base64url")}`;
 
 /** Yönetici arayüzünden bir kullanıcı oluşturur (yalnızca check-in izni olan Casino kullanıcısı). */
 async function createUserViaUi(page: Page, username: string, name: string, password: string): Promise<void> {

@@ -11,7 +11,7 @@
  * standart girdiden (sondaki satır sonu atılır) okunur ve hiçbir yere yazılmaz. Veritabanı DATABASE_URL'dendir.
  *
  * Uygulamayla aynı kurallar: kullanıcı adı büyük/küçük harf duyarlı, 1-100 karakter, baş/son boşluk ve kontrol
- * karakteri yok (src/features/auth/username.ts); parola en az 12 karakter, bcrypt maliyeti 12 (src/features/auth/auth.ts);
+ * karakteri yok (src/features/auth/username.ts); parola en az 6 karakter, büyük harf, küçük harf ve rakam içerir (src/features/auth/password-policy.ts); bcrypt maliyeti 12 (src/features/auth/auth.ts);
  * yönetici kaydı users + `credential` sağlayıcılı accounts satırıdır (hesap kimliği = kullanıcı kimliği).
  *
  * Çıkış kodları: 0 başarılı | 1 kullanım/yapılandırma/doğrulama hatası | 2 etkin yönetici zaten var (--reset yok)
@@ -24,7 +24,7 @@ import bcrypt from "bcryptjs";
 import pg from "pg";
 
 export const BCRYPT_COST = 12;
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 6;
 export const MIN_USERNAME_LENGTH = 1;
 export const MAX_USERNAME_LENGTH = 100;
 export const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
@@ -81,9 +81,17 @@ export function validate({ username, password }) {
       `Kullanıcı adı geçersiz: ${MIN_USERNAME_LENGTH}-${MAX_USERNAME_LENGTH} karakter olmalı, başında/sonunda boşluk ve kontrol karakteri içermemeli`,
     );
   }
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    throw new CliError(EXIT.usage, `Parola en az ${MIN_PASSWORD_LENGTH} karakter olmalı`);
+  const policyError = passwordPolicyError(password);
+  if (policyError) throw Object.assign(new CliError(EXIT.usage, policyError), { passwordPolicy: true });
+}
+
+/** `src/features/auth/password-policy.ts` ile aynı kural (bu betik bağımsız çalışır). */
+export function passwordPolicyError(password) {
+  if (password.length < MIN_PASSWORD_LENGTH) return `Parola en az ${MIN_PASSWORD_LENGTH} karakter olmalı`;
+  if (!/\p{Lu}/u.test(password) || !/\p{Ll}/u.test(password) || !/\d/.test(password)) {
+    return "Parola büyük harf, küçük harf ve rakam içermeli";
   }
+  return null;
 }
 
 /**
@@ -167,13 +175,28 @@ async function main() {
   if (password === "") {
     throw new CliError(EXIT.usage, "Parola gerekli: ADMIN_PASSWORD ortam değişkeni ya da --password-stdin");
   }
-  validate({ username: args.username, password });
+  // Kurala uymayan parola, etkin yönetici zaten varken dağıtımı bozmamalı: o durumda eskisi gibi "zaten var" (2) döner.
+  let policyFailure = null;
+  try {
+    validate({ username: args.username, password });
+  } catch (error) {
+    if (!(error instanceof CliError) || !error.passwordPolicy || args.reset) throw error;
+    policyFailure = error;
+  }
   const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) throw new CliError(EXIT.usage, "DATABASE_URL tanımlı değil");
+  if (!databaseUrl) throw policyFailure ?? new CliError(EXIT.usage, "DATABASE_URL tanımlı değil");
 
   const client = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 15_000 });
   try {
     await client.connect();
+    if (policyFailure) {
+      const { rows } = await client.query("select 1 from users where role = 'admin' and is_active limit 1");
+      if (rows.length === 0) throw policyFailure;
+      throw new CliError(
+        EXIT.adminExists,
+        "Etkin bir yönetici zaten var; hiçbir şey değiştirilmedi (parolayı sıfırlamak için --reset kullanın)",
+      );
+    }
     const result = await provisionAdmin(client, { ...args, password });
     const verb = result.action === "created" ? "yönetici oluşturuldu" : "yönetici parolası sıfırlandı";
     console.log(`create-admin: ${verb}: ${result.username} (${result.id})`);

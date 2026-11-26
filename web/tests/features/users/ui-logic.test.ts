@@ -23,14 +23,20 @@ const users: UserSummary[] = [
 
 describe("validatePasswordChange", () => {
   it("geçerli girdide hata yok", () => {
-    expect(validatePasswordChange({ current: "eski-parola-1", next: "yeni-parola-123", confirm: "yeni-parola-123" })).toEqual({});
+    expect(validatePasswordChange({ current: "eski-parola-1", next: "Yeni-parola-123", confirm: "Yeni-parola-123" })).toEqual({});
   });
   it("kısa, eşleşmeyen ve boş alanları yakalar", () => {
     const errors = validatePasswordChange({ current: "", next: "kisa", confirm: "farkli" });
     expect(Object.keys(errors).sort()).toEqual(["confirm", "current", "next"]);
   });
+  it("büyük harf, küçük harf ya da rakam eksikse reddeder", () => {
+    for (const next of ["abc123", "ABC123", "Abcdef"]) {
+      expect(validatePasswordChange({ current: "Eski1x", next, confirm: next }).next).toMatch(/büyük harf, küçük harf ve rakam/);
+    }
+    expect(validatePasswordChange({ current: "Eski1x", next: "Abc123", confirm: "Abc123" })).toEqual({});
+  });
   it("aynı parolayı reddeder", () => {
-    const same = "aynı-parola-123";
+    const same = "Aynı-parola-123";
     expect(validatePasswordChange({ current: same, next: same, confirm: same }).next).toMatch(/aynı/);
   });
 });
