@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { tickets } from "@/db/schema";
@@ -118,5 +118,56 @@ describe("satış toplamları", () => {
       demoIssued: 3,
       demoRevenue: "4500.00",
     });
+  });
+
+  it("gerçek toplam kategori toplamlarına eşittir", async () => {
+    const {
+      event,
+      tables: [a1, b1, c1],
+    } = await saleEvent({
+      tables: [
+        { label: "A1" },
+        { label: "B1", category: "premium" },
+        { label: "C1", category: "vip" },
+      ],
+      prices: { standard: "1500.00", premium: "2500.25", vip: "4000.50" },
+    });
+    const real: PaymentProvider = {
+      id: "demo",
+      isDemo: false,
+      start: async () => ({ outcome: "approved", providerRef: "r" }),
+    };
+    const hold = await createPendingHold(db, {
+      eventId: event.id,
+      items: [
+        { tableId: a1!.id, quantity: 2 },
+        { tableId: b1!.id, quantity: 3 },
+        { tableId: c1!.id, quantity: 1 },
+      ],
+    });
+    await payOrder(
+      db,
+      hold.orderId,
+      {
+        buyer: { firstName: "Ali", lastName: "Veli", email: "a@example.com" },
+        acceptTerms: true,
+        payment: { provider: "demo", action: "approve" },
+      },
+      { provider: real },
+    );
+    const t = await getSalesTotals(db, event.id);
+    expect(t.issued).toBe(6);
+    expect(t.revenue).toBe("14501.25");
+    const cats = Object.values(t.byCategory);
+    expect(cats.reduce((n, c) => n + c.issued, 0)).toBe(t.issued);
+    const [sum] = (
+      await db.execute(
+        sql`select (${sql.join(
+          cats.map((c) => sql`${c.revenue}::numeric`),
+          sql` + `,
+        )})::numeric(12,2)::text as sum`,
+      )
+    ).rows as { sum: string }[];
+    expect(sum?.sum).toBe(t.revenue);
   });
 });

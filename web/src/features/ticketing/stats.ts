@@ -24,50 +24,49 @@ export async function getSalesTotals(
   ex: Db | Tx,
   eventId: string,
 ): Promise<SalesTotals> {
-  const issuedOfEvent = and(
-    eq(tickets.eventId, eventId),
-    eq(tickets.status, "issued"),
-  );
-
-  const [totals] = await ex
+  // Tek sorgu (tek anlık görüntü): toplam ve kategori kırılımı aynı satırlardan türer, birbirinden sapmaz.
+  const rows = await ex
     .select({
-      issued: sql<number>`(count(*) filter (where ${orders.isDemo} = false))::int`,
-      revenue: sumOf(
-        sql`sum(${tickets.unitPrice}) filter (where ${orders.isDemo} = false)`,
-      ),
-      demoIssued: sql<number>`(count(*) filter (where ${orders.isDemo} = true))::int`,
-      demoRevenue: sumOf(
-        sql`sum(${tickets.unitPrice}) filter (where ${orders.isDemo} = true)`,
-      ),
+      isDemo: orders.isDemo,
+      category: sql<SaleCategory | null>`${tickets.saleCategory}`,
+      issued: sql<number>`count(*)::int`,
+      revenue: sumOf(sql`sum(${tickets.unitPrice})`),
       checkedIn: sql<number>`count(${tickets.checkedInAt})::int`,
     })
     .from(tickets)
     .innerJoin(orders, eq(orders.id, tickets.orderId))
-    .where(issuedOfEvent);
-
-  const categoryRows = await ex
-    .select({
-      category: tickets.saleCategory,
-      issued: sql<number>`count(*)::int`,
-      revenue: sumOf(sql`sum(${tickets.unitPrice})`),
-    })
-    .from(tickets)
-    .innerJoin(orders, eq(orders.id, tickets.orderId))
-    .where(and(issuedOfEvent, eq(orders.isDemo, false)))
-    .groupBy(tickets.saleCategory);
+    .where(and(eq(tickets.eventId, eventId), eq(tickets.status, "issued")))
+    .groupBy(
+      sql`grouping sets ((${orders.isDemo}, ${tickets.saleCategory}), (${orders.isDemo}))`,
+    );
 
   const byCategory = Object.fromEntries(
     SALE_CATEGORIES.map((c) => [c, { issued: 0, revenue: "0.00" }]),
   ) as SalesTotals["byCategory"];
-  for (const r of categoryRows)
-    byCategory[r.category] = { issued: r.issued, revenue: r.revenue };
-
+  const totals = {
+    real: { issued: 0, revenue: "0.00" },
+    demo: { issued: 0, revenue: "0.00" },
+  };
+  let checkedIn = 0;
+  for (const r of rows) {
+    if (r.category !== null) {
+      if (!r.isDemo)
+        byCategory[r.category] = { issued: r.issued, revenue: r.revenue };
+      continue;
+    }
+    // Kategorisiz satır = o grubun (gerçek/demo) toplamı.
+    totals[r.isDemo ? "demo" : "real"] = {
+      issued: r.issued,
+      revenue: r.revenue,
+    };
+    checkedIn += r.checkedIn;
+  }
   return {
-    issued: totals?.issued ?? 0,
-    revenue: totals?.revenue ?? "0.00",
-    demoIssued: totals?.demoIssued ?? 0,
-    demoRevenue: totals?.demoRevenue ?? "0.00",
-    checkedIn: totals?.checkedIn ?? 0,
+    issued: totals.real.issued,
+    revenue: totals.real.revenue,
+    demoIssued: totals.demo.issued,
+    demoRevenue: totals.demo.revenue,
+    checkedIn,
     byCategory,
   };
 }
