@@ -110,6 +110,7 @@ export type PgRateLimiterOptions = {
 export type PgRateLimiter = AsyncRateLimiter & {
   /** Eski pencereleri siler; silinen satır sayısını döndürür. İstekler sırasında fırsat buldukça kendiliğinden çağrılır. */
   prune(): Promise<number>;
+  refund(key: string): Promise<void>;
 };
 
 type HitRow = { hits: number; retry_after: number };
