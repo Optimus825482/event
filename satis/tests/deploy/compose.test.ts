@@ -29,6 +29,19 @@ describe("dağıtım dosyaları", () => {
     expect(coolify).toMatch(/WEB_PUBLIC_HOST:\?/);
   });
 
+  it("coolify: engel hem http hem https router'ında vardır ve https olan tls=true taşır", () => {
+    const label = (router: string, key: string) =>
+      coolify.match(new RegExp(`traefik\.http\.routers\.${router}\.${key}=(.+)`))?.[1]?.trim();
+    expect(label("eventflow-sales-block", "entrypoints")).toBe("http");
+    expect(label("eventflow-sales-block-tls", "entrypoints")).toBe("https");
+    expect(label("eventflow-sales-block-tls", "tls")).toBe("true");
+    expect(label("eventflow-sales-block-tls", "rule")).toBeDefined();
+    expect(label("eventflow-sales-block-tls", "rule")).toBe(label("eventflow-sales-block", "rule"));
+    expect(label("eventflow-sales-block-tls", "priority")).toBe(label("eventflow-sales-block", "priority"));
+    expect(label("eventflow-sales-block-tls", "middlewares")).toBe(label("eventflow-sales-block", "middlewares"));
+    expect(label("eventflow-sales-block-tls", "service")).toBe(label("eventflow-sales-block", "service"));
+  });
+
   it("hiçbir compose dosyasında NEXT_PUBLIC_ değişkeni yoktur", () => {
     expect(coolify).not.toContain("NEXT_PUBLIC_");
     expect(local).not.toContain("NEXT_PUBLIC_");

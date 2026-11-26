@@ -131,13 +131,21 @@ services:
         aliases:
           - eventflow-core
     labels:
+      # İki router: TLS'siz router HTTPS isteklerini eşlemez, bu yüzden http ve https ayrı tanımlanır.
       # `/api/sales` yolunu dışarıdan kapatır (içeriden satis doğrudan eventflow-core:3000'e gider). Kapsayıcıda denenmedi.
       - traefik.http.middlewares.eventflow-sales-block.replacepath.path=/__satis-api-disaridan-kapali
       - traefik.http.routers.eventflow-sales-block.rule=Host(`${WEB_PUBLIC_HOST:?WEB_PUBLIC_HOST zorunlu (çekirdeğin alan adı, şemasız)}`) && PathPrefix(`/api/sales`)
       - traefik.http.routers.eventflow-sales-block.priority=1000
-      - traefik.http.routers.eventflow-sales-block.entrypoints=http,https
+      - traefik.http.routers.eventflow-sales-block.entrypoints=http
       - traefik.http.routers.eventflow-sales-block.middlewares=eventflow-sales-block
       - traefik.http.routers.eventflow-sales-block.service=eventflow-sales-block
+      - traefik.http.routers.eventflow-sales-block-tls.rule=Host(`${WEB_PUBLIC_HOST:?WEB_PUBLIC_HOST zorunlu (çekirdeğin alan adı, şemasız)}`) && PathPrefix(`/api/sales`)
+      - traefik.http.routers.eventflow-sales-block-tls.priority=1000
+      - traefik.http.routers.eventflow-sales-block-tls.entrypoints=https
+      - traefik.http.routers.eventflow-sales-block-tls.tls=true
+      - traefik.http.routers.eventflow-sales-block-tls.tls.certresolver=letsencrypt
+      - traefik.http.routers.eventflow-sales-block-tls.middlewares=eventflow-sales-block
+      - traefik.http.routers.eventflow-sales-block-tls.service=eventflow-sales-block
       - traefik.http.services.eventflow-sales-block.loadbalancer.server.port=3000
     deploy:
       resources:
