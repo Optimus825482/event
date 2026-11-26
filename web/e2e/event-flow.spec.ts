@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "./support/fixtures";
 import { qrTokenFor, reservationCount } from "./support/db";
-import { createEvent, fillReservation } from "./support/ui";
+import { allocateAllToCasino, createEvent, fillReservation } from "./support/ui";
 
 // Bu dosyadaki senaryolar aynı etkinlik üzerinde sırayla ilerler (etkinlik, yerleşim, rezervasyon, check-in).
 test.describe.configure({ mode: "serial" });
@@ -54,6 +54,9 @@ test.describe("Etkinlik ve masa yerleşimi", () => {
 
     await page.getByRole("button", { name: "Yayınla" }).click();
     await expect(page.getByText("Yayında", { exact: true })).toBeVisible();
+
+    // Arayüzden yaratılan masalar beklemede doğar; rezervasyon yalnızca Casino'ya ayrılmış masaya yapılır.
+    await allocateAllToCasino(page, eventId);
   });
 });
 

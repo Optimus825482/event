@@ -108,6 +108,9 @@ export function ReservationList({ eventId, items, canEdit, canOverrideBlacklist 
                   <Link href={`/reservations/${eventId}/${r.id}`} className="font-medium text-white hover:underline">
                     {displayName(r)}
                   </Link>
+                  <div className="mt-0.5 text-xs text-slate-300">
+                    Kod: <span className="select-all font-mono tracking-wider">{r.bookingCode}</span>
+                  </div>
                   <div className="text-xs text-slate-400">
                     {r.guestPhone ?? ""}
                     {r.isBlacklisted ? <span className="ml-2 text-red-400">Kara listede</span> : null}
