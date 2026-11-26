@@ -1,7 +1,8 @@
 import type { z } from "zod";
 import { db } from "@/db/client";
 import type { ActionOptions } from "@/lib/action";
-import { saleSettingsSchema } from "./schemas";
+import { classifyTables } from "./classification-service";
+import { classifyTablesSchema, saleSettingsSchema } from "./schemas";
 import { saveSaleSettings } from "./settings-service";
 
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
@@ -15,5 +16,11 @@ export const seatingActionDefs = {
     verb: "edit",
     input: saleSettingsSchema,
     handler: async ({ actor, input }) => saveSaleSettings(db, actor, input),
+  }),
+  classify: def({
+    module: "ticketing",
+    verb: "edit",
+    input: classifyTablesSchema,
+    handler: async ({ actor, input }) => classifyTables(db, actor, input),
   }),
 };
