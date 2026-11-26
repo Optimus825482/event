@@ -147,6 +147,36 @@ describe("tutma çekirdeği", () => {
     expect(await activeTickets(a1!.id)).toHaveLength(2);
   });
 
+  it("clientKey başka etkinliğin siparişine aitse invalid; sipariş sızmaz", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const other = await saleEvent();
+    const clientKey = key();
+    await createHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 1 }], clientKey });
+    const err = await caughtSales(
+      createHold(db, { eventId: other.event.id, items: [{ tableId: other.tables[0]!.id, quantity: 1 }], clientKey }),
+    );
+    expect(err.salesCode).toBe("invalid");
+    expect(await activeTickets(other.tables[0]!.id)).toHaveLength(0);
+  });
+
+  it("satış kapandıktan sonra aynı anahtarla yineleme sales_closed değil aynı siparişi döner", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const input = { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }], clientKey: key() };
+    const first = await createHoldWithOutcome(db, input);
+    await setStage(db, event.id, "sales_closed");
+    const again = await createHoldWithOutcome(db, input);
+    expect(again.created).toBe(false);
+    expect(again.order.orderId).toBe(first.order.orderId);
+    const fresh = await caughtSales(createHold(db, { ...input, clientKey: key() }));
+    expect(fresh.salesCode).toBe("sales_closed");
+  });
+
   it("online olmayan ya da başka etkinliğin masası satılamaz", async () => {
     const { event } = await saleEvent();
     const { tables: [foreign] } = await saleEvent();

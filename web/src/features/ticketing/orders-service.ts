@@ -71,9 +71,15 @@ function mergeItems(items: readonly HoldItem[]): HoldItem[] {
     .sort((a, b) => (a.tableId < b.tableId ? -1 : a.tableId > b.tableId ? 1 : 0));
 }
 
-async function orderIdByClientKey(ex: Db | Tx, clientKey: string): Promise<string | null> {
-  const [row] = await ex.select({ id: orders.id }).from(orders).where(eq(orders.clientKey, clientKey));
-  return row?.id ?? null;
+/** Anahtarla bulunan sipariş başka bir etkinliğe aitse `invalid`: başka etkinliğin siparişi sızmaz. */
+async function orderIdByClientKey(ex: Db | Tx, clientKey: string, eventId: string): Promise<string | null> {
+  const [row] = await ex
+    .select({ id: orders.id, eventId: orders.eventId })
+    .from(orders)
+    .where(eq(orders.clientKey, clientKey));
+  if (!row) return null;
+  if (row.eventId !== eventId) throw new SalesError("invalid");
+  return row.id;
 }
 
 async function viewOrThrow(ex: Db | Tx, orderId: string): Promise<OrderView> {
@@ -118,7 +124,7 @@ export async function createHoldWithOutcome(
   input: HoldInput,
   deps: OrderDeps = {},
 ): Promise<{ order: OrderView; created: boolean }> {
-  const existing = await orderIdByClientKey(db, input.clientKey);
+  const existing = await orderIdByClientKey(db, input.clientKey, input.eventId);
   if (existing) return { order: await viewOrThrow(db, existing), created: false };
 
   const items = mergeItems(input.items);
@@ -138,6 +144,10 @@ export async function createHoldWithOutcome(
         if (error instanceof DomainError && error.code === "not_found") throw new SalesError("event_not_found");
         throw error;
       }
+      // Satış durumu denetiminden önce: aynı anahtarın yinelemesi, arada satış kapansa da aynı yanıtı almalı.
+      const early = await orderIdByClientKey(tx, clientKey, eventId);
+      if (early) return { orderId: early, created: false };
+
       const settings = await getSaleSettings(tx, eventId);
       const state = saleStateOf({
         planningStage: event.planningStage,
@@ -164,7 +174,7 @@ export async function createHoldWithOutcome(
 
       // Aynı anahtarla eşzamanlı yineleme masa kilidinde bekledi; kilit sonrası anlık görüntüde öncekinin
       // siparişi görünür. Yer kalmamış olsa da yineleme `seats_unavailable` değil aynı siparişi almalı.
-      const duplicate = await orderIdByClientKey(tx, clientKey);
+      const duplicate = await orderIdByClientKey(tx, clientKey, eventId);
       if (duplicate) return { orderId: duplicate, created: false };
 
       const prices = await getSeatPrices(tx, eventId);
@@ -227,7 +237,7 @@ export async function createHoldWithOutcome(
     if (pgCodeOf(error) === "23505") {
       const constraint = pgConstraintOf(error);
       if (constraint === "orders_client_key_uq") {
-        const winner = await orderIdByClientKey(db, clientKey);
+        const winner = await orderIdByClientKey(db, clientKey, eventId);
         if (winner) return { order: await viewOrThrow(db, winner), created: false };
       }
       if (constraint === "tickets_active_seat_uq") {
