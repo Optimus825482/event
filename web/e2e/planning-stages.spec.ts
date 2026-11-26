@@ -14,9 +14,9 @@ const EVENT_NAME = "E2E Aşama Zinciri";
 const PASSWORD = `Ps-${randomBytes(12).toString("base64url")}`;
 
 type Dept = { username: string; fullName: string; label: string };
-const ENT: Dept = { username: "e2e-ent-yonetici", fullName: "Ent Yönetici", label: "Entertainment" };
-const FNB: Dept = { username: "e2e-fnb-yonetici", fullName: "Fnb Yönetici", label: "Food & Beverage" };
-const CASINO: Dept = { username: "e2e-casino-yonetici", fullName: "Casino Yönetici", label: "Casino" };
+const ENT: Dept = { username: "e2e-plan-ent-yonetici", fullName: "Ent Yönetici", label: "Entertainment" };
+const FNB: Dept = { username: "e2e-plan-fnb-yonetici", fullName: "Fnb Yönetici", label: "Food & Beverage" };
+const CASINO: Dept = { username: "e2e-plan-casino-yonetici", fullName: "Casino Yönetici", label: "Casino" };
 
 let eventId = "";
 const contexts: BrowserContext[] = [];
