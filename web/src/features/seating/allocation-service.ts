@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { eventTables, reservations, users } from "@/db/schema";
+import { eventTables, reservations } from "@/db/schema";
 import type { TableAllocation } from "@/domain/seating";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
@@ -10,6 +10,7 @@ import { ACTIVE_STATUSES, lockEvent } from "@/features/reservations/internal";
 import { DomainError } from "@/lib/action";
 import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import { buildReleaseNotification } from "./notify";
+import { actorName } from "@/features/planning/stage-service";
 import { getSaleSettings } from "./settings-service";
 import { removeSeatSlots, syncSeatSlots } from "./slots";
 
@@ -37,13 +38,6 @@ function conflictWith(message: string, tables: { label: string }[]): DomainError
     .sort(byLabel)
     .join(", ");
   return new DomainError("conflict", `${message}: ${labels}`);
-}
-
-// SÖZLEŞME: planning/stage-service `actorName` dışa aktarılınca bu kopya onunla değiştirilir
-// (planning/** bu dalda değiştirilmiyor; davranış birebir aynıdır).
-async function actorName(ex: Db | Tx, actor: Actor): Promise<string> {
-  const [row] = await ex.select({ name: users.name }).from(users).where(eq(users.id, actor.id));
-  return row?.name ?? actor.username;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { eventTables } from "@/db/schema";
 import { isLayoutLockedStage } from "@/domain/planning-stage";
@@ -37,17 +37,16 @@ export async function classifyTables(
     const rows = await tx
       .select({
         id: eventTables.id,
-        eventId: eventTables.eventId,
         label: eventTables.label,
         capacity: eventTables.capacity,
         saleCategory: eventTables.saleCategory,
         sellableSeats: eventTables.sellableSeats,
       })
       .from(eventTables)
-      .where(inArray(eventTables.id, ids))
+      .where(and(eq(eventTables.eventId, input.eventId), inArray(eventTables.id, ids)))
       .orderBy(asc(eventTables.id))
       .for("update");
-    const own = new Map(rows.filter((r) => r.eventId === input.eventId).map((r) => [r.id, r]));
+    const own = new Map(rows.map((r) => [r.id, r]));
     if (own.size !== ids.length) throw new DomainError("not_found", "Masa bu etkinlikte bulunamadı");
 
     const over = input.items

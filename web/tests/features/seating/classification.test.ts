@@ -229,7 +229,9 @@ describe("masa sınıflandırma", () => {
     const empty = await run({ eventId: event.id, items: [{ tableId: t.id }] });
     expect(empty).toMatchObject({ ok: false, code: "invalid" });
     expect(JSON.stringify(empty)).toContain("Değişiklik belirtilmedi");
-    expect(classifyTablesSchema.safeParse({ eventId: event.id, items: [] }).success).toBe(false);
+    const none = classifyTablesSchema.safeParse({ eventId: event.id, items: [] });
+    expect(none.success).toBe(false);
+    expect(JSON.stringify(none.error?.issues)).toContain("En az bir masa seçin");
     expect((await row(t.id)).saleCategory).toBe("standard");
   });
 });

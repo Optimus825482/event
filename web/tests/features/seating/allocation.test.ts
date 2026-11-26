@@ -44,13 +44,14 @@ const slotsOf = async (id: string) =>
     .where(eq(tableSeatSlots.tableId, id))
     .orderBy(asc(tableSeatSlots.seatNo));
 
-/** Bu test veritabanında bir oturum kilit beklemeye girene dek bekler (sabit uyku yerine). */
-async function untilLockWait(timeoutMs = 5000): Promise<void> {
+/** Verilen oturumu (pid) bekleyen bir oturum kilit beklemesine girene dek bekler (sabit uyku yerine). */
+async function untilLockWait(blockerPid: number, timeoutMs = 5000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const r = await db.execute<{ n: number }>(
       sql`select count(*)::int as n from pg_stat_activity
-          where datname = current_database() and wait_event_type = 'Lock'`,
+          where datname = current_database() and wait_event_type = 'Lock'
+            and ${blockerPid} = any(pg_blocking_pids(pid))`,
     );
     if ((r.rows[0]?.n ?? 0) > 0) return;
     if (Date.now() > deadline) throw new Error(`kilit beklemesi ${timeoutMs} ms içinde görülmedi`);
@@ -217,6 +218,7 @@ describe("Casino tahsisi", () => {
         );
       } else {
         expect(allocation).toBe("pending");
+        expect((rejected[0]?.reason as DomainError).message).toBe("Bu masa Casino'ya ayrılmamış");
       }
     }
   });
@@ -227,6 +229,8 @@ describe("Casino tahsisi", () => {
     const customer = await f.createCustomer(db);
     let pending: Promise<unknown> | undefined;
     await db.transaction(async (tx) => {
+      const pidRow = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      const blockerPid = Number(pidRow.rows[0]?.pid);
       // createReservation ile aynı kilit: masa FOR SHARE, ardından ekleme.
       await tx.select({ id: eventTables.id }).from(eventTables).where(eq(eventTables.id, a1.id)).for("share");
       await f.createReservation(tx, { eventId: event.id, tableId: a1.id, customerId: customer.id });
@@ -234,7 +238,7 @@ describe("Casino tahsisi", () => {
         () => null,
         (e: unknown) => e,
       );
-      await untilLockWait();
+      await untilLockWait(blockerPid);
     });
     const error = await pending;
     expect(error).toBeInstanceOf(DomainError);

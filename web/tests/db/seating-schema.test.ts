@@ -106,6 +106,28 @@ describe("şema: Casino rezervasyonu tahsisli masaya bağlıdır", () => {
     });
   });
 
+  it("online ve closed tahsisli masaya etkin rezervasyon eklenemez", async () => {
+    await inRollback(async (tx) => {
+      const event = await createEvent(tx);
+      const customer = await createCustomer(tx);
+      for (const allocation of ["online", "closed"] as const) {
+        const table = await createTable(tx, event.id, { allocation });
+        await expectPgError(
+          tx,
+          "23503",
+          (sp) =>
+            createReservation(sp, {
+              eventId: event.id,
+              tableId: table.id,
+              customerId: customer.id,
+              status: "confirmed",
+            }),
+          CASINO_FK,
+        );
+      }
+    });
+  });
+
   it("pending masadaki iptal rezervasyon etkinleştirilemez", async () => {
     await inRollback(async (tx) => {
       const event = await createEvent(tx);
@@ -153,6 +175,9 @@ describe("şema: Casino rezervasyonu tahsisli masaya bağlıdır", () => {
       const confirmed = await createReservation(tx, { ...base, status: "confirmed" });
       const cancelled = await createReservation(tx, { ...base, status: "cancelled" });
       const noShow = await createReservation(tx, { ...base, status: "no_show" });
+      const other = await createTable(tx, event.id);
+      const checkedIn = await createReservation(tx, { ...base, tableId: other.id, status: "checked_in" });
+      expect(checkedIn.allocationLock).toBe("casino");
       expect(confirmed.allocationLock).toBe("casino");
       expect(cancelled.allocationLock).toBeNull();
       expect(noShow.allocationLock).toBeNull();
@@ -291,7 +316,12 @@ describe("şema: satış ayarları ve fiyatlar", () => {
         insert({ saleStartsAt: at, saleEndsAt: at }),
         "event_sale_settings_window_valid",
       );
-      await expectPgError(tx, "23505", (sp) => sp.insert(eventSaleSettings).values({ eventId: event.id }));
+      await expectPgError(
+        tx,
+        "23505",
+        (sp) => sp.insert(eventSaleSettings).values({ eventId: event.id }),
+        "event_sale_settings_pkey",
+      );
     });
   });
 
@@ -325,8 +355,11 @@ describe("şema: satış ayarları ve fiyatlar", () => {
         (sp) => sp.insert(eventSeatPrices).values({ eventId: event.id, category: "vip", coefficient: "0" }),
         "event_seat_prices_coefficient_positive",
       );
-      await expectPgError(tx, "23505", (sp) =>
-        sp.insert(eventSeatPrices).values({ eventId: event.id, category: "standard" }),
+      await expectPgError(
+        tx,
+        "23505",
+        (sp) => sp.insert(eventSeatPrices).values({ eventId: event.id, category: "standard" }),
+        "event_seat_prices_event_id_category_pk",
       );
     });
   });

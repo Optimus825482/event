@@ -22,7 +22,7 @@ const MESSAGES = {
   invalid: "Bu aşama geçişi yapılamaz",
 } as const;
 
-async function actorName(ex: Db | Tx, actor: Actor): Promise<string> {
+export async function actorName(ex: Db | Tx, actor: Actor): Promise<string> {
   const [row] = await ex.select({ name: users.name }).from(users).where(eq(users.id, actor.id));
   return row?.name ?? actor.username;
 }
