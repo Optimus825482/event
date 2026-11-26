@@ -24,7 +24,7 @@ describe("mekân servisi gerçek zamanlı olaylar", () => {
     await closeRealtime();
   });
 
-  it("saveLayout: commit sonrası tek table.updated; hata durumunda hiçbiri", async () => {
+  it("saveLayout: commit sonrası table.updated + seats.changed; hata durumunda hiçbiri", async () => {
     const { actor, event } = await setup();
     const watch = await watchEvents(event.id);
     try {
@@ -41,7 +41,7 @@ describe("mekân servisi gerçek zamanlı olaylar", () => {
       expect(await watch.settled()).toEqual([]);
 
       await saveLayout(db, actor, { eventId: event.id, tables: [{ label: "M1", capacity: 4, x: 0, y: 0 }], decor });
-      expect(await watch.settled()).toEqual(["table.updated"]);
+      expect(await watch.settled()).toEqual(["table.updated", "seats.changed"]);
     } finally {
       watch.stop();
     }

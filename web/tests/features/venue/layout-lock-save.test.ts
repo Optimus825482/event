@@ -9,7 +9,7 @@ import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { setStage } from "../../helpers/planning";
-import { setAllocation } from "../../helpers/seating";
+import { openOnline, setAllocation } from "../../helpers/seating";
 
 const decor = { width: 1600, height: 900, elements: [] };
 
@@ -40,7 +40,7 @@ function toInput(t: EventTableRow): TableInput {
   };
 }
 
-/** A1 (6 kişilik onaylı rezervasyon) ve B1 (taahhütsüz). */
+/** A1 (casino, 6 kişilik onaylı rezervasyon) ve B1 (taahhütsüz: açıkça `pending`). */
 async function setup() {
   const actor = await persistActor(db, managerActor("fnb"));
   const event = await f.createEvent(db, { organizerId: actor.id });
@@ -57,6 +57,7 @@ async function setup() {
   if (!a1 || !b1) throw new Error("masa yok");
   const customer = await f.createCustomer(db);
   await setAllocation(db, [a1.id], "casino");
+  await setAllocation(db, [b1.id], "pending");
   await f.createReservation(db, { eventId: event.id, tableId: a1.id, customerId: customer.id, guestCount: 6 });
   return { actor, event, a1, b1 };
 }
@@ -80,7 +81,7 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
 
     expect(err.code).toBe("conflict");
     expect(err.message).toBe(
-      "Satış başladı; taahhütlü (rezervasyonlu) masalar değiştirilemez: A1. Hiçbir değişiklik kaydedilmedi.",
+      "Satış başladı; rezervasyonlu ya da Casino'ya ayrılmış masalar değiştirilemez: A1. Hiçbir değişiklik kaydedilmedi.",
     );
     const after = await listEventTables(db, event.id);
     expect(after.find((t) => t.id === a1.id)?.x).toBe(a1.x);
@@ -173,5 +174,65 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
     const open = await getVenueLayout(db, actor, event.id);
     expect(open.layoutLocked).toBe(false);
     expect(open.frozenTableIds).toEqual([]);
+  });
+
+  it("satıştayken Casino'ya ayrılmış rezervasyonsuz masa taşınamaz ve silinemez", async () => {
+    const { actor, event, a1, b1 } = await setup();
+    await setAllocation(db, [b1.id], "casino");
+    await setStage(db, event.id, "on_sale");
+    const message =
+      "Satış başladı; rezervasyonlu ya da Casino'ya ayrılmış masalar değiştirilemez: B1. Hiçbir değişiklik kaydedilmedi.";
+
+    const moved = await caught(
+      saveLayout(db, actor, {
+        eventId: event.id,
+        tables: [toInput(a1), toInput({ ...b1, x: b1.x + 40 })],
+        decor,
+      }),
+    );
+    expect(moved.code).toBe("conflict");
+    expect(moved.message).toBe(message);
+
+    const removed = await caught(saveLayout(db, actor, { eventId: event.id, tables: [toInput(a1)], decor }));
+    expect(removed.message).toBe(message);
+    expect((await listEventTables(db, event.id)).find((t) => t.id === b1.id)?.x).toBe(b1.x);
+  });
+
+  it("satıştayken serbest bırakılmış ve online masalar taşınır", async () => {
+    const { actor, event, a1, b1 } = await setup();
+    const online = await f.createTable(db, event.id, { label: "C1", capacity: 8, x: 300, y: 100 });
+    await db.transaction((tx) => openOnline(tx, event.id, [online.id]));
+    await setStage(db, event.id, "on_sale");
+
+    const res = await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [toInput(a1), toInput({ ...b1, x: b1.x + 40 }), toInput({ ...online, x: online.x + 40 })],
+      decor,
+    });
+    expect(res.tables.find((t) => t.id === b1.id)?.x).toBe(b1.x + 40);
+    expect(res.tables.find((t) => t.id === online.id)?.x).toBe(online.x + 40);
+  });
+
+  it("fiyatlandı aşamasında Casino masası taşınabilir", async () => {
+    const { actor, event, a1, b1 } = await setup();
+    await setAllocation(db, [b1.id], "casino");
+    await setStage(db, event.id, "priced");
+
+    const res = await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [toInput(a1), toInput({ ...b1, x: b1.x + 40 })],
+      decor,
+    });
+    expect(res.tables.find((t) => t.id === b1.id)?.x).toBe(b1.x + 40);
+  });
+
+  it("getVenueLayout dondurulmuş masalara Casino masalarını da katar", async () => {
+    const { actor, event, a1, b1 } = await setup();
+    await setAllocation(db, [b1.id], "casino");
+    await setStage(db, event.id, "on_sale");
+
+    const locked = await getVenueLayout(db, actor, event.id);
+    expect(locked.frozenTableIds).toEqual(expect.arrayContaining([a1.id, b1.id]));
+    expect(locked.frozenTableIds).toHaveLength(2);
   });
 });

@@ -1,14 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import type { Tx } from "@/db/client";
 import { customers, reservations } from "@/db/schema";
 import { can } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { findOrCreateCustomer } from "@/features/customers/find-or-create";
 import { DomainError } from "@/lib/action";
+import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
+import { randomBookingCode } from "@/lib/short-code";
 import {
   ACTIVE_STATUSES,
   assertBookable,
   assertCapacity,
+  assertCasinoTable,
   assertEventOpen,
   assertNotBlacklisted,
   bumpTotalReservations,
@@ -56,6 +60,7 @@ export async function createReservation(
     const event = await lockEvent(tx, actor, input.eventId);
     assertBookable(event);
     const table = await lockTable(tx, event.id, input.tableId);
+    assertCasinoTable(table);
     assertCapacity(input.guestCount, table);
 
     const found = await findOrCreateCustomer(tx, {
@@ -71,28 +76,49 @@ export async function createReservation(
       .where(eq(customers.id, found.id));
 
     const id = randomUUID();
-    const [row] = await tx
-      .insert(reservations)
-      .values({
-        id,
-        eventId: event.id,
-        tableId: table.id,
-        customerId: found.id,
-        guestCount: input.guestCount,
-        // Eşleşen müşterinin iletişim bilgisi yalnızca `customers:view` olana ön doldurulur.
-        guestName: input.guestName ?? (mayReadCustomers ? customer?.fullName : undefined) ?? null,
-        guestPhone: input.guestPhone ?? (mayReadCustomers ? customer?.phone : undefined) ?? null,
-        guestEmail: input.guestEmail ?? (mayReadCustomers ? customer?.email : undefined) ?? null,
-        specialRequests: input.specialRequests ?? null,
-        status: "confirmed",
-        qrToken: signQrToken(id),
-      })
-      .returning();
-    if (!row) throw new Error("rezervasyon eklenemedi");
+    const row = await insertWithBookingCode(tx, {
+      id,
+      eventId: event.id,
+      tableId: table.id,
+      customerId: found.id,
+      guestCount: input.guestCount,
+      // Eşleşen müşterinin iletişim bilgisi yalnızca `customers:view` olana ön doldurulur.
+      guestName: input.guestName ?? (mayReadCustomers ? customer?.fullName : undefined) ?? null,
+      guestPhone: input.guestPhone ?? (mayReadCustomers ? customer?.phone : undefined) ?? null,
+      guestEmail: input.guestEmail ?? (mayReadCustomers ? customer?.email : undefined) ?? null,
+      specialRequests: input.specialRequests ?? null,
+      status: "confirmed",
+      qrToken: signQrToken(id),
+    });
     await bumpTotalReservations(tx, found.id, 1);
     await publishReservationChange(tx, event.id, row.id);
     return row;
   });
+}
+
+const BOOKING_CODE_ATTEMPTS = 3;
+
+/**
+ * Rezervasyonu ekler. Kısa kod (`reservations_booking_code_uq`) çakışırsa ekleme, kayıt noktası
+ * (savepoint) içinde yeni kodla en çok 3 kez denenir; ana işlem (müşteri kaydı, kilitler) bozulmaz.
+ * Üçüncüde de çakışırsa hata yukarı çıkar. Başka hatalar (ör. dolu masa) hemen yükselir.
+ */
+async function insertWithBookingCode(
+  tx: Tx,
+  values: Omit<typeof reservations.$inferInsert, "bookingCode">,
+): Promise<ReservationRow> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const [row] = await tx.transaction((sp) =>
+        sp.insert(reservations).values({ ...values, bookingCode: randomBookingCode() }).returning(),
+      );
+      if (!row) throw new Error("rezervasyon eklenemedi");
+      return row;
+    } catch (error) {
+      const clash = pgCodeOf(error) === "23505" && pgConstraintOf(error) === "reservations_booking_code_uq";
+      if (!clash || attempt >= BOOKING_CODE_ATTEMPTS) throw error;
+    }
+  }
 }
 
 const pick = <T>(next: T | undefined, current: T): T => (next === undefined ? current : next);
@@ -115,6 +141,7 @@ export async function updateReservation(
     }
     const guestCount = input.guestCount ?? reservation.guestCount;
     const table = await lockTable(tx, event.id, input.tableId ?? reservation.tableId);
+    if (table.id !== reservation.tableId) assertCasinoTable(table);
     // Kapasite yalnızca masa ya da kişi sayısı değişince denetlenir; önceden kapasiteyi aşan
     // (örn. içe aktarılmış) bir rezervasyonun yalnızca adı/telefonu düzenlenebilir.
     if (table.id !== reservation.tableId || guestCount !== reservation.guestCount) assertCapacity(guestCount, table);

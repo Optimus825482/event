@@ -286,6 +286,7 @@ export async function writeLayout(
       update ${eventTables} as t set
         label = v.label, capacity = v.capacity, table_type_id = v.table_type_id,
         x = v.x, y = v.y, rotation = v.rotation, is_loca = v.is_loca,
+        sellable_seats = CASE WHEN t.sellable_seats IS NULL THEN NULL ELSE least(t.sellable_seats, v.capacity) END,
         is_vip = v.is_vip, is_pinned = v.is_pinned, size = v.size, floor = v.floor, sort_number = v.sort_number,
         updated_at = now()
       from (values ${sql.join(updates.map(valuesRow), sql`, `)})

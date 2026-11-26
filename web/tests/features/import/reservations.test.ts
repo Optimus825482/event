@@ -239,4 +239,22 @@ describe("rezervasyon içe aktarma", () => {
       "Yalnızca .xlsx dosyaları kabul edilir",
     );
   });
+
+  it("önizleme casino olmayan masayı hata gösterir; onayda o satır atlanır, diğeri oluşur", async () => {
+    const { owner, event } = await bookableEvent({ X1: 4 });
+    await f.createTable(db, event.id, { label: "X2", capacity: 4, allocation: "pending" });
+    const bytes = await xlsx([
+      HEADER,
+      ["X1", "Ali Veli", null, null, 2, null],
+      ["X2", "Ayşe Fatma", null, null, 2, null],
+    ]);
+
+    const preview = await previewReservationImport(db, owner, { eventId: event.id, bytes });
+    expect(preview.rows[0]).toMatchObject({ row: 2, status: "ok" });
+    expect(preview.rows[1]).toMatchObject({ row: 3, status: "error", message: "Bu masa Casino'ya ayrılmamış" });
+
+    const result = await importReservations(db, owner, { eventId: event.id, bytes });
+    expect(result.createdCount).toBe(1);
+    expect(result.rows[1]).toEqual({ row: 3, status: "skipped", message: "Bu masa Casino'ya ayrılmamış" });
+  });
 });

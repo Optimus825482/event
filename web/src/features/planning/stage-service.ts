@@ -4,6 +4,7 @@ import { eventStageTransitions, events, users } from "@/db/schema";
 import { planTransition, type PlanningStage, type StageTransitionKind } from "@/domain/planning-stage";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
+import { publish } from "@/features/realtime/publish";
 import { getEventOrThrow } from "@/features/events/service";
 import { insertNotification, type NotificationRow } from "@/features/notifications/service";
 import { DomainError } from "@/lib/action";
@@ -71,6 +72,10 @@ export async function transitionStage(
       actorId: actor.id,
       note: note ?? null,
     });
+
+    if (to === "on_sale" || to === "sales_closed") {
+      await publish(tx, { type: "sales.changed", eventId: event.id });
+    }
 
     const notification = await insertNotification(
       tx,

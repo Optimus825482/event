@@ -23,6 +23,7 @@ export const MSG = {
   eventClosed: "Rezervasyon, tamamlanmış veya iptal edilmiş etkinlikte değiştirilemez",
   guestCountRange: "Kişi sayısı 1 ile 50 arasında olmalıdır",
   missingParent: "Masa veya müşteri artık mevcut değil",
+  notCasinoTable: "Bu masa Casino'ya ayrılmamış",
 } as const;
 
 /** Rezervasyon değişimini (liste/masa/istatistik) aynı transaction içinde yayar; rollback'te teslim edilmez. */
@@ -54,6 +55,10 @@ function mapDbError(error: unknown): unknown {
   }
   if (code === "23514" && pgConstraintOf(error) === "reservations_guest_count_range") {
     return new DomainError("conflict", MSG.guestCountRange);
+  }
+  // Genel `23503` kuralından önce: etkin rezervasyon yalnızca Casino tahsisli masaya yazılabilir.
+  if (code === "23503" && pgConstraintOf(error) === "reservations_casino_table_fk") {
+    return new DomainError("conflict", MSG.notCasinoTable);
   }
   if (code === "23503") return new DomainError("conflict", MSG.missingParent);
   return error;
@@ -95,6 +100,11 @@ export async function lockTable(tx: Tx, eventId: string, tableId: string): Promi
     .for("share");
   if (!table) throw new DomainError("not_found", MSG.tableNotFound);
   return table;
+}
+
+/** Rezervasyon yalnızca Casino'ya ayrılmış masaya yazılır; veritabanındaki bileşik yabancı anahtar aynı kuralı tutar. */
+export function assertCasinoTable(table: Pick<EventTableRow, "allocation">): void {
+  if (table.allocation !== "casino") throw new DomainError("conflict", MSG.notCasinoTable);
 }
 
 export function assertCapacity(guestCount: number, table: Pick<EventTableRow, "capacity">): void {
