@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { batchMessage, batchTone } from "./batch-feedback";
 import { resultLine } from "./order-view";
@@ -45,11 +46,21 @@ export function CheckInFeedbackBanner({
   feedback: CheckInFeedback | null;
   onClose: () => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Toplu gönderim bitince düğmesi kaybolur/devre dışı kalır; odak gövdeye düşmesin diye banta taşınır.
+  // Diğer sonuçlarda odak yalnızca gövdeye düşmüşse taşınır (tarayıcı girişindeki odak bozulmaz).
+  useEffect(() => {
+    if (!feedback) return;
+    if (feedback.kind === "batch" || document.activeElement === document.body) ref.current?.focus();
+  }, [feedback]);
+
   if (!feedback) return null;
+  const focusable = { ref, tabIndex: -1, "data-testid": "check-in-feedback" } as const;
 
   if (feedback.kind === "error") {
     return (
       <div
+        {...focusable}
         role="alert"
         className="flex items-start justify-between gap-4 rounded-xl border-2 border-red-500/60 bg-red-500/10 p-4 text-red-100"
       >
@@ -68,6 +79,7 @@ export function CheckInFeedbackBanner({
   if (feedback.kind === "queued") {
     return (
       <div
+        {...focusable}
         role="status"
         className="flex items-start justify-between gap-4 rounded-xl border-2 border-sky-500/60 bg-sky-500/10 p-4 text-sky-100"
       >
@@ -88,9 +100,10 @@ export function CheckInFeedbackBanner({
     const tone = batchTone(tally);
     return (
       <div
+        {...focusable}
         role="status"
         className={cn(
-          "flex items-start justify-between gap-4 rounded-xl border-2 p-4",
+          "flex items-start justify-between gap-4 rounded-xl border-2 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
           tone === "ok" && "border-emerald-500/60 bg-emerald-500/10 text-emerald-100",
           tone === "warn" && "border-amber-500/60 bg-amber-500/10 text-amber-100",
           tone === "info" && "border-sky-500/60 bg-sky-500/10 text-sky-100",
@@ -125,6 +138,7 @@ export function CheckInFeedbackBanner({
   const Icon = success ? CheckCircle2 : AlertTriangle;
   return (
     <div
+      {...focusable}
       role="status"
       className={
         success
