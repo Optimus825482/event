@@ -9,6 +9,7 @@ import { SecuritySessions } from "./security-tab-sessions";
 function policyItems(policy: SecurityPolicy): [string, string][] {
   return [
     ["Asgari parola uzunluğu", `${policy.minPasswordLength} karakter`],
+    ["Parola içeriği", "Büyük harf, küçük harf ve rakam zorunlu"],
     ["Parola özeti (bcrypt) maliyeti", String(policy.bcryptCost)],
     ["Oturum ömrü", policy.sessionDays === null ? "—" : `${policy.sessionDays} gün`],
     ["Giriş kilidi: kullanıcı adı + IP", `${policy.maxAttemptsPerIp} deneme`],

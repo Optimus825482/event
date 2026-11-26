@@ -40,7 +40,7 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 | `TRUSTED_IP_HEADER` | evet | Ters vekilin istemci IP'sini yazdığı başlık. Traefik/Coolify arkasında `x-real-ip` |
 | `SETTINGS_ENCRYPTION_KEY` | evet (bu yığında) | Ayarlardaki SMTP parolasını şifreler; 32 bayt base64: `openssl rand -base64 32`. Kaybedilirse kayıtlı SMTP parolası çözülemez, yeniden girilir |
 | `QR_SIGNING_KEY` | hayır | QR belirteçleri için HMAC anahtarı (en az 32 karakter). Boşsa `BETTER_AUTH_SECRET`'tan türetilir. **Değişirse dağıtılmış QR'lar geçersiz olur** |
-| `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 12 karakter). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
+| `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 6 karakter; büyük harf, küçük harf ve rakam içermeli). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
 | `ADMIN_USERNAME` | hayır | Otomatik oluşturulan yöneticinin kullanıcı adı; varsayılan `admin` (büyük/küçük harf duyarlı) |
 
 `UPLOAD_DIR` compose içinde `/data/uploads` olarak sabittir (adlandırılmış volume). Uygulama `NODE_ENV=production` iken
@@ -97,7 +97,7 @@ printf %s "$YENI_PAROLA" | docker compose run --rm -T create-admin --password-st
 ADMIN_PASSWORD="$YENI_PAROLA" docker compose run --rm create-admin <kullanıcı-adı> --email yonetici@sirket.com
 ```
 
-- Parola en az 12 karakter olmalıdır; hiçbir çıktıya yazılmaz. E-posta verilmezse `<kullanıcı-adı>@eventflow.invalid` kullanılır.
+- Parola en az 6 karakter olmalı, büyük harf, küçük harf ve rakam içermelidir; hiçbir çıktıya yazılmaz. E-posta verilmezse `<kullanıcı-adı>@eventflow.invalid` kullanılır.
 - **Etkin bir yönetici zaten varsa betik hiçbir şey değiştirmeden çıkış kodu 2 ile biter.** Taşıma sonrası eski
   yöneticilerle girilecekse bu betiği çalıştırmayın (bkz. aşağıda taşıma notu).
 - **Parola sıfırlama / kilitlenme**: `... create-admin --reset <kullanıcı-adı>` var olan yönetici hesabının parolasını

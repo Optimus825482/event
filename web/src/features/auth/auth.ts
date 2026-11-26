@@ -1,3 +1,4 @@
+import { MIN_PASSWORD_LENGTH } from "./password-policy";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
@@ -14,7 +15,7 @@ import { isValidUsername, MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH } from "./use
 
 /** Eski sistemle aynı bcrypt maliyeti; eski hash'ler olduğu gibi doğrulanır. */
 export const BCRYPT_COST = 12;
-export const MIN_PASSWORD_LENGTH = 12;
+export { MIN_PASSWORD_LENGTH };
 const SESSION_DAYS = 7;
 
 export function hashPassword(password: string): Promise<string> {

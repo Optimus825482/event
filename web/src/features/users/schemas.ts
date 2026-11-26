@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { DEPARTMENT_LEVELS, DEPARTMENTS } from "@/features/auth/departments";
 import { ROLES } from "@/features/auth/roles";
+import { MIN_PASSWORD_LENGTH, passwordPolicyError } from "@/features/auth/password-policy";
 import { isValidUsername } from "@/features/auth/username";
 import { checkAvatarDataUrl } from "./avatar";
 
-/** `MIN_PASSWORD_LENGTH` (features/auth/auth.ts) ile aynı; testle eşitliği doğrulanır. */
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = MIN_PASSWORD_LENGTH;
 const PASSWORD_MAX_LENGTH = 200;
 
 /** `permission_module` enum'unun, departman tavanında yer alabilen alt kümesi (`users` ve `settings` yalnızca admin). */
@@ -30,8 +30,11 @@ const username = z
 
 const password = z
   .string()
-  .min(PASSWORD_MIN_LENGTH, `Parola en az ${PASSWORD_MIN_LENGTH} karakter olmalı`)
-  .max(PASSWORD_MAX_LENGTH, "Parola çok uzun");
+  .max(PASSWORD_MAX_LENGTH, "Parola çok uzun")
+  .superRefine((value, ctx) => {
+    const error = passwordPolicyError(value);
+    if (error) ctx.addIssue({ code: "custom", message: error });
+  });
 
 const email = z.email("Geçerli bir e-posta girin").max(255);
 

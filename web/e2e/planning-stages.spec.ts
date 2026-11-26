@@ -11,7 +11,7 @@ test.describe.configure({ mode: "serial" });
 
 const EVENT_NAME = "E2E Aşama Zinciri";
 // Parolalar her koşuda rastgele üretilir; yalnızca bellekte yaşar.
-const PASSWORD = `Ps-${randomBytes(12).toString("base64url")}`;
+const PASSWORD = `Ps1-${randomBytes(12).toString("base64url")}`;
 
 type Dept = { username: string; fullName: string; label: string };
 const ENT: Dept = { username: "e2e-plan-ent-yonetici", fullName: "Ent Yönetici", label: "Entertainment" };

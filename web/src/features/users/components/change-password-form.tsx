@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { changeOwnPasswordAction } from "../actions";
 import { passwordChangeError, validatePasswordChange } from "../password-change";
 import { Field } from "./field";
+import { PASSWORD_RULE_HINT } from "@/features/auth/password-policy";
 
 const SUCCESS = "Parolanız değiştirildi; diğer oturumlar kapatıldı";
 const NETWORK_ERROR = "Bağlantı hatası. Lütfen tekrar deneyin.";
@@ -80,7 +81,7 @@ export function ChangePasswordForm() {
           aria-describedby={describe("current", "currentPassword")}
         />
       </Field>
-      <Field id="newPassword" label="Yeni parola" errors={list("next")} hint="En az 12 karakter">
+      <Field id="newPassword" label="Yeni parola" errors={list("next")} hint={PASSWORD_RULE_HINT}>
         <Input
           id="newPassword"
           name="newPassword"

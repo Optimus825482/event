@@ -97,7 +97,7 @@ export async function signOut(page: Page): Promise<void> {
 
 /** Yönetici arayüzünden yalnızca check-in izni olan ikinci bir Casino kullanıcısı oluşturur. Parola rastgele. */
 export async function createDoorUser(page: Page, username: string): Promise<string> {
-  const password = `Kp-${randomBytes(12).toString("base64url")}`;
+  const password = `Kp1-${randomBytes(12).toString("base64url")}`;
   await page.goto("/admin/users");
   await page.getByRole("button", { name: "Yeni kullanıcı" }).click();
   await page.getByLabel("Kullanıcı adı", { exact: true }).fill(username);

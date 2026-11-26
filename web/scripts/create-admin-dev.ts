@@ -10,7 +10,8 @@
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { auth, hashPassword, MIN_PASSWORD_LENGTH } from "@/features/auth/auth";
+import { auth, hashPassword } from "@/features/auth/auth";
+import { passwordPolicyError } from "@/features/auth/password-policy";
 import { isValidUsername, MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH } from "@/features/auth/username";
 
 export const PLACEHOLDER_EMAIL_DOMAIN = "eventflow.invalid";
@@ -33,9 +34,8 @@ export async function createAdmin(input: CreateAdminInput): Promise<CreatedAdmin
         "başında/sonunda boşluk ve kontrol karakteri içermemeli",
     );
   }
-  if (input.password.length < MIN_PASSWORD_LENGTH) {
-    throw new Error(`Parola en az ${MIN_PASSWORD_LENGTH} karakter olmalı`);
-  }
+  const policyError = passwordPolicyError(input.password);
+  if (policyError) throw new Error(policyError);
   const email = (input.email?.trim() || `${username}@${PLACEHOLDER_EMAIL_DOMAIN}`).toLowerCase();
 
   const ctx = await auth.$context;

@@ -1,4 +1,4 @@
-import { PASSWORD_MIN_LENGTH } from "./schemas";
+import { passwordPolicyError } from "@/features/auth/password-policy";
 
 export type PasswordChangeInput = { current: string; next: string; confirm: string };
 
@@ -6,7 +6,8 @@ export type PasswordChangeInput = { current: string; next: string; confirm: stri
 export function validatePasswordChange(input: PasswordChangeInput): Record<string, string> {
   const errors: Record<string, string> = {};
   if (input.current === "") errors.current = "Mevcut parolayı girin";
-  if (input.next.length < PASSWORD_MIN_LENGTH) errors.next = `Yeni parola en az ${PASSWORD_MIN_LENGTH} karakter olmalı`;
+  const policyError = passwordPolicyError(input.next);
+  if (policyError) errors.next = policyError.replace(/^Parola/, "Yeni parola");
   else if (input.next === input.current) errors.next = "Yeni parola mevcut parolayla aynı olamaz";
   if (input.confirm !== input.next) errors.confirm = "Parolalar eşleşmiyor";
   return errors;

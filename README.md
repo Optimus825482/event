@@ -60,7 +60,7 @@ printf %s "$PAROLA" | node --env-file=.env.local scripts/create-admin.mjs --pass
 ```
 
 - Parola yalnızca `ADMIN_PASSWORD` ortam değişkeninden ya da `--password-stdin` ile standart girdiden okunur (komut
-  satırı geçmişine düşmesin diye argüman değildir; hiçbir çıktıya yazılmaz); en az 12 karakter olmalıdır.
+  satırı geçmişine düşmesin diye argüman değildir; hiçbir çıktıya yazılmaz); en az 6 karakter olmalı; büyük harf, küçük harf ve rakam içermelidir.
 - Etkin bir yönetici zaten varsa **hiçbir şey yapmadan** çıkış kodu 2 ile biter; `--reset` yalnızca var olan bir
   yönetici hesabında çalışır (yönetici olmayan kullanıcıyı yükseltmez, kod 4). Diğer kodlar: 1 kullanım/doğrulama,
   3 kullanıcı adı ya da e-posta çakışması, 5 veritabanı hatası.

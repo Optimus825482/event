@@ -88,7 +88,12 @@ describe("kendi parolasını değiştirme", () => {
     expect(await run({ currentPassword: PASSWORD, newPassword: "kisa" })).toMatchObject({
       ok: false,
       code: "invalid",
-      fieldErrors: { newPassword: [expect.stringContaining("en az 12") as string] },
+      fieldErrors: { newPassword: [expect.stringContaining("en az 6") as string] },
+    });
+    expect(await run({ currentPassword: PASSWORD, newPassword: "hepsikucuk1" })).toMatchObject({
+      ok: false,
+      code: "invalid",
+      fieldErrors: { newPassword: [expect.stringContaining("büyük harf, küçük harf ve rakam") as string] },
     });
     expect(await run({ currentPassword: PASSWORD, newPassword: PASSWORD })).toMatchObject({ ok: false, code: "invalid" });
     await expect(changeOwnPassword(db, me, { currentPassword: PASSWORD, newPassword: PASSWORD })).rejects.toMatchObject({

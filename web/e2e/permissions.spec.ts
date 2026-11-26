@@ -4,7 +4,7 @@ import { expect, test, EMPTY_STATE, loginAs } from "./support/fixtures";
 
 const USERNAME = "e2e-kapi";
 // Kısıtlı kullanıcının parolası her koşuda rastgele üretilir; yalnızca bellekte yaşar.
-const PASSWORD = `Kp-${randomBytes(12).toString("base64url")}`;
+const PASSWORD = `Kp1-${randomBytes(12).toString("base64url")}`;
 
 test.describe("Yetkiler", () => {
   test.describe.configure({ mode: "serial" });

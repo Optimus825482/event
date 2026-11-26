@@ -17,7 +17,7 @@ import {
 
 // Parolalar ve gizli anahtar her koşuda rastgele üretilir; yalnızca süreç ortamında yaşar
 // (kök süreç burada yazar, çalışanlar miras alır). Hiçbir dosyaya yazılmaz.
-process.env.E2E_ADMIN_PASSWORD ??= randomBytes(18).toString("base64url");
+process.env.E2E_ADMIN_PASSWORD ??= `${randomBytes(18).toString("base64url")}aA1`;
 process.env.E2E_AUTH_SECRET ??= randomBytes(32).toString("hex");
 
 const OFFLINE_SPECS = "**/offline-*.spec.ts";

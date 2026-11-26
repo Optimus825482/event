@@ -15,7 +15,7 @@ const MANAGER = "e2e-fnb-yonetici";
 const CAPTAIN = "e2e-fnb-kaptan";
 const SUPERVISOR = "e2e-fnb-supervizor";
 // Parolalar her koşuda rastgele üretilir; yalnızca bellekte yaşar.
-const PASSWORD = `Fb-${randomBytes(12).toString("base64url")}`;
+const PASSWORD = `Fb1-${randomBytes(12).toString("base64url")}`;
 
 const NAMES = {
   captain: "Kaptan Can",

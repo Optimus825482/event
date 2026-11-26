@@ -13,6 +13,7 @@ import { ROLE_CHOICES, usesDepartments } from "../form-model";
 import { Field, FormStatus, SELECT_CLASS, toFormState, type FormState } from "./field";
 import { StaffLinkField } from "./staff-link-field";
 import { AccessFields, type AccessValue } from "./membership-fields";
+import { PASSWORD_RULE_HINT } from "@/features/auth/password-policy";
 
 const CREATED_MESSAGE = "Kullanıcı oluşturuldu";
 const EMPTY_ACCESS: AccessValue = { memberships: [], grants: [] };
@@ -95,7 +96,7 @@ export function CreateUserForm({
           ))}
         </select>
       </Field>
-      <Field id="password" label="Parola" errors={errors?.password} hint="En az 12 karakter">
+      <Field id="password" label="Parola" errors={errors?.password} hint={PASSWORD_RULE_HINT}>
         <Input
           id="password"
           name="password"

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { resetPasswordAction } from "../actions";
 import { Field, FormStatus, toFormState, type FormState } from "./field";
+import { PASSWORD_RULE_HINT } from "@/features/auth/password-policy";
 
 const RESET_MESSAGE = "Parola sıfırlandı; kullanıcının açık oturumları kapatıldı";
 
@@ -36,7 +37,7 @@ export function ResetPasswordForm({ userId, onDone }: { userId: string; onDone?:
   return (
     <form onSubmit={onReset} className="flex flex-wrap items-end gap-3" noValidate>
       <div className="w-full max-w-xs">
-        <Field id="new-password" label="Yeni parola" errors={state?.fieldErrors?.password} hint="En az 12 karakter">
+        <Field id="new-password" label="Yeni parola" errors={state?.fieldErrors?.password} hint={PASSWORD_RULE_HINT}>
           <Input id="new-password" name="password" type="password" autoComplete="new-password" required />
         </Field>
       </div>
