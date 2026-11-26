@@ -10,7 +10,6 @@ const LOGO_BY_SIDE: Record<WallSide, string> = {
   left: "/images/merit-international-logo.png",
   right: "/images/merit-international-logo.png",
 };
-const RAIL = "#0b1220";
 const PLAQUE_W = 6.4;
 const PLAQUE_H = 2.5;
 
@@ -47,45 +46,40 @@ function LogoPlaque({ url, y }: { url: string; y: number }) {
   );
 }
 
-function GlassWall({ spec }: { spec: WallSpec }) {
+const WALL_COLOR = "#252432";
+const GOLD = "#d4af37";
+
+/** Koyu duvar, üstte altın korniş, altta altın süpürgelik ve logo levhası. */
+function BallroomWall({ spec }: { spec: WallSpec }) {
   const { length, height } = spec;
-  const side = spec.side;
   return (
     <group position={spec.position} rotation={[0, spec.rotationY, 0]}>
-      <mesh position={[0, height / 2, 0]}>
-        <planeGeometry args={[length, height]} />
-        <meshStandardMaterial
-          color="#1e3a5f"
-          transparent
-          opacity={side === "back" ? 0.2 : 0.16}
-          roughness={0.15}
-          metalness={0.1}
-          side={DoubleSide}
-          depthWrite={false}
-        />
+      <mesh position={[0, height / 2, -0.06]}>
+        <boxGeometry args={[length, height, 0.12]} />
+        <meshStandardMaterial color={WALL_COLOR} roughness={0.72} metalness={0.12} />
       </mesh>
-      <mesh position={[0, height, 0]}>
-        <boxGeometry args={[length, 0.08, 0.08]} />
-        <meshStandardMaterial color={RAIL} metalness={0.6} roughness={0.4} />
+      <mesh position={[0, height - 0.06, 0.03]}>
+        <boxGeometry args={[length, 0.12, 0.1]} />
+        <meshStandardMaterial color={GOLD} roughness={0.28} metalness={0.82} />
       </mesh>
-      <mesh position={[0, 0.03, 0]}>
-        <boxGeometry args={[length, 0.06, 0.08]} />
-        <meshStandardMaterial color={RAIL} metalness={0.6} roughness={0.4} />
+      <mesh position={[0, 0.04, 0.02]}>
+        <boxGeometry args={[length, 0.08, 0.06]} />
+        <meshStandardMaterial color={GOLD} roughness={0.28} metalness={0.82} />
       </mesh>
       <Suspense fallback={null}>
-        <LogoPlaque url={LOGO_BY_SIDE[side]} y={height * 0.55} />
+        <LogoPlaque url={LOGO_BY_SIDE[spec.side]} y={height * 0.55} />
       </Suspense>
     </group>
   );
 }
 
-/** Salonun arka, sol ve sağ tarafında cam duvarlar ve logo levhaları; ön taraf açık kalır. */
+/** Salonun arka, sol ve sağ tarafında altın kornişli duvarlar ve logo levhaları; ön taraf açık kalır. */
 export default function Venue3DWalls({ canvasWidth, canvasHeight }: { canvasWidth: number; canvasHeight: number }) {
   const walls = useMemo(() => wallLayout(canvasWidth, canvasHeight), [canvasWidth, canvasHeight]);
   return (
     <group name="venue-walls" userData={{ height: WALL_HEIGHT }}>
       {walls.map((spec) => (
-        <GlassWall key={spec.side} spec={spec} />
+        <BallroomWall key={spec.side} spec={spec} />
       ))}
     </group>
   );
