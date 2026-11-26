@@ -2,7 +2,8 @@
 
 import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-react";
 import Link from "next/link";
-import { batchMessage } from "./batch-feedback";
+import { cn } from "@/lib/utils";
+import { batchMessage, batchTone } from "./batch-feedback";
 import type { CheckInFeedback, QueuedReason } from "./use-check-in";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 
@@ -83,10 +84,16 @@ export function CheckInFeedbackBanner({
 
   if (feedback.kind === "batch") {
     const { tally } = feedback;
+    const tone = batchTone(tally);
     return (
       <div
         role="status"
-        className="flex items-start justify-between gap-4 rounded-xl border-2 border-sky-500/60 bg-sky-500/10 p-4 text-sky-100"
+        className={cn(
+          "flex items-start justify-between gap-4 rounded-xl border-2 p-4",
+          tone === "ok" && "border-emerald-500/60 bg-emerald-500/10 text-emerald-100",
+          tone === "warn" && "border-amber-500/60 bg-amber-500/10 text-amber-100",
+          tone === "info" && "border-sky-500/60 bg-sky-500/10 text-sky-100",
+        )}
       >
         <div className="space-y-1">
           <p className="text-lg font-semibold">{batchMessage(tally)}</p>
@@ -100,7 +107,14 @@ export function CheckInFeedbackBanner({
             </p>
           ) : null}
         </div>
-        <CloseButton onClose={onClose} className="text-sky-200 hover:bg-sky-500/20" />
+        <CloseButton
+          onClose={onClose}
+          className={cn(
+            tone === "ok" && "text-emerald-200 hover:bg-emerald-500/20",
+            tone === "warn" && "text-amber-200 hover:bg-amber-500/20",
+            tone === "info" && "text-sky-200 hover:bg-sky-500/20",
+          )}
+        />
       </div>
     );
   }

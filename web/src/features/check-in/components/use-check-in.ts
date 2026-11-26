@@ -65,10 +65,11 @@ export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | 
       for (const event of events) {
         const key = event.item.idempotencyKey;
         if (event.type === "done") changed = true;
-        if (batch.current?.keys.has(key)) {
+        if (batch.current) {
+          // Anahtarlar yazımdan sonra bilinir: aradaki olaylar da toplanır, sayım anahtara göre süzülür.
+          // Reddedilen toplu öğe kuyrukta kalır; "Gönderilemeyen girişler" listesinde nedeniyle görünür.
           batch.current.events.push(event);
-          if (event.type === "failed") void queue.dismiss(key);
-          continue;
+          if (batch.current.keys.has(key)) continue;
         }
         const mine = own.current.delete(key);
         // Çevrimiçi reddedilen giriş yalnızca bantta gösterilir; "Gönderilemeyen girişler" listesi
@@ -133,20 +134,21 @@ export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | 
       setPending(true);
       void (async () => {
         try {
-          const items = await queue.enqueueMany(eventId, targets, { gate });
-          const keys = items.map((i) => i.idempotencyKey);
-          if (!navigator.onLine) {
-            setFeedback({ kind: "batch", tally: tallyBatch(keys, []) });
-            return;
-          }
-          const collected = { keys: new Set(keys), events: [] as SettledEvent[] };
+          const collected = { keys: new Set<string>(), events: [] as SettledEvent[] };
           batch.current = collected;
           try {
+            const items = await queue.enqueueMany(eventId, targets, { gate });
+            const keys = items.map((i) => i.idempotencyKey);
+            for (const k of keys) collected.keys.add(k);
+            if (!navigator.onLine) {
+              setFeedback({ kind: "batch", tally: tallyBatch(keys, []) });
+              return;
+            }
             await queue.flushNow();
+            setFeedback({ kind: "batch", tally: tallyBatch(keys, collected.events) });
           } finally {
             batch.current = null;
           }
-          setFeedback({ kind: "batch", tally: tallyBatch(keys, collected.events) });
         } catch {
           setFeedback({
             kind: "error",

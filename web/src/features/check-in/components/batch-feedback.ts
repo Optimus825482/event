@@ -26,3 +26,10 @@ export function batchMessage(t: BatchTally): string {
   if (t.queued > 0) parts.push(`${t.queued} kuyruğa alındı`);
   return parts.join(" · ");
 }
+
+/** Bant tonu: hepsi tamam → ok, herhangi bir ret → warn, aksi (kuyrukta/zaten) → info. */
+export function batchTone(t: BatchTally): "ok" | "warn" | "info" {
+  if (t.failed > 0) return "warn";
+  if (t.already === 0 && t.queued === 0) return "ok";
+  return "info";
+}
