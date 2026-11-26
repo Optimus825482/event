@@ -1,8 +1,10 @@
 import type { z } from "zod";
 import { db } from "@/db/client";
+import { publishNotifications } from "@/features/notifications/publish";
 import type { ActionOptions } from "@/lib/action";
+import { allocateToCasino, releaseFromCasino, setSaleAllocation } from "./allocation-service";
 import { classifyTables } from "./classification-service";
-import { classifyTablesSchema, saleSettingsSchema } from "./schemas";
+import { allocationInputSchema, classifyTablesSchema, saleAllocationSchema, saleSettingsSchema } from "./schemas";
 import { saveSaleSettings } from "./settings-service";
 
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
@@ -22,5 +24,28 @@ export const seatingActionDefs = {
     verb: "edit",
     input: classifyTablesSchema,
     handler: async ({ actor, input }) => classifyTables(db, actor, input),
+  }),
+  allocateToCasino: def({
+    module: "reservations",
+    verb: "edit",
+    input: allocationInputSchema,
+    handler: async ({ actor, input }) => allocateToCasino(db, actor, input),
+  }),
+  /** Bildirim satırı işlem bittikten sonra yayılır; reddedilen istekte bildirim yoktur. */
+  releaseFromCasino: def({
+    module: "reservations",
+    verb: "edit",
+    input: allocationInputSchema,
+    handler: async ({ actor, input }) => {
+      const { updated, notification } = await releaseFromCasino(db, actor, input);
+      if (notification) await publishNotifications([notification]);
+      return { updated };
+    },
+  }),
+  setSaleAllocation: def({
+    module: "ticketing",
+    verb: "edit",
+    input: saleAllocationSchema,
+    handler: async ({ actor, input }) => setSaleAllocation(db, actor, input),
   }),
 };

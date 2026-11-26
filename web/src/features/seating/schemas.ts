@@ -79,3 +79,21 @@ export const classifyTablesSchema = z
   });
 
 export type ClassifyTablesInput = z.infer<typeof classifyTablesSchema>;
+
+/** Toplu tahsis girdisi; tekrarlanan masa kimlikleri tekilleştirilir. */
+export const allocationInputSchema = z.object({
+  eventId: z.uuid("Geçersiz etkinlik"),
+  tableIds: z
+    .array(z.uuid("Geçersiz masa"))
+    .min(1, "En az bir masa seçin")
+    .max(MAX_TABLES)
+    .transform((ids) => [...new Set(ids)]),
+});
+
+export type AllocationInput = z.infer<typeof allocationInputSchema>;
+
+export const saleAllocationSchema = allocationInputSchema.extend({
+  allocation: z.enum(["online", "pending", "closed"], "Geçersiz tahsis"),
+});
+
+export type SaleAllocationInput = z.infer<typeof saleAllocationSchema>;
