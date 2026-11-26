@@ -155,6 +155,20 @@ test.describe("Planlama aşamaları", () => {
     await stageButton(casino, "Casino tahsisi tamam olarak işaretle");
     await expect(currentStep(casino)).toContainText("Casino tahsisi tamam");
 
+    // T2 satılabilir (beklemede) kaldığı için Standart kategorisinin kesin fiyatı olmadan "Fiyatlandı" geçilemez.
+    // (Satılabilir masa kalmasaydı engel çıkmaz ve bu doğrulama atlanırdı.)
+    await ent.goto(`/events/${eventId}`);
+    const panel = ent.getByRole("region", { name: "Planlama aşaması" });
+    await expect(panel).toContainText("Kesin fiyatı girilmemiş kategori var: Standart");
+
+    // Kesin fiyat Finans ekranından girilir; ardından aşama geçilir.
+    await ent.goto(`/events/${eventId}/finance`);
+    await expect(ent.getByText("Kesin fiyat gerekli")).toBeVisible();
+    await ent.getByLabel("Standart kesin fiyat").fill("1500");
+    await ent.getByRole("button", { name: "Fiyatları kaydet" }).click();
+    await expect(ent.locator('[aria-live="polite"]').getByText("Fiyatlar kaydedildi", { exact: true })).toBeVisible();
+    await expect(ent.getByText("Kesin fiyat gerekli")).toHaveCount(0);
+
     await ent.goto(`/events/${eventId}`);
     await stageButton(ent, "Fiyatlandı olarak işaretle");
     await expect(currentStep(ent)).toContainText("Fiyatlandı");

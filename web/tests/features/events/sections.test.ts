@@ -11,8 +11,12 @@ describe("etkinlik bölümleri", () => {
       ["orders", "Siparişler", "/events/E1/orders", "ticketing"],
     ]));
 
-  it("hazır olmayan bölümler gizlidir", () =>
-    expect(visibleEventSections(managerActor("entertainment")).map((s) => s.key)).toEqual(["overview", "tables"]));
+  it("hazır olmayan bölümler (Siparişler) gizlidir; Finans hazırdır", () =>
+    expect(visibleEventSections(managerActor("entertainment")).map((s) => s.key)).toEqual([
+      "overview",
+      "tables",
+      "finance",
+    ]));
 
   it.each(["fnb", "casino"] as const)("%s yöneticisi yalnızca Genel bölümünü görür", (department) =>
     expect(visibleEventSections(managerActor(department)).map((s) => s.key)).toEqual(["overview"]));
