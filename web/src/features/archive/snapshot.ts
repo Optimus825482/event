@@ -84,18 +84,17 @@ async function fnbStaffCount(tx: Tx, eventId: string): Promise<number> {
 
 /** Kapı dağılımı (Karar 12): kapı numarası artan, kapısı boş grup (`null`) en sonda. */
 async function gateBreakdown(tx: Tx, eventId: string): Promise<ArchiveDetails["gates"]> {
-  const [ticketRows, reservationRows] = await Promise.all([
-    tx
-      .select({ gate: tickets.checkInGate, n: sql<number>`count(*)::int` })
-      .from(tickets)
-      .where(and(eq(tickets.eventId, eventId), isNotNull(tickets.checkedInAt)))
-      .groupBy(tickets.checkInGate),
-    tx
-      .select({ gate: reservations.checkInGate, n: sql<number>`count(*)::int` })
-      .from(reservations)
-      .where(and(eq(reservations.eventId, eventId), eq(reservations.status, "checked_in")))
-      .groupBy(reservations.checkInGate),
-  ]);
+  // Kapı sayımı bilet durumuna bakmaz (yalnız `checked_in_at`); `getSalesTotals.checkedIn` ise yalnız `issued` biletleri sayar.
+  const ticketRows = await tx
+    .select({ gate: tickets.checkInGate, n: sql<number>`count(*)::int` })
+    .from(tickets)
+    .where(and(eq(tickets.eventId, eventId), isNotNull(tickets.checkedInAt)))
+    .groupBy(tickets.checkInGate);
+  const reservationRows = await tx
+    .select({ gate: reservations.checkInGate, n: sql<number>`count(*)::int` })
+    .from(reservations)
+    .where(and(eq(reservations.eventId, eventId), eq(reservations.status, "checked_in")))
+    .groupBy(reservations.checkInGate);
   const byGate = new Map<number | null, { gate: number | null; tickets: number; reservations: number }>();
   const slot = (gate: number | null) => {
     let s = byGate.get(gate);
@@ -120,14 +119,13 @@ async function gateBreakdown(tx: Tx, eventId: string): Promise<ArchiveDetails["g
  */
 export async function buildArchiveSnapshot(tx: Tx, eventId: string): Promise<ArchiveInsert> {
   const event = await getEventOrThrow(tx, eventId);
-  const [finance, sales, tablesM, resM, staffCount, gates] = await Promise.all([
-    getFinanceSummary(tx, eventId),
-    getSalesTotals(tx, eventId),
-    tableMetrics(tx, eventId),
-    reservationMetrics(tx, eventId),
-    fnbStaffCount(tx, eventId),
-    gateBreakdown(tx, eventId),
-  ]);
+  // Aynı işlem tek istemcide çalışır; eşzamanlı sorgu yerine sıralı beklenir.
+  const finance = await getFinanceSummary(tx, eventId);
+  const sales = await getSalesTotals(tx, eventId);
+  const tablesM = await tableMetrics(tx, eventId);
+  const resM = await reservationMetrics(tx, eventId);
+  const staffCount = await fnbStaffCount(tx, eventId);
+  const gates = await gateBreakdown(tx, eventId);
 
   const details: ArchiveDetails = {
     categories: SALE_CATEGORIES.map((category) => ({

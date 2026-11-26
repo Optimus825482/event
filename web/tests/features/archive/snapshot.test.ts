@@ -115,9 +115,8 @@ describe("arşiv anlık görüntüsü", () => {
 
   it("kapısı boş giriş 'gate: null' grubunda ve en sonda", async () => {
     const s = await seedScenario(db);
-    const [t] = await db.select().from(tickets).where(eq(tickets.eventId, s.event.id)).limit(10);
     const free = (await db.select().from(tickets).where(eq(tickets.eventId, s.event.id))).find((x) => x.checkedInAt === null);
-    expect(t).toBeDefined();
+    expect(free).toBeDefined();
     await checkInTicket(db, free!.id, null);
     const snap = await build(s.event.id);
     const gates = snap.details!.gates;
@@ -130,6 +129,27 @@ describe("arşiv anlık görüntüsü", () => {
     expect(await db.select().from(eventStaffAssignments).where(eq(eventStaffAssignments.eventId, s.event.id))).toHaveLength(4);
     expect(await db.select().from(eventExtraStaff).where(eq(eventExtraStaff.eventId, s.event.id))).toHaveLength(3);
     expect((await build(s.event.id)).fnbStaffCount).toBe(4);
+  });
+
+  it("no_show sayımı: açık no_show ve pending gelmemiş sayılır, iptal sayılmaz", async () => {
+    const event = await f.createEvent(db);
+    const table = await f.createTable(db, event.id, { label: "C1", capacity: 10, allocation: "casino" });
+    const customer = await f.createCustomer(db);
+    const t2 = await f.createTable(db, event.id, { label: "C2", capacity: 10, allocation: "casino" });
+    const t3 = await f.createTable(db, event.id, { label: "C3", capacity: 10, allocation: "casino" });
+    const mk = (tableId: string, status: "no_show" | "pending" | "cancelled", guestCount: number) =>
+      f.createReservation(db, { eventId: event.id, tableId, customerId: customer.id, status, guestCount });
+    await mk(table.id, "no_show", 3);
+    await mk(t2.id, "pending", 2);
+    await mk(t3.id, "cancelled", 5);
+    const snap = await build(event.id);
+    expect(snap).toMatchObject({
+      reservationCount: 2,
+      reservationsNoShow: 2,
+      reservationsCheckedIn: 0,
+      guestsExpected: 5,
+      guestsCheckedIn: 0,
+    });
   });
 
   it("olmayan etkinlik → not_found 'Etkinlik bulunamadı'", async () => {
