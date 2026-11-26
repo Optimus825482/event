@@ -9,6 +9,7 @@ import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
 import { setStage } from "../../helpers/planning";
+import { setAllocation } from "../../helpers/seating";
 
 const decor = { width: 1600, height: 900, elements: [] };
 
@@ -55,6 +56,7 @@ async function setup() {
   const b1 = saved.tables.find((t) => t.label === "B1");
   if (!a1 || !b1) throw new Error("masa yok");
   const customer = await f.createCustomer(db);
+  await setAllocation(db, [a1.id], "casino");
   await f.createReservation(db, { eventId: event.id, tableId: a1.id, customerId: customer.id, guestCount: 6 });
   return { actor, event, a1, b1 };
 }

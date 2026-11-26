@@ -12,6 +12,7 @@ import { ForbiddenError } from "@/features/auth/errors";
 import { adminActor, managerActor, memberActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { setAllocation } from "../../helpers/seating";
 
 async function makeActor(actor: Actor = managerActor("fnb")): Promise<Actor> {
   return persistActor(db, actor);
@@ -145,6 +146,7 @@ describe("saveLayout", () => {
     if (!m1 || !m2 || !m3) throw new Error("masa yok");
     const customer = await f.createCustomer(db);
     await f.createReservation(db, { eventId: event.id, tableId: m1.id, customerId: customer.id, status: "cancelled" });
+    await setAllocation(db, [m2.id], "casino");
     await f.createReservation(db, { eventId: event.id, tableId: m2.id, customerId: customer.id });
 
     const err = await caught(
@@ -191,6 +193,7 @@ describe("saveLayout", () => {
     const m1 = first.tables[0];
     if (!m1) throw new Error("masa yok");
     const customer = await f.createCustomer(db);
+    await setAllocation(db, [m1.id], "casino");
     await f.createReservation(db, { eventId: event.id, tableId: m1.id, customerId: customer.id });
     const res = await saveLayout(db, actor, {
       eventId: event.id,
@@ -371,6 +374,7 @@ describe("getVenueLayout", () => {
     const m1 = saved.tables[0];
     if (!m1) throw new Error("masa yok");
     const customer = await f.createCustomer(db);
+    await setAllocation(db, [m1.id], "casino");
     await f.createReservation(db, { eventId: event.id, tableId: m1.id, customerId: customer.id });
     const layout = await getVenueLayout(db, actor, event.id);
     expect(layout.tables).toHaveLength(2);

@@ -57,6 +57,7 @@ export const notificationType = pgEnum("notification_type", [
   "planning_stage_reverted",
   "sales_opened",
   "sales_closed",
+  "casino_tables_released",
 ]);
 export const notificationPriority = pgEnum("notification_priority", ["low", "medium", "high", "urgent"]);
 export const notificationAudience = pgEnum("notification_audience", ["all", "admin", "entertainment", "fnb", "casino"]);

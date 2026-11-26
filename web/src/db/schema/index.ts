@@ -4,6 +4,7 @@ export * from "./people";
 export * from "./events";
 export * from "./planning";
 export * from "./reservations";
+export * from "./seating";
 export * from "./staffing";
 export * from "./invitations";
 export * from "./reviews";

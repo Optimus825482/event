@@ -81,7 +81,7 @@ export async function createTable(
 ) {
   const [row] = await ex
     .insert(eventTables)
-    .values({ eventId, label: `M-${uniq()}`, capacity: 8, x: 0, y: 0, ...o })
+    .values({ eventId, label: `M-${uniq()}`, capacity: 8, x: 0, y: 0, allocation: "casino", ...o })
     .returning();
   if (!row) throw new Error("masa eklenemedi");
   return row;

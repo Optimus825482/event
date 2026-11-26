@@ -243,6 +243,9 @@ describe("hedef durum", () => {
       expect(of(E.e1).map((t) => t.label)).toEqual(["1", "2", "A1", "Eski ghost-7"]);
       expect(of(E.e1).find((t) => t.label === "1")?.table_type_id).toBe(IDS.tableType);
       expect(of(E.e1).find((t) => t.label === "A1")?.is_loca).toBe(true);
+      // Eski sistemde her masa Casino rezervasyonuna açıktı: yer tutucular dahil tüm masalar casino'ya tahsisli.
+      const allocations = await c.query<{ allocation: string }>("SELECT DISTINCT allocation FROM event_tables");
+      expect(allocations.rows.map((r) => r.allocation)).toEqual(["casino"]);
       const attrs = await c.query<{ label: string; x: number; y: number; is_pinned: boolean; is_vip: boolean; size: number | null; floor: number; sort_number: number | null }>(
         "SELECT label, x, y, is_pinned, is_vip, size, floor, sort_number FROM event_tables WHERE event_id = $1 ORDER BY label",
         [E.e1],
