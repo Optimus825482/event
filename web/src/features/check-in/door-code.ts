@@ -2,11 +2,16 @@
  * Kapı arama kutusundaki kod biçimi tanıma. Saf işlevler: Node modülü içe aktarmaz, istemcide çalışır.
  * `features/ticketing/pnr.ts` ile eşitliği sunucu testi sabitler.
  */
+import { normalizeCode } from "@/lib/code-format";
+
 const PNR_LENGTH = 8;
 
-/** Boşluk ve `-` atıldıktan sonra uzunluk tam 8 ise PNR biçimindedir. */
+/**
+ * `parsePnr` ile aynı kural: boşluk ve `-` atıldıktan sonra yalnızca kod alfabesinden tam 8 karakter.
+ * "Ayşe Kaya" gibi 8 harfli adlar alfabe dışı karakter içerdiğinden ad araması kalır.
+ */
 export function looksLikePnr(q: string): boolean {
-  return q.replace(/[\s-]/g, "").length === PNR_LENGTH;
+  return normalizeCode(q).length === PNR_LENGTH;
 }
 
 /** 8 karakterlik PNR'ı `XXXX-XXXX` gösterir; başka girdiyi aynen döner. */
