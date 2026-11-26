@@ -2,6 +2,8 @@ import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventStaffAssignments, eventTables, events, orders, reservations } from "@/db/schema";
 import { canTransitionEvent } from "@/domain/event-status";
+import { resolveArtist } from "@/features/artists/resolve";
+import { archiveEvent } from "@/features/archive/snapshot";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { escapeLike } from "@/lib/identifiers";
@@ -41,6 +43,7 @@ export async function totalCapacity(db: Executor, eventId: string): Promise<numb
 }
 
 export async function createEvent(db: Executor, actor: Actor, input: CreateEventInput): Promise<EventRow> {
+  const artist = await resolveArtist(db, input.artistName);
   const [row] = await db
     .insert(events)
     .values({
@@ -49,7 +52,8 @@ export async function createEvent(db: Executor, actor: Actor, input: CreateEvent
       startsAt: input.startsAt,
       endsAt: input.endsAt ?? null,
       eventType: input.eventType ?? null,
-      artistName: input.artistName ?? null,
+      artistId: artist.artistId,
+      artistName: artist.artistName,
       reservationEnabled: input.reservationEnabled ?? true,
       organizerId: actor.id,
       status: "draft",
@@ -68,6 +72,11 @@ export async function updateEvent(db: Db, actor: Actor, input: UpdateEventInput)
     if (existing.status === "completed" || existing.status === "cancelled") {
       throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinlik düzenlenemez");
     }
+    // Alan verilmediyse ya da metin aynı kalıp bağ varsa bağ korunur (sanatçı sonradan adlandırılmış olabilir).
+    const artist =
+      input.artistName === undefined || (input.artistName === existing.artistName && existing.artistId !== null)
+        ? { artistId: existing.artistId, artistName: existing.artistName }
+        : await resolveArtist(tx, input.artistName);
     const [row] = await tx
       .update(events)
       .set({
@@ -76,8 +85,8 @@ export async function updateEvent(db: Db, actor: Actor, input: UpdateEventInput)
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         eventType: input.eventType ?? null,
-        // Alan hiç verilmediyse mevcut değer korunur; boş metin null ile temizlenir.
-        artistName: input.artistName !== undefined ? input.artistName : existing.artistName,
+        artistId: artist.artistId,
+        artistName: artist.artistName,
         reservationEnabled: input.reservationEnabled ?? existing.reservationEnabled,
         reviewEnabled: input.reviewEnabled ?? existing.reviewEnabled,
         reviewHistoryVisible: input.reviewHistoryVisible ?? existing.reviewHistoryVisible,
@@ -114,6 +123,7 @@ export async function changeEventStatus(
   actor: Actor,
   input: ChangeEventStatusInput,
 ): Promise<EventRow> {
+  // Arşiv anlık görüntüsü tek tutarlı zamanda okunsun diye repeatable read.
   return db.transaction(async (tx) => {
     // Eşzamanlı iki geçişin aynı eski durumu görmemesi için satır kilitlenir.
     const [locked] = await tx.select().from(events).where(eq(events.id, input.id)).for("update");
@@ -130,8 +140,10 @@ export async function changeEventStatus(
       .where(eq(events.id, input.id))
       .returning();
     if (!row) throw new DomainError("not_found", NOT_FOUND);
+    // Tamamlanma ile arşiv aynı işlemde yazılır; arşiv başarısızsa durum da değişmez.
+    if (input.status === "completed") await archiveEvent(tx, row.id, actor.id);
     return row;
-  });
+  }, { isolationLevel: "repeatable read" });
 }
 
 /** Yalnızca taslak ve hiç rezervasyonu olmayan etkinlik silinir (iptal edilmiş rezervasyon da sayılır). */
