@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventStaffAssignments, eventTables, events, reservations } from "@/db/schema";
 import { canTransitionEvent } from "@/domain/event-status";
+import { archiveEvent } from "@/features/archive/snapshot";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import { escapeLike } from "@/lib/identifiers";
@@ -130,6 +131,8 @@ export async function changeEventStatus(
       .where(eq(events.id, input.id))
       .returning();
     if (!row) throw new DomainError("not_found", NOT_FOUND);
+    // Tamamlanma ile arşiv aynı işlemde yazılır; arşiv başarısızsa durum da değişmez.
+    if (input.status === "completed") await archiveEvent(tx, row.id, actor.id);
     return row;
   });
 }
