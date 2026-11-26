@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { SALE_CATEGORIES } from "@/domain/seating";
 import type { FinanceOverview } from "../overview";
 import { summaryCards } from "../view-model";
 import { ItemsSection } from "./items-section";
@@ -14,11 +13,6 @@ export function FinanceView({ overview }: { overview: FinanceOverview }) {
   const cards = summaryCards(overview);
   // Sunucu verisi yenilenince formlar kayıtlı değerlerle yeniden kurulur.
   const planKey = [overview.plan.targetProfit, overview.plan.casinoCostMode, overview.plan.casinoTransferPrice].join("|");
-  const pricingKey = JSON.stringify([
-    SALE_CATEGORIES.map((c) => [overview.seatPrices[c].coefficient, overview.seatPrices[c].finalPrice]),
-    overview.pricesLocked,
-    overview.permissions.edit,
-  ]);
 
   return (
     <div className="min-w-0 space-y-6">
@@ -36,7 +30,7 @@ export function FinanceView({ overview }: { overview: FinanceOverview }) {
       </section>
       <ItemsSection overview={overview} />
       <PlanForm key={planKey} overview={overview} />
-      <PricingSection key={pricingKey} overview={overview} computed={computed} onComputed={setComputed} />
+      <PricingSection overview={overview} computed={computed} onComputed={setComputed} />
     </div>
   );
 }

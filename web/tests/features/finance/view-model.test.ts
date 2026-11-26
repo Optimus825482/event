@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { RecommendationView } from "@/features/finance/recommendation-service";
 import {
+  coefficientsDirty,
   finalPricesFromForm,
   itemFormToInput,
   priceRows,
+  recommendationStamp,
   recommendationNote,
   summaryCards,
   type ItemForm,
@@ -140,5 +142,45 @@ describe("recommendationNote", () => {
       "Gelirler gideri ve hedef kârı karşılıyor; önerilen fiyat 0",
     );
     expect(recommendationNote(view({ distributable: "5000.00" }))).toBeNull();
+  });
+});
+
+describe("coefficientsDirty", () => {
+  const saved = { standard: "1.000", premium: "2.000", vip: "1.500" };
+  it("sayısal olarak eşit girdi kirli değildir", () => {
+    expect(coefficientsDirty({ standard: "1", premium: "2,0", vip: "1.5" }, saved)).toBe(false);
+  });
+  it("farklı ya da geçersiz girdi kirlidir", () => {
+    expect(coefficientsDirty({ ...saved, premium: "2.5" }, saved)).toBe(true);
+    expect(coefficientsDirty({ ...saved, vip: "x" }, saved)).toBe(true);
+    expect(coefficientsDirty({ ...saved, vip: "" }, saved)).toBe(true);
+  });
+});
+
+describe("recommendationStamp", () => {
+  const base = {
+    summary: { estimatedExpense: "1.00" },
+    plan: { targetProfit: "0.00", casinoCostMode: "free", casinoTransferPrice: "0.00" },
+    seats: { standard: 1, premium: 0, vip: 0 },
+    seatPrices: {
+      standard: { finalPrice: null, recommendedPrice: null, coefficient: "1.000" },
+      premium: { finalPrice: null, recommendedPrice: null, coefficient: "1.000" },
+      vip: { finalPrice: null, recommendedPrice: null, coefficient: "1.000" },
+    },
+  } as unknown as Parameters<typeof recommendationStamp>[0];
+
+  it("katsayı değişince değişir", () => {
+    const changed = {
+      ...base,
+      seatPrices: { ...base.seatPrices, premium: { ...base.seatPrices.premium, coefficient: "2.000" } },
+    };
+    expect(recommendationStamp(changed)).not.toBe(recommendationStamp(base));
+  });
+  it("tavsiye ve kesin fiyat değişince değişmez", () => {
+    const changed = {
+      ...base,
+      seatPrices: { ...base.seatPrices, standard: { finalPrice: "5.00", recommendedPrice: "4.00", coefficient: "1.000" } },
+    };
+    expect(recommendationStamp(changed)).toBe(recommendationStamp(base));
   });
 });

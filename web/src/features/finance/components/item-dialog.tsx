@@ -82,6 +82,7 @@ export function ItemDialog({
     if (!parsed.ok) {
       setErrors(parsed.errors);
       setError(null);
+      document.getElementById(parsed.errors.estimated ? "item-estimated" : "item-actual")?.focus();
       return;
     }
     setErrors({});

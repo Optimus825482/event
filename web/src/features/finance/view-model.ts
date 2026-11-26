@@ -2,7 +2,7 @@
 // Para yalnızca `formatMoney` / `parseMoneyInput` ile işlenir; kayan nokta kullanılmaz.
 import { SALE_CATEGORIES, SALE_CATEGORY_LABELS, type SaleCategory } from "@/domain/seating";
 import type { FinanceCategory, FinanceDirection } from "./constants";
-import { formatMoney, parseMoneyInput } from "./money";
+import { formatMoney, parseMoneyInput, toMilli } from "./money";
 import type { FinanceOverview } from "./overview";
 import type { RecommendationView } from "./recommendation-service";
 
@@ -126,4 +126,38 @@ export function recommendationNote(view: RecommendationView): string | null {
     return "Gelirler gideri ve hedef kârı karşılıyor; önerilen fiyat 0";
   }
   return null;
+}
+
+/** Katsayı girdisi: virgül de kabul edilir; doğrulama sunucudadır. */
+export const coefficientValue = (text: string) => text.trim().replace(",", ".");
+
+/**
+ * Girilen katsayılar kayıtlılardan farklı mı? Sayısal karşılaştırılır ("1" ile "1.000" aynıdır);
+ * ayrıştırılamayan girdi kirli sayılır.
+ */
+export function coefficientsDirty(
+  texts: Record<SaleCategory, string>,
+  saved: Record<SaleCategory, string>,
+): boolean {
+  return SALE_CATEGORIES.some((category) => {
+    try {
+      return toMilli(coefficientValue(texts[category])) !== toMilli(saved[category]);
+    } catch {
+      return true;
+    }
+  });
+}
+
+/** Tavsiyenin dayandığı verinin parmak izi (kayıtlı katsayılar dahil); değişince eski varsayımlar gösterilmez. */
+export function recommendationStamp(
+  o: Pick<FinanceOverview, "summary" | "plan" | "seats" | "seatPrices">,
+): string {
+  return JSON.stringify([
+    o.summary,
+    o.plan.targetProfit,
+    o.plan.casinoCostMode,
+    o.plan.casinoTransferPrice,
+    o.seats,
+    SALE_CATEGORIES.map((c) => o.seatPrices[c].coefficient),
+  ]);
 }

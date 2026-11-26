@@ -11,21 +11,20 @@ import { CASINO_COST_MODE_LABELS } from "../constants";
 import { formatMoney } from "../money";
 import type { FinanceOverview } from "../overview";
 import type { RecommendationView } from "../recommendation-service";
-import { finalPricesFromForm, priceRows, recommendationNote } from "../view-model";
+import {
+  coefficientValue,
+  coefficientsDirty,
+  finalPricesFromForm,
+  priceRows,
+  recommendationNote,
+  recommendationStamp,
+} from "../view-model";
 import { firstFieldErrors, useFinanceAction } from "./use-finance-action";
 
 export type ComputedRecommendation = { view: RecommendationView; stamp: string };
 
-/** Tavsiyenin dayandığı verinin parmak izi; değişince eski varsayımlar gösterilmez. */
-export function recommendationStamp(o: FinanceOverview): string {
-  return JSON.stringify([o.summary, o.plan.targetProfit, o.plan.casinoCostMode, o.plan.casinoTransferPrice, o.seats]);
-}
-
 type Texts = Record<SaleCategory, string>;
 type CategoryErrors = Partial<Record<SaleCategory, string>>;
-
-/** Katsayı girdisi: virgül de kabul edilir; doğrulama sunucudadır. */
-const coefficientValue = (text: string) => text.trim().replace(",", ".");
 
 function pickTexts(read: (category: SaleCategory) => string): Texts {
   return { standard: read("standard"), premium: read("premium"), vip: read("vip") };
@@ -53,6 +52,24 @@ export function PricingSection({
   const [coefficientErrors, setCoefficientErrors] = useState<CategoryErrors>({});
   const [finalErrors, setFinalErrors] = useState<CategoryErrors>({});
 
+  // Her alan grubu yalnızca kendi sunucu değeri değişince sıfırlanır; öbürünün kaydedilmemiş girdisi korunur.
+  const savedCoefficients = pickTexts((c) => rows.find((r) => r.category === c)!.coefficient);
+  const savedFinals = pickTexts((c) => rows.find((r) => r.category === c)!.finalPrice);
+  const coefficientsSeen = JSON.stringify(savedCoefficients);
+  const finalsSeen = JSON.stringify(savedFinals);
+  const [seenCoefficients, setSeenCoefficients] = useState(coefficientsSeen);
+  const [seenFinals, setSeenFinals] = useState(finalsSeen);
+  if (seenCoefficients !== coefficientsSeen) {
+    setSeenCoefficients(coefficientsSeen);
+    setCoefficients(savedCoefficients);
+    setCoefficientErrors({});
+  }
+  if (seenFinals !== finalsSeen) {
+    setSeenFinals(finalsSeen);
+    setFinals(savedFinals);
+    setFinalErrors({});
+  }
+
   const coefficientsAction = useFinanceAction();
   const computeAction = useFinanceAction();
   const finalsAction = useFinanceAction();
@@ -65,9 +82,7 @@ export function PricingSection({
 
   const finalsForm = finalPricesFromForm(finals);
   const hasFinals = finalsForm.ok ? Object.keys(finalsForm.prices).length > 0 : true;
-  const coefficientsDirty = SALE_CATEGORIES.some(
-    (c) => coefficientValue(coefficients[c]) !== rows.find((r) => r.category === c)!.coefficient,
-  );
+  const dirty = coefficientsDirty(coefficients, savedCoefficients);
 
   async function saveCoefficients() {
     const result = await coefficientsAction.run(
@@ -230,7 +245,7 @@ export function PricingSection({
               Fiyatları kaydet
             </Button>
           </div>
-          {coefficientsDirty ? (
+          {dirty ? (
             <p className="text-sm text-muted-foreground">Kaydedilmemiş katsayılar tavsiye hesabına girmez.</p>
           ) : null}
           {!hasFinals ? (
