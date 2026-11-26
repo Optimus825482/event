@@ -6,6 +6,9 @@
     "dev": "npm --prefix web run dev",
     "build": "npm --prefix web run build",
     "start": "npm --prefix web run start",
-    "test": "npm --prefix web run test"
+    "test": "npm --prefix web run test",
+    "dev:satis": "npm --prefix satis run dev",
+    "build:satis": "npm --prefix satis run build",
+    "test:satis": "npm --prefix satis run test"
   }
 }
