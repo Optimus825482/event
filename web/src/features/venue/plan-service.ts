@@ -28,7 +28,15 @@ export async function listTableGroupMembers(db: Db | Tx, eventId: string): Promi
 /**
  * Etkinliğin salt okunur yerleşimi (alan planı çizimi için). Etkinlik yoksa `not_found`. Rol/izin denetimi çağıranın işidir.
  */
-export async function getFloorPlan(db: Db | Tx, actor: Actor, eventId: string): Promise<{ eventName: string } & FloorPlanData> {
+export async function getFloorPlan(db: Db | Tx, _actor: Actor, eventId: string): Promise<{ eventName: string } & FloorPlanData> {
+  return loadFloorPlan(db, eventId);
+}
+
+/**
+ * `getFloorPlan`'ın aktörsüz çekirdeği: yetki denetimi yapmaz. Herkese açık, imzalı belirteçle korunan
+ * görünümler (ör. "masamı bul") içindir; çağıran yanıtı kendi beyaz listesiyle süzmelidir.
+ */
+export async function loadFloorPlan(db: Db | Tx, eventId: string): Promise<{ eventName: string } & FloorPlanData> {
   const [event] = await db
     .select({ name: events.name, layoutDecor: events.layoutDecor })
     .from(events)
