@@ -7,6 +7,11 @@ import type { Actor } from "@/features/auth/session";
 import { type PeriodInput, periodBounds } from "./period";
 import { type CurrencyTotals, totalsByCurrency } from "./totals";
 
+/** Sayfa, şema hatasında bile yetkisiz kullanıcıyı geri çevirsin diye servis kapısı. */
+export function assertCanViewReports(actor: Actor): void {
+  authorize(actor, "archive", "view");
+}
+
 export type PeriodReport = { from: string; to: string; rows: ArchiveSummary[]; totals: CurrencyTotals[] };
 
 /** Dönem raporu: yalnızca `event_archives`, `starts_at`'e göre; `from`/`to` Kıbrıs günleri, ikisi de dahil (Karar 15). */
