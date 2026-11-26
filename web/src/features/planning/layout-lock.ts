@@ -1,6 +1,6 @@
 /**
  * Yerleşim kilidi: satış başladıktan sonra (`on_sale`, `sales_closed`) taahhütlü masalar
- * (rezervasyon; ileride Casino tahsisi ve bilet) silinemez, taşınamaz, etiketi/kat/tipi
+ * (rezervasyon, Casino tahsisi; ileride bilet) silinemez, taşınamaz, etiketi/kat/tipi
  * değiştirilemez, kapasitesi taahhüdün altına indirilemez. Taahhütsüz masalar serbesttir.
  */
 import { and, eq, inArray } from "drizzle-orm";
@@ -25,8 +25,17 @@ export const reservationCommitments: CommitmentSource = async (ex, eventId) => {
   return rows.map((r) => ({ tableId: r.tableId, reason: "reservation" as const, seats: r.seats }));
 };
 
+/** Casino'ya ayrılmış (`allocation = 'casino'`) her masa, rezervasyonu olmasa da sıfır koltukla taahhütlüdür. */
+export const casinoAllocationCommitments: CommitmentSource = async (ex, eventId) => {
+  const rows = await ex
+    .select({ tableId: eventTables.id })
+    .from(eventTables)
+    .where(and(eq(eventTables.eventId, eventId), eq(eventTables.allocation, "casino")));
+  return rows.map((r) => ({ tableId: r.tableId, reason: "casino_allocation" as const, seats: 0 }));
+};
+
 /**
- * Taahhüt kaynakları. Faz 4 `casino_allocation`, Faz 6 `ticket` kaynağını bu diziye ekler.
+ * Taahhüt kaynakları. Faz 6 `ticket` kaynağını bu diziye ekler.
  *
  * SÖZLEŞME: taahhüt satırı yazan her yeni yazıcı, yazmadan önce etkinlik satırını `FOR SHARE`
  * kilitlemelidir (`lockEvent`, bkz. `reservations/internal.ts`). `saveLayout` etkinliği `FOR UPDATE`
@@ -34,7 +43,7 @@ export const reservationCommitments: CommitmentSource = async (ex, eventId) => {
  * kapanır. Kilidi atlayan bir yazıcı, kilidin dondurmaya çalıştığı masanın kaydedilen düzenle
  * eşzamanlı taşınmasına yol açar. Kaynağı diziye eklemek tek başına yetmez.
  */
-export const COMMITMENT_SOURCES: readonly CommitmentSource[] = [reservationCommitments];
+export const COMMITMENT_SOURCES: readonly CommitmentSource[] = [reservationCommitments, casinoAllocationCommitments];
 
 export type TableCommitment = { tableId: string; reasons: CommitmentReason[]; minCapacity: number };
 
@@ -170,7 +179,7 @@ export async function assertLayoutChangeAllowed(
   const labels = [...new Set(changes.map((c) => c.label))].sort(compareLabels).join(", ");
   throw new DomainError(
     "conflict",
-    `Satış başladı; taahhütlü (rezervasyonlu) masalar değiştirilemez: ${labels}. Hiçbir değişiklik kaydedilmedi.`,
+    `Satış başladı; rezervasyonlu ya da Casino'ya ayrılmış masalar değiştirilemez: ${labels}. Hiçbir değişiklik kaydedilmedi.`,
   );
 }
 

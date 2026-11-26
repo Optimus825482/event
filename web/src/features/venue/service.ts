@@ -5,6 +5,7 @@ import { eventTables, events, tableTypes, venueTemplates } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow, listEventTables, totalCapacity } from "@/features/events/service";
+import { syncSeatSlots } from "@/features/seating/slots";
 import { publish } from "@/features/realtime/publish";
 import {
   assertLayoutChangeAllowed,
@@ -52,7 +53,9 @@ export async function saveLayout(db: Db, actor: Actor, input: SaveLayoutServiceI
       const event = await lockEditableEvent(tx, actor, input.eventId);
       await assertLayoutChangeAllowed(tx, event, input.tables);
       const result = await writeLayout(tx, input.eventId, input.tables, input.decor);
+      await syncSeatSlots(tx, input.eventId);
       await publish(tx, { type: "table.updated", eventId: input.eventId });
+      await publish(tx, { type: "seats.changed", eventId: input.eventId });
       return result;
     });
   } catch (error) {

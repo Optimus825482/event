@@ -9,6 +9,7 @@ import {
 } from "@/features/planning/layout-lock";
 import { truncateAll } from "../../helpers/db";
 import * as f from "../../helpers/factories";
+import { setAllocation } from "../../helpers/seating";
 
 describe("findLockedChanges", () => {
   const A1 = { id: "a1", label: "A1", capacity: 8, x: 100, y: 100, rotation: 0, floor: 1, tableTypeId: "t1" };
@@ -43,7 +44,7 @@ describe("loadCommitments", () => {
   it("loadCommitments: iptal edilmiş rezervasyon masayı dondurmaz", async () => {
     const event = await f.createEvent(db);
     const a1 = await f.createTable(db, event.id, { label: "A1", capacity: 8 });
-    const b1 = await f.createTable(db, event.id, { label: "B1", capacity: 8 });
+    const b1 = await f.createTable(db, event.id, { label: "B1", capacity: 8, allocation: "pending" });
     const customer = await f.createCustomer(db);
     await f.createReservation(db, { eventId: event.id, tableId: a1.id, customerId: customer.id, guestCount: 6 });
     await f.createReservation(db, {
@@ -56,6 +57,31 @@ describe("loadCommitments", () => {
 
     const commitments = await loadCommitments(db, event.id);
 
-    expect([...commitments.values()]).toEqual([{ tableId: a1.id, reasons: ["reservation"], minCapacity: 6 }]);
+    expect([...commitments.values()]).toEqual([
+      { tableId: a1.id, reasons: ["reservation", "casino_allocation"], minCapacity: 6 },
+    ]);
+  });
+
+  it("loadCommitments: Casino'ya ayrılmış rezervasyonsuz masa sıfır koltukla taahhütlüdür", async () => {
+    const event = await f.createEvent(db);
+    const a1 = await f.createTable(db, event.id, { label: "A1", capacity: 8, allocation: "casino" });
+    const b1 = await f.createTable(db, event.id, { label: "B1", capacity: 8, allocation: "casino" });
+    const c1 = await f.createTable(db, event.id, { label: "C1", capacity: 8, allocation: "pending" });
+    const d1 = await f.createTable(db, event.id, { label: "D1", capacity: 8, allocation: "pending" });
+    const e1 = await f.createTable(db, event.id, { label: "E1", capacity: 8, allocation: "pending" });
+    await setAllocation(db, [d1.id], "online");
+    await setAllocation(db, [e1.id], "closed");
+    const customer = await f.createCustomer(db);
+    await f.createReservation(db, { eventId: event.id, tableId: a1.id, customerId: customer.id, guestCount: 6 });
+
+    const commitments = await loadCommitments(db, event.id);
+
+    expect(commitments.get(a1.id)).toEqual({
+      tableId: a1.id,
+      reasons: ["reservation", "casino_allocation"],
+      minCapacity: 6,
+    });
+    expect(commitments.get(b1.id)).toEqual({ tableId: b1.id, reasons: ["casino_allocation"], minCapacity: 0 });
+    for (const id of [c1.id, d1.id, e1.id]) expect(commitments.has(id)).toBe(false);
   });
 });
