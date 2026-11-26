@@ -139,7 +139,12 @@ export async function completeReview(
       );
     if (!existing) throw new DomainError("not_found", REVIEW_MESSAGES.reviewNotFound);
     if (existing.isCompleted) throw new DomainError("conflict", REVIEW_MESSAGES.locked);
-    if (!isReviewComplete(existing)) throw new DomainError("invalid", REVIEW_MESSAGES.incomplete);
+    if (!isReviewComplete(existing)) {
+      throw new DomainError(
+        "invalid",
+        existing.formKind === "short" ? REVIEW_MESSAGES.incompleteShort : REVIEW_MESSAGES.incomplete,
+      );
+    }
 
     const [review] = await tx
       .update(staffPerformanceReviews)

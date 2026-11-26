@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { ratingBand, RATING_KEYS, type RatingBand, type RatingKey } from "./score";
 
-/** Boş metin "yok" demektir; en fazla 500 karakter. */
+/** Boş ya da verilmeyen metin "yok" demektir; en fazla 500 karakter. */
 const shortNote = (message: string) =>
   z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    (v) => (v === undefined || (typeof v === "string" && v.trim() === "") ? null : v),
     z.string().trim().max(500, message).nullable(),
   );
 

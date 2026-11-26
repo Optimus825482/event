@@ -15,6 +15,14 @@ const base = {
   nextEventNotes: null,
 };
 
+describe("shortReviewSchema eksik notlar", () => {
+  it("comment ve nextEventNotes verilmezse null olur (İngilizce Zod hatası yok)", () => {
+    const parsed = shortReviewSchema.parse({ eventId: base.eventId, staffId: base.staffId, overallRating: 3 });
+    expect(parsed.comment).toBeNull();
+    expect(parsed.nextEventNotes).toBeNull();
+  });
+});
+
 describe("kısa değerlendirme formu modeli", () => {
   it.each([
     [1, 20, "bad"],

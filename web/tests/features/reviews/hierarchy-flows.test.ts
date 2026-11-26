@@ -167,7 +167,7 @@ describe("hiyerarşik değerlendirme akışları", () => {
       isCompleted: false,
     });
     const err = await expectDomain(completeReview(db, w.actors.S, { eventId: w.event.id, staffId: w.W3.id }), "invalid");
-    expect(err.message).toBe(REVIEW_MESSAGES.incomplete);
+    expect(err.message).toBe(REVIEW_MESSAGES.incompleteShort);
 
     await db
       .update(staffPerformanceReviews)

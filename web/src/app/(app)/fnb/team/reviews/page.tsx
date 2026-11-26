@@ -39,7 +39,7 @@ export default async function ReviewsPage() {
       {events.length === 0 ? (
         <EmptyState
           title="Değerlendirilecek etkinlik yok"
-          description="Değerlendirilecek ekip üyesi olan bir etkinlik yok. Bir etkinlikte ekip lideri olarak atandığınızda burada görünür."
+          description="Değerlendirilecek ekip üyesi olan bir etkinlik yok. Bir etkinlikte ekip lideri, süpervizör ya da kısım sorumlusu olarak atandığınızda burada görünür."
         />
       ) : (
         <ul className="space-y-3">

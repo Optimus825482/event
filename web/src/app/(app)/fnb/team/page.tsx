@@ -52,7 +52,7 @@ export default async function LeaderDashboardPage() {
         <EmptyState
           icon={<UsersRound />}
           title="Henüz bir takımınız yok"
-          description="Bir etkinlikte ekip lideri olarak atandığınızda takımınız ve etkinlikleriniz burada görünür."
+          description="Bir etkinlikte ekip lideri, süpervizör ya da kısım sorumlusu olarak atandığınızda takımınız ve etkinlikleriniz burada görünür."
         />
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">

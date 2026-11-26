@@ -71,7 +71,7 @@ export default async function LeaderEventsPage({
         <EmptyState
           icon={<CalendarDays />}
           title="Etkinlik bulunamadı"
-          description="Kriterlere uyan atanmış etkinlik yok. Bir etkinlikte ekip lideri olarak atandığınızda burada görünür."
+          description="Kriterlere uyan atanmış etkinlik yok. Bir etkinlikte ekip lideri, süpervizör ya da kısım sorumlusu olarak atandığınızda burada görünür."
         />
       ) : (
         <ul className="space-y-3">

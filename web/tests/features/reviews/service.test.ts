@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { events, notifications, staffPerformanceReviews, teamMembers } from "@/db/schema";
+import { REVIEW_MESSAGES } from "@/features/reviews/labels";
 import { completeAllReviews, completeReview, saveReviewDraft } from "@/features/reviews/service";
 import { computeScore, type Ratings } from "@/features/reviews/score";
 import { memberActor, noAccessActor } from "../../helpers/actors";
@@ -295,7 +296,11 @@ describe("completeReview", () => {
   it("tüm kategoriler puanlanmadan tamamlanamaz (invalid)", async () => {
     const w = await setupReviewWorld();
     await draft(w, w.member1.id, { communication: 5 });
-    await expectDomain(completeReview(db, w.leader, { eventId: w.event.id, staffId: w.member1.id }), "invalid");
+    const err = await expectDomain(
+      completeReview(db, w.leader, { eventId: w.event.id, staffId: w.member1.id }),
+      "invalid",
+    );
+    expect(err.message).toBe(REVIEW_MESSAGES.incomplete);
     expect((await reviewRows(w.event.id))[0]?.isCompleted).toBe(false);
   });
 

@@ -28,4 +28,5 @@ export const REVIEW_MESSAGES = {
   self: "Kendinizi değerlendiremezsiniz",
   reviewNotFound: "Değerlendirme bulunamadı",
   incomplete: "Tamamlamak için tüm kategoriler puanlanmalı",
+  incompleteShort: "Tamamlamak için genel puan verilmeli",
 } as const;
