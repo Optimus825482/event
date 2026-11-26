@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
+import { checkInEvents, tickets } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { checkInActionDefs } from "@/features/check-in/action-defs";
 import { checkIn } from "@/features/check-in/service";
@@ -198,6 +200,40 @@ describe("bilet bazında giriş", () => {
       "Bu QR kod başka bir etkinliğe ait",
     );
     expect((await ticketRow(a.tickets[0]!.ticketId)).checkedInAt).toBeNull();
+    expect((await ticketLog(a.tickets[0]!.ticketId)).map((l) => l.outcome)).toEqual([]);
+    const logged = await db.select({ outcome: checkInEvents.outcome }).from(checkInEvents);
+    expect(logged.map((l) => l.outcome)).toEqual(["invalid_status"]);
+  });
+
+  it("imzası bozuk bilet belirteci not_found", async () => {
+    const te = await ticketedEvent();
+    const t = te.tickets[0]!;
+    const broken = `${t.qrPayload.slice(0, -2)}${t.qrPayload.endsWith("xx") ? "yy" : "xx"}`;
+    await expectDomain(
+      checkIn(db, door, { eventId: te.event.id, idempotencyKey: key(), token: broken }),
+      "not_found",
+      "QR kod geçersiz veya rezervasyon bulunamadı",
+    );
+    expect((await ticketRow(t.ticketId)).checkedInAt).toBeNull();
+  });
+
+  it("imzası geçerli ama satırdaki qr_token ile eşleşmeyen belirteç not_found", async () => {
+    const te = await ticketedEvent();
+    const t = te.tickets[0]!;
+    await db.update(tickets).set({ qrToken: `${t.qrPayload}.eski` }).where(eq(tickets.id, t.ticketId));
+    await expectDomain(
+      checkIn(db, door, { eventId: te.event.id, idempotencyKey: key(), token: t.qrPayload }),
+      "not_found",
+      "QR kod geçersiz veya rezervasyon bulunamadı",
+    );
+    expect((await ticketRow(t.ticketId)).checkedInAt).toBeNull();
+  });
+
+  it("tamamlanmış etkinlikte bilet girişi kabul edilir", async () => {
+    const te = await ticketedEvent();
+    await setEventStatus(te.event.id, "completed");
+    const r = await checkIn(db, door, { eventId: te.event.id, idempotencyKey: key(), token: te.tickets[0]!.qrPayload });
+    expect(r).toMatchObject({ outcome: "checked_in", kind: "ticket" });
   });
 
   it("imzası geçerli ama hiçbir rezervasyona ya da bilete ait olmayan belirteç not_found", async () => {

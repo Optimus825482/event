@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/check-in/route";
 import { db } from "@/db/client";
-import { tickets } from "@/db/schema";
+import { checkInEvents, tickets } from "@/db/schema";
 import { memberActor } from "../../helpers/actors";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { addPaidOrder, ticketedEvent, ticketLog, ticketRow } from "../../helpers/door";
@@ -288,5 +288,7 @@ describe("POST /api/check-in", () => {
     expect(counts).toEqual({ checked_in: 100, already_checked_in: 50 });
     const rows = await db.select({ at: tickets.checkedInAt }).from(tickets).where(eq(tickets.eventId, te.event.id));
     expect(rows.filter((r) => r.at !== null)).toHaveLength(100);
+    const logged = await db.select({ id: checkInEvents.id }).from(checkInEvents).where(inArray(checkInEvents.ticketId, ids));
+    expect(logged).toHaveLength(150);
   }, 60_000);
 });

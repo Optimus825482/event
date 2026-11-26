@@ -212,7 +212,7 @@ export async function readCheckIn(tx: Tx, reservationId: string, outcome: CheckI
 }
 
 /** Giriş olayları: kapıdaki diğer ekranlar listeyi ve istatistikleri yeniler. Commit ile teslim edilir. */
-export async function publishCheckIn(tx: Tx, eventId: string, reservationId: string): Promise<void> {
-  await publish(tx, { type: "guest.checked_in", eventId, id: reservationId });
+export async function publishCheckIn(tx: Tx, eventId: string, targetId: string): Promise<void> {
+  await publish(tx, { type: "guest.checked_in", eventId, id: targetId });
   await publish(tx, { type: "stats.updated", eventId });
 }
