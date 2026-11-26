@@ -4,7 +4,7 @@ import { eventTables, events, orders, tableSeatSlots, tickets, type OrderStatus 
 import type { SaleCategory } from "@/domain/seating";
 import { publish } from "@/features/realtime/publish";
 import { lockEvent } from "@/features/reservations/internal";
-import { SALES_ERROR_MESSAGES, type SalesErrorCode } from "@/features/sales-api/contract";
+import { MAX_ORDER_TABLES, SALES_ERROR_MESSAGES, type SalesErrorCode } from "@/features/sales-api/contract";
 import { getSeatPrices } from "@/features/seating/prices";
 import { getSaleSettings } from "@/features/seating/settings-service";
 import { DomainError, type DomainErrorCode } from "@/lib/action";
@@ -88,25 +88,33 @@ async function viewOrThrow(ex: Db | Tx, orderId: string): Promise<OrderView> {
   return view;
 }
 
-/** Masa başına, etkin bileti olmayan yuvalar `seat_no` sırasıyla. Masa kilitleri tutulurken çağrılır. */
-async function freeSlotsByTable(tx: Tx, tableIds: readonly string[]): Promise<Map<string, string[]>> {
-  const result = new Map<string, string[]>();
+type TableSlots = { total: number; free: string[] };
+
+/**
+ * Masa başına yuva sayısı ve etkin bileti olmayan yuvalar (`seat_no` sırasıyla). Masa kilitleri tutulurken
+ * çağrılır; kilit öncesi okunan doluluk bayattır.
+ */
+async function slotsByTable(tx: Tx, tableIds: readonly string[]): Promise<Map<string, TableSlots>> {
+  const result = new Map<string, TableSlots>();
   if (tableIds.length === 0) return result;
-  const rows = await tx
+  const ids = [...tableIds];
+  const totals = await tx
+    .select({ tableId: tableSeatSlots.tableId, total: sql<number>`count(*)::int` })
+    .from(tableSeatSlots)
+    .where(inArray(tableSeatSlots.tableId, ids))
+    .groupBy(tableSeatSlots.tableId);
+  for (const row of totals) result.set(row.tableId, { total: row.total, free: [] });
+  const freeRows = await tx
     .select({ id: tableSeatSlots.id, tableId: tableSeatSlots.tableId })
     .from(tableSeatSlots)
     .where(
       and(
-        inArray(tableSeatSlots.tableId, [...tableIds]),
+        inArray(tableSeatSlots.tableId, ids),
         sql`not exists (select 1 from ${tickets} where ${tickets.seatSlotId} = ${tableSeatSlots.id} and ${tickets.status} in ('held', 'issued'))`,
       ),
     )
     .orderBy(asc(tableSeatSlots.tableId), asc(tableSeatSlots.seatNo));
-  for (const row of rows) {
-    const list = result.get(row.tableId);
-    if (list) list.push(row.id);
-    else result.set(row.tableId, [row.id]);
-  }
+  for (const row of freeRows) result.get(row.tableId)?.free.push(row.id);
   return result;
 }
 
@@ -160,12 +168,18 @@ export async function createHoldWithOutcome(
       if (state === null) throw new SalesError("event_not_found");
       if (state !== "open") throw new SalesError("sales_closed");
 
+      const orderedSeats = items.reduce((sum, i) => sum + i.quantity, 0);
+      if (items.length > MAX_ORDER_TABLES || orderedSeats > settings.maxSeatsPerOrder) {
+        throw new SalesError("limit_exceeded", { maxTables: MAX_ORDER_TABLES, maxSeats: settings.maxSeatsPerOrder });
+      }
+
       const tableIds = items.map((i) => i.tableId);
       const tables = await tx
         .select({
           id: eventTables.id,
           allocation: eventTables.allocation,
           saleCategory: eventTables.saleCategory,
+          isLoca: eventTables.isLoca,
         })
         .from(eventTables)
         .where(and(eq(eventTables.eventId, eventId), inArray(eventTables.id, tableIds)))
@@ -178,16 +192,23 @@ export async function createHoldWithOutcome(
       if (duplicate) return { orderId: duplicate, created: false };
 
       const prices = await getSeatPrices(tx, eventId);
-      const free = await freeSlotsByTable(tx, tableIds);
+      const slotMap = await slotsByTable(tx, tableIds);
       const lines: HoldLine[] = [];
       for (const item of items) {
         const table = tables.find((t) => t.id === item.tableId);
         if (!table || table.allocation !== "online") {
           throw new SalesError("table_not_sellable", { tableId: item.tableId });
         }
-        const slots = free.get(table.id) ?? [];
-        if (slots.length < item.quantity) {
+        const { total: seats, free: slots } = slotMap.get(table.id) ?? { total: 0, free: [] };
+        const wholeOnly = !settings.sharedTables || table.isLoca;
+        if (wholeOnly && item.quantity !== seats) {
+          throw new SalesError("whole_table_required", { tableId: table.id, seats });
+        }
+        if (item.quantity > slots.length) {
           throw new SalesError("seats_unavailable", { tableId: table.id, free: slots.length });
+        }
+        if (settings.blockSingleLeftover && slots.length - item.quantity === 1) {
+          throw new SalesError("leaves_single_seat", { tableId: table.id });
         }
         const unitPrice = prices[table.saleCategory].finalPrice;
         if (unitPrice === null) throw new SalesError("price_missing", { tableId: table.id });
