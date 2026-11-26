@@ -1,7 +1,8 @@
 import { db } from "@/db/client";
 import type { ActionOptions } from "@/lib/action";
-import type { z } from "zod";
+import { z } from "zod";
 import { createArtistSchema, deleteArtistSchema, updateArtistSchema } from "./schemas";
+import { listArtistOptions } from "./resolve";
 import { createArtist, deleteArtist, updateArtist } from "./service";
 
 function def<S extends z.ZodType, T>(options: ActionOptions<S, T>): ActionOptions<S, T> {
@@ -27,5 +28,12 @@ export const artistActionDefs = {
     verb: "delete",
     input: deleteArtistSchema,
     handler: async ({ actor, input }) => deleteArtist(db, actor, input),
+  }),
+  /** Etkinlik formunun sanatçı önerileri: yalnızca kimlik ve ad (tam kayıt `archive:view` ister). */
+  options: def({
+    module: "events",
+    verb: "view",
+    input: z.object({}),
+    handler: async () => listArtistOptions(db),
   }),
 };
