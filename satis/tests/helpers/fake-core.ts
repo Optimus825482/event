@@ -104,6 +104,7 @@ const centsToPrice = (cents: bigint): string => `${cents / HUNDRED}.${(cents % H
 
 type OrderLine = { tableId: string; tableLabel: string; category: SaleCategory; quantity: number; unitPrice: string };
 type Order = {
+  id: string;
   token: string;
   eventId: string;
   clientKey: string;
@@ -118,7 +119,11 @@ type EventState = { detail: EventDetail; free: Map<string, number>; prices: Map<
 type Result = { status: number; body: unknown };
 
 const trUpper = (value: string) => value.trim().toLocaleUpperCase("tr-TR");
-const normalizePnr = (value: string) => value.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+/** Çekirdeğin `normalizeCode` kuralı: boşluk ve tire atılır, alfabe dışı karakter varsa eşleşmez. */
+const normalizePnr = (value: string) => {
+  const code = value.replace(/[\s-]/g, "").toUpperCase();
+  return [...code].every((ch) => PNR_ALPHABET.includes(ch)) ? code : "";
+};
 
 function errorResult(code: SalesErrorCode, details?: Record<string, unknown>): Result {
   return {
@@ -163,7 +168,7 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
     const state = events.get(order.eventId);
     const total = order.lines.reduce((sum, l) => sum + priceToCents(l.unitPrice) * BigInt(l.quantity), ZERO);
     return {
-      orderId: order.token.slice(0, 16),
+      orderId: order.id,
       eventId: order.eventId,
       eventName: state?.detail.name ?? "",
       startsAt: state?.detail.startsAt ?? "",
@@ -171,12 +176,12 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       holdExpiresAt: new Date(order.holdExpiresMs).toISOString(),
       currency: state?.detail.currency ?? "TRY",
       total: centsToPrice(total),
-      isDemo: true,
+      isDemo: order.status === "paid" && (state?.detail.sale.demo ?? true),
       pnr: order.pnr,
       items: order.lines.map((l) => ({ ...l })),
       tickets: order.tickets.map((t) => ({ ...t })),
       orderToken: order.token,
-      demoNotice: order.status === "paid" ? DEMO_NOTICE : null,
+      demoNotice: order.status === "paid" && (state?.detail.sale.demo ?? true) ? DEMO_NOTICE : null,
     };
   }
 
@@ -233,23 +238,29 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
     const state = events.get(eventId);
     if (!state) return errorResult("event_not_found");
     const { sale } = state.detail;
-    if (sale.state !== "open") return errorResult("sales_closed");
     const existingToken = clientKeys.get(clientKey);
     const existing = existingToken ? orders.get(existingToken) : undefined;
-    if (existing) return { status: 200, body: toResponse(existing) };
+    if (existing) {
+      // Yineleme, satış arada kapansa bile aynı siparişi alır; başka etkinliğin siparişi sızmaz.
+      return existing.eventId === eventId ? { status: 200, body: toResponse(existing) } : errorResult("invalid");
+    }
+    if (sale.state !== "open") return errorResult("sales_closed");
 
-    const total = items.reduce((sum, i) => sum + i.quantity, 0);
-    if (items.length > MAX_ORDER_TABLES || total > sale.maxSeatsPerOrder) return errorResult("limit_exceeded");
+    // Yinelenen masa kalemleri birleştirilir.
+    const merged = new Map<string, number>();
+    for (const item of items) merged.set(item.tableId, (merged.get(item.tableId) ?? 0) + item.quantity);
+    const lineItems = [...merged].map(([id, quantity]) => ({ tableId: id, quantity }));
+
+    const total = lineItems.reduce((sum, i) => sum + i.quantity, 0);
+    if (lineItems.length > MAX_ORDER_TABLES || total > sale.maxSeatsPerOrder) return errorResult("limit_exceeded");
 
     const working = new Map(state.free);
     const lines: OrderLine[] = [];
-    for (const item of items) {
+    for (const item of lineItems) {
       const table = state.detail.plan.tables.find((t) => t.id === item.tableId);
       if (!table || !table.sellable || table.category === null || table.seats === null) {
         return errorResult("table_not_sellable");
       }
-      const unitPrice = state.prices.get(table.category);
-      if (unitPrice === undefined) return errorResult("price_missing");
       const free = working.get(table.id) ?? 0;
       if (table.wholeOnly && (free < table.seats || item.quantity !== table.seats)) {
         return errorResult("whole_table_required", { tableId: table.id, seats: table.seats });
@@ -258,6 +269,8 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       if (sale.blockSingleLeftover && free - item.quantity === 1) {
         return errorResult("leaves_single_seat", { tableId: table.id });
       }
+      const unitPrice = state.prices.get(table.category);
+      if (unitPrice === undefined) return errorResult("price_missing", { tableId: table.id });
       working.set(table.id, free - item.quantity);
       lines.push({
         tableId: table.id,
@@ -268,8 +281,11 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       });
     }
     state.free = working;
+    const id = randomUUID();
     const order: Order = {
-      token: randomBytes(24).toString("base64url"),
+      id,
+      // Çekirdekteki biçim: base64url(uuid) + "." + base64url(32 baytlık imza).
+      token: `${Buffer.from(id, "utf8").toString("base64url")}.${randomBytes(32).toString("base64url")}`,
       eventId,
       clientKey,
       lines,

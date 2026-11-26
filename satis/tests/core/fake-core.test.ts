@@ -214,6 +214,82 @@ describe("sahte çekirdek", () => {
     expect((await call("GET", `${API}/events`)).status).toBe(200);
   });
 
+  it("belirteç ve sipariş kimliği çekirdekteki biçimdedir", async () => {
+    const order = (await (await hold("A1", 2)).json()) as OrderResponse;
+    expect(order.orderId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    const [head, signature, ...rest] = order.orderToken.split(".");
+    expect(rest).toEqual([]);
+    expect(Buffer.from(head!, "base64url").toString("utf8")).toBe(order.orderId);
+    expect(Buffer.from(signature!, "base64url")).toHaveLength(32);
+  });
+
+  it("isDemo bekleyen siparişte false, ödenince sale.demo değeridir", async () => {
+    const order = (await (await hold("A1", 2)).json()) as OrderResponse;
+    expect(order.isDemo).toBe(false);
+    const paid = (await (
+      await call("POST", `${API}/orders/${order.orderToken}/pay`, payBody("approve"))
+    ).json()) as OrderResponse;
+    expect(paid.isDemo).toBe(true);
+    const real = fake.addEvent({ demo: false });
+    const hold2 = (await (
+      await call("POST", `${API}/orders`, {
+        eventId: real.id,
+        items: [{ tableId: real.plan.tables[0]!.id, quantity: 2 }],
+        clientKey: randomUUID(),
+      })
+    ).json()) as OrderResponse;
+    const paid2 = (await (
+      await call("POST", `${API}/orders/${hold2.orderToken}/pay`, payBody("approve"))
+    ).json()) as OrderResponse;
+    expect(paid2.isDemo).toBe(false);
+    expect(paid2.demoNotice).toBeNull();
+  });
+
+  it("clientKey yinelemesi satış kapansa da aynı siparişi verir; başka etkinlikte invalid", async () => {
+    const open = fake.addEvent({ saleState: "open" });
+    const key = randomUUID();
+    const body = { eventId: open.id, items: [{ tableId: open.plan.tables[0]!.id, quantity: 2 }], clientKey: key };
+    const first = (await (await call("POST", `${API}/orders`, body)).json()) as OrderResponse;
+    const other = fake.addEvent();
+    const crossed = await call("POST", `${API}/orders`, { ...body, eventId: other.id });
+    expect(crossed.status).toBe(400);
+    expect((await crossed.json()).error.code).toBe("invalid");
+
+    // Satış arada kapanır: sahte çekirdekte durum etkinlik ayrıntısından değiştirilir.
+    open.sale.state = "closed";
+    const again = await call("POST", `${API}/orders`, body);
+    expect(again.status).toBe(200);
+    expect(((await again.json()) as OrderResponse).orderToken).toBe(first.orderToken);
+  });
+
+  it("yinelenen masa kalemleri birleştirilir", async () => {
+    const id = tableId("A4");
+    const res = await call("POST", `${API}/orders`, {
+      eventId: event.id,
+      items: [
+        { tableId: id, quantity: 2 },
+        { tableId: id, quantity: 3 },
+      ],
+      clientKey: randomUUID(),
+    });
+    const order = (await res.json()) as OrderResponse;
+    expect(order.items).toHaveLength(1);
+    expect(order.items[0]?.quantity).toBe(5);
+    expect(fake.free(event.id, id)).toBe(3);
+  });
+
+  it("fiyatı olmayan kategori price_missing verir (adet denetimlerinden sonra)", async () => {
+    const noVip = fake.addEvent({ prices: { vip: undefined } });
+    const vip = noVip.plan.tables.find((t) => t.label === "V1")!;
+    const res = await call("POST", `${API}/orders`, {
+      eventId: noVip.id,
+      items: [{ tableId: vip.id, quantity: 2 }],
+      clientKey: randomUUID(),
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("price_missing");
+  });
+
   it("listen: HTTP üzerinden aynı davranış ve denetim uçları", async () => {
     const server = await fake.listen(0);
     try {
