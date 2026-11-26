@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createCoreClient } from "@/lib/core/client";
-import { CoreError } from "@/lib/core/errors";
 import type { EventDetail } from "@/lib/core/contract";
 import { createReader, type Reader } from "@/features/plan/read";
 import { createFakeCore, type FakeCore } from "../../helpers/fake-core";
@@ -66,7 +65,7 @@ describe("okuma katmanı", () => {
   it("çekirdek arızası fırlatılır ve önbelleğe alınmaz", async () => {
     await reader.events();
     fake.failNext(/availability/, 502);
-    await expect(reader.availability(ev.id)).rejects.toBeInstanceOf(CoreError);
+    await expect(reader.availability(ev.id)).rejects.toMatchObject({ code: "core_unreachable" });
     const result = await reader.availability(ev.id);
     expect(result?.tables.length).toBeGreaterThan(0);
   });

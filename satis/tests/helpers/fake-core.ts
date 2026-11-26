@@ -407,11 +407,8 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       const status = failures[failure]!.status;
       failures.splice(failure, 1);
       const code = (Object.keys(SALES_ERROR_STATUS) as SalesErrorCode[]).find((c) => SALES_ERROR_STATUS[c] === status);
-      return json(
-        code
-          ? errorResult(code)
-          : { status, body: { error: { code: "invalid", message: SALES_ERROR_MESSAGES.invalid } } },
-      );
+      // Sözleşmede eşlenmeyen durum (ör. 502) gerçek bir ağ geçidi gibi gövdesiz döner.
+      return code ? json(errorResult(code)) : new Response(null, { status });
     }
     if (!url.pathname.startsWith(`${API_PREFIX}/`)) return json(errorResult("invalid"));
     let body: unknown;
