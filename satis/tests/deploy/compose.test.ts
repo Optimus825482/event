@@ -16,17 +16,30 @@ describe("dağıtım dosyaları", () => {
     expect(coolify).toContain("image: eventflow-satis:coolify");
   });
 
-  it("coolify: satis çekirdeğe iç ağ takma adıyla gider ve sır zorunludur", () => {
+  it("coolify: satis çekirdeğe iç ağ takma adıyla gider; sır boş varsayılanlıdır", () => {
     expect(coolify).toContain("CORE_API_URL: http://eventflow-core:3000");
-    expect(coolify).toMatch(/SALES_API_SECRET: \$\{SALES_API_SECRET:\?/);
-    expect(coolify).toMatch(/SITE_URL: \$\{SALES_SITE_URL:\?/);
+    expect(coolify).toContain("SALES_API_SECRET: ${SALES_API_SECRET:-}");
+    expect(coolify).toContain("SITE_URL: ${SALES_SITE_URL:-}");
     expect(coolify).toMatch(/aliases:\s*\n\s*- eventflow-core/);
   });
 
   it("coolify: /api/sales dışarıya kapalıdır", () => {
     expect(coolify).toContain("eventflow-sales-block");
     expect(coolify).toContain("PathPrefix(`/api/sales`)");
-    expect(coolify).toMatch(/WEB_PUBLIC_HOST:\?/);
+    expect(coolify).toContain("${WEB_PUBLIC_HOST:-sales-block.invalid}");
+  });
+
+  it("satis servisi 'satis' profili arkasındadır (varsayılan kapalı)", () => {
+    for (const text of [coolify, local]) {
+      const block = text.slice(text.indexOf("\n  satis:\n"));
+      expect(block).toMatch(/^ {4}profiles: \["satis"\]$/m);
+    }
+  });
+
+  it("satış değişkenleri için hiçbir ':?' zorunluluğu kalmaz (ana yığın onlarsız dağıtılır)", () => {
+    for (const text of [coolify, local]) {
+      expect(text).not.toMatch(/\$\{(SALES_API_SECRET|SALES_SITE_URL|WEB_PUBLIC_HOST):\?/);
+    }
   });
 
   it("coolify: engel hem http hem https router'ında vardır ve https olan tls=true taşır", () => {

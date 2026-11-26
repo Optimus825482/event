@@ -12,7 +12,8 @@
 # UYARI: bu etiketler kapsayıcıda denenmedi; dağıtım sonrası dışarıdan `curl https://<çekirdek alan adı>/api/sales/...`
 # ile yolun kapalı olduğu doğrulanmalıdır.
 #
-# Zorunlu ortam değişkenleri eksikse `docker compose config` başarısız olur (${VAR:?...}).
+# `satis` varsayılan KAPALIDIR (profiles: ["satis"]); yalnızca COMPOSE_PROFILES=satis ile başlar. SALES_API_SECRET, SALES_SITE_URL ve
+# WEB_PUBLIC_HOST tanımsızsa ana yığın yine de dağıtılır (WEB_PUBLIC_HOST varsayılanı `sales-block.invalid`: kural hiçbir isteği eşlemez).
 
 # İmaj sunucuda, deploy edilen commit'in kaynağından derlenir (GitHub Actions / kayıt defteri yok): çalışan sürüm her
 # zaman deploy edilen commit'tir. Derleme `migrate` servisinde tanımlıdır; `web` ve `create-admin` aynı imajı kullanır.
@@ -134,12 +135,12 @@ services:
       # İki router: TLS'siz router HTTPS isteklerini eşlemez, bu yüzden http ve https ayrı tanımlanır.
       # `/api/sales` yolunu dışarıdan kapatır (içeriden satis doğrudan eventflow-core:3000'e gider). Kapsayıcıda denenmedi.
       - traefik.http.middlewares.eventflow-sales-block.replacepath.path=/__satis-api-disaridan-kapali
-      - traefik.http.routers.eventflow-sales-block.rule=Host(`${WEB_PUBLIC_HOST:?WEB_PUBLIC_HOST zorunlu (çekirdeğin alan adı, şemasız)}`) && PathPrefix(`/api/sales`)
+      - traefik.http.routers.eventflow-sales-block.rule=Host(`${WEB_PUBLIC_HOST:-sales-block.invalid}`) && PathPrefix(`/api/sales`)
       - traefik.http.routers.eventflow-sales-block.priority=1000
       - traefik.http.routers.eventflow-sales-block.entrypoints=http
       - traefik.http.routers.eventflow-sales-block.middlewares=eventflow-sales-block
       - traefik.http.routers.eventflow-sales-block.service=eventflow-sales-block
-      - traefik.http.routers.eventflow-sales-block-tls.rule=Host(`${WEB_PUBLIC_HOST:?WEB_PUBLIC_HOST zorunlu (çekirdeğin alan adı, şemasız)}`) && PathPrefix(`/api/sales`)
+      - traefik.http.routers.eventflow-sales-block-tls.rule=Host(`${WEB_PUBLIC_HOST:-sales-block.invalid}`) && PathPrefix(`/api/sales`)
       - traefik.http.routers.eventflow-sales-block-tls.priority=1000
       - traefik.http.routers.eventflow-sales-block-tls.entrypoints=https
       - traefik.http.routers.eventflow-sales-block-tls.tls=true
@@ -156,6 +157,7 @@ services:
 
   # Herkese açık satış sitesi (satis/, standalone). Çekirdeğe iç ağdan gider; port yayınlanmaz.
   satis:
+    profiles: ["satis"]
     build:
       context: ./satis
       dockerfile: Dockerfile
@@ -168,8 +170,8 @@ services:
     environment:
       NODE_ENV: production
       CORE_API_URL: http://eventflow-core:3000
-      SALES_API_SECRET: ${SALES_API_SECRET:?SALES_API_SECRET zorunlu (en az 32 karakter)}
-      SITE_URL: ${SALES_SITE_URL:?SALES_SITE_URL zorunlu (https://...)}
+      SALES_API_SECRET: ${SALES_API_SECRET:-}
+      SITE_URL: ${SALES_SITE_URL:-}
       TRUSTED_IP_HEADER: ${TRUSTED_IP_HEADER:?TRUSTED_IP_HEADER zorunlu (Traefik arkasında x-real-ip)}
     expose:
       - "3000"

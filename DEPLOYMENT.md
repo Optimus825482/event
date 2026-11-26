@@ -41,10 +41,11 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 | `TRUSTED_IP_HEADER` | evet | Ters vekilin istemci IP'sini yazdığı başlık. Traefik/Coolify arkasında `x-real-ip` |
 | `SETTINGS_ENCRYPTION_KEY` | evet (bu yığında) | Ayarlardaki SMTP parolasını şifreler; 32 bayt base64: `openssl rand -base64 32`. Kaybedilirse kayıtlı SMTP parolası çözülemez, yeniden girilir |
 | `QR_SIGNING_KEY` | hayır | QR belirteçleri için HMAC anahtarı (en az 32 karakter). Boşsa `BETTER_AUTH_SECRET`'tan türetilir. **Değişirse dağıtılmış QR'lar geçersiz olur** |
-| `SALES_API_SECRET` | **evet** | Satış API'sinin ortak sırrı (en az 32 karakter; `openssl rand -base64 48`). Compose `:?` kullanır: tanımsızsa tüm yığın (web dahil) dağıtılamaz |
+| `SALES_API_SECRET` | hayır (satış sitesi için evet) | Satış API'sinin ortak sırrı (en az 32 karakter; `openssl rand -base64 48`). Tanımsızsa çekirdek satış API'sini 503 ile kapalı tutar; yığın yine de dağıtılır |
 | `PAYMENT_PROVIDER` | hayır | `demo` \| `disabled`; varsayılan `disabled`. Başka değer açılışı durdurur. `demo` gerçek ödeme almaz |
-| `SALES_SITE_URL` | **evet** | Herkese açık satış sitesinin adresi, `https://` ile başlamalı (sondaki `/` atılır). Compose `:?` kullanır: tanımsızsa tüm yığın dağıtılamaz |
-| `WEB_PUBLIC_HOST` | **evet** | Çekirdeğin herkese açık alan adı, şemasız (ör. `eventflow.example.com`); Traefik etiketi `/api/sales` yolunu dışarıya kapatır. Compose `:?` kullanır: tanımsızsa tüm yığın dağıtılamaz |
+| `SALES_SITE_URL` | hayır (satış sitesi için evet) | Herkese açık satış sitesinin adresi, `https://` ile başlamalı (sondaki `/` atılır). Boş bırakılabilir (yalnızca e-posta bağlantısında kullanılır) |
+| `WEB_PUBLIC_HOST` | hayır (satış sitesi için evet) | Çekirdeğin herkese açık alan adı, şemasız (ör. `eventflow.example.com`); Traefik etiketi `/api/sales` yolunu dışarıya kapatır. Tanımsızsa varsayılan `sales-block.invalid` kullanılır (kural hiçbir isteği eşlemez) |
+| `COMPOSE_PROFILES` | hayır | `satis` verilirse satış sitesi servisi de başlar; varsayılan boş (satış sitesi kapalı) |
 | `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 6 karakter; büyük harf, küçük harf ve rakam içermeli). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
 | `ADMIN_USERNAME` | hayır | Otomatik oluşturulan yöneticinin kullanıcı adı; varsayılan `admin` (büyük/küçük harf duyarlı) |
 
@@ -196,20 +197,30 @@ Herkese açık bilet satış sitesi. Çekirdek (`web/`) satış API'sini (`/api/
 **Mimari:** `Traefik -> satis (:3000) -> eventflow-core:3000 (iç ağ) -> veritabanı`. `satis`'in veritabanı yoktur; tarayıcı
 çekirdeğe hiç gitmez (tüm çağrılar `satis` sunucusundan yapılır). `eventflow-core`, `web` servisinin iç ağ takma adıdır.
 
-**Coolify kurulumu:** aynı Docker Compose kaynağında ikinci servis olarak `satis` görünür. `satis` servisine satış alan
-adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify uygulaması açmayın). Deploy sırası: veritabanı
--> `migrate` -> `web` -> `satis`. Bu fazda çekirdekte şema/migration değişikliği yoktur.
+**Varsayılan durum: satış sitesi KAPALIDIR.** `satis` servisi compose'da `profiles: ["satis"]` arkasındadır; `COMPOSE_PROFILES=satis`
+verilmedikçe başlamaz. `SALES_API_SECRET`, `SALES_SITE_URL` ve `WEB_PUBLIC_HOST` tanımsızken ana sistem (veritabanı, `migrate`, `web`)
+sorunsuz dağıtılır; satış API'si çekirdekte 503 ile kapalı kalır.
 
-**Ortam değişkenleri** (Coolify'da tanımlanır; depoya yazılmaz):
+**Demo modu:** `PAYMENT_PROVIDER=demo` (`web`) yönetici için çalışmaya devam eder; satış sitesi gerekmez.
 
-**Uyarı: `SALES_API_SECRET`, `SALES_SITE_URL` ve `WEB_PUBLIC_HOST` bu sürüm dağıtılmadan ÖNCE Coolify'da tanımlanmalıdır; biri eksikse compose `:?` nedeniyle `web` dahil TÜM dağıtım başarısız olur.**
+**Satış sitesini açmak için** Coolify'da şunları tanımlayın:
 
+1. `SALES_API_SECRET` (en az 32 karakter; `web` ve `satis` için aynı değer), `SALES_SITE_URL` (`https://...`), `WEB_PUBLIC_HOST` (şemasız) ve `COMPOSE_PROFILES=satis`.
+2. `satis` servisine satış alan adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify uygulaması açmayın).
+3. Yeniden dağıtın. Deploy sırası: veritabanı -> `migrate` -> `web` -> `satis`. Bu fazda çekirdekte şema/migration değişikliği yoktur.
+
+**Doğrulanmalı:** Coolify'ın `COMPOSE_PROFILES` değerini bu yığında dikkate aldığı ilk açılışta bir kez teyit edilmelidir. Dikkate
+alınmazsa alternatif, compose dosyasından `satis` servisindeki `profiles: ["satis"]` satırını kaldırmaktır (o zaman `satis` her zaman
+başlar ve üç değişken de tanımlı olmalıdır).
+
+**Ortam değişkenleri** (Coolify'da tanımlanır; depoya yazılmaz; yalnızca satış sitesi açıkken gerekir):
 
 | Değişken | Kim kullanır | Açıklama |
 | --- | --- | --- |
+| `COMPOSE_PROFILES` | compose | `satis` olduğunda satış sitesi servisi başlar |
 | `SALES_API_SECRET` | `web` + `satis` | Paylaşılan sır, en az 32 karakter (`openssl rand -base64 48`). İki serviste aynı değer. Değişirse iki servis birlikte yeniden başlatılır |
 | `SALES_SITE_URL` | `web` (e-posta bağlantısı) + `satis` (`SITE_URL`) | Satış sitesinin herkese açık adresi, `https://` ile |
-| `WEB_PUBLIC_HOST` | compose (Traefik etiketi) | Çekirdeğin alan adı, şemasız (ör. `eventflow.example.com`); `/api/sales` yolunu dışarıya kapatır |
+| `WEB_PUBLIC_HOST` | compose (Traefik etiketi) | Çekirdeğin alan adı, şemasız (ör. `eventflow.example.com`); `/api/sales` yolunu dışarıya kapatır. Varsayılan `sales-block.invalid` |
 | `TRUSTED_IP_HEADER` | `web` + `satis` | Zaten tanımlı (`x-real-ip`) |
 | `PAYMENT_PROVIDER` | `web` | `demo` ya da `disabled`. Üretim varsayılanı `disabled`: satış kapalı görünür. Demo satış için açıkça `demo` verilmelidir; **demo ile alınan biletler gerçek ödeme değildir** ve her yüzeyde "DEMO - gerçek ödeme alınmadı" yazar |
 
