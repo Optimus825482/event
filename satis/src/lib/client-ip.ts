@@ -6,7 +6,12 @@ import { isIP } from "node:net";
  */
 export function clientIp(headers: Headers, trustedHeader: string | undefined): string | null {
   if (!trustedHeader) return null;
-  const raw = headers.get(trustedHeader);
+  let raw: string | null;
+  try {
+    raw = headers.get(trustedHeader);
+  } catch {
+    return null;
+  }
   if (!raw) return null;
   const first = raw.split(",")[0]?.trim() ?? "";
   return isIP(first) !== 0 ? first : null;

@@ -118,6 +118,40 @@ describe("çekirdek istemcisi", () => {
     await expect(c.listEvents()).rejects.toMatchObject({ code: "core_unreachable" });
   });
 
+  it("başlık gelip gövdesi asılan yanıt core_unreachable olur", async () => {
+    const hanging = new ReadableStream<Uint8Array>({ start() {} });
+    const c = withFetch(async () => new Response(hanging, { status: 200 }), 30);
+    await expect(c.listEvents()).rejects.toMatchObject({ code: "core_unreachable" });
+  });
+
+  it("yönlendirme izlenmez (redirect: error) ve 30x core_unreachable olur", async () => {
+    let seen: RequestInit | undefined;
+    const c = withFetch(async (_input, init) => {
+      seen = init;
+      return new Response(null, { status: 302, headers: { location: "http://baska.test/" } });
+    });
+    await expect(c.listEvents()).rejects.toMatchObject({ code: "core_unreachable", status: 302 });
+    expect(seen?.redirect).toBe("error");
+  });
+
+  it("fetch yönlendirmede hata fırlatırsa core_unreachable olur", async () => {
+    const c = withFetch(async () => {
+      throw new TypeError("redirect mode is set to error");
+    });
+    await expect(c.getOrder("x")).rejects.toMatchObject({ code: "core_unreachable" });
+  });
+
+  it("gövdeye yalnızca bilinen alanlar gider", async () => {
+    let captured: unknown;
+    const c = withFetch(async (input, init) => {
+      captured = JSON.parse(String(init?.body));
+      return fake.handle(new Request(input, init));
+    });
+    const extra = { ...hold("A6", 2), fazla: "x" } as HoldInput;
+    await c.createHold(extra, ctx).catch(() => undefined);
+    expect(Object.keys(captured as object).sort()).toEqual(["clientKey", "eventId", "items"]);
+  });
+
   it("sipariş belirteci yolda kodlanır", async () => {
     await client.getOrder("a/b.c").catch(() => undefined);
     expect(fake.requests.at(-1)?.path).toBe("/api/sales/v1/orders/a%2Fb.c");

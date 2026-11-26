@@ -68,11 +68,12 @@ export function createCoreClient(config: CoreConfig): CoreClient {
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const baseUrl = config.baseUrl.replace(/\/+$/, "");
 
+  /** Zaman aşımı başlıktan gövdenin tamamen okunmasına kadar sürer. `none`: gövde okunmaz (204). */
   async function request(
     method: "GET" | "POST" | "DELETE",
     path: string,
-    options: { body?: unknown; ctx?: WriteContext } = {},
-  ): Promise<Response> {
+    options: { body?: unknown; ctx?: WriteContext; read?: "json" | "none" } = {},
+  ): Promise<unknown> {
     const headers: Record<string, string> = {
       authorization: `Bearer ${config.secret}`,
       accept: "application/json",
@@ -88,19 +89,26 @@ export function createCoreClient(config: CoreConfig): CoreClient {
         reject(new CoreError("core_unreachable", 0));
       }, timeoutMs);
     });
-    try {
-      const response = await Promise.race([
-        doFetch(`${baseUrl}${API_PREFIX}${path}`, {
-          method,
-          headers,
-          body: options.body === undefined ? undefined : JSON.stringify(options.body),
-          cache: "no-store",
-          signal: controller.signal,
-        }),
-        timeout,
-      ]);
+    const work = (async () => {
+      const response = await doFetch(`${baseUrl}${API_PREFIX}${path}`, {
+        method,
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        cache: "no-store",
+        redirect: "error",
+        signal: controller.signal,
+      });
       if (!response.ok) throw await toError(response);
-      return response;
+      if (options.read === "none") return undefined;
+      try {
+        return await response.json();
+      } catch {
+        throw new CoreError("core_unreachable", response.status);
+      }
+    })();
+    work.catch(() => undefined);
+    try {
+      return await Promise.race([work, timeout]);
     } catch (error) {
       if (error instanceof CoreError) throw error;
       throw new CoreError("core_unreachable", 0);
@@ -109,41 +117,50 @@ export function createCoreClient(config: CoreConfig): CoreClient {
     }
   }
 
-  async function readJson<T>(response: Response): Promise<T> {
-    try {
-      return (await response.json()) as T;
-    } catch {
-      throw new CoreError("core_unreachable", response.status);
-    }
-  }
-
   const orderPath = (orderToken: string) => `/orders/${encodeURIComponent(orderToken)}`;
 
   return {
     async listEvents() {
-      const body = await readJson<{ events: EventCard[] }>(await request("GET", "/events"));
+      const body = (await request("GET", "/events")) as { events: EventCard[] };
       return body.events;
     },
     async getEvent(eventId) {
-      return readJson<EventDetail>(await request("GET", `/events/${encodeURIComponent(eventId)}`));
+      return (await request("GET", `/events/${encodeURIComponent(eventId)}`)) as EventDetail;
     },
     async getAvailability(eventId) {
-      return readJson<Availability>(await request("GET", `/events/${encodeURIComponent(eventId)}/availability`));
+      return (await request("GET", `/events/${encodeURIComponent(eventId)}/availability`)) as Availability;
     },
     async createHold(input, ctx) {
-      return readJson<OrderResponse>(await request("POST", "/orders", { body: input, ctx }));
+      const body = {
+        eventId: input.eventId,
+        items: input.items.map((i) => ({ tableId: i.tableId, quantity: i.quantity })),
+        clientKey: input.clientKey,
+      };
+      return (await request("POST", "/orders", { body, ctx })) as OrderResponse;
     },
     async getOrder(orderToken) {
-      return readJson<OrderResponse>(await request("GET", orderPath(orderToken)));
+      return (await request("GET", orderPath(orderToken))) as OrderResponse;
     },
     async payOrder(orderToken, input, ctx) {
-      return readJson<OrderResponse>(await request("POST", `${orderPath(orderToken)}/pay`, { body: input, ctx }));
+      const { buyer } = input;
+      const body = {
+        buyer: {
+          firstName: buyer.firstName,
+          lastName: buyer.lastName,
+          email: buyer.email,
+          ...(buyer.phone === undefined ? {} : { phone: buyer.phone }),
+        },
+        acceptTerms: input.acceptTerms,
+        payment: { provider: input.payment.provider, action: input.payment.action },
+      };
+      return (await request("POST", `${orderPath(orderToken)}/pay`, { body, ctx })) as OrderResponse;
     },
     async releaseOrder(orderToken, ctx) {
-      await request("DELETE", orderPath(orderToken), { ctx });
+      await request("DELETE", orderPath(orderToken), { ctx, read: "none" });
     },
     async lookupOrder(input, ctx) {
-      return readJson<{ orderToken: string }>(await request("POST", "/orders/lookup", { body: input, ctx }));
+      const body = { pnr: input.pnr, lastName: input.lastName };
+      return (await request("POST", "/orders/lookup", { body, ctx })) as { orderToken: string };
     },
   };
 }

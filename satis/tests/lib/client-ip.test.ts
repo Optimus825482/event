@@ -16,4 +16,5 @@ describe("istemci IP'si", () => {
     expect(clientIp(h({ "x-real-ip": "203.0.113.7, 10.0.0.1" }), "x-real-ip")).toBe("203.0.113.7"));
   it("IP olmayan değer reddedilir", () => expect(clientIp(h({ "x-real-ip": "<script>" }), "x-real-ip")).toBeNull());
   it("IPv6 kabul edilir", () => expect(clientIp(h({ "x-real-ip": "2001:db8::1" }), "x-real-ip")).toBe("2001:db8::1"));
+  it("geçersiz başlık adı hata fırlatmaz", () => expect(clientIp(h({}), "geçersiz ad")).toBeNull());
 });
