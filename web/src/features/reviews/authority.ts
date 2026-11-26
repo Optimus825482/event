@@ -307,9 +307,9 @@ function reviewersOf(h: EventHierarchy, staffId: string): string[] {
 }
 
 /**
- * Aktör X'i bu etkinlikte değerlendirebilir mi? Sıra: X etkinlik personeli değilse `not_found`;
- * modül izni olan aktör kendini hedeflediyse `conflict` (self); değerlendirici kümesinde değilse
- * `ForbiddenError`. Dönüş aktörün X için dayanaklarıdır (yönetici/admin için `["manager"]`).
+ * Aktör X'i bu etkinlikte değerlendirebilir mi? Sıra: modül izni olan aktör kendini hedeflediyse
+ * `conflict` (self); değerlendirici kümesinde değilse `ForbiddenError`; yetkili aktör için X etkinlik
+ * personeli değilse `not_found` (kapı varlık denetiminden önce gelir). Dönüş aktörün X için dayanaklarıdır (yönetici/admin için `["manager"]`).
  */
 export async function assertCanReview(
   ex: Executor,
@@ -319,7 +319,6 @@ export async function assertCanReview(
   verb: Verb,
 ): Promise<ReviewBasis[]> {
   const h = await loadHierarchy(ex, eventId);
-  if (!staffOf(h).has(staffId)) throw new DomainError("not_found", REVIEW_MESSAGES.notOnTeam);
   // Değerlendirici kümesi X'in kendisini içermez; bu yüzden kendini hedefleyen aktör kümeyle hep reddedilirdi.
   // Modül izni olan aktöre (kendisi değerlendirici olsaydı izin alacak olana) açık "kendinizi..." hatası verilir;
   // izni olmayan aktör ForbiddenError alır, böylece izinsiz aktöre ek bilgi sızmaz.
@@ -330,6 +329,8 @@ export async function assertCanReview(
   }
   // Kendini hedefleyen aktör buraya yalnızca izinsizse gelir: küme onu içermediği için authorize reddeder.
   authorize(actor, "reviews", verb, { reviewerStaffIds: reviewersOf(h, staffId) });
+  // Kapıdan sonra: izinsiz aktör personelin listede olup olmadığını öğrenemez (liste dışı personelin değerlendiricisi yok → Forbidden).
+  if (!staffOf(h).has(staffId)) throw new DomainError("not_found", REVIEW_MESSAGES.notOnTeam);
   if (seesWholeEvent(actor)) return ["manager"];
   const reviewerId = hierarchyReviewerId(actor);
   const bases = reviewerId === null ? undefined : reviewableBy(h, reviewerId).get(staffId);
@@ -361,25 +362,25 @@ export async function reviewEventIds(ex: Executor, actor: PolicyActor): Promise<
         // Aktörün personel kaydı etkin değilse hiyerarşi yetki vermez: aday yok, hiyerarşi yüklenmez.
         exists(ex.select({ one: ONE }).from(staff).where(and(eq(staff.id, reviewerId), eq(staff.status, "active")))),
         or(
-        exists(
-          ex
-            .select({ one: ONE })
-            .from(teams)
-            .where(and(eq(teams.eventId, events.id), eq(teams.isActive, true), eq(teams.leaderStaffId, reviewerId))),
+          exists(
+            ex
+              .select({ one: ONE })
+              .from(teams)
+              .where(and(eq(teams.eventId, events.id), eq(teams.isActive, true), eq(teams.leaderStaffId, reviewerId))),
+          ),
+          exists(
+            ex
+              .select({ one: ONE })
+              .from(tableGroups)
+              .where(and(eq(tableGroups.eventId, events.id), eq(tableGroups.supervisorStaffId, reviewerId))),
+          ),
+          exists(
+            ex
+              .select({ one: ONE })
+              .from(eventSectionHeads)
+              .where(and(eq(eventSectionHeads.eventId, events.id), eq(eventSectionHeads.staffId, reviewerId))),
+          ),
         ),
-        exists(
-          ex
-            .select({ one: ONE })
-            .from(tableGroups)
-            .where(and(eq(tableGroups.eventId, events.id), eq(tableGroups.supervisorStaffId, reviewerId))),
-        ),
-        exists(
-          ex
-            .select({ one: ONE })
-            .from(eventSectionHeads)
-            .where(and(eq(eventSectionHeads.eventId, events.id), eq(eventSectionHeads.staffId, reviewerId))),
-        ),
-      ),
       ),
     )
     .orderBy(asc(events.startsAt), asc(events.id));

@@ -40,6 +40,8 @@ export function authorizeEventScope(actor: Actor, verb: Verb, reviewable: Readon
 export async function loadReviewEvent(executor: Executor, actor: Actor, eventId: string): Promise<EventRow> {
   const [event] = await executor.select().from(events).where(eq(events.id, eventId));
   if (!event) {
+    // Kapı varlık denetiminden önce: yetkisiz aktör Forbidden alır; yönetici/admin not_found.
+    authorize(actor, "reviews", "view", { reviewerStaffIds: [] });
     throw new DomainError("not_found", REVIEW_MESSAGES.eventNotFound);
   }
   return event;

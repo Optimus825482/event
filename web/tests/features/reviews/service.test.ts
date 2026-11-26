@@ -117,26 +117,62 @@ describe("saveReviewDraft", () => {
     );
   });
 
-  it("bağlantısız (ekipte olmayan) personel not_found", async () => {
+  it("bağlantısız (ekipte olmayan) personel: hiyerarşi lideri Forbidden, yönetici not_found", async () => {
     const w = await setupReviewWorld();
     const stranger = await f.createStaff(db);
-    await expectDomain(
+    const input = {
+      eventId: w.event.id,
+      staffId: stranger.id,
+      ratings: FULL_RATINGS,
+      strengths: [],
+      improvements: [],
+      recommendedTrainings: [],
+    };
+    await expectForbidden(saveReviewDraft(db, w.leader, input));
+    await expectDomain(saveReviewDraft(db, w.fnbManager, input), "not_found");
+  });
+
+  it("olmayan etkinlik: yetkisiz Forbidden, hiyerarşi lideri Forbidden, yönetici not_found", async () => {
+    const w = await setupReviewWorld();
+    const input = {
+      eventId: crypto.randomUUID(),
+      staffId: crypto.randomUUID(),
+      ratings: FULL_RATINGS,
+      strengths: [],
+      improvements: [],
+      recommendedTrainings: [],
+    };
+    await expectForbidden(saveReviewDraft(db, await makeActor(noAccessActor()), input));
+    await expectForbidden(saveReviewDraft(db, w.leader, input));
+    await expectDomain(saveReviewDraft(db, w.fnbManager, input), "not_found");
+    const ids = { eventId: input.eventId };
+    await expectForbidden(completeAllReviews(db, w.leader, ids));
+    await expectDomain(completeAllReviews(db, w.fnbManager, ids), "not_found");
+    await expectForbidden(completeReview(db, w.leader, { ...ids, staffId: input.staffId }));
+    await expectDomain(completeReview(db, w.fnbManager, { ...ids, staffId: input.staffId }), "not_found");
+  });
+
+  it("kapsam dışı personel, değerlendirme kapalı etkinlikte de Forbidden (disabled değil)", async () => {
+    const w = await setupReviewWorld({ reviewEnabled: false });
+    await expectForbidden(
       saveReviewDraft(db, w.leader, {
         eventId: w.event.id,
-        staffId: stranger.id,
+        staffId: w.otherMember.id,
         ratings: FULL_RATINGS,
         strengths: [],
         improvements: [],
         recommendedTrainings: [],
       }),
-      "not_found",
     );
+    await expectForbidden(completeReview(db, w.leader, { eventId: w.event.id, staffId: w.otherMember.id }));
   });
+
 
   it("personelin başka etkinlikteki ekibi bu etkinlik için geçerli değil", async () => {
     const w = await setupReviewWorld();
     const otherEvent = await f.createEvent(db, { organizerId: w.fnbManager.id, reviewEnabled: true });
-    await expectDomain(
+    // Lider o etkinlikte rol sahibi değil: Forbidden (kapı varlık denetiminden önce).
+    await expectForbidden(
       saveReviewDraft(db, w.leader, {
         eventId: otherEvent.id,
         staffId: w.member1.id,
@@ -145,14 +181,13 @@ describe("saveReviewDraft", () => {
         improvements: [],
         recommendedTrainings: [],
       }),
-      "not_found",
     );
   });
 
-  it("olmayan etkinlik not_found", async () => {
+  it("olmayan etkinlik: yönetici için not_found", async () => {
     const w = await setupReviewWorld();
     await expectDomain(
-      saveReviewDraft(db, w.leader, {
+      saveReviewDraft(db, w.fnbManager, {
         eventId: "00000000-0000-4000-8000-000000000000",
         staffId: w.member1.id,
         ratings: FULL_RATINGS,
@@ -280,7 +315,7 @@ describe("completeReview", () => {
     const w = await setupReviewWorld();
     await draft(w, w.member1.id);
     await db.delete(teamMembers).where(and(eq(teamMembers.teamId, w.team.id), eq(teamMembers.staffId, w.member1.id)));
-    await expectDomain(completeReview(db, w.leader, { eventId: w.event.id, staffId: w.member1.id }), "not_found");
+    await expectForbidden(completeReview(db, w.leader, { eventId: w.event.id, staffId: w.member1.id }));
   });
 });
 

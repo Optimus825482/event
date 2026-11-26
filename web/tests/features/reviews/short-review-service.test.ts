@@ -111,7 +111,18 @@ describe("saveShortReview", () => {
   it("kendini değerlendirme ve etkinlik personeli olmayan hedef reddedilir", async () => {
     const w = await setupReviewWorld();
     await expectDomain(saveShortReview(db, w.leader, short(w.event.id, w.leaderStaff.id)), "conflict");
-    await expectDomain(saveShortReview(db, w.leader, short(w.event.id, w.leader.id)), "not_found");
+    // Kapı varlık denetiminden önce: lider Forbidden, yönetici not_found.
+    const unknown = crypto.randomUUID();
+    await expectForbidden(saveShortReview(db, w.leader, short(w.event.id, unknown)));
+    await expectDomain(saveShortReview(db, w.fnbManager, short(w.event.id, unknown)), "not_found");
+  });
+
+  it("olmayan etkinlik: izinsiz ve hiyerarşi aktörü Forbidden, yönetici not_found", async () => {
+    const w = await setupReviewWorld();
+    const input = short(crypto.randomUUID(), crypto.randomUUID());
+    await expectForbidden(saveShortReview(db, await makeActor(noAccessActor()), input));
+    await expectForbidden(saveShortReview(db, w.leader, input));
+    await expectDomain(saveShortReview(db, w.fnbManager, input), "not_found");
   });
 
   it("yönetici etkinlikteki herkesi değerlendirebilir", async () => {

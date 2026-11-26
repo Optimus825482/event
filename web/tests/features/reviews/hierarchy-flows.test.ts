@@ -264,3 +264,27 @@ describe("hiyerarşik değerlendirme akışları", () => {
     expect(await scopedMembers(db, forH.map((t) => ({ ...t })))).toEqual([]);
   });
 });
+
+describe("kapı varlık denetiminden önce (olmayan etkinlik / liste dışı personel)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("hiyerarşi aktörü olmayan etkinlikte Forbidden alır; yönetici not_found", async () => {
+    const w = await setupWorld();
+    const eventId = crypto.randomUUID();
+    await expectForbidden(getReviewBoard(db, w.actors.S, eventId));
+    await expectForbidden(completeAllReviews(db, w.actors.S, { eventId }));
+    await expectDomain(getReviewBoard(db, w.manager, eventId), "not_found");
+    await expectDomain(completeAllReviews(db, w.manager, { eventId }), "not_found");
+  });
+
+  it("liste dışı personel: süpervizör Forbidden, yönetici not_found", async () => {
+    const w = await setupWorld();
+    const stranger = await f.createStaff(db, { fullName: "Yabancı" });
+    const input = { eventId: w.event.id, staffId: stranger.id, ratings: FULL_RATINGS, ...lists };
+    await expectForbidden(saveReviewDraft(db, w.actors.S, input));
+    await expectForbidden(completeReview(db, w.actors.S, { eventId: w.event.id, staffId: stranger.id }));
+    await expectDomain(saveReviewDraft(db, w.manager, input), "not_found");
+  });
+});

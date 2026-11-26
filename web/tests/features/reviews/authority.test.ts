@@ -170,7 +170,9 @@ describe("hiyerarşik değerlendirme yetkisi", () => {
   it("assertCanReview", async () => {
     await expectForbidden(assertCanReview(db, w.actors.C, w.event.id, w.W3.id, "edit"));
     expect(await assertCanReview(db, w.actors.S, w.event.id, w.W3.id, "edit")).toEqual(["supervisor"]);
-    const notOnTeam = await expectDomain(assertCanReview(db, w.actors.C, w.event.id, w.W9.id, "edit"), "not_found");
+    // Kapı varlık denetiminden önce: hiyerarşi aktörü liste dışı personel için Forbidden alır; yönetici not_found.
+    await expectForbidden(assertCanReview(db, w.actors.C, w.event.id, w.W9.id, "edit"));
+    const notOnTeam = await expectDomain(assertCanReview(db, w.manager, w.event.id, w.W9.id, "edit"), "not_found");
     expect(notOnTeam.message).toBe(REVIEW_MESSAGES.notOnTeam);
     const self = await expectDomain(assertCanReview(db, w.actors.S, w.event.id, w.S.id, "edit"), "conflict");
     expect(self.message).toBe(REVIEW_MESSAGES.self);
@@ -246,7 +248,7 @@ describe("hiyerarşik değerlendirme yetkisi", () => {
     expect(await mapOf(w, s3)).toEqual({});
     expect(await reviewerStaffIdsFor(db, w.event.id, w.C.id)).toEqual([w.H.id, w.S.id].sort());
     expect(await reviewerStaffIdsFor(db, w.event2.id, w.W9.id)).toEqual([w.C.id]);
-    await expectDomain(assertCanReview(db, s3, w.event.id, w.W9.id, "edit"), "not_found");
+    await expectForbidden(assertCanReview(db, s3, w.event.id, w.W9.id, "edit"));
   });
 
   it("toplu yüklemede başka etkinliğin ekibine bağlı grup o etkinliği açmaz", async () => {
