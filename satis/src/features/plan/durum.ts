@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Availability } from "@/lib/core/contract";
 
-export const DURUM_CACHE_CONTROL = "public, max-age=3, stale-while-revalidate=5";
+export const DURUM_CACHE_CONTROL = "private, no-cache";
 
 /** ETag yalnızca masa durumunun özetidir; `at` katılmaz (zaman damgası değişse de içerik aynıdır). */
 export function availabilityEtag(a: Availability): string {

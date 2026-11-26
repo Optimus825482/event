@@ -69,7 +69,7 @@ export function useAvailability(
       controller = current;
       let aborted = false;
       try {
-        const response = await fetch(`/api/durum/${encodeURIComponent(eventId)}`, { signal: current.signal });
+        const response = await fetch(`/api/durum/${encodeURIComponent(eventId)}`, { cache: "no-cache", signal: current.signal });
         if (cancelled) return;
         if (response.status === 304) {
           succeed();

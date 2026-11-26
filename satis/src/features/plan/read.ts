@@ -50,11 +50,13 @@ export function createReader(deps: {
 
   return {
     events,
-    async event(eventId) {
+    async event(rawId) {
+      const eventId = rawId.toLowerCase();
       if (!(await isListed(eventId))) return null;
       return orNull(() => detailCache.get(eventId, () => core.getEvent(eventId)));
     },
-    async availability(eventId) {
+    async availability(rawId) {
+      const eventId = rawId.toLowerCase();
       if (!(await isListed(eventId))) return null;
       return orNull(() => availabilityCache.get(eventId, () => core.getAvailability(eventId)));
     },

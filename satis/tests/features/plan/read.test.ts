@@ -47,6 +47,13 @@ describe("okuma katmanı", () => {
     expect(fake.requests.filter((r) => r.path === "/api/sales/v1/events").length).toBe(1);
   });
 
+  it("büyük harfli kimlik küçük harfe indirilip aynı kayıtla eşleşir", async () => {
+    const upper = ev.id.toUpperCase();
+    expect((await reader.event(upper))?.id).toBe(ev.id);
+    expect(await reader.availability(upper)).not.toBeNull();
+    expect(availabilityHits()).toBe(1);
+  });
+
   it("UUID olmayan kimlik çekirdeğe hiç gitmez", async () => {
     expect(await reader.event("../orders")).toBeNull();
     expect(await reader.availability("../orders")).toBeNull();

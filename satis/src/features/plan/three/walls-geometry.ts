@@ -32,10 +32,3 @@ export function wallLayout(canvasWidth: number, canvasHeight: number): WallSpec[
     { side: "right", position: [xEdge, 0, 0], rotationY: -Math.PI / 2, length: h + WALL_MARGIN * 2, height: WALL_HEIGHT },
   ];
 }
-
-/** Logoyu en/boy oranını koruyarak kutuya (maxW x maxH) sığdırır. */
-export function fitLogo(aspect: number, maxW: number, maxH: number): { width: number; height: number } {
-  const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
-  const width = Math.min(maxW, maxH * a);
-  return { width, height: width / a };
-}

@@ -1,11 +1,10 @@
 import { z } from "zod";
+import { createOrderBodySchema } from "@/lib/core/contract";
 
-export const holdInputSchema = z.strictObject({
-  eventId: z.uuid(),
-  tableId: z.uuid(),
-  quantity: z.number().int().min(1).max(50),
-  clientKey: z.uuid(),
-});
+// Sözleşme şemasından türetilir: küçük harfe indirgeme (UUID) ve sınırlar tek yerde kalır.
+export const holdInputSchema = createOrderBodySchema
+  .pick({ eventId: true, clientKey: true })
+  .extend(createOrderBodySchema.shape.items.element.shape);
 
 const required = (message: string) => z.string({ error: message }).trim().min(1, message);
 
@@ -24,4 +23,3 @@ export const buyerSchema = z.strictObject({
     .transform((value) => (value ? value : undefined)),
   acceptTerms: z.literal(true, { error: "Devam etmek için metinleri onaylamalısınız" }),
 });
-export type BuyerInput = z.input<typeof buyerSchema>;

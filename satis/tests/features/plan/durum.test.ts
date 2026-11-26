@@ -8,7 +8,7 @@ describe("canlı durum yanıtı", () => {
     const res = durumResponse(a, null);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(a);
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3, stale-while-revalidate=5");
+    expect(res.headers.get("Cache-Control")).toBe("private, no-cache");
     expect(res.headers.get("ETag")).toBe(availabilityEtag(a));
   });
 
@@ -23,7 +23,7 @@ describe("canlı durum yanıtı", () => {
     expect(res.status).toBe(304);
     expect(await res.text()).toBe("");
     expect(res.headers.get("ETag")).toBe(availabilityEtag(a));
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3, stale-while-revalidate=5");
+    expect(res.headers.get("Cache-Control")).toBe("private, no-cache");
   });
 
   it("eşleşmeyen If-None-Match 200 döner", () => {
