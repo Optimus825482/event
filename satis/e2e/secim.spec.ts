@@ -55,6 +55,8 @@ test("tarayıcı çekirdeğe hiç istek atmaz ve hiçbir yanıtta sır geçmez",
   await expect(page).toHaveURL(/\/odeme\//);
   expect(urls.filter((u) => u.startsWith(fakeState().coreUrl))).toEqual([]);
   expect(bodies.some((b) => b.includes(process.env.SATIS_E2E_SECRET!))).toBe(false);
+  const coreUrl = fakeState().coreUrl;
+  expect(bodies.some((b) => b.includes(coreUrl))).toBe(false);
 });
 
 test("liste görünümünden de seçilir ve 375 px'te taşmaz", async ({ page }) => {

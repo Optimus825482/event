@@ -57,27 +57,69 @@ describe("useAvailability", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("ardışık üç hatada stale olur, başarıyla düzelir", async () => {
+  it("ardışık hatalarda geri çekilir, üçte stale olur, başarıyla normale döner", async () => {
     fetchMock.mockImplementation(async () => json({ error: "unavailable" }, 503));
     const { result } = renderHook(() => useAvailability("ev1", initial));
-    await advance(5000);
-    await advance(5000);
+    await advance(5000); // hata 1; sonraki 10 sn
+    await advance(9000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await advance(1000); // hata 2; sonraki 20 sn
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result.current.stale).toBe(false);
-    await advance(5000);
+    await advance(20_000); // hata 3
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(result.current.stale).toBe(true);
     fetchMock.mockImplementation(async () => json(body("2026-12-01T10:00:30.000Z", 3)));
-    await advance(5000);
+    await advance(30_000); // tavan 30 sn
     expect(result.current.stale).toBe(false);
+    await advance(5000); // normal aralık
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
-  it("patch yerel değeri değiştirir ve daha eski yanıt onu geri almaz", async () => {
-    fetchMock.mockImplementation(async () => json(body("2026-12-01T10:00:02.000Z", 6)));
+  it("bozuk satırlı yanıt hata sayılır ve duruma girmez", async () => {
+    fetchMock.mockImplementation(async () => json({ at: "2026-12-01T10:00:20.000Z", tables: [{ id: "t", free: "çok" }] }));
+    const { result } = renderHook(() => useAvailability("ev1", initial));
+    await advance(5000);
+    expect(result.current.availability).toBe(initial);
+    fetchMock.mockImplementation(async () => json({ at: "2026-12-01T10:00:20.000Z", tables: [null] }));
+    await advance(10_000);
+    expect(result.current.availability).toBe(initial);
+  });
+
+  it("patch yerel değeri değiştirir; eski yanıt onu geri almaz, daha yeni sunucu yanıtı yamayı düşürür", async () => {
+    fetchMock.mockImplementation(async () => json(body("2026-12-01T09:59:59.000Z", 6)));
     const { result } = renderHook(() => useAvailability("ev1", initial));
     act(() => result.current.patch("t", 0));
     expect(result.current.availability.tables[0]?.free).toBe(0);
     await advance(5000);
     expect(fetchMock).toHaveBeenCalled();
     expect(result.current.availability.tables[0]?.free).toBe(0);
+    fetchMock.mockImplementation(async () => json(body("2026-12-01T10:00:20.000Z", 2)));
+    await advance(5000);
+    expect(result.current.availability.tables[0]?.free).toBe(2);
+  });
+
+  it("yama ~8 sn sonra düşer", async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 304 }));
+    const { result } = renderHook(() => useAvailability("ev1", initial));
+    act(() => result.current.patch("t", 0));
+    await advance(7000);
+    expect(result.current.availability.tables[0]?.free).toBe(0);
+    await advance(1500);
+    expect(result.current.availability.tables[0]?.free).toBe(8);
+  });
+
+  it("cihaz saati sunucudan 10 dk ileri olsa da sunucu yanıtları uygulanır", async () => {
+    vi.setSystemTime(new Date("2026-12-01T10:10:00.000Z"));
+    fetchMock.mockImplementation(async () => json(body("2026-12-01T10:00:20.000Z", 2)));
+    const { result } = renderHook(() => useAvailability("ev1", initial));
+    act(() => result.current.patch("t", 0));
+    expect(result.current.availability.tables[0]?.free).toBe(0);
+    await advance(5000);
+    expect(result.current.availability.tables[0]?.free).toBe(2);
+    fetchMock.mockImplementation(async () => json(body("2026-12-01T10:00:30.000Z", 1)));
+    await advance(5000);
+    expect(result.current.availability.tables[0]?.free).toBe(1);
   });
 
   it("304 yanıtında durum aynı kalır", async () => {
