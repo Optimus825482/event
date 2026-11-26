@@ -55,6 +55,13 @@ describe("planToSceneTables", () => {
     expect(byKey(rows, "closed").color).toBe(COLORS.surface);
     expect(new Set([byKey(rows, "free").color, byKey(rows, "part").color, byKey(rows, "full").color]).size).toBe(3);
   });
+  it("örtü rengi durumu büyük yüzeyde gösterir", () => {
+    expect(byKey(rows, "free").bodyColor).toBe(COLORS.ivory);
+    expect(byKey(rows, "part").bodyColor).toBe(COLORS.muted);
+    expect(byKey(rows, "full").bodyColor).toBe(COLORS.disabledBg);
+    expect(byKey(rows, "closed").bodyColor).toBe(COLORS.surface);
+    expect(byKey(planToSceneTables(model, { selectedId: "free" }), "free").bodyColor).toBe(COLORS.goldBright);
+  });
   it("seçili masa işaretlenir ve seçili rengi alır; yalnız o masa", () => {
     const sel = planToSceneTables(model, { selectedId: "part" });
     expect(byKey(sel, "part")).toMatchObject({ selected: true, color: COLORS.goldBright });

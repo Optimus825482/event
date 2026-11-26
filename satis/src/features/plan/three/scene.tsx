@@ -1,8 +1,8 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
-import { useCallback, useMemo, useState } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DoubleSide } from "three";
 import { Button } from "@/components/ui/button";
 import { COLORS } from "@/lib/theme";
@@ -29,7 +29,20 @@ export type SceneProps = {
   onSelect?: (tableId: string) => void;
   /** WebGL bağlamı kaybolunca çağrılır; üst bileşen 2B'ye düşer. */
   onContextLost?: () => void;
+  /** Kanvasın açıklaması (yardımcı metin) için kimlik. */
+  describedBy?: string;
 };
+
+/** WebGL bağlam kaybını dinler; kaldırılırken dinleyiciyi söker (R3F kaldırırken bağlamı kendisi kaybettirir). */
+function ContextLossGuard({ onLost }: { onLost?: () => void }) {
+  const canvas = useThree((s) => s.gl.domElement);
+  useEffect(() => {
+    if (!onLost) return;
+    canvas.addEventListener("webglcontextlost", onLost);
+    return () => canvas.removeEventListener("webglcontextlost", onLost);
+  }, [canvas, onLost]);
+  return null;
+}
 
 type TableGeometry = { x: number; z: number; w: number; d: number; rot: number };
 
@@ -53,6 +66,10 @@ function SelectionRing({ g }: { g: TableGeometry }) {
 
 /** Masaya dokunma: yalnızca seçilebilir masa `onSelect` çağırır; imleç ona göre değişir. */
 function useTablePointer(table: SceneTable, onSelect?: (id: string) => void) {
+  // Üzerindeyken masa kaldırılırsa imleç takılı kalmasın.
+  useEffect(() => () => {
+    document.body.style.cursor = "";
+  }, []);
   return {
     onClick: (event: { stopPropagation: () => void }) => {
       event.stopPropagation();
@@ -72,7 +89,6 @@ function TableMesh({ table, world, onSelect }: { table: SceneTable; world: ToWor
   const g = tableGeometry(table, world);
   const round = table.shape === "round";
   const pointer = useTablePointer(table, onSelect);
-  const dimmed = table.state === "full" || table.state === "closed";
   const height = tableHeight(g.w, g.d);
   const rim = height * 0.11;
   return (
@@ -80,7 +96,7 @@ function TableMesh({ table, world, onSelect }: { table: SceneTable; world: ToWor
       <group position={[g.x, 0, g.z]} rotation={[0, g.rot, 0]}>
         <mesh position={[0, height / 2, 0]} castShadow>
           {round ? <cylinderGeometry args={[g.w / 2 - 0.02, g.w / 2, height, 24]} /> : <boxGeometry args={[g.w, height, g.d]} />}
-          <meshStandardMaterial color={BALLROOM.cream} roughness={0.6} metalness={0.08} transparent={dimmed} opacity={dimmed ? 0.5 : 1} />
+          <meshStandardMaterial color={table.bodyColor} roughness={0.6} metalness={0.08} />
         </mesh>
         <mesh position={[0, height + rim / 2, 0]}>
           {round ? <cylinderGeometry args={[g.w / 2, g.w / 2, rim, 24]} /> : <boxGeometry args={[g.w + 0.02, rim, g.d + 0.02]} />}
@@ -128,7 +144,7 @@ function LocaMesh({ table, world, stage, onSelect }: { table: SceneTable; world:
         </mesh>
         <mesh position={[0, 0.12 + wallHeight / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
           <cylinderGeometry args={[r, r * 0.93, wallHeight, 22, 1, true, 0, Math.PI]} />
-          <meshStandardMaterial color={BALLROOM.cream} roughness={0.6} metalness={0.08} side={DoubleSide} transparent={dimmed} opacity={opacity} />
+          <meshStandardMaterial color={table.bodyColor} roughness={0.6} metalness={0.08} side={DoubleSide} />
         </mesh>
         <mesh position={[0, 0.12 + wallHeight, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <torusGeometry args={[r, 0.05, 8, 24, Math.PI]} />
@@ -226,7 +242,7 @@ function DecorMesh({ element, world }: { element: SceneDecor; world: ToWorld }) 
  * Satış planının 3B balo salonu sahnesi: desenli halı, altın ayrıntılı duvarlar, örtülü masalar ve sandalyeler,
  * loca kabinleri, avizeler, sahne ışıkları ve kamera açıları. Masaya dokunmak 2B'deki seçimle aynı yolu çağırır.
  */
-export default function Scene3D({ tables, decor, lines, canvas, onSelect, onContextLost }: SceneProps) {
+export default function Scene3D({ tables, decor, lines, canvas, onSelect, onContextLost, describedBy }: SceneProps) {
   const w = canvas.width / WORLD_SCALE;
   const h = canvas.height / WORLD_SCALE;
   const world = useCallback<ToWorld>((x, y) => toWorld(canvas, x, y), [canvas]);
@@ -253,18 +269,13 @@ export default function Scene3D({ tables, decor, lines, canvas, onSelect, onCont
 
   return (
     <div className="relative h-full w-full bg-bg" data-testid="plan-3d-scene">
-      <div role="img" aria-label="Salon planı (3B)" className="h-full w-full">
+      <div role="img" aria-label="Salon planı (3B)" aria-describedby={describedBy} className="h-full w-full">
       <Canvas
         camera={{ position: overview, fov: 46 }}
         shadows
         gl={{ toneMappingExposure: 1.15 }}
-        onCreated={({ gl }) => {
-          gl.domElement.addEventListener("webglcontextlost", (event) => {
-            event.preventDefault();
-            onContextLost?.();
-          });
-        }}
       >
+        <ContextLossGuard onLost={onContextLost} />
         <color attach="background" args={[BALLROOM.background]} />
         <fogExp2 attach="fog" args={[BALLROOM.background, 0.35 / Math.max(w, h, 20)]} />
         <BallroomLights width={w} depth={h} ceiling={WALL_HEIGHT} />

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Component, useMemo, type ReactNode } from "react";
+import { Component, useId, useMemo, type ReactNode } from "react";
 import type { PlanModel } from "./model";
 import { planToSceneDecor, planToSceneLines, planToSceneTables } from "./three/scene-data";
 
@@ -45,14 +45,15 @@ export function Plan3D({ model, selectedId, onSelect, onFail, height = 420 }: Pl
   const tables = useMemo(() => planToSceneTables(model, { selectedId }), [model, selectedId]);
   const decor = useMemo(() => planToSceneDecor(model), [model]);
   const lines = useMemo(() => planToSceneLines(model), [model]);
+  const helpId = useId();
   return (
     <div className="flex flex-col gap-2">
       <div className="w-full overflow-hidden rounded-xl border border-line bg-bg" style={{ height }}>
         <SceneBoundary onFail={onFail}>
-          <Scene3D tables={tables} decor={decor} lines={lines} canvas={model.canvas} onSelect={onSelect} onContextLost={onFail} />
+          <Scene3D tables={tables} decor={decor} lines={lines} canvas={model.canvas} onSelect={onSelect} onContextLost={onFail} describedBy={helpId} />
         </SceneBoundary>
       </div>
-      <p className="text-sm text-muted">Seçim için 2B plan ya da liste görünümünü kullanın.</p>
+      <p id={helpId} className="text-sm text-muted">Seçim için 2B plan ya da liste görünümünü kullanın.</p>
     </div>
   );
 }

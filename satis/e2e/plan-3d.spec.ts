@@ -29,6 +29,13 @@ test("3B görünüm açılır, seçim 2B'ye dönünce korunur", async ({ page })
   expect(violations).toEqual([]);
   await back.click();
   await expect(page.getByRole("button", { name: /Masa A1,/ })).toHaveAttribute("aria-pressed", "true");
+  // Normal 2B dönüşü hata sayılmaz: bildirim yok, düğme durur ve 3B yeniden açılır.
+  await page.waitForTimeout(1000);
+  await expect(page.getByText("3B görünüm açılamadı")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "3B görünüm" })).toBeVisible();
+  await page.getByRole("button", { name: "3B görünüm" }).click();
+  await expect(page.getByRole("img", { name: /3B/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("3B görünüm açılamadı")).toHaveCount(0);
 });
 
 test("WebGL yoksa 3B düğmesi görünmez", async ({ page }) => {

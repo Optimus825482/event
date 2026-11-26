@@ -26,6 +26,8 @@ export type SceneTable = {
   height: number;
   /** Masa üst tablası rengi (tema belirteci). */
   color: string;
+  /** Masa örtüsü/gövde rengi: durumu büyük yüzeyde gösterir (tema belirteci). */
+  bodyColor: string;
   state: SceneState;
   selected: boolean;
   selectable: boolean;
@@ -46,6 +48,15 @@ function sceneColor(table: PlanTableModel, state: SceneState, selected: boolean)
   return table.category === "premium" || table.category === "vip" ? COLORS.gold : COLORS.ivory;
 }
 
+/** Örtü rengi: seçili > kapalı > dolu > kısmen dolu > boş (2B `table-style.ts` anlamları). */
+function bodyColorOf(state: SceneState, selected: boolean): string {
+  if (selected) return COLORS.goldBright;
+  if (state === "closed") return COLORS.surface;
+  if (state === "full") return COLORS.disabledBg;
+  if (state === "partial") return COLORS.muted;
+  return COLORS.ivory;
+}
+
 export function planToSceneTables(model: PlanModel, opts: { selectedId: string | null }): SceneTable[] {
   return model.tables.map((table) => {
     const state = sceneState(table);
@@ -63,6 +74,7 @@ export function planToSceneTables(model: PlanModel, opts: { selectedId: string |
       width: table.width,
       height: table.height,
       color: sceneColor(table, state, selected),
+      bodyColor: bodyColorOf(state, selected),
       state,
       selected,
       selectable,
