@@ -18,7 +18,7 @@ import { isAdmin } from "@/features/auth/scope";
 import { setUserActiveAction } from "../actions";
 import { countUsers, filterUsers, isDeletedAccount, type RoleFilter, type StatusFilter } from "../filter";
 import { accessSummary, ROLE_CHOICES } from "../form-model";
-import type { UserDetail } from "../queries";
+import type { LinkableStaff, UserDetail } from "../queries";
 import { CreateUserForm } from "./create-user-form";
 import { DeleteUserDialog } from "./delete-user-dialog";
 import { EditUserForm } from "./edit-user-form";
@@ -33,9 +33,16 @@ type DialogState =
   | { kind: "delete"; user: UserDetail }
   | null;
 
-type Props = { users: UserDetail[]; selfId: string; canCreate: boolean; canEdit: boolean; canDelete: boolean };
+type Props = {
+  users: UserDetail[];
+  selfId: string;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  staffOptions: LinkableStaff[];
+};
 
-export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Props) {
+export function UsersView({ users, selfId, canCreate, canEdit, canDelete, staffOptions }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
@@ -45,6 +52,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
   const [dialog, setDialog] = useState<DialogState>(null);
   const [announcement, setAnnouncement] = useState("");
 
+  const staffNames = useMemo(() => new Map(staffOptions.map((p) => [p.id, p.fullName])), [staffOptions]);
   const counts = useMemo(() => countUsers(users), [users]);
   const visible = useMemo(() => filterUsers(users, { search, role, status }), [users, search, role, status]);
 
@@ -160,7 +168,12 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
               {visible.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium text-white">{user.username}</TableCell>
-                  <TableCell>{user.name}</TableCell>
+                  <TableCell>
+                    {user.name}
+                    {user.staffId && staffNames.get(user.staffId) ? (
+                      <span className="block text-xs text-slate-400">Personel: {staffNames.get(user.staffId)}</span>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={isAdmin(user) ? "border-amber-500/40 text-amber-400" : ""}>
@@ -224,7 +237,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
             <DialogTitle>Yeni kullanıcı</DialogTitle>
             <DialogDescription>Kullanıcı adı ve parola ile yeni bir hesap oluşturun.</DialogDescription>
           </DialogHeader>
-          <CreateUserForm onDone={done} />
+          <CreateUserForm onDone={done} staffOptions={staffOptions} />
         </DialogContent>
       </Dialog>
 
@@ -234,7 +247,7 @@ export function UsersView({ users, selfId, canCreate, canEdit, canDelete }: Prop
             <DialogTitle>Kullanıcıyı düzenle</DialogTitle>
             <DialogDescription>{dialog?.kind === "edit" ? dialog.user.username : ""}</DialogDescription>
           </DialogHeader>
-          {dialog?.kind === "edit" ? <EditUserForm key={dialog.user.id} user={dialog.user} onDone={done} /> : null}
+          {dialog?.kind === "edit" ? <EditUserForm key={dialog.user.id} user={dialog.user} onDone={done} staffOptions={staffOptions} /> : null}
         </DialogContent>
       </Dialog>
 

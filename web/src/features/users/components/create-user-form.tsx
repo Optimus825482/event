@@ -8,20 +8,29 @@ import { useToast } from "@/components/ui/toast";
 import type { Role } from "@/features/auth/roles";
 import { createUserAction } from "../actions";
 import { ACCESS_MESSAGES } from "../access-rules";
+import type { LinkableStaff } from "../queries";
 import { ROLE_CHOICES, usesDepartments } from "../form-model";
 import { Field, FormStatus, SELECT_CLASS, toFormState, type FormState } from "./field";
+import { StaffLinkField } from "./staff-link-field";
 import { AccessFields, type AccessValue } from "./membership-fields";
 
 const CREATED_MESSAGE = "Kullanıcı oluşturuldu";
 const EMPTY_ACCESS: AccessValue = { memberships: [], grants: [] };
 
-export function CreateUserForm({ onDone }: { onDone?: (message: string) => void }) {
+export function CreateUserForm({
+  onDone,
+  staffOptions = [],
+}: {
+  onDone?: (message: string) => void;
+  staffOptions?: readonly LinkableStaff[];
+}) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(null);
   const [role, setRole] = useState<Role>("user");
   const [access, setAccess] = useState<AccessValue>(EMPTY_ACCESS);
+  const [staffId, setStaffId] = useState<string | null>(null);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +48,7 @@ export function CreateUserForm({ onDone }: { onDone?: (message: string) => void 
         name: String(data.get("name") ?? ""),
         email: String(data.get("email") ?? ""),
         role,
+        staffId,
         password: String(data.get("password") ?? ""),
         memberships: withDepartments ? access.memberships : [],
         permissions: withDepartments ? access.grants : [],
@@ -49,6 +59,7 @@ export function CreateUserForm({ onDone }: { onDone?: (message: string) => void 
         form.reset();
         setRole("user");
         setAccess(EMPTY_ACCESS);
+        setStaffId(null);
         router.refresh();
         onDone?.(CREATED_MESSAGE);
       } else {
@@ -94,6 +105,7 @@ export function CreateUserForm({ onDone }: { onDone?: (message: string) => void 
           aria-invalid={Boolean(errors?.password)}
         />
       </Field>
+      <StaffLinkField options={staffOptions} value={staffId} onChange={setStaffId} errors={errors?.staffId} />
       {usesDepartments(role) ? <AccessFields value={access} onChange={setAccess} /> : null}
       <div className="flex items-end gap-3 sm:col-span-2 in-data-[slot=dialog-content]:sticky in-data-[slot=dialog-content]:bottom-0 in-data-[slot=dialog-content]:z-10 in-data-[slot=dialog-content]:-mx-6 in-data-[slot=dialog-content]:-mb-6 in-data-[slot=dialog-content]:border-t in-data-[slot=dialog-content]:bg-background in-data-[slot=dialog-content]:px-6 in-data-[slot=dialog-content]:py-4">
         <Button type="submit" disabled={pending} className="bg-amber-600 text-white hover:bg-amber-700">

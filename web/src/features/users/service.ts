@@ -5,6 +5,7 @@ import {
   departmentMemberships,
   events,
   sessions,
+  staff,
   staffPerformanceReviews,
   userPermissions,
   users,
@@ -45,6 +46,7 @@ const MESSAGES = {
   deletedImmutable: "Silinmiş hesap değiştirilemez",
   reservedEmail: "Bu e-posta adresi kullanılamaz",
   reservedUsername: "Bu kullanıcı adı kullanılamaz",
+  staffNotFound: "Personel kaydı bulunamadı",
 } as const;
 
 /** Yönetici sayısını etkileyen işlemleri (pasifleştirme, rol düşürme) sıraya sokar. */
@@ -107,6 +109,27 @@ async function assertUnique(db: Db | Tx, username: string | undefined, email: st
   if (rows.length > 0) throw new DomainError("conflict", MESSAGES.emailTaken);
 }
 
+/**
+ * Personel kaydı bağı: kayıt var olmalı ve başka bir hesaba bağlı olmamalı (`users.staff_id` tekildir;
+ * burada Türkçe, diğer kullanıcıyı adlandıran ileti için önceden denetlenir). Eşzamanlı iki bağlama
+ * aynı kaydı kapmasın diye işlem boyunca danışma kilidi alınır.
+ */
+async function assertStaffLinkable(tx: Tx, staffId: string, selfId?: string) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext('eventflow_user_staff_link'))`);
+  const [person] = await tx.select({ id: staff.id }).from(staff).where(eq(staff.id, staffId));
+  if (!person) throw new DomainError("not_found", MESSAGES.staffNotFound);
+  const [owner] = await tx
+    .select({ name: users.name, username: users.username, id: users.id })
+    .from(users)
+    .where(eq(users.staffId, staffId));
+  if (owner && owner.id !== selfId) {
+    throw new DomainError(
+      "conflict",
+      `Bu personel kaydı zaten "${owner.name}" (${owner.username}) kullanıcısına bağlı`,
+    );
+  }
+}
+
 function assertAccess(role: Role, memberships: Membership[], rows: PermissionRow[]) {
   const problem = checkAccess(role, memberships, rows);
   if (problem !== null) throw new DomainError("invalid", problem);
@@ -162,6 +185,7 @@ export async function createUser(db: Db | Tx, actor: Actor, input: CreateUserInp
 
   return db.transaction(async (tx) => {
     await assertUnique(tx, input.username, email);
+    if (input.staffId) await assertStaffLinkable(tx, input.staffId);
     const [user] = await tx
       .insert(users)
       .values({
@@ -206,6 +230,7 @@ export async function updateUser(db: Db | Tx, actor: Actor, input: UpdateUserInp
       throw new DomainError("conflict", MESSAGES.lastAdmin);
     }
     await assertUnique(tx, undefined, values.email, id);
+    if (input.staffId) await assertStaffLinkable(tx, input.staffId, id);
 
     // Yazılacak yeni durum: verilmeyen kısım mevcut olandır (user için tavana göre budanır).
     let nextMemberships: Membership[] = [];

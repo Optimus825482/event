@@ -11,7 +11,7 @@ import { AccountPanel } from "@/features/users/components/account-panel";
 import { EditUserForm } from "@/features/users/components/edit-user-form";
 import { UserDeleteButton } from "@/features/users/components/user-delete-button";
 import { accessSummary } from "@/features/users/form-model";
-import { getUserDetail } from "@/features/users/queries";
+import { getUserDetail, listLinkableStaff } from "@/features/users/queries";
 import { isAdmin } from "@/features/auth/scope";
 
 export const metadata: Metadata = { title: "Kullanıcı | EventFlow" };
@@ -24,6 +24,8 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
   const user = await getUserDetail(db, actor, id);
   if (!user) notFound();
   const canEdit = can(actor, "users", "edit");
+  const staffOptions = canEdit ? await listLinkableStaff(db, actor) : [];
+  const linkedStaff = staffOptions.find((p) => p.id === user.staffId);
   // Liste ile aynı kural: yalnızca yönetici ve izin, kendi hesabı ve silinmiş hesap değil.
   const canDelete = isAdmin(actor) && can(actor, "users", "delete") && user.id !== actor.id && !isDeletedAccount(user);
 
@@ -36,6 +38,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
         <h1 className="mt-2 text-2xl font-semibold">{user.username}</h1>
         <p className="text-sm text-muted-foreground">
           {accessSummary(user.role, user.memberships)} · {user.isActive ? "Aktif" : "Pasif"}
+          {linkedStaff ? ` · Personel: ${linkedStaff.fullName}` : ""}
         </p>
       </div>
 
@@ -46,7 +49,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
               <CardTitle>Profil, rol ve izinler</CardTitle>
             </CardHeader>
             <CardContent>
-              <EditUserForm user={user} />
+              <EditUserForm user={user} staffOptions={staffOptions} />
             </CardContent>
           </Card>
           <Card>
