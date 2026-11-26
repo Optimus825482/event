@@ -6,6 +6,7 @@ import type { EventRow } from "@/features/events/service";
 import { publish } from "@/features/realtime/publish";
 import { verifyQrToken } from "@/features/reservations/qr-token";
 import { DomainError } from "@/lib/action";
+import type { CheckInSuccess } from "./result-schema";
 
 export const CHECK_IN_MSG = {
   invalidCode: "QR kod geçersiz veya rezervasyon bulunamadı",
@@ -20,18 +21,8 @@ export const CLIENT_TIMESTAMP_MAX_AGE_HOURS = 24;
 
 export type CheckInOutcome = "checked_in" | "already_checked_in";
 
-/** Check-in yanıtı. Yalnızca JSON değerleri içerir: saklanan yanıt ile ilk yanıt birebir aynıdır. */
-export type CheckInSuccess = {
-  outcome: CheckInOutcome;
-  reservationId: string;
-  eventId: string;
-  guestName: string | null;
-  guestCount: number;
-  tableId: string;
-  tableLabel: string;
-  checkedInAt: string;
-  checkedInBy: { id: string; username: string } | null;
-};
+/** Check-in yanıtı (bkz. `result-schema.ts`). Yalnızca JSON değerleri içerir: saklanan yanıt ile ilk yanıt birebir aynıdır. */
+export type { CheckInSuccess };
 
 export type ReservationRef =
   { kind: "token"; value: string } | { kind: "legacyHash"; value: string } | { kind: "reservationId"; value: string };
@@ -98,6 +89,7 @@ export async function markCheckedIn(
     event: EventRow;
     actorId: string;
     clientTimestamp: Date | null;
+    gate: number | null;
   },
 ): Promise<boolean> {
   const ts = input.clientTimestamp ? input.clientTimestamp.toISOString() : null;
@@ -111,7 +103,7 @@ export async function markCheckedIn(
     previous_status: string;
   }>(sql`
     update ${reservations} as r
-    set status = 'checked_in', checked_in_at = ${checkedInAt}, checked_in_by = ${input.actorId}, updated_at = now()
+    set status = 'checked_in', checked_in_at = ${checkedInAt}, checked_in_by = ${input.actorId}, check_in_gate = ${input.gate}::smallint, updated_at = now()
     from (
       select id, status as previous_status from ${reservations}
       where id = ${input.reservationId} and event_id = ${input.event.id}
@@ -150,6 +142,7 @@ export async function readCheckIn(tx: Tx, reservationId: string, outcome: CheckI
       tableId: reservations.tableId,
       tableLabel: eventTables.label,
       checkedInAt: reservations.checkedInAt,
+      gate: reservations.checkInGate,
       byId: users.id,
       byUsername: users.username,
     })
@@ -164,7 +157,11 @@ export async function readCheckIn(tx: Tx, reservationId: string, outcome: CheckI
   if (row.status !== "checked_in") return { status: row.status, response: null };
   const response: CheckInSuccess = {
     outcome,
+    kind: "reservation",
     reservationId: row.reservationId,
+    ticketId: null,
+    pnr: null,
+    gate: row.gate,
     eventId: row.eventId,
     guestName: row.guestName,
     guestCount: row.guestCount,

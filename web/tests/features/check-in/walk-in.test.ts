@@ -46,7 +46,7 @@ describe("registerWalkIn", () => {
       guestCount: 5,
       checkedInBy: { id: door.id, username: door.username },
     });
-    const row = await reservationRow(result.reservationId);
+    const row = await reservationRow(result.reservationId!);
     expect(row.status).toBe("checked_in");
     expect(verifyQrToken(row.qrToken)).toEqual({ reservationId: row.id });
     const customer = await customerRow(row.customerId);

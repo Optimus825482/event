@@ -53,6 +53,7 @@ export async function registerWalkIn(
       event,
       actorId: actor.id,
       clientTimestamp: options.clientTimestamp ?? null,
+      gate: input.gate ?? null,
     });
     const { response } = await readCheckIn(tx, reservation.id, "checked_in");
     if (!changed || !response) throw new Error("walk-in girişi yapılamadı");
@@ -63,6 +64,7 @@ export async function registerWalkIn(
         idempotencyKey: `walk-in:${reservation.id}`,
         actorId: actor.id,
         outcome: "checked_in",
+        gate: input.gate ?? null,
         response: { ok: true, data: response },
       });
     }

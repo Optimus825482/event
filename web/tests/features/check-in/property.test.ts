@@ -186,7 +186,7 @@ describe("Property 12: Walk-in kaydı doğrulaması", () => {
         const at = Date.parse(result.checkedInAt);
         expect(at).toBeGreaterThanOrEqual(before - 1000);
         expect(at).toBeLessThanOrEqual(Date.now() + 1000);
-        expect((await reservationRow(result.reservationId)).status).toBe("checked_in");
+        expect((await reservationRow(result.reservationId!)).status).toBe("checked_in");
 
         await expectDomain(
           registerWalkIn(db, door, {

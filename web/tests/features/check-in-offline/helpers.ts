@@ -36,7 +36,11 @@ export function walkInItem(walkIn: { tableId: string; guestName: string; guestCo
 export function success(reservationId = "r1", outcome: CheckInSuccess["outcome"] = "checked_in"): CheckInSuccess {
   return {
     outcome,
+    kind: "reservation",
     reservationId,
+    ticketId: null,
+    pnr: null,
+    gate: null,
     eventId: EVENT_ID,
     guestName: "Ayşe",
     guestCount: 2,

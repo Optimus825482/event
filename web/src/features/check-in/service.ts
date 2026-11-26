@@ -19,6 +19,7 @@ import {
   type CheckInSuccess,
   type ReservationRef,
 } from "./internal";
+import { checkInSuccessSchema } from "./result-schema";
 import { checkInInput, walkInOnceInput, type CheckInInput, type WalkInOnceInput } from "./schemas";
 import { registerWalkIn } from "./walk-in-service";
 
@@ -30,17 +31,7 @@ export { eventStats, searchGuests, recentCheckIns, listCheckInEvents, type Event
 const storedResultSchema = z.union([
   z.object({
     ok: z.literal(true),
-    data: z.object({
-      outcome: z.enum(["checked_in", "already_checked_in"]),
-      reservationId: z.string(),
-      eventId: z.string(),
-      guestName: z.string().nullable(),
-      guestCount: z.number(),
-      tableId: z.string(),
-      tableLabel: z.string(),
-      checkedInAt: z.string(),
-      checkedInBy: z.object({ id: z.string(), username: z.string() }).nullable(),
-    }),
+    data: checkInSuccessSchema,
   }),
   z.object({
     ok: z.literal(false),
@@ -54,6 +45,7 @@ function refOf(input: z.infer<typeof checkInInput>): ReservationRef {
   if (input.token !== undefined) return { kind: "token", value: input.token };
   if (input.legacyHash !== undefined) return { kind: "legacyHash", value: input.legacyHash };
   if (input.reservationId !== undefined) return { kind: "reservationId", value: input.reservationId };
+  // Bilet girişi bir sonraki görevde işlenir.
   throw new DomainError("invalid", "QR kod veya rezervasyon belirtilmedi");
 }
 
@@ -125,6 +117,7 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
         clientTimestamp,
         outcome: "not_found",
         requestFingerprint: print,
+        gate: input.gate ?? null,
       })
       .onConflictDoNothing({ target: checkInEvents.idempotencyKey })
       .returning({ id: checkInEvents.id });
@@ -144,6 +137,7 @@ export async function checkIn(db: Executor, actor: Actor, raw: CheckInInput): Pr
           event,
           actorId: actor.id,
           clientTimestamp,
+          gate: input.gate ?? null,
         });
         const { status, response } = await readCheckIn(
           sp,
@@ -200,6 +194,7 @@ export async function registerWalkInOnce(db: Executor, actor: Actor, raw: WalkIn
         clientTimestamp,
         outcome: "not_found",
         requestFingerprint: print,
+        gate: input.gate ?? null,
       })
       .onConflictDoNothing({ target: checkInEvents.idempotencyKey })
       .returning({ id: checkInEvents.id });
