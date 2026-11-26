@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
+import { PlanningStagePanel } from "@/features/planning/components/stage-panel";
+import { loadPlanningPanel } from "@/features/planning/queries";
 import { TeamOrganizationWizard } from "@/features/staffing/components/wizard";
 import { loadTeamOrganization } from "@/features/staffing/queries";
 
@@ -10,7 +12,7 @@ export const metadata: Metadata = { title: "Ekip organizasyonu | EventFlow" };
 
 export default async function TeamOrganizationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const data = await loadTeamOrganization(id);
+  const [data, planning] = await Promise.all([loadTeamOrganization(id), loadPlanningPanel(id)]);
   const { event } = data.organization;
 
   return (
@@ -39,6 +41,11 @@ export default async function TeamOrganizationPage({ params }: { params: Promise
           ) : null
         }
       />
+      {planning ? (
+        <div className="mb-4">
+          <PlanningStagePanel state={planning} compact />
+        </div>
+      ) : null}
       {data.organization.editable ? null : (
         <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
           Tamamlanmış veya iptal edilmiş etkinlik: organizasyon yalnızca görüntülenir.

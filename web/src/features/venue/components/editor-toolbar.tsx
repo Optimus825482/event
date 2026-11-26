@@ -29,8 +29,8 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArrangeMenu } from "./arrange-menu";
-import type { Notify } from "./editor-commands";
-import { useEditor, useEditorStore } from "./editor-context";
+import { runDelete, type Notify } from "./editor-commands";
+import { useEditor, useEditorLock, useEditorStore } from "./editor-context";
 import { FLOOR_OPTIONS } from "./table-visual";
 
 type Props = {
@@ -42,7 +42,6 @@ type Props = {
   onToggle3d: () => void;
   onSave: () => void;
   onOpenTemplates: () => void;
-  onBlocked: (labels: string[]) => void;
   notify: Notify;
   onOpenAdd: (kind: "table" | "loca") => void;
   onOpenSpacing: () => void;
@@ -81,7 +80,8 @@ function ToolButton({
 const Divider = () => <span className="mx-1 h-6 w-px bg-border" aria-hidden />;
 
 export function EditorToolbar(props: Props) {
-  const { readOnly, saving, show3d, fullscreen, onToggleFullscreen, onToggle3d, onSave, onOpenTemplates, onBlocked } = props;
+  const { readOnly, saving, show3d, fullscreen, onToggleFullscreen, onToggle3d, onSave, onOpenTemplates } = props;
+  const lock = useEditorLock();
   const store = useEditorStore();
   const tool = useEditor((s) => s.tool);
   const snapEnabled = useEditor((s) => s.snapEnabled);
@@ -172,10 +172,7 @@ export function EditorToolbar(props: Props) {
           <ToolButton
             label="Seçileni sil (Delete)"
             disabled={!hasSelection}
-            onClick={() => {
-              const { blocked } = s().deleteSelection();
-              if (blocked.length > 0) onBlocked(blocked);
-            }}
+            onClick={() => runDelete(store, props.notify, lock)}
           >
             <Trash2 className="size-4" />
           </ToolButton>

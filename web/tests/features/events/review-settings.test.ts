@@ -6,6 +6,7 @@ import { getEvent, listEventBoard, setReviewSettings } from "@/features/events/s
 import { createAction } from "@/lib/action";
 import { adminActor, managerActor, noAccessActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
+import { setStage } from "../../helpers/planning";
 import * as f from "../../helpers/factories";
 
 async function makeActor(actor: Actor = managerActor("entertainment")): Promise<Actor> {
@@ -112,5 +113,22 @@ describe("listEventBoard / getEvent hazırlık sayaçları", () => {
 
     const detail = await getEvent(db, actor, ready.id);
     expect(detail).toMatchObject({ tableCount: 2, assignmentCount: 1 });
+  });
+});
+
+describe("listEventBoard aşama ve sanatçı", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("planlama aşamasını ve sanatçı adını döner", async () => {
+    const actor = await makeActor();
+    const staged = await f.createEvent(db, { organizerId: actor.id, name: "Aşamalı", artistName: "Sezen Aksu" });
+    await setStage(db, staged.id, "priced");
+    await f.createEvent(db, { organizerId: actor.id, name: "Yeni" });
+
+    const byName = Object.fromEntries((await listEventBoard(db, actor, {})).map((e) => [e.name, e]));
+    expect(byName["Aşamalı"]).toMatchObject({ planningStage: "priced", artistName: "Sezen Aksu" });
+    expect(byName["Yeni"]).toMatchObject({ planningStage: "defined", artistName: null });
   });
 });

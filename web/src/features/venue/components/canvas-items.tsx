@@ -4,6 +4,7 @@ import type Konva from "konva";
 import { memo } from "react";
 import { Circle, Group, Path, Rect, Text } from "react-konva";
 import { effectiveTableSize } from "../editor/geometry";
+import { FROZEN_TABLE_TITLE } from "../editor/lock";
 import type { EditorTable } from "../editor/store";
 import type { DecorElement } from "../schemas";
 import { GroupRing } from "./group-ring";
@@ -23,6 +24,21 @@ export type ItemHandlers = {
   onDragEnd: () => void;
 };
 
+/** Tuval kapsayıcısının `title` değeri; üzerine yazılmadan önceki hâli saklanır, ayrılınca geri konur. */
+const previousTitles = new WeakMap<HTMLElement, string>();
+function showTitle(e: Konva.KonvaEventObject<MouseEvent>, title: string) {
+  const container = e.target.getStage()?.container();
+  if (!container) return;
+  if (!previousTitles.has(container)) previousTitles.set(container, container.title);
+  container.title = title;
+}
+function restoreTitle(e: Konva.KonvaEventObject<MouseEvent>) {
+  const container = e.target.getStage()?.container();
+  if (!container || !previousTitles.has(container)) return;
+  container.title = previousTitles.get(container) ?? "";
+  previousTitles.delete(container);
+}
+
 /** Etkin katta olmayan öğe: soluk çizilir, tıklanamaz. */
 const MUTED_OPACITY = 0.22;
 
@@ -33,9 +49,12 @@ type TableNodeProps = ItemHandlers & {
   selected: boolean;
   /** Masa bir ekip grubundaysa halka rengi. */
   groupColor?: string | undefined;
+  /** Satış kilidi: satılmış/rezerve masa; konumu ve etiketi değiştirilemez. */
+  frozen?: boolean;
 };
 
-export const TableNode = memo(function TableNode({ table, type, selected, groupColor, muted = false, ...h }: TableNodeProps) {
+
+export const TableNode = memo(function TableNode({ table, type, selected, groupColor, muted = false, frozen = false, ...h }: TableNodeProps) {
   const shape = tableShapeOf(type);
   const size = effectiveTableSize({ size: table.size, capacity: table.capacity, isLoca: table.isLoca });
   const { width, height } = tableDims(shape, table.isLoca, size);
@@ -66,6 +85,8 @@ export const TableNode = memo(function TableNode({ table, type, selected, groupC
       draggable={h.draggable}
       onMouseDown={(e) => h.onSelect(table.key, e)}
       onTap={(e) => h.onSelect(table.key, e)}
+      onMouseEnter={frozen ? (e) => showTitle(e, FROZEN_TABLE_TITLE) : undefined}
+      onMouseLeave={frozen ? restoreTitle : undefined}
       onDragStart={() => h.onDragStart(table.key)}
       onDragMove={(e) => h.onDragMove(table.key, e.target)}
       onDragEnd={h.onDragEnd}
@@ -103,7 +124,7 @@ export const TableNode = memo(function TableNode({ table, type, selected, groupC
           listening={false}
         />
       ) : null}
-      <TableBadges width={width} height={height} isVip={table.isVip} isPinned={table.isPinned} floor={table.floor} />
+      <TableBadges width={width} height={height} isVip={table.isVip} isPinned={table.isPinned || frozen} floor={table.floor} />
     </Group>
   );
 });
@@ -144,10 +165,6 @@ export const DecorNode = memo(function DecorNode({ element, itemKey, selected, m
         rotation: style.direction === "vertical-down" ? 90 : -90,
       }
     : { x: text.x, y: text.y, width: text.width, height: text.height };
-  const setTitle = (e: Konva.KonvaEventObject<MouseEvent>, title: string) => {
-    const container = e.target.getStage()?.container();
-    if (container) container.title = title;
-  };
   return (
     <Group
       ref={(node) => h.register(itemKey, node)}
@@ -160,8 +177,8 @@ export const DecorNode = memo(function DecorNode({ element, itemKey, selected, m
       draggable={h.draggable}
       onMouseDown={(e) => h.onSelect(itemKey, e)}
       onTap={(e) => h.onSelect(itemKey, e)}
-      onMouseEnter={element.tooltip ? (e) => setTitle(e, element.tooltip ?? "") : undefined}
-      onMouseLeave={element.tooltip ? (e) => setTitle(e, "") : undefined}
+      onMouseEnter={element.tooltip ? (e) => showTitle(e, element.tooltip ?? "") : undefined}
+      onMouseLeave={element.tooltip ? restoreTitle : undefined}
       onDragStart={() => h.onDragStart(itemKey)}
       onDragMove={(e) => h.onDragMove(itemKey, e.target)}
       onDragEnd={h.onDragEnd}

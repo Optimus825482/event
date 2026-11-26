@@ -80,6 +80,7 @@ export const tableGroups = pgTable(
     index("table_groups_event_sort_idx").on(t.eventId, t.sortOrder),
     index("table_groups_team_id_idx").on(t.teamId),
     index("table_groups_supervisor_staff_id_idx").on(t.supervisorStaffId),
+    check("table_groups_group_type_valid", sql`${t.groupType} IN ('standard','loca')`),
   ],
 );
 
@@ -317,4 +318,27 @@ export const organizationTemplates = pgTable(
     ...timestamps(),
   },
   (t) => [index("organization_templates_created_by_id_idx").on(t.createdById)],
+);
+
+/**
+ * Etkinlik kısım sorumlusu: etkinliğin tamamında personeli değerlendirebilen atanmış personel
+ * (değerlendirme hiyerarşisinin en üstü). Bölüm kapsamı yoktur; etkinlik bazında atanır.
+ */
+export const eventSectionHeads = pgTable(
+  "event_section_heads",
+  {
+    id: pk(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id")
+      .notNull()
+      .references(() => staff.id, { onDelete: "cascade" }),
+    createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    ...createdOnly(),
+  },
+  (t) => [
+    unique("event_section_heads_event_staff_uq").on(t.eventId, t.staffId),
+    index("event_section_heads_staff_id_idx").on(t.staffId),
+  ],
 );

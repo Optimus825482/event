@@ -49,6 +49,7 @@ export async function createEvent(db: Executor, actor: Actor, input: CreateEvent
       startsAt: input.startsAt,
       endsAt: input.endsAt ?? null,
       eventType: input.eventType ?? null,
+      artistName: input.artistName ?? null,
       reservationEnabled: input.reservationEnabled ?? true,
       organizerId: actor.id,
       status: "draft",
@@ -75,6 +76,8 @@ export async function updateEvent(db: Db, actor: Actor, input: UpdateEventInput)
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         eventType: input.eventType ?? null,
+        // Alan hiç verilmediyse mevcut değer korunur; boş metin null ile temizlenir.
+        artistName: input.artistName !== undefined ? input.artistName : existing.artistName,
         reservationEnabled: input.reservationEnabled ?? existing.reservationEnabled,
         reviewEnabled: input.reviewEnabled ?? existing.reviewEnabled,
         reviewHistoryVisible: input.reviewHistoryVisible ?? existing.reviewHistoryVisible,
@@ -171,6 +174,7 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
         startsAt: events.startsAt,
         endsAt: events.endsAt,
         eventType: events.eventType,
+        artistName: events.artistName,
         reservationCount,
       })
       .from(events)
@@ -225,6 +229,8 @@ export async function listEventBoard(db: Executor, actor: Actor, filter: { searc
       startsAt: events.startsAt,
       endsAt: events.endsAt,
       eventType: events.eventType,
+      artistName: events.artistName,
+      planningStage: events.planningStage,
       reservationEnabled: events.reservationEnabled,
       reservationCount,
       tableCount,

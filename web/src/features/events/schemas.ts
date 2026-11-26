@@ -9,6 +9,12 @@ function emptyToUndefined(value: unknown): unknown {
 const optionalText = (max: number, tooLong: string) =>
   z.preprocess(emptyToUndefined, z.string().trim().max(max, tooLong).optional());
 
+/** Sanatçı adı: boş ya da yalnızca boşluk "yok" (null) demektir; alan hiç verilmezse undefined kalır. */
+const artistName = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+  z.string().trim().max(200, "Sanatçı adı en fazla 200 karakter olabilir").nullable().optional(),
+);
+
 const requiredDate = (message: string) =>
   z.preprocess(emptyToUndefined, z.coerce.date({ error: message }));
 
@@ -24,6 +30,7 @@ const baseShape = {
   startsAt: requiredDate("Başlangıç tarihi gerekli"),
   endsAt: optionalDate,
   eventType: optionalText(100, "Etkinlik türü en fazla 100 karakter olabilir"),
+  artistName,
   reservationEnabled: z.boolean().optional(),
 };
 

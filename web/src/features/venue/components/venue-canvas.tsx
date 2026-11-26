@@ -9,6 +9,7 @@ import { decorFloor, layoutItems } from "../editor/collision";
 import { floorKeys, onActiveFloor } from "../editor/floors";
 import { clampDelta, containsPoint, normalizeRect, zoomAround, type Point, type Rect as Box } from "../editor/geometry";
 import { cellName } from "../editor/view-chrome";
+import { isFrozen, type EditorLock } from "../editor/lock";
 import { linesInRect } from "../editor/lines";
 import type { GroupBadge } from "../editor/groups";
 import { decorKey, isDecorKey, shapeResolver, type Placement } from "../editor/store";
@@ -17,7 +18,7 @@ import { CanvasRulers } from "./canvas-rulers";
 import { DecorNode, TableNode, type ItemHandlers } from "./canvas-items";
 import { CanvasContextMenu, type ContextTarget } from "./canvas-context-menu";
 import { reportMove, type Notify } from "./editor-commands";
-import { useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
+import { useEditor, useEditorLock, useEditorStore, type TableTypeOption } from "./editor-context";
 import { useLineDrawing } from "./use-line-drawing";
 
 type Props = {
@@ -54,20 +55,21 @@ function fitView(canvas: { width: number; height: number }, size: { width: numbe
 }
 
 type PinSource = {
-  tables: ReadonlyArray<{ key: string; isPinned: boolean }>;
+  tables: ReadonlyArray<{ key: string; id?: string | null; isPinned: boolean }>;
   elements: ReadonlyArray<{ id: string; isPinned?: boolean }>;
 };
 
-/** Sabitlenmiş öğe anahtarları (sürüklenmez, dönüştürücüye bağlanmaz). */
-function pinnedKeys(s: PinSource): Set<string> {
+/** Sabitlenmiş ya da donmuş öğe anahtarları (sürüklenmez, dönüştürücüye bağlanmaz). */
+function pinnedKeys(s: PinSource, lock: EditorLock): Set<string> {
   return new Set([
-    ...s.tables.filter((t) => t.isPinned).map((t) => t.key),
+    ...s.tables.filter((t) => t.isPinned || (t.id != null && isFrozen(lock, t.id))).map((t) => t.key),
     ...s.elements.filter((e) => e.isPinned === true).map((e) => decorKey(e.id)),
   ]);
 }
 
 export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, onOpenSpacing, groups }: Props) {
   const store = useEditorStore();
+  const lock = useEditorLock();
   const containerRef = useRef<HTMLDivElement>(null);
   const size = useContainerSize(containerRef);
   const tables = useEditor((s) => s.tables);
@@ -95,7 +97,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
   useEffect(() => {
     const tr = transformer.current;
     if (!tr) return;
-    const pinned = pinnedKeys({ tables, elements });
+    const pinned = pinnedKeys({ tables, elements }, lock);
     const attached = selection
       .filter((k) => !pinned.has(k))
       .map((k) => nodes.current.get(k))
@@ -103,7 +105,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
     tr.nodes(readOnly ? [] : attached);
     tr.resizeEnabled(selection.length > 0 && selection.every(isDecorKey));
     tr.getLayer()?.batchDraw();
-  }, [selection, tables, elements, readOnly]);
+  }, [selection, tables, elements, readOnly, lock]);
 
   /**
    * Izgaraya oturtma sonucu store değeri sürükleme öncesiyle aynı kalırsa React prop'u değişmez ve
@@ -143,7 +145,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
       },
       onDragStart: (key) => {
         const s = store.getState();
-        const pinned = pinnedKeys(s);
+        const pinned = pinnedKeys(s, lock);
         const moving = (s.selection.includes(key) ? s.selection : [key]).filter((k) => !pinned.has(k));
         if (!s.selection.includes(key)) s.select([key]);
         const movingSet = new Set(moving);
@@ -180,7 +182,7 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
         syncNodes(placements.map((p) => p.key));
       },
     }),
-    [readOnly, tool, store, syncNodes, notify],
+    [readOnly, tool, store, syncNodes, notify, lock],
   );
 
   const onTransformEnd = useCallback(() => {
@@ -353,7 +355,8 @@ export default function VenueCanvas({ readOnly, tableTypes, notify, onOpenAdd, o
                 muted={!onActiveFloor(t.floor, activeFloor)}
                 groupColor={t.id ? groups?.get(t.id)?.color : undefined}
                 {...handlers}
-                draggable={canDrag && !t.isPinned}
+                draggable={canDrag && !t.isPinned && !(t.id !== null && isFrozen(lock, t.id))}
+                frozen={t.id !== null && isFrozen(lock, t.id)}
               />
             ))}
             <Transformer

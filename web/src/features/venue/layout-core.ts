@@ -86,6 +86,9 @@ function normalizeTables(tables: TableInput[]): NormalizedTable[] {
   const badFloor: string[] = [];
   const emptyLabel = tables.some((t) => t.label.trim() === "");
   if (emptyLabel) throw new DomainError("conflict", "Her masanın bir etiketi olmalı");
+  // Tekrarlanan kimlik, yerleşim kilidini atlatabilir (kilit yalnızca son girdiyi görür); şemadan bağımsız reddedilir.
+  const ids = tables.flatMap((t) => (t.id ? [t.id] : []));
+  if (new Set(ids).size !== ids.length) throw new DomainError("conflict", "Masa iki kez gönderildi");
 
   const result = tables.map((t) => {
     const label = t.label.trim();

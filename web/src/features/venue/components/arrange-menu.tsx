@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { decorKey, isDecorKey } from "../editor/store";
 import { runAutoAlign, runCenterHorizontally, runSnapToCells, runTogglePin, runToggleVip, type Notify } from "./editor-commands";
-import { useEditor, useEditorStore } from "./editor-context";
+import { useEditor, useEditorLock, useEditorStore } from "./editor-context";
 
 type Props = {
   notify: Notify;
@@ -23,6 +23,7 @@ type Props = {
 /** Toplu ekleme ve hizalama menüleri (sağ tık menüsündeki işlemlerin klavyeyle erişilebilir karşılıkları). */
 export function ArrangeMenu({ notify, onOpenAdd, onOpenSpacing }: Props) {
   const store = useEditorStore();
+  const lock = useEditorLock();
   const selection = useEditor((s) => s.selection);
   const tableCount = useEditor((s) => s.selection.filter((k) => !isDecorKey(k)).length);
 
@@ -48,11 +49,11 @@ export function ArrangeMenu({ notify, onOpenAdd, onOpenSpacing }: Props) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-56">
-          <DropdownMenuItem onSelect={() => runAutoAlign(store, notify)}>
+          <DropdownMenuItem onSelect={() => runAutoAlign(store, notify, lock)}>
             <Settings className="size-4" />
             {tableCount > 0 ? `Seçilileri Hizala (${tableCount})` : "Otomatik Hizala"}
           </DropdownMenuItem>
-          <DropdownMenuItem title="Tüm masaları grid hücre merkezine hizala" onSelect={() => runSnapToCells(store, notify)}>
+          <DropdownMenuItem title="Tüm masaları grid hücre merkezine hizala" onSelect={() => runSnapToCells(store, notify, lock)}>
             <Grid3x3 className="size-4" />
             Merkezle
           </DropdownMenuItem>
@@ -60,7 +61,7 @@ export function ArrangeMenu({ notify, onOpenAdd, onOpenSpacing }: Props) {
             <ArrowLeftRight className="size-4" />
             Aralık Ayarla
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={selection.length === 0} onSelect={() => runCenterHorizontally(store, notify)}>
+          <DropdownMenuItem disabled={selection.length === 0} onSelect={() => runCenterHorizontally(store, notify, lock)}>
             <Maximize2 className="size-4" />
             Yatay Ortala
           </DropdownMenuItem>

@@ -64,12 +64,25 @@ export const staffPerformanceReviews = pgTable(
     privateNotes: text("private_notes"),
     nextEventNotes: text("next_event_notes"),
     isCompleted: boolean("is_completed").notNull().default(false),
+    // Form türü: eski satırlar ayrıntılı ("full"); kısa formda yalnızca genel yıldız puanı vardır.
+    formKind: text("form_kind").notNull().default("full"),
+    // Kısa formun 1–5 yıldızı; ayrıntılı formda boştur.
+    overallRating: smallint("overall_rating"),
     ...timestamps(),
   },
   (t) => [
     unique("staff_performance_reviews_staff_event_reviewer_uq").on(t.staffId, t.eventId, t.reviewerId),
     index("staff_performance_reviews_event_id_idx").on(t.eventId),
     index("staff_performance_reviews_reviewer_id_idx").on(t.reviewerId),
+    check("staff_performance_reviews_form_kind_valid", sql`${t.formKind} IN ('short','full')`),
+    check(
+      "staff_performance_reviews_overall_range",
+      sql`${t.overallRating} IS NULL OR ${t.overallRating} BETWEEN 1 AND 5`,
+    ),
+    check(
+      "staff_performance_reviews_short_complete",
+      sql`${t.formKind} <> 'short' OR ${t.isCompleted} = false OR ${t.overallRating} IS NOT NULL`,
+    ),
     check("staff_performance_reviews_score_range", sql`${t.score} BETWEEN 0 AND 100`),
     check("staff_performance_reviews_communication_range", scoreRange(t.communication)),
     check("staff_performance_reviews_punctuality_range", scoreRange(t.punctuality)),

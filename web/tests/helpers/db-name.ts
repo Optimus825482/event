@@ -21,6 +21,11 @@ export function resolveTestDbName(raw: string | undefined): string {
   return raw;
 }
 
+/** `<base>_<suffix>`; sonuç `resolveTestDbName` kuralını geçmezse aynı hata (ör. şeridin `_mig` veritabanı). */
+export function derivedTestDbName(base: string, suffix: string): string {
+  return resolveTestDbName(`${base}_${suffix}`);
+}
+
 export function testDatabaseUrl(name: string): string {
   return `${PG_BASE_URL}/${name}`;
 }

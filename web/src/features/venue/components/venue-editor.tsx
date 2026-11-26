@@ -6,6 +6,7 @@ import { formatDraftTime } from "../editor/draft";
 import { groupsByTable, type TableGroupInfo } from "../editor/groups";
 import { DEFAULT_VIEW_SETTINGS, type ViewSettings } from "../editor/view-chrome";
 import type { Point } from "../editor/geometry";
+import { editorLock, type EditorLock } from "../editor/lock";
 import { createEditorStore, isLayoutEmpty, type InitialLayout } from "../editor/store";
 import type { TableShape } from "../schemas";
 import type { WriteLayoutResult } from "../layout-core";
@@ -13,7 +14,7 @@ import { saveLayoutAction } from "../actions";
 import { AddElementsDialog, type AddRequest } from "./add-elements-dialog";
 import { DraftRecoveryDialog } from "./draft-recovery-dialog";
 import type { Notify } from "./editor-commands";
-import { EditorStoreContext, tableShapeOf, useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
+import { EditorLockContext, EditorStoreContext, tableShapeOf, useEditor, useEditorStore, type TableTypeOption } from "./editor-context";
 import { EditorToolbar } from "./editor-toolbar";
 import { PropertiesPanel } from "./properties-panel";
 import { TemplateDialog, type TemplateOption } from "./template-dialog";
@@ -41,6 +42,11 @@ export type VenueEditorProps = {
   templates: TemplateOption[];
   canEdit: boolean;
   canSaveTemplate: boolean;
+  /**
+   * Satış kilidi görünümü; yetkili olan sunucudur, editör yalnızca kullanıcıyı önceden bilgilendirir.
+   * Sunucu sayfasından geçtiği için serileştirilebilir (dizi); `Set` istemcide kurulur.
+   */
+  lock: { locked: boolean; frozenTableIds: string[] };
   /** Ekip masa grupları (planda halka); verilmezse gösterilmez. */
   tableGroups?: readonly TableGroupInfo[];
   /** Izgara boyutu / yapışma / görünürlük varsayılanları (sistem ayarları). */
@@ -81,15 +87,32 @@ function groupTableErrors(fieldErrors: Record<string, string[]>, keys: readonly 
 }
 
 export function VenueEditor(props: VenueEditorProps) {
-  const [store] = useState(() => createEditorStore(props.initial, props.viewSettings ?? DEFAULT_VIEW_SETTINGS));
+  const lock = useMemo(
+    () => editorLock({ layoutLocked: props.lock.locked, frozenTableIds: props.lock.frozenTableIds }),
+    [props.lock.locked, props.lock.frozenTableIds],
+  );
+  const [store] = useState(() =>
+    createEditorStore({ ...props.initial, frozenTableIds: [...lock.frozen] }, props.viewSettings ?? DEFAULT_VIEW_SETTINGS),
+  );
   return (
     <EditorStoreContext.Provider value={store}>
-      <EditorShell {...props} />
+      <EditorLockContext.Provider value={lock}>
+        <EditorShell {...props} lock={lock} />
+      </EditorLockContext.Provider>
     </EditorStoreContext.Provider>
   );
 }
 
-function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveTemplate, tableGroups }: VenueEditorProps) {
+function EditorShell({
+  eventId,
+  userId,
+  tableTypes,
+  templates,
+  canEdit,
+  canSaveTemplate,
+  tableGroups,
+  lock,
+}: Omit<VenueEditorProps, "lock"> & { lock: EditorLock }) {
   const store = useEditorStore();
   const dirty = useEditor((s) => s.dirty);
   const layoutEmpty = useEditor(isLayoutEmpty);
@@ -137,12 +160,8 @@ function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveT
     }
   }, [store, canEdit, saving, eventId, clearDraft]);
 
-  const onBlocked = useCallback((labels: string[]) => {
-    setMessage({ kind: "error", text: `Rezervasyonu veya ataması olan masalar silinemez: ${labels.join(", ")}` });
-  }, []);
-
   const dialogOpen = templatesOpen || addRequest !== null || spacingOpen || draft.recovery !== null;
-  useEditorShortcuts({ store, enabled: !dialogOpen, onSave: () => void save(), onBlocked, notify });
+  useEditorShortcuts({ store, enabled: !dialogOpen, onSave: () => void save(), notify, lock });
 
   useEffect(() => {
     if (!dirty) return;
@@ -168,11 +187,15 @@ function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveT
         onToggle3d={() => setShow3d((v) => !v)}
         onSave={() => void save()}
         onOpenTemplates={() => setTemplatesOpen(true)}
-        onBlocked={onBlocked}
         notify={notify}
         onOpenAdd={(kind) => openAdd(kind)}
         onOpenSpacing={() => setSpacingOpen(true)}
       />
+      {lock.locked ? (
+        <p role="status" className="border-b border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+          Satış başladı: taahhütlü (rezervasyonlu) masalar kilitli.
+        </p>
+      ) : null}
       {canEdit && layoutEmpty ? (
         <p className="border-b border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
           Henüz masa yok. Araç çubuğundan masa ekleyin ya da bir şablon uygulayın.
@@ -214,6 +237,7 @@ function EditorShell({ eventId, userId, tableTypes, templates, canEdit, canSaveT
         eventId={eventId}
         templates={templates}
         canApply={canEdit}
+        layoutLocked={lock.locked}
         canSave={canSaveTemplate}
         dirty={dirty}
         onApplied={(result) => {

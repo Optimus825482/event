@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PG_BASE_URL } from "../helpers/db-name";
+import { derivedTestDbName, PG_BASE_URL, resolveTestDbName } from "../helpers/db-name";
 
 const SCRIPT = path.resolve(import.meta.dirname, "../../scripts/migrate.mjs");
 const REAL_FOLDER = path.resolve(import.meta.dirname, "../../drizzle");
-const DB_NAME = "eventflow_test_fixh_mig";
+// Şeridin test veritabanından türetilir; paralel koşular (ve ana ağaç) birbirinin veritabanını düşürmez.
+const DB_NAME = derivedTestDbName(resolveTestDbName(process.env.TEST_DB_NAME), "mig");
 const DB_URL = `${PG_BASE_URL}/${DB_NAME}`;
 
 function migrate(folder: string, url = DB_URL) {
