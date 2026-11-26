@@ -21,6 +21,7 @@ export default async function NewReservationPage({ params, searchParams }: { par
   const { actor, event, tables, plan, statuses, customerResults } = await loadNewReservationPage(eventId, customerQ);
   const bookable = (event.status === "published" || event.status === "active") && event.reservationEnabled;
   const freeCount = tables.filter((t) => t.available).length;
+  const hasCasinoTables = tables.some((t) => t.allocation === "casino");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -45,6 +46,13 @@ export default async function NewReservationPage({ params, searchParams }: { par
         <p role="alert" className="rounded-md border border-border p-4 text-sm">
           Bu etkinlik şu anda rezervasyona açık değil (yalnızca yayında veya devam eden ve rezervasyonu açık etkinlikler).
         </p>
+      ) : !hasCasinoTables ? (
+        <div role="status" className="space-y-3 rounded-md border border-border p-4 text-sm">
+          <p>Casino&apos;ya ayrılmış masa yok. Önce masa tahsisi yapın.</p>
+          <Link href={`/reservations/${eventId}/allocation`} className={buttonVariants({ variant: "outline" })}>
+            Masa tahsisi
+          </Link>
+        </div>
       ) : (
         <>
           {can(actor, "customers", "view") ? (

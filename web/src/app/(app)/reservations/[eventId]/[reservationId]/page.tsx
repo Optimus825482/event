@@ -51,6 +51,8 @@ export default async function ReservationDetailPage({ params }: { params: Params
 
       <div className="grid gap-6 md:grid-cols-[1fr_auto]">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt className="text-muted-foreground">Rezervasyon kodu</dt>
+          <dd className="select-all font-mono text-base font-semibold tracking-wider">{reservation.bookingCode}</dd>
           <dt className="text-muted-foreground">Masa</dt>
           <dd>
             {tableLabel} ({tableCapacity} kişilik)

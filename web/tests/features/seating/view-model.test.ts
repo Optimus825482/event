@@ -3,6 +3,7 @@ import { SALE_CATEGORIES, TABLE_ALLOCATIONS } from "@/domain/seating";
 import type { SeatingTable } from "@/features/seating/queries";
 import {
   ALLOCATION_COLORS,
+  casinoMove,
   CATEGORY_COLORS,
   parseSellableInput,
   parseWholeNumber,
@@ -108,4 +109,14 @@ describe("masalar ve satış görünüm modeli", () => {
     expect(parseSellableInput("0", 8)).toEqual({ ok: false, message: "1 ile 8 arasında bir sayı girin" });
     expect(parseSellableInput("x", 8)).toEqual({ ok: false, message: "1 ile 8 arasında bir sayı girin" });
   });
+});
+
+describe("Casino tahsis geçişi", () => {
+  it.each([
+    [{ allocation: "pending", hasActiveReservation: false }, "allocate"],
+    [{ allocation: "casino", hasActiveReservation: false }, "release"],
+    [{ allocation: "casino", hasActiveReservation: true }, null],
+    [{ allocation: "online", hasActiveReservation: false }, null],
+    [{ allocation: "closed", hasActiveReservation: false }, null],
+  ] as const)("casinoMove(%j) = %s", (table, move) => expect(casinoMove(table)).toBe(move));
 });
