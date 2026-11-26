@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { PoolClient } from "pg";
 import { db, pool } from "@/db/client";
-import { customers, reservations } from "@/db/schema";
+import { checkInEvents, customers, reservations } from "@/db/schema";
 import { registerWalkIn, updateGuestCount } from "@/features/check-in/service";
 import { verifyQrToken } from "@/features/reservations/qr-token";
 import { setupTestDb, truncateAll } from "../../helpers/db";
@@ -129,6 +129,25 @@ describe("registerWalkIn", () => {
       guestCount: 1,
     });
     expect(result.outcome).toBe("checked_in");
+  });
+
+  it("walk-in casino olmayan masaya yapılamaz ve hiçbir şey yazılmaz", async () => {
+    const { event } = await bookedGuest();
+    const table = await createTable(db, event.id, { capacity: 6, label: "P1", allocation: "pending" });
+    const door = await actorOf(memberActor("casino", { check_in: "vc--" }));
+    const count = async () => [
+      (await db.select().from(reservations)).length,
+      (await db.select().from(customers)).length,
+      (await db.select().from(checkInEvents)).length,
+    ];
+    const before = await count();
+
+    await expectDomain(
+      registerWalkIn(db, door, { eventId: event.id, tableId: table.id, guestName: "Kapı Misafiri", guestCount: 2 }),
+      "conflict",
+      "Bu masa Casino'ya ayrılmamış",
+    );
+    expect(await count()).toEqual(before);
   });
 });
 

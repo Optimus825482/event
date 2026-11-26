@@ -60,6 +60,7 @@ export async function listReservations(db: Executor, actor: Actor, raw: ListRese
     db
       .select({
         id: reservations.id,
+        bookingCode: reservations.bookingCode,
         status: reservations.status,
         guestCount: reservations.guestCount,
         guestName: reservations.guestName,
