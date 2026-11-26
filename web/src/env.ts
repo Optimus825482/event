@@ -3,6 +3,10 @@ import { z } from "zod";
 
 const DEV_AUTH_URL = "http://localhost:3000";
 
+function blankToUndefined(value: unknown): unknown {
+  return typeof value === "string" && value.trim() === "" ? undefined : value;
+}
+
 const envSchema = z
   .object({
     DATABASE_URL: z.string().min(1),
@@ -22,6 +26,19 @@ const envSchema = z
       (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
       z.string().min(32, "en az 32 karakter olmalıdır").optional(),
     ),
+    // Satış API'sinin ortak sırrı (en az 32 karakter). Tanımsızsa `/api/sales/*` uçları 503 döner.
+    SALES_API_SECRET: z.preprocess(blankToUndefined, z.string().min(32, "en az 32 karakter olmalıdır").optional()),
+    // Ödeme sağlayıcı: yalnızca tam olarak "demo" | "disabled". Verilmezse geliştirme/testte demo,
+    // üretimde disabled (demo POS üretimde yalnızca açıkça yazılırsa etkinleşir).
+    PAYMENT_PROVIDER: z.preprocess(blankToUndefined, z.enum(["demo", "disabled"]).optional()),
+    // Herkese açık satış sitesinin adresi; sondaki "/" atılır, üretimde https:// olmalı.
+    SALES_SITE_URL: z.preprocess(
+      (value) => {
+        const blank = blankToUndefined(value);
+        return typeof blank === "string" ? blank.trim().replace(/\/+$/, "") : blank;
+      },
+      z.string().min(1).optional(),
+    ),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     // İstemci IP'sinin okunacağı, ters vekilin (ör. Traefik) yazdığı başlık. Üretimde
     // zorunlu; geliştirme/testte tanımsızsa istemcinin gönderdiği hiçbir başlığa güvenilmez.
@@ -39,6 +56,9 @@ const envSchema = z
     } else if (!value.BETTER_AUTH_URL.startsWith("https://")) {
       ctx.addIssue({ code: "custom", path: ["BETTER_AUTH_URL"], message: "üretimde https:// ile başlamalıdır" });
     }
+    if (value.SALES_SITE_URL && !value.SALES_SITE_URL.startsWith("https://")) {
+      ctx.addIssue({ code: "custom", path: ["SALES_SITE_URL"], message: "üretimde https:// ile başlamalıdır" });
+    }
     if (!value.TRUSTED_IP_HEADER) {
       ctx.addIssue({
         code: "custom",
@@ -47,7 +67,11 @@ const envSchema = z
       });
     }
   })
-  .transform((value) => ({ ...value, BETTER_AUTH_URL: value.BETTER_AUTH_URL ?? DEV_AUTH_URL }));
+  .transform((value) => ({
+    ...value,
+    BETTER_AUTH_URL: value.BETTER_AUTH_URL ?? DEV_AUTH_URL,
+    PAYMENT_PROVIDER: value.PAYMENT_PROVIDER ?? (value.NODE_ENV === "production" ? "disabled" : "demo"),
+  }));
 
 export type Env = z.output<typeof envSchema>;
 
