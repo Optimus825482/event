@@ -41,13 +41,14 @@ depoya yazmayın; Coolify "Environment Variables" bölümünde ya da sunucuda or
 | `TRUSTED_IP_HEADER` | evet | Ters vekilin istemci IP'sini yazdığı başlık. Traefik/Coolify arkasında `x-real-ip` |
 | `SETTINGS_ENCRYPTION_KEY` | evet (bu yığında) | Ayarlardaki SMTP parolasını şifreler; 32 bayt base64: `openssl rand -base64 32`. Kaybedilirse kayıtlı SMTP parolası çözülemez, yeniden girilir |
 | `QR_SIGNING_KEY` | hayır | QR belirteçleri için HMAC anahtarı (en az 32 karakter). Boşsa `BETTER_AUTH_SECRET`'tan türetilir. **Değişirse dağıtılmış QR'lar geçersiz olur** |
-| `SALES_API_SECRET` | hayır | Satış API'sinin ortak sırrı (en az 32 karakter; `openssl rand -base64 48`). Tanımsızsa `/api/sales/*` uçları `503` döner |
+| `SALES_API_SECRET` | **evet** | Satış API'sinin ortak sırrı (en az 32 karakter; `openssl rand -base64 48`). Compose `:?` kullanır: tanımsızsa tüm yığın (web dahil) dağıtılamaz |
 | `PAYMENT_PROVIDER` | hayır | `demo` \| `disabled`; varsayılan `disabled`. Başka değer açılışı durdurur. `demo` gerçek ödeme almaz |
-| `SALES_SITE_URL` | hayır | Herkese açık satış sitesinin adresi, `https://` ile başlamalı (sondaki `/` atılır) |
+| `SALES_SITE_URL` | **evet** | Herkese açık satış sitesinin adresi, `https://` ile başlamalı (sondaki `/` atılır). Compose `:?` kullanır: tanımsızsa tüm yığın dağıtılamaz |
+| `WEB_PUBLIC_HOST` | **evet** | Çekirdeğin herkese açık alan adı, şemasız (ör. `eventflow.example.com`); Traefik etiketi `/api/sales` yolunu dışarıya kapatır. Compose `:?` kullanır: tanımsızsa tüm yığın dağıtılamaz |
 | `ADMIN_PASSWORD` | hayır | Verilirse dağıtımda `migrate` adımı ilk yöneticiyi kendiliğinden oluşturur (en az 6 karakter; büyük harf, küçük harf ve rakam içermeli). Etkin bir yönetici varsa dokunulmaz; parola değiştirmez. Kısa parola `migrate` adımını durdurur, `web` başlamaz. İlk girişten sonra silebilirsiniz |
 | `ADMIN_USERNAME` | hayır | Otomatik oluşturulan yöneticinin kullanıcı adı; varsayılan `admin` (büyük/küçük harf duyarlı) |
 
-> Faz 7'de `/api/sales/*` için iç ağ yönlendirme kısıtı eklenene dek tek koruma `SALES_API_SECRET`'tır; sır tanımlanmadan uçlar `503` döner. `PAYMENT_PROVIDER=demo` gerçek ödeme almaz; canlı satışta kullanılmaz.
+> `/api/sales/*` Traefik'te dışarıya kapatılmıştır (`WEB_PUBLIC_HOST` etiketi); iç ağdan ise `SALES_API_SECRET` ile korunur. `PAYMENT_PROVIDER=demo` gerçek ödeme almaz; canlı satışta kullanılmaz.
 
 `UPLOAD_DIR` compose içinde `/data/uploads` olarak sabittir (adlandırılmış volume). Uygulama `NODE_ENV=production` iken
 `BETTER_AUTH_URL` (https) ve `TRUSTED_IP_HEADER` olmadan açılmaz.
@@ -201,6 +202,9 @@ adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify
 
 **Ortam değişkenleri** (Coolify'da tanımlanır; depoya yazılmaz):
 
+**Uyarı: `SALES_API_SECRET`, `SALES_SITE_URL` ve `WEB_PUBLIC_HOST` bu sürüm dağıtılmadan ÖNCE Coolify'da tanımlanmalıdır; biri eksikse compose `:?` nedeniyle `web` dahil TÜM dağıtım başarısız olur.**
+
+
 | Değişken | Kim kullanır | Açıklama |
 | --- | --- | --- |
 | `SALES_API_SECRET` | `web` + `satis` | Paylaşılan sır, en az 32 karakter (`openssl rand -base64 48`). İki serviste aynı değer. Değişirse iki servis birlikte yeniden başlatılır |
@@ -208,6 +212,8 @@ adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify
 | `WEB_PUBLIC_HOST` | compose (Traefik etiketi) | Çekirdeğin alan adı, şemasız (ör. `eventflow.example.com`); `/api/sales` yolunu dışarıya kapatır |
 | `TRUSTED_IP_HEADER` | `web` + `satis` | Zaten tanımlı (`x-real-ip`) |
 | `PAYMENT_PROVIDER` | `web` | `demo` ya da `disabled`. Üretim varsayılanı `disabled`: satış kapalı görünür. Demo satış için açıkça `demo` verilmelidir; **demo ile alınan biletler gerçek ödeme değildir** ve her yüzeyde "DEMO - gerçek ödeme alınmadı" yazar |
+
+Ortak `coolify` ağındaki diğer kapsayıcılar `satis:3000` ve `web:3000` adreslerine doğrudan erişebilir; Traefik yönlendirmesi bu erişimi kısıtlamaz. `/api/sales` yine paylaşılan sırla (`SALES_API_SECRET`) korunur.
 
 `satis` kapsayıcısının kendi değişkenleri compose'da bunlardan türetilir: `CORE_API_URL` (sabit `http://eventflow-core:3000`),
 `SALES_API_SECRET`, `SITE_URL` (= `SALES_SITE_URL`), `TRUSTED_IP_HEADER`.
