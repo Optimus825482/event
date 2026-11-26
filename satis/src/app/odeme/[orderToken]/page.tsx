@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Notice } from "@/components/ui/notice";
-import { demoNoticeFor } from "@/features/checkout/demo";
+import { demoNoticeFor, saleIsDemo } from "@/features/checkout/demo";
 import { ExpiredView } from "@/features/checkout/expired-view";
 import { OrderSummary } from "@/features/checkout/order-summary";
 import { PaymentForm } from "@/features/checkout/payment-form";
@@ -55,7 +55,7 @@ export default async function CheckoutPage({ params }: PageProps) {
   }
 
   const event = await loadEvent(order.eventId);
-  const demoNotice = demoNoticeFor(order, event?.sale.demo ?? false);
+  const demoNotice = demoNoticeFor(order, saleIsDemo(event));
   const categoryLabels = Object.fromEntries((event?.prices ?? []).map((p) => [p.category, p.label]));
 
   return (

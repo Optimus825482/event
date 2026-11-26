@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { demoNoticeFor } from "@/features/checkout/demo";
+import { demoNoticeFor, saleIsDemo } from "@/features/checkout/demo";
 import { payFlow, releaseFlow } from "@/features/checkout/flows";
 import { createCoreClient, type CoreClient } from "@/lib/core/client";
 import type { EventDetail } from "@/lib/core/contract";
@@ -139,5 +139,11 @@ describe("demoNoticeFor", () => {
     expect(demoNoticeFor({ demoNotice: null, isDemo: false }, true)).toBe("DEMO - gerçek ödeme alınmadı");
     expect(demoNoticeFor({ demoNotice: null, isDemo: false }, false)).toBeNull();
     expect(demoNoticeFor({ demoNotice: "DEMO - gerçek ödeme alınmadı", isDemo: true }, false)).toBe("DEMO - gerçek ödeme alınmadı");
+  });
+
+  it("etkinlik okunamazsa demo varsayılır ve ibare gösterilir", () => {
+    expect(saleIsDemo(null)).toBe(true);
+    expect(saleIsDemo({ sale: { demo: false } })).toBe(false);
+    expect(demoNoticeFor({ demoNotice: null, isDemo: false }, saleIsDemo(null))).toBe("DEMO - gerçek ödeme alınmadı");
   });
 });

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
@@ -29,6 +29,9 @@ const FIELDS: { name: Field; label: string; type: string; autoComplete: string; 
   { name: "phone", label: "Telefon (isteğe bağlı)", type: "tel", autoComplete: "tel", inputMode: "tel" },
 ];
 
+// Odak düğmede kalsın diye `disabled` yerine aria-disabled + ref koruması kullanılır.
+const BUSY = "aria-disabled:cursor-not-allowed aria-disabled:border-transparent aria-disabled:bg-disabled-bg aria-disabled:text-disabled-text";
+
 const INPUT = "min-h-11 w-full rounded-lg border bg-surface px-3 py-2 text-ivory";
 
 /** Geri sayım + alıcı formu; ödeme ve bırakma tek istekle ilerler (çift tıklama korumalı). */
@@ -47,6 +50,13 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
     setExpired(true);
     router.refresh();
   };
+
+  // Doğrulama hatasında odak ilk geçersiz alana taşınır.
+  useEffect(() => {
+    const order = ["firstName", "lastName", "email", "phone", "acceptTerms"];
+    const first = order.find((name) => fieldErrors[name]);
+    if (first) document.getElementById(first === "acceptTerms" ? "buyer-acceptTerms" : `buyer-${first}`)?.focus();
+  }, [fieldErrors]);
 
   if (expired) return <ExpiredView eventId={eventId} />;
 
@@ -86,6 +96,10 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
         router.replace(`/etkinlik/${eventId}`);
         return;
       }
+      if (result.code === "already_paid") {
+        router.replace(`/bilet/${orderToken}`);
+        return;
+      }
       setError(result.message);
     } catch {
       setError(ERROR_MESSAGES.core_unreachable);
@@ -121,7 +135,7 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
                 autoComplete={field.autoComplete}
                 inputMode={field.inputMode}
                 value={values[field.name]}
-                disabled={pending}
+                readOnly={pending}
                 aria-invalid={message ? true : undefined}
                 aria-describedby={message ? `${id}-error` : undefined}
                 onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.value }))}
@@ -138,13 +152,15 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
         <div className="flex flex-col gap-1">
           <label className="flex min-h-11 items-start gap-3 text-ivory">
             <input
+              id="buyer-acceptTerms"
               type="checkbox"
               name="acceptTerms"
               checked={acceptTerms}
-              disabled={pending}
               aria-invalid={fieldErrors.acceptTerms ? true : undefined}
               aria-describedby={fieldErrors.acceptTerms ? "buyer-acceptTerms-error" : undefined}
-              onChange={(event) => setAcceptTerms(event.target.checked)}
+              onChange={(event) => {
+                if (!busy.current) setAcceptTerms(event.target.checked);
+              }}
               className="mt-1 size-5 shrink-0 accent-gold"
             />
             <span>
@@ -166,15 +182,15 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
         </div>
         {error ? <Notice tone="error">{error}</Notice> : null}
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="submit" variant="gold" size="lg" disabled={pending} className="sm:flex-1">
+          <Button type="submit" variant="gold" size="lg" aria-disabled={pending} className={cn("sm:flex-1", BUSY)}>
             Öde
           </Button>
           {demo ? (
-            <Button variant="glass" size="lg" disabled={pending} onClick={() => void submit("decline")} className="sm:flex-1">
+            <Button variant="glass" size="lg" aria-disabled={pending} onClick={() => void submit("decline")} className={cn("sm:flex-1", BUSY)}>
               Reddet (deneme)
             </Button>
           ) : null}
-          <Button variant="ghost" size="lg" disabled={pending} onClick={() => void giveUp()}>
+          <Button variant="ghost" size="lg" aria-disabled={pending} onClick={() => void giveUp()} className={BUSY}>
             Vazgeç
           </Button>
         </div>
