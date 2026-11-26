@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Dosyalar metin olarak okunur (YAML ayrıştırıcı bağımlılığı yok).
-const read = (relativePath: string) => readFileSync(resolve(import.meta.dirname, relativePath), "utf8");
+const read = (relativePath: string) => readFileSync(resolve(import.meta.dirname, relativePath), "utf8").replace(/\r\n/g, "\n");
 
 const coolify = read("../../../docker-compose.coolify.yaml");
 const local = read("../../../docker-compose.yml");
