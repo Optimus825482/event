@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { fillBuyer, startCheckout } from "./support/checkout";
 import { expireOrder, fakeRequests, fakeState, resetOrders } from "./support/fake";
 import { expectNoHorizontalOverflow } from "./support/layout";
 
@@ -7,21 +8,6 @@ const { gala } = fakeState().events;
 test.beforeEach(async () => {
   await resetOrders();
 });
-
-/** Etkinlik sayfasından masayı seçip "Devam et"e basar; ödeme sayfasında biter. */
-async function startCheckout(page: Page, label: string): Promise<void> {
-  await page.goto(`/etkinlik/${gala.id}`);
-  await page.getByRole("button", { name: new RegExp(`Masa ${label},`) }).click();
-  await page.getByRole("region", { name: "Seçiminiz" }).getByRole("button", { name: "Devam et" }).click();
-  await expect(page).toHaveURL(/\/odeme\//);
-  await expect(page.getByRole("button", { name: "Öde" })).toBeVisible();
-}
-
-async function fillBuyer(page: Page): Promise<void> {
-  await page.getByLabel("Ad", { exact: true }).fill("Ayşe");
-  await page.getByLabel("Soyad").fill("Kaya");
-  await page.getByLabel("E-posta").fill("ayse@example.com");
-}
 
 test("ödeme sayfası: özet, geri sayım, DEMO ibaresi, gizlilik başlıkları", async ({ page }) => {
   await startCheckout(page, "A5");
