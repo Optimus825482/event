@@ -47,8 +47,19 @@ export async function findTableByCode(
   deps: { limiters?: FindTableLimiters } = {},
 ): Promise<{ token: string } | null> {
   const limiters = deps.limiters ?? createFindTableLimiters(db);
+  // IP sayacı her denemeyi önce sayar (eşzamanlı patlamalar da sınırlanır); başarılı arama sayımı geri alır,
+  // böylece yalnızca başarısız denemeler (yanlış kod/soyad, biçimsiz kod) birikir.
   await guard(limiters.ip, ctx.ip);
+  const found = await lookup(db, input, limiters);
+  if (found) await limiters.ip.refund?.(ctx.ip);
+  return found;
+}
 
+async function lookup(
+  db: Db,
+  input: { code: string; lastName: string },
+  limiters: FindTableLimiters,
+): Promise<{ token: string } | null> {
   const code = normalizeCode(input.code);
   const isPnr = code.length === PNR_LENGTH;
   const isBooking = code.length === BOOKING_CODE_LENGTH && code.startsWith("R");

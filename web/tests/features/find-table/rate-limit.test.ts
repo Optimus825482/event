@@ -43,6 +43,26 @@ describe("masamı bul hız sınırı", () => {
     expect((err as FindTableRateLimitedError).retryAfterSeconds).toBeGreaterThan(0);
   });
 
+  it("başarılı aramalar IP sayacına yazılmaz: aynı IP'den 6 başarılı arama da geçer (gerçek sayaç)", async () => {
+    const te = await ticketedEvent();
+    const limiters = createFindTableLimiters(db);
+    for (let i = 0; i < 6; i += 1) {
+      expect(await findTableByCode(db, { code: te.order.pnr!, lastName: "Yılmaz" }, ctx, { limiters })).not.toBeNull();
+    }
+  });
+
+  it("5 başarısız denemeden sonraki deneme 429 olur; araya giren başarılı arama sayılmaz", async () => {
+    const te = await ticketedEvent();
+    const limiters = createFindTableLimiters(db);
+    for (let i = 0; i < 5; i += 1) {
+      expect(await findTableByCode(db, { code: te.order.pnr!, lastName: "Kaya" }, ctx, { limiters })).toBeNull();
+      if (i === 2) expect(await findTableByCode(db, { code: te.order.pnr!, lastName: "Yılmaz" }, ctx, { limiters })).not.toBeNull();
+    }
+    expect(await rejection(findTableByCode(db, { code: "ZZZZZZZZ", lastName: "x" }, ctx, { limiters }))).toBeInstanceOf(
+      FindTableRateLimitedError,
+    );
+  });
+
   it("farklı IP'ler birbirini etkilemez", async () => {
     const te = await ticketedEvent();
     const limiters = createFindTableLimiters(db);

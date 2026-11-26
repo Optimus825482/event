@@ -78,6 +78,11 @@ export function createRateLimiter(options: RateLimiterOptions): RateLimiter {
 
 export type AsyncRateLimiter = {
   check(key: string): Promise<RateLimitDecision>;
+  /**
+   * İsteğe bağlı: geçerli penceredeki son `check` sayımını geri alır (yalnızca başarısız denemeleri
+   * saymak isteyen uçlar için). Sayaç sıfırın altına inmez; hata yutulur ve günlüğe yazılır.
+   */
+  refund?(key: string): Promise<void>;
 };
 
 export type PgRateLimiterOptions = {
@@ -133,6 +138,17 @@ export function createPgRateLimiter(options: PgRateLimiterOptions): PgRateLimite
 
   return {
     prune,
+    async refund(key) {
+      try {
+        await db.execute(sql`
+          update public_rate_limits set hits = hits - 1
+          where scope = ${scope}::text and key = ${key}::text and hits > 0
+            and window_start = to_timestamp(floor(extract(epoch from clock_timestamp()) / ${windowSeconds}::int) * ${windowSeconds}::int)
+        `);
+      } catch (error) {
+        onError(error);
+      }
+    },
     async check(key) {
       try {
         const result = await db.execute<HitRow>(sql`
