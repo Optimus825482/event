@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { checkInActionDefs } from "@/features/check-in/action-defs";
@@ -9,7 +10,6 @@ import { createAction } from "@/lib/action";
 import { memberActor, noAccessActor } from "../../helpers/actors";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { doorActor, stampTicketCheckIn, ticketIdsOf, ticketedEvent } from "../../helpers/door";
-import { createPendingHold, expireOrder } from "../../helpers/ticketing";
 import { bookedGuest, expectDomain, reservationRow } from "./fixtures";
 
 describe("kapıda rezervasyon kodu ve PNR araması", () => {
@@ -91,19 +91,23 @@ describe("kapıda rezervasyon kodu ve PNR araması", () => {
     expect(await findOrderAtDoor(db, door, { eventId: b.event.id, pnr: a.order.pnr! })).toBeNull();
   });
 
-  it("ödenmemiş sipariş bulunmaz; süresi dolmuş tutma null döner", async () => {
+  it.each(["expired", "pending"])("ödenmemiş (%s) sipariş PNR ile bulunmaz", async (status) => {
     const door = await doorActor();
-    const te = await ticketedEvent({ seats: [1] });
-    const hold = await createPendingHold(db, {
-      eventId: te.event.id,
-      items: [{ tableId: te.tables[0]!.id, quantity: 1 }],
-    }).catch(() => null);
-    if (hold) {
-      await expireOrder(db, hold.orderId);
-      expect(hold.pnr ?? null).toBeNull();
-    }
-    // Sahte PNR'la ödenmemiş sipariş de bulunmaz.
-    expect(await findOrderAtDoor(db, door, { eventId: te.event.id, pnr: "ABCD2345" })).toBeNull();
+    const te = await ticketedEvent();
+    const input = { eventId: te.event.id, pnr: te.order.pnr! };
+    expect(await findOrderAtDoor(db, door, input)).not.toBeNull();
+    await db.execute(sql`update orders set status = ${status} where id = ${te.order.orderId}`);
+    expect(await findOrderAtDoor(db, door, input)).toBeNull();
+  });
+
+  it("issued olmayan bilet listede çıkmaz", async () => {
+    const door = await doorActor();
+    const te = await ticketedEvent();
+    const [gone] = await ticketIdsOf(te.order.orderId);
+    await db.execute(sql`update tickets set status = 'expired', seat_slot_id = null where id = ${gone}`);
+    const found = await findOrderAtDoor(db, door, { eventId: te.event.id, pnr: te.order.pnr! });
+    expect(found?.tickets).toHaveLength(2);
+    expect(found?.tickets.map((t) => t.ticketId)).not.toContain(gone);
   });
 
   it("olmayan etkinlik not_found", async () => {
