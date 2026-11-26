@@ -14,6 +14,7 @@
 Traefik/Coolify (HTTPS, x-real-ip) -> web (Next.js standalone, :3000) -> eventflow-db (PostgreSQL 17, iç ağ, port yayınlanmaz)
                                       ^-- migrate (tek seferlik: node /opt/migrator/migrate.mjs)
                                       ^-- create-admin (isteğe bağlı tek seferlik, profil `tools`; bkz. İlk yönetici)
+Traefik/Coolify -> satis (Next.js standalone, :3000) -> eventflow-core:3000 (= web, iç ağ); satis'in veritabanı yoktur (bkz. Satış sitesi)
 ```
 
 - `eventflow-db`: `postgres:17-alpine`, verisi `web_postgres_data` volume'unda. Port yayınlanmaz. Volume adı eski yığınınkinden
@@ -185,6 +186,56 @@ Bunlar ajanın/otomasyonun yapamayacağı ya da yapmaması gereken işlerdir:
    GHCR'deki eski imajlar ve eski yığının volume'ları da kaldırılabilir.
 6. Üretim gizli değerlerini (`BETTER_AUTH_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `DB_PASSWORD`) üretip güvenli bir yerde
    (parola yöneticisi) yedekleyin; kaybedilen `BETTER_AUTH_SECRET`/`QR_SIGNING_KEY` basılı/dağıtılmış QR'ları geçersiz kılar.
+
+## Satış sitesi (`satis/`)
+
+Herkese açık bilet satış sitesi. Çekirdek (`web/`) satış API'sini (`/api/sales/v1/*`) yalnızca iç ağdan, paylaşılan sırla sunar;
+`satis` bu API'nin tek istemcisidir.
+
+**Mimari:** `Traefik -> satis (:3000) -> eventflow-core:3000 (iç ağ) -> veritabanı`. `satis`'in veritabanı yoktur; tarayıcı
+çekirdeğe hiç gitmez (tüm çağrılar `satis` sunucusundan yapılır). `eventflow-core`, `web` servisinin iç ağ takma adıdır.
+
+**Coolify kurulumu:** aynı Docker Compose kaynağında ikinci servis olarak `satis` görünür. `satis` servisine satış alan
+adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify uygulaması açmayın). Deploy sırası: veritabanı
+-> `migrate` -> `web` -> `satis`. Bu fazda çekirdekte şema/migration değişikliği yoktur.
+
+**Ortam değişkenleri** (Coolify'da tanımlanır; depoya yazılmaz):
+
+| Değişken | Kim kullanır | Açıklama |
+| --- | --- | --- |
+| `SALES_API_SECRET` | `web` + `satis` | Paylaşılan sır, en az 32 karakter (`openssl rand -base64 48`). İki serviste aynı değer. Değişirse iki servis birlikte yeniden başlatılır |
+| `SALES_SITE_URL` | `web` (e-posta bağlantısı) + `satis` (`SITE_URL`) | Satış sitesinin herkese açık adresi, `https://` ile |
+| `WEB_PUBLIC_HOST` | compose (Traefik etiketi) | Çekirdeğin alan adı, şemasız (ör. `eventflow.example.com`); `/api/sales` yolunu dışarıya kapatır |
+| `TRUSTED_IP_HEADER` | `web` + `satis` | Zaten tanımlı (`x-real-ip`) |
+| `PAYMENT_PROVIDER` | `web` | `demo` ya da `disabled`. Üretim varsayılanı `disabled`: satış kapalı görünür. Demo satış için açıkça `demo` verilmelidir; **demo ile alınan biletler gerçek ödeme değildir** ve her yüzeyde "DEMO - gerçek ödeme alınmadı" yazar |
+
+`satis` kapsayıcısının kendi değişkenleri compose'da bunlardan türetilir: `CORE_API_URL` (sabit `http://eventflow-core:3000`),
+`SALES_API_SECRET`, `SITE_URL` (= `SALES_SITE_URL`), `TRUSTED_IP_HEADER`.
+
+**Dağıtım sonrası doğrulama (sahibi yapar):**
+
+1. `https://<satış-alan-adı>/api/health` -> `{"status":"ok"}`.
+2. Yalıtım: `curl -i https://<çekirdek-alan-adı>/api/sales/v1/events` JSON `401 unauthorized` **dönmemelidir**. Beklenen:
+   404 ya da giriş sayfasına yönlendirme. 401 JSON dönüyorsa Traefik etiketleri etkisizdir, yol dışarıya açıktır ve tek
+   koruma paylaşılan sırdır: bildirin. **Traefik etiketleri (`eventflow-sales-block*`) kapsayıcıda denenmedi**; bu
+   kontrol ilk dağıtımdan sonra mutlaka yapılmalıdır.
+3. Satış sitesinde bir etkinlik görünüyor, demo ile bir bilet alınabiliyor, e-posta geliyor (SMTP ayarlıysa).
+
+**Canlı satıştan önce yapılacaklar (sahibi):** KVKK aydınlatma metni ve mesafeli satış sözleşmesi sağlanmalı; `/kvkk` ve
+`/mesafeli-satis` şu anda **yer tutucudur** ve bunu sayfada açıkça yazar. Gerçek ödeme sağlayıcısı yoktur; demo dışında
+satış alınamaz.
+
+**Bilinen sınırlar:** canlı masa durumu en çok ~11 sn gecikir; plan 2B'dir (3B sahne bu fazda yok); CAPTCHA yok
+(sözleşme risk 27).
+
+**Doğrulama durumu (satış sitesi):**
+
+- Yapıldı: `satis/` tür denetimi, lint, 304 birim testi, üretim derlemesi, paket sızıntı denetimi (`check:bundle`), Playwright
+  uçtan uca (sahte çekirdekle) ve gerçek çekirdekle çapraz akış; yük koşusu (üretim derlemeleri, 40 masa x 10 sandalye,
+  5000 istemci, 300 tutma, 30 sn): ihlal yok, 378 sandalye tutuldu, 0 yoklama hatası, çekirdeğe ~0,33 uygunluk isteği/sn.
+- Yapılmadı: Docker yok; `satis/Dockerfile` ve compose etiketleri (Traefik engeli dahil) kapsayıcıda denenmedi; ilk dağıtım
+  hazırlık ortamında denenmeli. Elle denetim gerçek telefonda yapılmadı (yalnızca 375 px tarayıcı kipinde); QR'ın başka bir
+  telefon kamerasıyla okunması denenmedi.
 
 ## Sorun giderme
 
