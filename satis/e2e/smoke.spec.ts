@@ -32,7 +32,7 @@ test("altın düğmenin metni okunur: hesaplanan renkler token'lardır", async (
   await page.goto("/");
   const link = page.getByRole("link", { name: "Masa seç" }).first();
   expect(await link.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor])).toEqual([
-    "rgb(20, 27, 45)",
+    "rgb(8, 9, 13)",
     "rgb(212, 175, 55)",
   ]);
 });

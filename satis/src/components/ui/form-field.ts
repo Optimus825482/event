@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 
-const INPUT_BASE = "min-h-11 w-full rounded-lg border bg-surface px-3 py-2 text-ivory";
+const INPUT_BASE = "min-h-11 w-full rounded-[12px] border bg-surface px-3 py-2 text-ivory";
 
 /** Metin alanı sınıfı; hatalıysa kenarlık tehlike renginde. */
 export function inputClass(invalid: boolean): string {

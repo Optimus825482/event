@@ -15,6 +15,8 @@ describe("proxy matcher", () => {
   it.each(["/api/health", "/_next/static/chunks/a.js", "/_next/image", "/favicon.ico"])("%s dışlanır", (p) =>
     expect(matches(p)).toBe(false),
   );
+  it("yazı tipi dosyaları proxy'den geçmez", () => expect(matches("/fonts/dm-sans-latin-wght-normal.woff2")).toBe(false));
+  it.each(["/etkinlikler", "/takvim", "/hakkimizda"])("%s proxy'den geçer", (p) => expect(matches(p)).toBe(true));
 });
 
 describe("proxy", () => {
@@ -36,5 +38,9 @@ describe("next.config headers() yedeği", () => {
     const rule = rules.find((r) => r.source === source);
     expect(rule?.headers).toContainEqual({ key: "X-Robots-Tag", value: "noindex, nofollow" });
     expect(rule?.headers).toContainEqual({ key: "Cache-Control", value: "no-store" });
+  });
+  it("/fonts/:path* uzun ömürlü önbellek başlığı taşır", async () => {
+    const rule = (await nextConfig.headers!()).find((r) => r.source === "/fonts/:path*");
+    expect(rule?.headers).toContainEqual({ key: "Cache-Control", value: "public, max-age=2592000" });
   });
 });

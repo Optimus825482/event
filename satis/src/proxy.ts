@@ -21,7 +21,7 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 // Dosya soneki dışlaması yoktur: sipariş belirteçleri (`<base64url>.<base64url>`) nokta içerir ve
-// bir sonek gibi görünebilir. `satis/public` varlığı yok; eklenirse yolları buraya açıkça yazılır.
+// bir sonek gibi görünebilir. `public/fonts` altındaki statik yazı tipi dosyaları dışlanır.
 export const config = {
-  matcher: ["/((?!api/|_next/static|_next/image|favicon\\.ico$).*)"],
+  matcher: ["/((?!api/|_next/static|_next/image|fonts/|favicon\\.ico$).*)"],
 };
