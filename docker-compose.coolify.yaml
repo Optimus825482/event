@@ -145,7 +145,7 @@ services:
       context: ./satis
       dockerfile: Dockerfile
     image: eventflow-satis:coolify
-    pull_policy: build
+    pull_policy: never
     restart: unless-stopped
     depends_on:
       web:

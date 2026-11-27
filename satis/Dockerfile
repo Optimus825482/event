@@ -7,7 +7,8 @@ RUN npm ci
 
 FROM node:24-alpine AS builder
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_OPTIONS=--max-old-space-size=1536
 # Yalnızca derleme için yer tutucular: ortam modülü `next build` sırasında bunları doğrular.
 # Bu aşama son imajın parçası değildir; değerler imaja girmez. Gerçek değerler çalışma zamanında verilir.
 ENV CORE_API_URL=http://core.invalid \
