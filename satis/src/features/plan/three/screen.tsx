@@ -126,16 +126,19 @@ export function StageScreen({
   room,
   artworkUrl,
   title,
+  wallVis = { left: true, right: true },
 }: {
   stage: StageInfo;
   room: { width: number; depth: number };
   artworkUrl?: string | null;
   title?: string;
+  wallVis?: { left: boolean; right: boolean };
 }) {
   const map = useScreenTexture(title || "Merit Entertainment", artworkUrl);
   const { position, rotationY, width, height } = stage.screen;
   const showSideScreens = room.depth >= 20;
-  const sideX = room.width / 2 + WALL_MARGIN - 0.14;
+  // Duvar pilasterleri (0.65m) ve kornişlerin (0.68m) önünde duracak şekilde 0.85m içeri yerleştirilir.
+  const sideX = room.width / 2 + WALL_MARGIN - 0.85;
 
   return (
     <group>
@@ -152,37 +155,37 @@ export function StageScreen({
       </group>
 
       {/* Yan duvar ekranları (koyu pano + altın çerçeve) */}
-      {showSideScreens ? (
-        <>
-          <group position={[-sideX, 4.18, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <mesh position={[0, 0, -0.22]}>
-              <boxGeometry args={[13.1, 5.1, 0.4]} />
-              <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
-            </mesh>
-            <mesh position={[0, 0, -0.02]}>
-              <boxGeometry args={[12.85, 4.86, 0.09]} />
-              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
-            </mesh>
-            <mesh position={[0, 0, 0.04]}>
-              <planeGeometry args={[12.6, 4.64]} />
-              <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
-            </mesh>
-          </group>
-          <group position={[sideX, 4.18, 0]} rotation={[0, -Math.PI / 2, 0]}>
-            <mesh position={[0, 0, -0.22]}>
-              <boxGeometry args={[13.1, 5.1, 0.4]} />
-              <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
-            </mesh>
-            <mesh position={[0, 0, -0.02]}>
-              <boxGeometry args={[12.85, 4.86, 0.09]} />
-              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
-            </mesh>
-            <mesh position={[0, 0, 0.04]}>
-              <planeGeometry args={[12.6, 4.64]} />
-              <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
-            </mesh>
-          </group>
-        </>
+      {showSideScreens && wallVis.left ? (
+        <group position={[-sideX, 4.18, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <mesh position={[0, 0, -0.22]}>
+            <boxGeometry args={[13.1, 5.1, 0.4]} />
+            <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 0, -0.02]}>
+            <boxGeometry args={[12.85, 4.86, 0.09]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+          </mesh>
+          <mesh position={[0, 0, 0.04]}>
+            <planeGeometry args={[12.6, 4.64]} />
+            <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
+          </mesh>
+        </group>
+      ) : null}
+      {showSideScreens && wallVis.right ? (
+        <group position={[sideX, 4.18, 0]} rotation={[0, -Math.PI / 2, 0]}>
+          <mesh position={[0, 0, -0.22]}>
+            <boxGeometry args={[13.1, 5.1, 0.4]} />
+            <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 0, -0.02]}>
+            <boxGeometry args={[12.85, 4.86, 0.09]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+          </mesh>
+          <mesh position={[0, 0, 0.04]}>
+            <planeGeometry args={[12.6, 4.64]} />
+            <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
+          </mesh>
+        </group>
       ) : null}
     </group>
   );

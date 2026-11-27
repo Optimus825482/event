@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { holdAction } from "@/features/checkout/actions";
 import type { Availability, EventDetail } from "@/lib/core/contract";
@@ -11,7 +12,6 @@ import { formatEventTime } from "@/lib/time-zone";
 import { dimmedTableIds, findTables, type KindFilter } from "./finder";
 import { buildPlanModel } from "./model";
 import { DEFAULT_PARTY_SIZE } from "./party";
-import { PartySizeField } from "./party-step";
 import {
   applyPick,
   autoPick,
@@ -20,6 +20,7 @@ import {
   partyLimit,
   type PickAction,
   type PickRules,
+  pickedCount,
   readiness,
   reconcilePicks,
   samePick,
@@ -31,11 +32,8 @@ import { usePlanView } from "./plan-view";
 import { PlanViewer } from "./plan-viewer";
 import { picksTotal } from "./price";
 import { SalonBrowser } from "./salon-browser";
-import { SelectionSummary } from "./selection-summary";
-import { SightlinePanel } from "./sightline-panel";
 import { formatStageMetrics, tableStageMetrics } from "./stage-metrics";
 import { TableDialog } from "./table-dialog";
-import { TableFinder } from "./table-finder";
 import { useAvailability } from "./use-availability";
 
 export const SEAT_TAKEN_MESSAGE = "Seçtiğiniz sandalyelerden biri az önce alındı. Seçiminiz güncellendi.";
@@ -43,14 +41,19 @@ export const SEAT_TAKEN_MESSAGE = "Seçtiğiniz sandalyelerden biri az önce al�
 export type EventSalesProps = {
   event: EventDetail;
   initialAvailability: Availability;
-  /** "Bilet Al" penceresinde seçilen kişi sayısı (1..event.sale.maxSeatsPerOrder). Verilmezse 2 ile başlar; panelden değişir. */
+  /** "Bilet Al" penceresinde seçilen kişi sayısı (1..event.sale.maxSeatsPerOrder). Verilmezse 2 ile başlar. */
   initialPartySize?: number;
 };
 
+const KIND_FILTERS: { value: KindFilter; label: string }[] = [
+  { value: "all", label: "Tümü" },
+  { value: "table", label: "Masa" },
+  { value: "loca", label: "Loca" },
+];
+
 /**
- * 3B/2B salon planı, masa bulucu, masa penceresi (sahne görüşü, numaralı sandalye seçimi, ödemeye geçiş) ve tutma akışı.
- * Masa açılınca kişi sayısı kadar boş sandalye (bütün satılan masada masanın tamamı) önseçilir;
- * pencere seçime dokunulmadan kapatılırsa önseçim geri alınır.
+ * Tam genişlikte 3B/2B salon arenası: üst kontrol çubuğu (alan filtresi, masa arama, kişi sayısı, seçili masa),
+ * tam ekran salon görünümü ve masa tıklanınca açılan sahne görüşü / ödeme penceresi.
  */
 export function EventSales({ event, initialAvailability, initialPartySize }: EventSalesProps) {
   const router = useRouter();
@@ -134,12 +137,15 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
     runAction({ type: "toggleSeat", tableId, seatNo });
   };
 
-  const finderTables = findTables(model, { query, kind, partySize: state.partySize });
+  const trimmedQuery = query.trim();
+  const finderTables = trimmedQuery
+    ? findTables(model, { query: trimmedQuery, kind, partySize: state.partySize }).slice(0, 8)
+    : [];
   const dimmedIds = dimmedTableIds(model, { query, kind });
-  const pickedIds = new Set(state.picks.map((p) => p.tableId));
   const activeTable = state.activeTableId ? (model.tables.find((t) => t.id === state.activeTableId) ?? null) : null;
   const total = picksTotal(state, model, event.prices);
   const readyInfo = readiness(state, model, rules);
+  const selectedCount = pickedCount(state, model);
 
   const lookFromTable = (tableId: string) => {
     view.setMode("3d");
@@ -200,84 +206,121 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 rounded-[16px] border border-line-gold bg-surface p-3 sm:p-4">
-          {activeTable ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+    <div className="flex flex-col gap-4">
+      {/* Meritevent tarzı üst kontrol çubuğu */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="Alan filtresi" className="relative flex flex-wrap items-center gap-2">
+          {KIND_FILTERS.map((f) => {
+            const active = kind === f.value;
+            return (
               <button
+                key={f.value}
                 type="button"
-                onClick={() => openTable(activeTable.id)}
-                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line-gold bg-glass px-3.5 py-1 text-xs font-semibold text-gold-bright transition-colors hover:border-gold hover:bg-surface-raised"
+                aria-pressed={active}
+                onClick={() => setKind(f.value)}
+                className={
+                  active
+                    ? "inline-flex min-h-10 items-center gap-2 rounded-full border border-gold bg-glass px-3.5 py-1.5 text-xs font-semibold text-gold-bright transition-colors"
+                    : "inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-gold hover:text-ivory"
+                }
               >
-                <span aria-hidden="true" className="size-2 rounded-full bg-gold" />
-                {`Seçili: ${activeTable.isLoca ? "Loca" : "Masa"} ${activeTable.label}`}
+                {f.value === "table" ? <span aria-hidden="true" className="size-2 rounded-full bg-ivory" /> : null}
+                {f.value === "loca" ? <span aria-hidden="true" className="size-2 rounded-full bg-gold" /> : null}
+                {f.label}
               </button>
-            </div>
-          ) : null}
-          <PlanViewer
-            model={model}
-            view={view}
-            picks={state.picks}
-            activeTableId={state.activeTableId}
-            dimmedIds={dimmedIds}
-            artworkUrl={artworkUrl}
-            title={event.name}
-            seatView={seatView}
-            onTable={openTable}
-            onSeat={handleSeat}
-          />
-          <div className="border-t border-line pt-3">
-            <PlanLegend prices={event.prices} currency={event.currency} />
+            );
+          })}
+
+          <div className="relative">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Masa no ara (örn. 45)"
+              aria-label="Masa numarası ara"
+              className="min-h-10 w-[min(100%,195px)] rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs text-ivory placeholder:text-muted focus:border-gold"
+            />
+            {trimmedQuery ? (
+              <div
+                role="region"
+                aria-label="Masa arama sonuçları"
+                className="absolute top-full left-0 z-30 mt-1.5 max-h-60 w-64 overflow-y-auto rounded-2xl border border-line-gold bg-surface p-1.5 shadow-2xl"
+              >
+                {finderTables.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted">Eşleşen masa yok.</p>
+                ) : (
+                  finderTables.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        openTable(t.id);
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-surface-raised"
+                    >
+                      <span className="font-semibold">{`${t.isLoca ? "Loca" : "Masa"} ${t.label}`}</span>
+                      <span className="text-muted">{t.countLabel ?? "—"}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
-        {stale ? (
-          <Notice>Canlı doluluk güncellenemedi; bilgiler birkaç saniye gecikmeli olabilir.</Notice>
-        ) : null}
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          {activeTable ? (
+            <button
+              type="button"
+              onClick={() => openTable(activeTable.id)}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-gold bg-glass px-3.5 py-1.5 text-xs font-semibold text-gold-bright transition-colors hover:border-gold"
+            >
+              <span aria-hidden="true" className="size-2 rounded-full bg-gold" />
+              {`Seçili: ${activeTable.isLoca ? "Loca" : "Masa"} ${activeTable.label}`}
+            </button>
+          ) : null}
+
+          <span
+            role="status"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs font-semibold text-ivory tabular-nums"
+          >
+            <span className="text-muted">{`${state.partySize} Kişi ·`}</span>
+            <span className="text-gold-bright">{`${selectedCount}/${state.partySize} kişi seçildi`}</span>
+          </span>
+
+          {state.picks.length > 0 ? (
+            <Button variant="gold" disabled={!readyInfo.ready || pending || total === null} onClick={proceed} className="min-h-10 px-4 py-1.5 text-xs">
+              {pending ? "Yeriniz ayrılıyor…" : "Devam et"}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      <aside aria-label="Bilet seçimi" className="flex flex-col gap-4">
-        <PartySizeField
-          value={state.partySize}
-          max={limit}
-          disabled={pending}
-          onChange={(partySize) => runAction({ type: "setPartySize", partySize })}
-        />
-        <TableFinder
-          tables={finderTables}
-          query={query}
-          kind={kind}
-          partySize={state.partySize}
-          activeTableId={state.activeTableId}
-          pickedIds={pickedIds}
-          prices={event.prices}
-          currency={event.currency}
-          onQuery={setQuery}
-          onKind={setKind}
-          onFocus={openTable}
-        />
-        <SightlinePanel
-          set={event.site.sightlineSet}
-          table={activeTable ? { label: activeTable.label, isLoca: activeTable.isLoca } : null}
-          canLookIn3d={view.can3d && !view.failed}
-          onLookIn3d={() => {
-            if (activeTable) lookFromTable(activeTable.id);
-          }}
-        />
-        <SelectionSummary
-          state={state}
+      {!dialogTable && messages ? <div className="flex flex-col gap-2">{messages}</div> : null}
+
+      {/* Tam genişlik salon arenası */}
+      <div className="flex flex-col gap-3 rounded-[20px] border border-line-gold bg-surface p-2.5 sm:p-4">
+        <PlanViewer
           model={model}
-          total={total}
-          currency={event.currency}
-          readiness={readyInfo}
-          pending={pending}
-          onRemove={(tableId) => runAction({ type: "removeTable", tableId })}
-          onFocus={openTable}
-          onContinue={proceed}
-        >
-          {dialogTable ? null : messages}
-        </SelectionSummary>
-      </aside>
+          view={view}
+          picks={state.picks}
+          activeTableId={state.activeTableId}
+          dimmedIds={dimmedIds}
+          artworkUrl={artworkUrl}
+          title={event.name}
+          seatView={seatView}
+          onTable={openTable}
+          onSeat={handleSeat}
+        />
+        <div className="border-t border-line pt-3">
+          <PlanLegend prices={event.prices} currency={event.currency} />
+        </div>
+      </div>
+
+      {stale ? (
+        <Notice>Canlı doluluk güncellenemedi; bilgiler birkaç saniye gecikmeli olabilir.</Notice>
+      ) : null}
 
       <TableDialog
         open={dialogTable !== null}

@@ -60,7 +60,7 @@ const CAMERA_BUTTONS: { type: CameraCommand["type"]; label: string; text: string
 ];
 
 export const DEFAULT_3D_HINT =
-  "Döndürmek için sürükleyin, yakınlaşmak için tekerleği ya da iki parmağınızı kullanın. Masaya dokununca yakınlaşır; sandalye seçimi sağdaki numaralı düğmelerle de yapılabilir.";
+  "Sol tık/sürükle: Döndür · Sağ tık: Sağa sola kaydır · Tekerlek: Yakınlaştır. Masaya tıklayınca sahne görünümü ve detaylar açılır.";
 
 /** Planın 3B balo salonu görünümü (tembel yüklenir, hata sınırıyla sarılıdır). */
 export function Plan3D({
@@ -99,19 +99,19 @@ export function Plan3D({
         data-testid="plan-3d-scene"
         data-ready={ready ? "true" : "false"}
         data-camera={cameraTag}
-        className="relative h-[clamp(440px,68dvh,680px)] w-full overflow-hidden rounded-[20px] border border-line-gold bg-bg"
+        className="relative h-[min(64dvh,480px)] min-h-[360px] w-full overflow-hidden rounded-[20px] border border-line-gold bg-bg sm:h-[clamp(480px,72dvh,720px)]"
       >
         <div
           role="group"
           aria-label="Kamera"
-          className="absolute top-3 left-3 z-10 flex flex-wrap gap-1 rounded-full border border-line-gold bg-surface/75 px-2 py-1 backdrop-blur-md"
+          className="absolute top-2.5 right-2.5 left-2.5 z-10 flex flex-wrap gap-1 rounded-2xl border border-line-gold bg-surface/80 p-1.5 backdrop-blur-md sm:top-3 sm:right-auto sm:left-3 sm:rounded-full sm:px-2 sm:py-1"
         >
           {CAMERA_BUTTONS.map((b) => (
             <Button
               key={b.type}
               variant="glass"
               aria-label={b.text === b.label ? undefined : b.label}
-              className="px-3 py-1 text-sm"
+              className="min-h-9 px-2.5 py-1 text-xs sm:min-h-10 sm:px-3 sm:text-sm"
               onClick={() => setCommand((c) => ({ type: b.type, nonce: (c?.nonce ?? 0) + 1 }))}
             >
               {b.text}

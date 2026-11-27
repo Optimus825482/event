@@ -158,18 +158,23 @@ function TableDialogBody({
       </dl>
 
       {sale && table.status === "available" ? (
-        <div className="mx-5 mt-3">
-          <ActiveTableCard
-            compact
-            table={table}
-            pick={sale.pick}
-            unitPrice={unitPrice}
-            currency={currency}
-            disabled={sale.pending}
-            onToggleSeat={sale.onToggleSeat}
-            onToggleWhole={sale.onToggleWhole}
-          />
-        </div>
+        <details className="mx-5 mt-3 rounded-[14px] border border-line bg-surface-raised">
+          <summary className="cursor-pointer px-4 py-2.5 text-xs font-semibold tracking-wider text-gold-bright uppercase select-none hover:text-ivory">
+            Sandalyeleri değiştir
+          </summary>
+          <div className="border-t border-line p-3">
+            <ActiveTableCard
+              compact
+              table={table}
+              pick={sale.pick}
+              unitPrice={unitPrice}
+              currency={currency}
+              disabled={sale.pending}
+              onToggleSeat={sale.onToggleSeat}
+              onToggleWhole={sale.onToggleWhole}
+            />
+          </div>
+        </details>
       ) : null}
 
       {children ? <div className="mx-5 mt-3 flex flex-col gap-2">{children}</div> : null}

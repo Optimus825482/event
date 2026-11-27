@@ -6,11 +6,11 @@ export type ButtonVariant = "gold" | "glass" | "ghost";
 type ButtonSize = "md" | "lg";
 
 const BASE =
-  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-5 text-center font-bold no-underline transition-colors";
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-5 text-center font-bold no-underline transition-all duration-150";
 const VARIANTS: Record<ButtonVariant, string> = {
-  gold: "bg-gold text-on-gold hover:bg-gold-bright",
-  glass: "border border-line-gold text-ivory hover:border-gold hover:bg-glass",
-  ghost: "text-gold hover:bg-glass",
+  gold: "bg-gold text-on-gold hover:-translate-y-px hover:bg-gold-bright",
+  glass: "border border-line-gold bg-transparent text-ivory hover:border-gold hover:bg-glass",
+  ghost: "border border-line text-muted hover:border-gold hover:bg-glass hover:text-ivory",
 };
 const SIZES: Record<ButtonSize, string> = { md: "py-2 text-base", lg: "min-h-12 py-3 text-lg" };
 const DISABLED =

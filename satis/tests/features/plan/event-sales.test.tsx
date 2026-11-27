@@ -171,15 +171,13 @@ const inDialog = () => within(dialog());
 const proceedButton = () => inDialog().getByRole("button", { name: PROCEED_LABEL }) as HTMLButtonElement;
 
 describe("EventSales", () => {
-  it("kişi sayısı verilmemişse ayrı adım sorulmaz: 2 kişiyle plan, panel ve sahne görüşü açılır", () => {
+  it("kişi sayısı verilmemişse 2 kişiyle tam genişlikte salon arenası açılır", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} />);
     expect(screen.queryByText("Kaç kişisiniz?")).toBeNull();
     expect(screen.queryByRole("button", { name: "Masaları göster" })).toBeNull();
     expect(screen.getByTestId("mock-plan-viewer")).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Sahne görüşü" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Seçiminiz" })).toBeTruthy();
     expect(screen.getByRole("status").textContent).toContain("0/2 kişi seçildi");
-    expect((screen.getByLabelText("Kişi sayısı") as HTMLSelectElement).value).toBe("2");
+    expect(screen.getByRole("status").textContent).toContain("2 Kişi");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -188,11 +186,10 @@ describe("EventSales", () => {
     expect(screen.getByRole("status").textContent).toContain("0/4 kişi seçildi");
   });
 
-  it("satış kapalıyken plan salt okunurdur: kişi sayısı, panel ve Devam et yoktur", () => {
+  it("satış kapalıyken plan salt okunurdur: kişi sayısı ve Devam et yoktur", () => {
     render(<EventSales event={makeEvent({ sale: closedSale })} initialAvailability={mockAvailability} />);
     expect(screen.getByTestId("mock-plan-viewer")).toBeTruthy();
     expect(screen.queryByLabelText("Kişi sayısı")).toBeNull();
-    expect(screen.queryByRole("region", { name: "Seçiminiz" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Devam et" })).toBeNull();
   });
 
@@ -205,7 +202,6 @@ describe("EventSales", () => {
     expect(inDialog().getByText("Masa A1 — Sahne Görünümü")).toBeTruthy();
     expect(inDialog().queryByRole("group", { name: /sandalyeleri/ })).toBeNull();
     expect(inDialog().queryByRole("button", { name: PROCEED_LABEL })).toBeNull();
-    expect(screen.getByText("Masa A1 · Sahne görüşü")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Devam et" })).toBeNull();
     fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -219,7 +215,7 @@ describe("EventSales", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("Masa veya loca"), { target: { value: "a1" } });
-    expect(screen.getByText("Masa A1 · Sahne görüşü")).toBeTruthy();
+    expect(inDialog().getByRole("heading", { level: 2, name: "Masa A1" })).toBeTruthy();
     expect(inDialog().getByText("Satış yakında")).toBeTruthy();
   });
 
@@ -279,12 +275,13 @@ describe("EventSales", () => {
     fireEvent.click(inDialog().getByRole("button", { name: "Sandalye 5, boş" }));
     fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
     expect(screen.getByRole("status").textContent).toContain("2/2 kişi seçildi");
-    expect(screen.getByText("Masa A1 · sandalye 1, 5")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Seçili: Masa A1" })).toBeTruthy();
   });
 
-  it("sağdaki listeden seçilen masa da pencerede açılır", () => {
+  it("masa arama kutusundan seçilen masa pencerede açılır", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Masa A2 ·/ }));
+    fireEvent.change(screen.getByLabelText("Masa numarası ara"), { target: { value: "A2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Masa A2/ }));
     expect(screen.getByRole("dialog", { name: "Masa A2" })).toBeTruthy();
   });
 
@@ -456,10 +453,9 @@ describe("EventSales", () => {
     expect(key3).not.toBe(key1);
   });
 
-  it("sahne görüşü etkin masayı izler; 3B yokken ne panelde ne pencerede masadan bakış düğmesi vardır", () => {
+  it("sahne görüşü pencerede gösterilir; 3B yokken ne panelde ne pencerede masadan bakış düğmesi vardır", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    expect(screen.getByText("Bu masa için sahne görüşü fotoğrafı yok.")).toBeTruthy();
     expect(inDialog().getByText("Bu konum için sahne fotoğrafı yok.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "3B'de masadan bak" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Masadan Sahneye Bak" })).toBeNull();

@@ -8,7 +8,6 @@ import { BallroomFloor, BallroomLights, Chairs, Chandeliers, LocaArchitecture, S
 import {
   type CameraPose,
   CHAIR_PICK_DISTANCE,
-  detailPose,
   FOV_HALL,
   maxDistance,
   MIN_DISTANCE,
@@ -24,9 +23,8 @@ import { type Vec3 } from "./metric";
 import { BALLROOM } from "./palette";
 import { chairHit, type SceneData, type SceneDecor, type SceneTable } from "./scene-data";
 import { StageScreen } from "./screen";
-import { towardStage } from "./stage";
 import { SceneWalls } from "./walls";
-import { WALL_HEIGHT } from "./walls-geometry";
+import { WALL_HEIGHT, wallVisibility } from "./walls-geometry";
 
 export type SeatView = { tableId: string; nonce: number };
 /** Kamera düğmeleri (tuvalin dışında, `Plan3D` içinde) bu komutu üretir; nonce değişince uygulanır. */
@@ -248,7 +246,6 @@ type Flight = {
 
 function CameraController({
   scene,
-  activeTableId,
   seatView,
   command,
   orbitRef,
@@ -257,7 +254,6 @@ function CameraController({
   onCamPos,
 }: {
   scene: SceneData;
-  activeTableId: string | null;
   seatView?: SeatView | null;
   command: CameraCommand | null;
   orbitRef: React.RefObject<OrbitHandle | null>;
@@ -306,18 +302,6 @@ function CameraController({
     },
     [get, orbitRef, onPovChange, onCamPos, onPoseDone, invalidate],
   );
-
-  // Etkin masa değişince yakınlaş
-  const prevTableRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (activeTableId === prevTableRef.current) return;
-    prevTableRef.current = activeTableId;
-    if (!activeTableId) return;
-    const t = scene.tables.find((x) => x.key === activeTableId);
-    if (!t) return;
-    const toStage = towardStage(scene.stage, { x: t.x, z: t.z });
-    startFlight(detailPose({ x: t.x, z: t.z }, t.floorY, toStage), `detail:${t.key}`);
-  }, [activeTableId, scene.tables, scene.stage, startFlight]);
 
   // Masadan bakış
   const prevSeatNonceRef = useRef<number>(0);
@@ -463,6 +447,8 @@ export default function Scene3D({
     [scene],
   );
 
+  const wallVis = useMemo(() => wallVisibility(scene.room, camPos, pov), [scene.room, camPos, pov]);
+
   return (
     <div className="relative h-full w-full bg-bg">
       <div role="img" aria-label="Salon planı (3B)" aria-describedby={describedBy} className="h-full w-full">
@@ -486,7 +472,7 @@ export default function Scene3D({
             <DecorMesh key={e.id} element={e} />
           ))}
           <StageRig stage={scene.stage} />
-          <StageScreen stage={scene.stage} room={scene.room} artworkUrl={artworkUrl} title={title} />
+          <StageScreen stage={scene.stage} room={scene.room} artworkUrl={artworkUrl} title={title} wallVis={wallVis} />
           <LocaArchitecture tables={scene.tables} />
           <SceneLines lines={scene.lines} />
           <InstancedTables tables={scene.tables} onTable={onTable} onHoverTable={onHoverTable} />
@@ -510,7 +496,9 @@ export default function Scene3D({
           <OrbitControls
             ref={orbitRef as never}
             makeDefault
-            enablePan={false}
+            enablePan
+            screenSpacePanning={false}
+            panSpeed={0.9}
             target={initialPose.target}
             minDistance={MIN_DISTANCE}
             maxDistance={maxDistance(scene.room)}
@@ -518,7 +506,6 @@ export default function Scene3D({
           />
           <CameraController
             scene={scene}
-            activeTableId={activeTableId}
             seatView={seatView}
             command={command}
             orbitRef={orbitRef}

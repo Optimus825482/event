@@ -9,7 +9,6 @@ import { PlanLegend } from "./plan-legend";
 import type { usePlanView } from "./plan-view";
 import { PlanViewer } from "./plan-viewer";
 import { saleStateLabel } from "./sale-state";
-import { SightlinePanel } from "./sightline-panel";
 import { formatStageMetrics, tableStageMetrics } from "./stage-metrics";
 import { TableDialog } from "./table-dialog";
 
@@ -21,8 +20,8 @@ export type SalonBrowserProps = {
 };
 
 /**
- * Satış kapalıyken salonu gezdirir: 3B/2B plan; masaya dokununca (ya da listeden seçilince) masa penceresi
- * (sahne görüşü, fiyat, satış durumu) açılır ve sağdaki sahne görüşü o masayı izler. Sandalye seçimi ve tutma yoktur.
+ * Satış kapalıyken tam genişlikte salonu gezdirir: 3B/2B plan; masaya dokununca (ya da listeden seçilince)
+ * masa penceresi (sahne görüşü, fiyat, satış durumu) açılır.
  */
 export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserProps) {
   const [tableId, setTableId] = useState<string | null>(null);
@@ -45,20 +44,40 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="flex flex-col gap-3 rounded-[16px] border border-line-gold bg-surface p-3 sm:p-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <label htmlFor={selectId} className="text-xs font-semibold text-muted">
+            Masa veya loca
+          </label>
+          <select
+            id={selectId}
+            value={tableId ?? ""}
+            onChange={(e) => openTable(e.target.value || null)}
+            className="min-h-10 rounded-full border border-line bg-surface px-3.5 text-xs font-semibold text-ivory focus:border-gold"
+          >
+            <option value="">Masa veya loca seçin</option>
+            {model.tables.map((t) => (
+              <option key={t.id} value={t.id}>
+                {`${t.isLoca ? "Loca" : "Masa"} ${t.label}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {table ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
-            <button
-              type="button"
-              onClick={() => openTable(table.id)}
-              className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line-gold bg-glass px-3.5 py-1 text-xs font-semibold text-gold-bright transition-colors hover:border-gold hover:bg-surface-raised"
-            >
-              <span aria-hidden="true" className="size-2 rounded-full bg-gold" />
-              {`Seçili: ${table.isLoca ? "Loca" : "Masa"} ${table.label}`}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => openTable(table.id)}
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-gold bg-glass px-3.5 py-1.5 text-xs font-semibold text-gold-bright transition-colors hover:border-gold"
+          >
+            <span aria-hidden="true" className="size-2 rounded-full bg-gold" />
+            {`Seçili: ${table.isLoca ? "Loca" : "Masa"} ${table.label}`}
+          </button>
         ) : null}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-[20px] border border-line-gold bg-surface p-2.5 sm:p-4">
         <PlanViewer
           model={model}
           view={view}
@@ -72,32 +91,6 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
           <PlanLegend prices={event.prices} currency={event.currency} />
         </div>
       </div>
-      <aside aria-label="Salon ve sahne görüşü" className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 rounded-[16px] border border-line-gold bg-surface px-4 py-3.5">
-          <label htmlFor={selectId} className="text-sm font-medium text-ivory">
-            Masa veya loca
-          </label>
-          <select
-            id={selectId}
-            value={tableId ?? ""}
-            onChange={(e) => openTable(e.target.value || null)}
-            className="min-h-11 rounded-lg border border-line bg-bg px-3 text-sm text-ivory"
-          >
-            <option value="">Masa veya loca seçin</option>
-            {model.tables.map((t) => (
-              <option key={t.id} value={t.id}>
-                {`${t.isLoca ? "Loca" : "Masa"} ${t.label}`}
-              </option>
-            ))}
-          </select>
-        </div>
-        <SightlinePanel
-          set={event.site.sightlineSet}
-          table={table ? { label: table.label, isLoca: table.isLoca } : null}
-          canLookIn3d={canLookIn3d}
-          onLookIn3d={lookFromTable}
-        />
-      </aside>
 
       <TableDialog
         open={dialogOpen}

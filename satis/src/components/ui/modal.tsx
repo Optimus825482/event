@@ -47,7 +47,7 @@ export function Modal({ open, onClose, labelledBy, id, keepMounted, className, c
         if (e.target === e.currentTarget) onClose();
       }}
       className={cn(
-        "modal m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto rounded-[20px] border border-line-gold bg-surface p-0 text-ivory shadow-2xl",
+        "modal m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] overscroll-contain overflow-y-auto rounded-[20px] border border-gold bg-surface p-0 text-ivory shadow-2xl",
         className,
       )}
     >
