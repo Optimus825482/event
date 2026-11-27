@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, orders, paymentAttempts, tableSeatSlots, tickets } from "@/db/schema";
-import type { SaleCategory } from "@/domain/seating";
+import { seatNoShown, type SaleCategory } from "@/domain/seating";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow } from "@/features/events/service";
@@ -52,6 +52,7 @@ export type OrderDetail = OrderListRow & {
   tickets: {
     ticketId: string;
     tableLabel: string;
+    seatNo: number | null;
     category: SaleCategory;
     unitPrice: string;
     status: "held" | "issued" | "expired";
@@ -216,10 +217,14 @@ export async function getOrderDetail(
     .where(and(eq(orders.id, input.orderId), eq(orders.eventId, input.eventId)));
   if (!order) throw new DomainError("not_found", "Sipariş bulunamadı");
 
-  const ticketRows = await ex
+  const { saleMode } = await getSaleSettings(ex, input.eventId);
+
+  const rawTickets = await ex
     .select({
       ticketId: tickets.id,
       tableLabel: eventTables.label,
+      isLoca: eventTables.isLoca,
+      seatNo: tableSeatSlots.seatNo,
       category: tickets.saleCategory,
       unitPrice: tickets.unitPrice,
       // Süresi dolmuş ama süpürülmemiş tutma `expired` okunur (DB saatiyle).
@@ -232,9 +237,16 @@ export async function getOrderDetail(
     .from(tickets)
     .innerJoin(orders, eq(orders.id, tickets.orderId))
     .innerJoin(eventTables, eq(eventTables.id, tickets.tableId))
+    .leftJoin(tableSeatSlots, eq(tableSeatSlots.id, tickets.seatSlotId))
     .where(eq(tickets.orderId, order.id))
     .orderBy(asc(tickets.createdAt), asc(tickets.id));
-  ticketRows.sort((a, b) => byLabel(a.tableLabel, b.tableLabel));
+
+  const ticketRows = rawTickets
+    .map(({ isLoca, seatNo, ...rest }) => ({
+      ...rest,
+      seatNo: rest.status !== "expired" && seatNoShown({ saleMode, isLoca }) ? seatNo : null,
+    }))
+    .sort((a, b) => byLabel(a.tableLabel, b.tableLabel) || (a.seatNo ?? 0) - (b.seatNo ?? 0));
 
   const attemptRows = await ex
     .select({

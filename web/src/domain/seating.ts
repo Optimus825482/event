@@ -37,6 +37,11 @@ export function seatNoShown(i: { saleMode: SaleMode; isLoca: boolean }): boolean
   return i.saleMode === "seat" && !i.isLoca;
 }
 
+/** Masa ve (varsa) sandalye numarasını tek biçimde yazar. */
+export function seatLabel(tableLabel: string, seatNo: number | null): string {
+  return seatNo === null ? `Masa ${tableLabel}` : `Masa ${tableLabel} · Sandalye ${seatNo}`;
+}
+
 /** Satılabilir sandalye sayısı: `sellableSeats` boşsa masanın kapasitesi. */
 export function effectiveSellable(t: { capacity: number; sellableSeats: number | null }): number {
   return t.sellableSeats ?? t.capacity;

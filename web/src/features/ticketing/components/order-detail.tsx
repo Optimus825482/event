@@ -1,4 +1,4 @@
-import { SALE_CATEGORY_LABELS } from "@/domain/seating";
+import { SALE_CATEGORY_LABELS, seatLabel } from "@/domain/seating";
 import { DEMO_NOTICE } from "@/features/sales-api/contract";
 import { cn, formatDate } from "@/lib/utils";
 import { formatPnr } from "../pnr";
@@ -82,10 +82,11 @@ export function OrderDetailView({
           {detail.tickets.map((ticket) => {
             const status = TICKET_STATUS[ticket.status];
             const qr = qrImages[ticket.ticketId];
+            const label = seatLabel(ticket.tableLabel, ticket.seatNo);
             return (
               <li key={ticket.ticketId} className={cn(cardClass, "flex flex-col items-center text-center")}>
                 <div className="flex w-full flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold">Masa {ticket.tableLabel}</p>
+                  <p className="font-semibold">{label}</p>
                   <span className={cn("rounded-full border px-2 py-0.5 text-xs font-semibold", status.tone)}>{status.label}</span>
                 </div>
                 <p className="w-full text-left text-sm text-muted-foreground">
@@ -94,7 +95,7 @@ export function OrderDetailView({
                 {ticket.status === "issued" && qr ? (
                   // QR bir data URL'dir; yan etkisiz, sabit boyutlu görsel.
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={qr} alt={`Masa ${ticket.tableLabel} bilet QR kodu`} width={168} height={168} className="rounded-md bg-white p-1" />
+                  <img src={qr} alt={`${label} bilet QR kodu`} width={168} height={168} className="rounded-md bg-white p-1" />
                 ) : null}
                 {ticket.checkedInAt ? (
                   <p className="w-full text-left text-sm text-emerald-300">Giriş yapıldı: {formatDate(ticket.checkedInAt, "datetime")}</p>
