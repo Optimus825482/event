@@ -29,6 +29,8 @@ export async function getCheckInEvent(db: Executor, actor: Actor, eventId: strin
     name: event.name,
     status: event.status,
     startsAt: event.startsAt,
+    /** Bitiş anı (ISO); bitiş yoksa başlangıç + 24 saat. Çevrimdışı kuyruk temizliği bunu kullanır. */
+    endsAt: (event.endsAt ?? new Date(event.startsAt.getTime() + 24 * 60 * 60 * 1000)).toISOString(),
   };
 }
 

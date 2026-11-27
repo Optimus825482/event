@@ -52,6 +52,7 @@ export default async function CheckInEventPage({ params }: { params: Params }) {
       ) : null}
       <CheckInConsole
         eventId={event.id}
+        eventEndsAt={event.endsAt}
         userId={userId}
         initialStats={stats}
         canWrite={canWrite && !closed}

@@ -5,6 +5,8 @@ import { compareItems, heldAside, ownedBy, summarize, type QueueItem, type Queue
 import { getQueueRuntime, type EnqueueMeta } from "./runtime";
 
 const FLUSH_INTERVAL_MS = 15_000;
+/** Konsol açıkken süresi geçmiş öğeler için temizlik aralığı. */
+const PURGE_INTERVAL_MS = 5 * 60_000;
 
 function subscribeOnline(callback: () => void): () => void {
   window.addEventListener("online", callback);
@@ -106,6 +108,12 @@ export function useOfflineQueue(userId: string, onEvents?: (events: SettledEvent
       document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(timer);
     };
+  }, []);
+
+  useEffect(() => {
+    const runtime = getQueueRuntime();
+    const timer = window.setInterval(() => void runtime.purgeStale(), PURGE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
   const items = useMemo(() => ownedBy(allItems, userId), [allItems, userId]);

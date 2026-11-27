@@ -27,6 +27,8 @@ import { WalkInForm } from "./walk-in-form";
 /** `readOnlyNote`: yazma kapalıysa nedeni (yetki yok ya da etkinlik kapalı); `null` ise not gösterilmez. */
 type ConsoleProps = {
   eventId: string;
+  /** Etkinlik bitiş anı (ISO); kuyruk öğelerine yazılır, bitiş + 1 saat sonra cihazdan silinir. */
+  eventEndsAt: string;
   /** Oturumdaki kullanıcı (sunucuda çözülür); çevrimdışı kuyruk öğeleri bununla damgalanır. */
   userId: string;
   initialStats: EventStats;
@@ -51,7 +53,7 @@ const ALL_TABS: readonly ConsoleTabDef<TabId>[] = [
   { id: "walkin", label: "Walk-in", icon: UserPlus },
 ];
 
-function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: ConsoleProps) {
+function ConsoleBody({ eventId, eventEndsAt, userId, initialStats, canWrite, readOnlyNote }: ConsoleProps) {
   const stream = useEventStream(eventId);
   const [syncNote, setSyncNote] = useState("");
   // Kuyruk olayları check-in kancasından gelir; kanca da kuyruğu ister: önce sabit bir yönlendirici.
@@ -64,7 +66,7 @@ function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: 
     }, []),
   );
   const { gate, setGate } = useGate();
-  const { submit, submitMany, pending, feedback, setFeedback, clear, onEvents } = useCheckIn(eventId, queue, gate);
+  const { submit, submitMany, pending, feedback, setFeedback, clear, onEvents } = useCheckIn(eventId, queue, gate, eventEndsAt);
   useEffect(() => {
     handlers.current = onEvents;
   }, [onEvents]);
