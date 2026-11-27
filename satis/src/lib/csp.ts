@@ -5,6 +5,7 @@
  * - `'unsafe-eval'` yalnızca geliştirmede (React/Next dev hata yığınları için).
  * - Geliştirmede `style-src 'unsafe-inline'`: Turbopack/HMR CSS'i satır içi `<style>` olarak enjekte eder.
  * - `style-src-attr 'unsafe-inline'`: React `style={{…}}` öznitelikleri için; öznitelikler betik çalıştıramaz.
+ * - `frame-src https://www.google.com`: yalnızca etkinlik konumunun Google Haritalar gömülü haritası.
  */
 export type CspOptions = { nonce: string; production: boolean };
 
@@ -29,6 +30,8 @@ export function buildCsp({ nonce, production }: CspOptions): string {
     ["base-uri", ["'self'"]],
     ["form-action", ["'self'"]],
     ["frame-ancestors", ["'none'"]],
+    // Etkinlik sayfasındaki Konum bölümü: Google Haritalar gömülü gösterimi.
+    ["frame-src", ["https://www.google.com"]],
   ];
   const parts = directives.map(([name, values]) => `${name} ${values.join(" ")}`);
   if (production) parts.push("upgrade-insecure-requests");

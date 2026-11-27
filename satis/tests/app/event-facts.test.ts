@@ -3,7 +3,7 @@ import { eventFacts, partyOptions, saleModeNote } from "@/components/event/facts
 import { createFakeCore } from "../helpers/fake-core";
 
 describe("eventFacts", () => {
-  it("site içeriği dolu etkinlikte altı bilgi sırayla gelir", () => {
+  it("site içeriği dolu etkinlikte beş bilgi sırayla gelir; Kıyafet yazılmaz (yerinde Bilet Al durur)", () => {
     const fake = createFakeCore();
     const ev = fake.addEvent({
       startsAt: "2027-01-15T18:00:00.000Z",
@@ -14,7 +14,6 @@ describe("eventFacts", () => {
       { label: "Kapı Açılış", value: "18:30" },
       { label: "Konser Saati", value: "20:00" },
       { label: "Yaş Sınırı", value: "18+" },
-      { label: "Kıyafet", value: "Şık" },
       { label: "Başlangıç Fiyatı", value: "1.500,00 ₺ / kişi" },
     ]);
   });

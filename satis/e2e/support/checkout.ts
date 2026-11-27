@@ -5,7 +5,7 @@ import { fakeState } from "./fake";
 /** Etkinlik sayfasından masayı açar, önseçili sandalyelerle "Seç & Ödemeye Geç"e basar; ödeme sayfasında biter. */
 export async function startCheckout(page: Page, label: string, options: { quantity?: number } = {}): Promise<void> {
   const qty = options.quantity ?? 1;
-  await page.goto(`/etkinlik/${fakeState().events.gala.id}?kisi=${qty}#masa-secimi`);
+  await page.goto(`/etkinlik/${fakeState().events.gala.id}/salon?kisi=${qty}`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: new RegExp(`^Masa ${label} ·`) }).click();
   const dialog = page.getByRole("dialog", { name: `Masa ${label}` });
   for (let i = 1; i <= qty; i++) {

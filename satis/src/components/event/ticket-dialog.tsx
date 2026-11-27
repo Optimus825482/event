@@ -19,10 +19,18 @@ export function openTicketDialog(): boolean {
 }
 
 /**
- * JS kapalıyken pencere `:target` ile görünür olur (`#bilet-al` bağlantısı); form GET ile gönderilir.
- * Yalnızca `<noscript>` içinde yüklenir.
+ * JS kapalıyken pencere `:target` ile görünür olur (`#bilet-al` bağlantısı); form GET ile salona gönderilir.
+ * Yalnızca `<noscript>` içinde yüklenir; CSP için istek nonce'unu taşır.
  */
-export const TICKET_DIALOG_NOSCRIPT_CSS = `<style>dialog#${TICKET_DIALOG_ID}:target{display:block;position:fixed;inset:0;z-index:60;height:fit-content}</style>`;
+export function ticketDialogNoscriptCss(nonce: string | null): string {
+  const attr = nonce ? ` nonce="${nonce.replace(/[^A-Za-z0-9+/=]/g, "")}"` : "";
+  return `<style${attr}>dialog#${TICKET_DIALOG_ID}:target{display:block;position:fixed;inset:0;z-index:60;height:fit-content}</style>`;
+}
+
+/** Kişi sayısı seçildikten sonra gidilen salon (3B/2B masa seçimi) sayfası. */
+export function salonPath(eventId: string): string {
+  return `/etkinlik/${eventId}/salon`;
+}
 
 export type TicketDialogProps = {
   eventId: string;
@@ -72,7 +80,7 @@ export function TicketDialog({ eventId, eyebrow, maxSeatsPerOrder, selected }: T
           e.preventDefault();
           show();
         }}
-        className="inline-flex min-h-12 min-w-11 items-center justify-center rounded-full bg-gold px-8 py-3 text-lg font-bold text-on-gold no-underline transition-colors hover:bg-gold-bright"
+        className="inline-flex min-h-12 w-full min-w-11 items-center justify-center rounded-full bg-gold px-8 py-3 text-lg font-bold text-on-gold no-underline transition-colors hover:bg-gold-bright"
       >
         Bilet Al
       </a>
@@ -100,7 +108,7 @@ export function TicketDialog({ eventId, eyebrow, maxSeatsPerOrder, selected }: T
             <span aria-hidden="true">×</span>
           </button>
         </div>
-          <form method="get" action={`/etkinlik/${eventId}#masa-secimi`} className="flex flex-col gap-3 px-6 py-6">
+          <form method="get" action={salonPath(eventId)} className="flex flex-col gap-3 px-6 py-6">
             <label htmlFor={selectId} className="text-sm font-semibold text-ivory">
               Kişi sayısı
             </label>

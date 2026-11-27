@@ -25,7 +25,7 @@ test.beforeAll(async ({ browser }) => {
   // Soğuk geliştirme sunucusu ilk derlemede sayfayı art arda yeniler; tohumlu etkinlikle bir kez ısıtılır.
   test.setTimeout(180_000);
   const page = await browser.newPage();
-  await page.goto(`/etkinlik/${fakeState().events.gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${fakeState().events.gala.id}/salon?kisi=2`);
   await expect(page.getByTestId("plan-3d-scene")).toHaveAttribute("data-ready", "true", { timeout: 120_000 });
   await page.close();
 });
@@ -46,7 +46,7 @@ async function expectSightlinePhoto(page: Page, label: string) {
 
 test("satış kapalıyken de 3B salon açılır; masaya dokununca o masanın sahne görüşü fotoğrafı gelir", async ({ page }) => {
   test.setTimeout(180_000);
-  await gotoListedEvent(page, `/etkinlik/${closed.id}#masa-secimi`);
+  await gotoListedEvent(page, `/etkinlik/${closed.id}/salon`);
   const scene = await sceneReady(page);
   await expect(page.getByRole("img", { name: "Salon planı (3B)" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Sahne görüşü" }).getByRole("img")).toHaveAttribute(
@@ -109,7 +109,7 @@ test("satış kapalıyken de 3B salon açılır; masaya dokununca o masanın sah
 });
 test("satış kapalıyken 2B planda da masaya dokununca sahne görüşü değişir", async ({ page }) => {
   test.setTimeout(180_000);
-  await gotoListedEvent(page, `/etkinlik/${closed.id}#masa-secimi`);
+  await gotoListedEvent(page, `/etkinlik/${closed.id}/salon`);
   await sceneReady(page);
 
   await page.getByRole("button", { name: "2B görünüm" }).click();
@@ -117,19 +117,24 @@ test("satış kapalıyken 2B planda da masaya dokununca sahne görüşü değiş
   await expectSightlinePhoto(page, "M-90");
 });
 
-test("açık satışta kişi sayısı verilmeden de 3B salon, sahne görüşü ve 2 kişilik seçim paneli görünür", async ({ page }) => {
+test("açık satışta salon kişi sayısı seçilmeden açılmaz: pencereye döner, seçilen sayıyla 3B salon açılır", async ({ page }) => {
   test.setTimeout(180_000);
-  await gotoListedEvent(page, `/etkinlik/${open.id}#masa-secimi`);
-  await expect(page.getByText("Kaç kişisiniz?")).toHaveCount(0);
+  await gotoListedEvent(page, `/etkinlik/${open.id}/salon`);
+  await expect(page).toHaveURL(`/etkinlik/${open.id}#bilet-al`);
+  const dialog = page.getByRole("dialog", { name: "Kişi sayısı" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("combobox", { name: "Kişi sayısı" }).selectOption("3");
+  await dialog.getByRole("button", { name: "Masa seçimine geç →" }).click();
+  await expect(page).toHaveURL(`/etkinlik/${open.id}/salon?kisi=3`);
   await sceneReady(page);
   await expect(page.getByRole("region", { name: "Sahne görüşü" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Bilet seçimi" }).getByLabel("Kişi sayısı")).toHaveValue("2");
-  await expect(page.getByRole("region", { name: "Seçiminiz" }).getByText("0/2 kişi seçildi")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Bilet seçimi" }).getByLabel("Kişi sayısı")).toHaveValue("3");
+  await expect(page.getByRole("region", { name: "Seçiminiz" }).getByText("0/3 kişi seçildi")).toBeVisible();
 });
 
 test("açık satışta masa seçilince sahne görüşü fotoğrafı gelir ve masadan bakış da sunulur", async ({ page }) => {
   test.setTimeout(180_000);
-  await gotoListedEvent(page, `/etkinlik/${open.id}?kisi=2#masa-secimi`);
+  await gotoListedEvent(page, `/etkinlik/${open.id}/salon?kisi=2`);
   const scene = await sceneReady(page);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa M-40 ·/ }).click();
   await expectSightlinePhoto(page, "M-40");
@@ -162,7 +167,7 @@ test("açık satışta masa seçilince sahne görüşü fotoğrafı gelir ve mas
 
 test("kamera düğmeleri tuvalin dışındadır ve genel görünüme döndürür", async ({ page }) => {
   test.setTimeout(180_000);
-  await gotoListedEvent(page, `/etkinlik/${closed.id}#masa-secimi`);
+  await gotoListedEvent(page, `/etkinlik/${closed.id}/salon`);
   const scene = await sceneReady(page);
   const bar = page.getByRole("group", { name: "Kamera" });
   const barBox = (await bar.boundingBox())!;

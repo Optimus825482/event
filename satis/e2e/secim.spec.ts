@@ -14,7 +14,7 @@ test.beforeEach(async () => {
 });
 
 test("masa penceresinde numaralı düğmelerle iki masadan dört sandalye seçilir ve tutulur", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=4#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=4`);
   const finder = page.getByRole("region", { name: "Masa bulucu" });
   await finder.getByRole("button", { name: /^Masa A1 ·/ }).click();
   const a1 = page.getByRole("dialog", { name: "Masa A1" });
@@ -43,7 +43,7 @@ test("masa penceresinde numaralı düğmelerle iki masadan dört sandalye seçil
 });
 
 test("yuva boşluğu olan masada olmayan numara sunulmaz", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa G1 ·/ }).click();
   const dialog = page.getByRole("dialog", { name: "Masa G1" });
   for (const no of [1, 2, 3, 5, 6, 8]) {
@@ -54,7 +54,7 @@ test("yuva boşluğu olan masada olmayan numara sunulmaz", async ({ page }) => {
 });
 
 test("kişi sayısı dolunca yeni sandalye seçilmez ve uyarı çıkar", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
   const dialog = page.getByRole("dialog", { name: "Masa A1" });
   await expect(dialog.getByRole("button", { name: "Sandalye 1, seçili" })).toHaveAttribute("aria-pressed", "true");
@@ -65,7 +65,7 @@ test("kişi sayısı dolunca yeni sandalye seçilmez ve uyarı çıkar", async (
 });
 
 test("başkası seçili sandalyeyi alınca seçimden düşer ve uyarı çıkar", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
   const dialog = page.getByRole("dialog", { name: "Masa A1" });
   await expect(dialog.getByText("Masa A1 · 2 Kişi · Sandalye 1, 2")).toBeVisible();
@@ -78,7 +78,7 @@ test("başkası seçili sandalyeyi alınca seçimden düşer ve uyarı çıkar",
 });
 
 test("tutma anında sandalye alınmışsa mesaj çıkar ve plan hemen güncellenir", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa P1 ·/ }).click();
   const dialog = page.getByRole("dialog", { name: "Masa P1" });
   await expect(dialog.getByText("Masa P1 · 2 Kişi · Sandalye 1, 2")).toBeVisible();
@@ -90,7 +90,7 @@ test("tutma anında sandalye alınmışsa mesaj çıkar ve plan hemen güncellen
 });
 
 test("masa bazlı etkinlikte masa bütün seçilir", async ({ page }) => {
-  await page.goto(`/etkinlik/${masa.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${masa.id}/salon?kisi=2`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
   const dialog = page.getByRole("dialog", { name: "Masa A1" });
   await expect(dialog.getByText("8 kişilik masa · 8 bilet")).toBeVisible();
@@ -103,7 +103,7 @@ test("masa bazlı etkinlikte masa bütün seçilir", async ({ page }) => {
 });
 
 test("loca bütün seçilir; Loca süzgeci ve masa numarası araması listeyi daraltır", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   const finder = page.getByRole("region", { name: "Masa bulucu" });
   await finder.getByRole("button", { name: "Loca", exact: true }).click();
   const list = finder.getByRole("list", { name: "Alınabilir masalar" });
@@ -117,7 +117,7 @@ test("loca bütün seçilir; Loca süzgeci ve masa numarası araması listeyi da
 });
 
 test("klavyeyle seçim: Enter pencereyi açar, odak pencereye geçer, Tab ile sandalyeye gelinir, Boşluk seçer", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=1#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=1`);
   const a1Btn = page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ });
   await a1Btn.focus();
   await page.keyboard.press("Enter");
@@ -145,7 +145,7 @@ test("klavyeyle seçim: Enter pencereyi açar, odak pencereye geçer, Tab ile sa
 });
 
 test("başka ziyaretçinin tutması sayfa yenilenmeden planda görünür", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expect(page.getByRole("button", { name: "Masa A2, Standart, boş sandalye 8/8" })).toBeVisible();
   await holdAs(gala.id, tableId(gala, "A2"), 3);
   await expect(page.getByRole("button", { name: "Masa A2, Standart, boş sandalye 5/8" })).toBeVisible({ timeout: 12_000 });
@@ -160,7 +160,7 @@ test("tarayıcı çekirdeğe hiç istek atmaz ve hiçbir yanıtta sır geçmez",
       bodies.push(await r.text().catch(() => ""));
     }
   });
-  await page.goto(`/etkinlik/${gala.id}?kisi=1#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=1`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A3 ·/ }).click();
   const dialog = page.getByRole("dialog", { name: "Masa A3" });
   await expect(dialog.getByRole("button", { name: "Sandalye 1, seçili" })).toBeVisible();
@@ -174,7 +174,7 @@ test("tarayıcı çekirdeğe hiç istek atmaz ve hiçbir yanıtta sır geçmez",
 
 test("375 px'te taşmaz; panel planın altındadır", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expectNoHorizontalOverflow(page);
   const planBox = await page.getByRole("group", { name: "Salon planı" }).boundingBox();
   const panelBox = await page.getByRole("region", { name: "Seçiminiz" }).boundingBox();
@@ -188,7 +188,7 @@ test("sahne görüşü dosyası kendi kökenimizden sunulur", async ({ page }) =
   expect(res.status()).toBe(200);
   expect(res.headers()["content-type"]).toContain("image/webp");
 
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
   await expect(page.getByText(SIGHTLINE_CAPTION)).toBeVisible();
 });

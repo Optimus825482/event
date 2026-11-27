@@ -1,6 +1,8 @@
+import type { ReactNode } from "react";
 import type { EventFact } from "./facts";
 
-export function EventFacts({ facts }: { facts: EventFact[] }): React.JSX.Element {
+/** Etkinlik bilgi kutuları; `action` (Bilet Al düğmesi ya da satış durumu) ızgaranın son hücresidir. */
+export function EventFacts({ facts, action }: { facts: EventFact[]; action?: ReactNode }): React.JSX.Element {
   return (
     <dl className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
       {facts.map((fact) => (
@@ -9,6 +11,7 @@ export function EventFacts({ facts }: { facts: EventFact[] }): React.JSX.Element
           <dd className="mt-1 text-[14.5px] font-semibold text-ivory">{fact.value}</dd>
         </div>
       ))}
+      {action ? <div className="flex min-h-[72px] items-stretch">{action}</div> : null}
     </dl>
   );
 }

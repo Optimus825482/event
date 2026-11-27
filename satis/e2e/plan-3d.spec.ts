@@ -20,7 +20,7 @@ test("yetenekli cihazda 3B kendiliğinden açılır, 2B düğmesi kalır, seçim
   page.on("console", (m) => {
     if (/Content Security Policy|Refused to/i.test(m.text())) violations.push(m.text());
   });
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   const sceneBox = page.getByTestId("plan-3d-scene");
   await expect(sceneBox).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
   await expect(page.getByRole("img", { name: "Salon planı (3B)" })).toBeVisible();
@@ -45,7 +45,7 @@ test("yetenekli cihazda 3B kendiliğinden açılır, 2B düğmesi kalır, seçim
 });
 
 test("masa seçilince kamera masaya yakınlaşır; 3B'de sandalyeye tıklamak panelde aynı numarayı seçer", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   const sceneBox = page.getByTestId("plan-3d-scene");
   await expect(sceneBox).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
 
@@ -88,7 +88,7 @@ test("masa seçilince kamera masaya yakınlaşır; 3B'de sandalyeye tıklamak pa
 });
 
 test("3B'de masadan bak kamerayı masadan sahneye çevirir", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   const sceneBox = page.getByTestId("plan-3d-scene");
   await expect(sceneBox).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
 
@@ -103,7 +103,7 @@ test("3B'de masadan bak kamerayı masadan sahneye çevirir", async ({ page }) =>
 });
 
 test("WebGL bağlamı kaybolursa 2B'ye bildirimle düşer, seçim korunur, masadan bak düğmesi kalkar", async ({ page }) => {
-  await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   const sceneBox = page.getByTestId("plan-3d-scene");
   await expect(sceneBox).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
 
@@ -131,7 +131,7 @@ test("reduced motion ya da WebGL yokken 2B plan gösterilir ve three.js parças�
   const page1 = await ctx1.newPage();
   const urls: string[] = [];
   page1.on("request", (r) => urls.push(r.url()));
-  await page1.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page1.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expect(page1.getByRole("group", { name: "Salon planı" })).toBeVisible();
   await page1.waitForLoadState("networkidle");
   const hasThree = (
@@ -155,7 +155,7 @@ test("reduced motion ya da WebGL yokken 2B plan gösterilir ve three.js parças�
       return (original as (...a: unknown[]) => unknown).call(this, type, ...rest) as never;
     } as typeof original;
   });
-  await page2.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
+  await page2.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expect(page2.getByRole("group", { name: "Salon planı" })).toBeVisible();
   await expect(page2.getByRole("button", { name: "3B görünüm" })).toHaveCount(0);
   await ctx2.close();

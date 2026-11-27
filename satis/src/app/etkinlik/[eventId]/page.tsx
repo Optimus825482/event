@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { notFound, redirect } from "next/navigation";
 import { EventFacts } from "@/components/event/event-facts";
-import { eventFacts, saleModeNote } from "@/components/event/facts";
+import { eventFacts } from "@/components/event/facts";
 import { eventHeroMedia } from "@/components/event/hero-media";
-import { TICKET_DIALOG_NOSCRIPT_CSS, TicketDialog } from "@/components/event/ticket-dialog";
+import { salonPath, TicketDialog, ticketDialogNoscriptCss } from "@/components/event/ticket-dialog";
+import { eventVenue, VenueMap } from "@/components/event/venue-map";
 import { EventImage } from "@/components/event-image";
 import { PosterFallback } from "@/components/poster-fallback";
+import { ButtonLink } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { EventSales } from "@/features/plan/event-sales";
-import { parsePartySize } from "@/features/plan/party";
-import { getReader } from "@/features/plan/read";
+import { PARTY_PARAM, parsePartySize } from "@/features/plan/party";
 import { saleStateLabel } from "@/features/plan/sale-state";
-import type { Availability, EventDetail } from "@/lib/core/contract";
-import { CoreError, messageFor } from "@/lib/core/errors";
 import { formatEventDate, formatEventDay, formatEventTime } from "@/lib/time-zone";
+import { eventMetadataTitle, loadEvent } from "./event-data";
 
 // Her istekte çekirdek önbelleğinden okunur; derlemede çekirdeğe gidilmez.
 export const dynamic = "force-dynamic";
@@ -25,48 +25,36 @@ type PageProps = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { eventId } = await params;
-  try {
-    const event = await getReader().event(eventId);
-    return event ? { title: event.name, description: event.site.summary ?? undefined } : {};
-  } catch {
-    return {};
-  }
-}
-
-async function loadAvailability(eventId: string): Promise<Availability | null> {
-  try {
-    return await getReader().availability(eventId);
-  } catch (error) {
-    if (error instanceof CoreError) return null;
-    throw error;
-  }
+  return (await eventMetadataTitle(eventId)) ?? {};
 }
 
 export default async function EventPage({ params, searchParams }: PageProps) {
   const [{ eventId }, sp] = await Promise.all([params, searchParams]);
 
-  let event: EventDetail | null;
-  try {
-    event = await getReader().event(eventId);
-  } catch (error) {
-    if (!(error instanceof CoreError)) throw error;
+  const loaded = await loadEvent(eventId);
+  if (!loaded.ok) {
     return (
       <main className="page-gutter mx-auto max-w-[1180px] py-10">
-        <Notice tone="error">{messageFor(error)}</Notice>
+        <Notice tone="error">{loaded.message}</Notice>
       </main>
     );
   }
+  const event = loaded.event;
   if (!event) notFound();
 
-  const availability = await loadAvailability(eventId);
+  // Eski `/etkinlik/<id>?kisi=n#masa-secimi` bağlantıları salon sayfasına taşınır.
   const partySize = parsePartySize(sp.kisi, event.sale.maxSeatsPerOrder);
+  if (partySize !== undefined) redirect(`${salonPath(event.id)}?${PARTY_PARAM}=${partySize}`);
+
+  const nonce = (await headers()).get("x-nonce");
   const hero = eventHeroMedia(event);
   const dateLabel = formatEventDate(event.startsAt);
   const timeLabel = formatEventTime(event.startsAt);
   const summary = event.site.summary ?? event.description;
+  const saleOpen = event.sale.state === "open";
 
   return (
-    <main className="page-gutter mx-auto max-w-[1180px] space-y-10 py-10">
+    <main className="page-gutter mx-auto max-w-[1180px] space-y-12 py-10">
       <div className="grid grid-cols-1 items-start gap-8 min-[860px]:grid-cols-[0.9fr_1.1fr]">
         <div className="aspect-[4/5] w-full overflow-hidden rounded-[20px] border border-line-gold bg-surface">
           <EventImage
@@ -98,37 +86,33 @@ export default async function EventPage({ params, searchParams }: PageProps) {
             </span>
           ) : null}
 
-          <EventFacts facts={eventFacts(event)} />
+          <EventFacts
+            facts={eventFacts(event)}
+            action={
+              saleOpen ? (
+                <TicketDialog
+                  eventId={event.id}
+                  eyebrow={`${event.artistName ?? event.name} · ${formatEventDay(event.startsAt)}`.toLocaleUpperCase("tr-TR")}
+                  maxSeatsPerOrder={event.sale.maxSeatsPerOrder}
+                />
+              ) : (
+                <Notice className="flex w-full items-center">{saleStateLabel(event.sale.state)}</Notice>
+              )
+            }
+          />
+          {saleOpen ? <noscript dangerouslySetInnerHTML={{ __html: ticketDialogNoscriptCss(nonce) }} /> : null}
 
           {summary ? <p className="text-base leading-relaxed text-ivory">{summary}</p> : null}
 
-          {event.sale.state === "open" ? (
-            <>
-              <TicketDialog
-                eventId={event.id}
-                eyebrow={`${event.artistName ?? event.name} · ${formatEventDay(event.startsAt)}`.toLocaleUpperCase("tr-TR")}
-                maxSeatsPerOrder={event.sale.maxSeatsPerOrder}
-                selected={partySize}
-              />
-              <noscript dangerouslySetInnerHTML={{ __html: TICKET_DIALOG_NOSCRIPT_CSS }} />
-            </>
-          ) : (
-            <Notice>{saleStateLabel(event.sale.state)}</Notice>
+          {saleOpen ? null : (
+            <ButtonLink href={salonPath(event.id)} variant="glass">
+              Salonu ve sahne görüşünü incele →
+            </ButtonLink>
           )}
         </div>
       </div>
 
-      <section id="masa-secimi" aria-labelledby="masa-secimi-baslik" className="scroll-mt-24 space-y-4">
-        <h2 id="masa-secimi-baslik" className="text-[clamp(30px,4vw,44px)] text-ivory">
-          Masa Seçimi
-        </h2>
-        <p className="text-sm text-muted">{saleModeNote(event.sale.mode)}</p>
-        {availability ? (
-          <EventSales event={event} initialAvailability={availability} initialPartySize={partySize} />
-        ) : (
-          <Notice tone="error">Canlı masa durumu alınamadı. Sayfayı yenileyin.</Notice>
-        )}
-      </section>
+      <VenueMap venue={eventVenue()} />
     </main>
   );
 }

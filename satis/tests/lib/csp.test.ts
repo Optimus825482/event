@@ -22,9 +22,15 @@ describe("CSP", () => {
     expect(csp).toContain("img-src 'self' data:");
   });
   it("nonce her çağrıda farklıdır", () => expect(generateNonce()).not.toBe(generateNonce()));
-  it("yazı tipi ve görsel yalnızca kendi kökenimizden; politika dış köken içermez", () => {
+  it("yazı tipi ve görsel yalnızca kendi kökenimizden; tek dış köken frame-src'teki Google Haritalar'dır", () => {
     const csp = buildCsp({ nonce: "N", production: true });
     expect(csp).toContain("font-src 'self' data:");
-    expect(csp).not.toMatch(/https?:\/\//);
+    expect(csp).toContain("frame-src https://www.google.com");
+    const others = csp
+      .split(";")
+      .map((d) => d.trim())
+      .filter((d) => !d.startsWith("frame-src "));
+    expect(others.join("; ")).not.toMatch(/https?:\/\//);
+    expect(csp.match(/https?:\/\/[^\s;]+/g)).toEqual(["https://www.google.com"]);
   });
 });

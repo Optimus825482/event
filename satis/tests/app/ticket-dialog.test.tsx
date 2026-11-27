@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { openTicketDialog, TicketDialog } from "@/components/event/ticket-dialog";
+import { openTicketDialog, salonPath, TicketDialog, ticketDialogNoscriptCss } from "@/components/event/ticket-dialog";
 
 afterEach(() => {
   cleanup();
@@ -35,7 +35,7 @@ describe("TicketDialog", () => {
     render(<TicketDialog {...props} />);
     const form = dialog().querySelector("form")!;
     expect(form.getAttribute("method")).toBe("get");
-    expect(form.getAttribute("action")).toBe("/etkinlik/e1#masa-secimi");
+    expect(form.getAttribute("action")).toBe("/etkinlik/e1/salon");
     const select = within(dialog()).getByRole("combobox", { name: "Kişi sayısı", hidden: true }) as HTMLSelectElement;
     expect(select.name).toBe("kisi");
     expect(Array.from(select.options).map((o) => [o.value, o.text])).toEqual(
@@ -95,5 +95,12 @@ describe("TicketDialog", () => {
     });
     expect(opened).toBe(true);
     expect(dialog()).toHaveAttribute("open");
+  });
+
+  it("JS kapalı yedeği: :target kuralı CSP nonce'unu taşır; nonce kaçışsız öznitelik üretemez", () => {
+    expect(ticketDialogNoscriptCss("abc+/=")).toMatch(/^<style nonce="abc\+\/=">dialog#bilet-al:target\{display:block/);
+    expect(ticketDialogNoscriptCss('x" onload="y')).toContain('nonce="xonload=y"');
+    expect(ticketDialogNoscriptCss(null)).toMatch(/^<style>/);
+    expect(salonPath("e1")).toBe("/etkinlik/e1/salon");
   });
 });
