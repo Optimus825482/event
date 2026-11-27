@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import {
@@ -56,7 +56,11 @@ describe("demo kalıcı silme", () => {
     await db.insert(systemSettings).values({ salesDemoEnabled: true });
     const demoId = eventIds[0]!;
     const [demoEvent] = await db.select().from(events).where(eq(events.id, demoId));
-    const [m1] = await db.select().from(eventTables).where(eq(eventTables.eventId, demoId));
+    // Loca masaları bütün satılır; iki koltukluk sipariş için açıkça loca olmayan `M-1` seçilir.
+    const [m1] = await db
+      .select()
+      .from(eventTables)
+      .where(and(eq(eventTables.eventId, demoId), eq(eventTables.label, "M-1")));
 
     const paid = await createPaidOrder(db, { eventId: demoId, items: [{ tableId: m1!.id, quantity: 2 }] });
     await createPendingHold(db, { eventId: demoId, items: [{ tableId: m1!.id, quantity: 1 }] });
