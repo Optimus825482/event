@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { openTicketDialog } from "@/components/event/ticket-dialog";
 import { buttonClass } from "@/components/ui/button";
 import { isCurrentPath, NAV_CTA, NAV_ITEMS } from "@/content/site";
 import { cn } from "@/lib/cn";
@@ -14,6 +15,14 @@ export function SiteNav(): React.JSX.Element {
   useEffect(() => {
     if (detailsRef.current) detailsRef.current.open = false;
   }, [pathname]);
+
+  // Etkinlik sayfasında "Bilet Al" kişi sayısı penceresini açar; pencere yoksa (satış kapalı, başka sayfa) etkinliklere gider.
+  function handleCta(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (!openTicketDialog()) return;
+    event.preventDefault();
+    if (detailsRef.current) detailsRef.current.open = false;
+  }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDetailsElement>) {
     if (event.key === "Escape" && detailsRef.current) {
@@ -40,7 +49,7 @@ export function SiteNav(): React.JSX.Element {
             </Link>
           );
         })}
-        <Link href={NAV_CTA.href} className={buttonClass("gold")}>
+        <Link href={NAV_CTA.href} onClick={handleCta} className={buttonClass("gold")}>
           {NAV_CTA.label}
         </Link>
       </div>
@@ -66,7 +75,7 @@ export function SiteNav(): React.JSX.Element {
               </Link>
             );
           })}
-          <Link href={NAV_CTA.href} className={cn(buttonClass("gold"), "mt-2 w-full")}>
+          <Link href={NAV_CTA.href} onClick={handleCta} className={cn(buttonClass("gold"), "mt-2 w-full")}>
             {NAV_CTA.label}
           </Link>
         </div>

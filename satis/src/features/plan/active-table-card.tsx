@@ -12,6 +12,7 @@ export function ActiveTableCard({
   unitPrice,
   currency,
   disabled,
+  compact,
   onToggleSeat,
   onToggleWhole,
 }: {
@@ -20,6 +21,8 @@ export function ActiveTableCard({
   unitPrice: string | null;
   currency: string;
   disabled?: boolean;
+  /** Masa penceresinde: başlık ve çerçeve yok (pencere başlığı masayı adlandırır). */
+  compact?: boolean;
   onToggleSeat(seatNo: number): void;
   onToggleWhole(): void;
 }) {
@@ -32,6 +35,7 @@ export function ActiveTableCard({
   }
 
   const kindWord = table.isLoca ? "Loca" : "Masa";
+  const frame = compact ? "flex flex-col gap-3" : "flex flex-col gap-3 rounded-xl border border-line bg-surface p-4";
   const title = `${kindWord} ${table.label}`;
   const priceText = unitPrice ? `${formatMoney(unitPrice, currency)} / kişi` : null;
 
@@ -39,13 +43,15 @@ export function ActiveTableCard({
     const seats = table.seats ?? 0;
     const isPicked = pick !== null;
     return (
-      <section aria-label="Seçili masa" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
-        <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-base font-semibold text-ivory">{title}</h3>
-          <span className="text-xs text-muted">
-            {[table.categoryLabel, priceText].filter(Boolean).join(" · ")}
-          </span>
-        </div>
+      <section aria-label="Seçili masa" className={frame}>
+        {compact ? null : (
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-base font-semibold text-ivory">{title}</h3>
+            <span className="text-xs text-muted">
+              {[table.categoryLabel, priceText].filter(Boolean).join(" · ")}
+            </span>
+          </div>
+        )}
         <p className="text-sm text-muted">
           {seats} kişilik masa · {seats} bilet
         </p>
@@ -65,13 +71,15 @@ export function ActiveTableCard({
   const closedCount = Math.max(0, table.capacity - table.seatNos.length);
 
   return (
-    <section aria-label="Seçili masa" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-base font-semibold text-ivory">{title}</h3>
-        <span className="text-xs text-muted">
-          {[table.categoryLabel, priceText].filter(Boolean).join(" · ")}
-        </span>
-      </div>
+    <section aria-label="Seçili masa" className={frame}>
+      {compact ? null : (
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="text-base font-semibold text-ivory">{title}</h3>
+          <span className="text-xs text-muted">
+            {[table.categoryLabel, priceText].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+      )}
       <div role="group" aria-label={`${title} sandalyeleri`} className="grid grid-cols-6 gap-2">
         {table.seatNos.map((seatNo) => {
           const isPicked = pickedSet.has(seatNo);

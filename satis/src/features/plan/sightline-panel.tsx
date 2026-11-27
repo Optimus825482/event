@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { SightlineSet } from "@/lib/core/contract";
 import { SIGHTLINE_CAPTION, sightlineSrc } from "./sightline";
@@ -16,14 +16,49 @@ export type SightlinePanelProps = {
 /** Seçili masadan sahnenin temsili fotoğrafı (panel genişliğinde) ve 3B göz hizası düğmesi. */
 export function SightlinePanel({ set, table, canLookIn3d, onLookIn3d }: SightlinePanelProps) {
   const src = sightlineSrc(set, table ? table.label : null);
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const showImage = src !== null && failedSrc !== src;
   const name = table ? `${table.isLoca ? "Loca" : "Masa"} ${table.label}` : null;
   const title = name ? `${name} · Sahne görüşü` : "Salon ortasından sahne görüşü";
   const alt = name ? `${name} konumundan sahnenin temsili görünümü` : "Salonun temsili genel görünümü";
 
   return (
     <section aria-label="Sahne görüşü" className="overflow-hidden rounded-xl border border-line bg-surface">
+      <SightlineImage
+        src={src}
+        alt={alt}
+        fallback={table ? "Bu masa için sahne görüşü fotoğrafı yok." : "Sahne görüşü için bir masa seçin."}
+      />
+      <div className="space-y-3 p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <p className="text-sm font-semibold text-ivory">{title}</p>
+          <p className="text-xs text-muted">{SIGHTLINE_CAPTION}</p>
+        </div>
+        {table && canLookIn3d ? (
+          <Button variant="glass" className="w-full" onClick={onLookIn3d}>
+            3B&apos;de masadan bak
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+/** Sahne görüşü fotoğrafı (16:9); dosya yoksa ya da yüklenemezse yedek metin gösterilir. */
+export function SightlineImage({
+  src,
+  alt,
+  fallback,
+  children,
+}: {
+  src: string | null;
+  alt: string;
+  fallback: string;
+  /** Fotoğrafın üstüne bindirilen içerik (alt yazılar). */
+  children?: ReactNode;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showImage = src !== null && failedSrc !== src;
+  return (
+    <div className="relative">
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element -- statik public/sightline/ WebP varlıkları doğrudan sunulur
         <img
@@ -38,22 +73,10 @@ export function SightlinePanel({ set, table, canLookIn3d, onLookIn3d }: Sightlin
         />
       ) : (
         <div className="flex aspect-video w-full items-center justify-center bg-bg px-4 text-center">
-          <p className="text-sm text-muted">
-            {table ? "Bu masa için sahne görüşü fotoğrafı yok." : "Sahne görüşü için bir masa seçin."}
-          </p>
+          <p className="text-sm text-muted">{fallback}</p>
         </div>
       )}
-      <div className="space-y-3 p-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <p className="text-sm font-semibold text-ivory">{title}</p>
-          <p className="text-xs text-muted">{SIGHTLINE_CAPTION}</p>
-        </div>
-        {table && canLookIn3d ? (
-          <Button variant="glass" className="w-full" onClick={onLookIn3d}>
-            3B&apos;de masadan bak
-          </Button>
-        ) : null}
-      </div>
-    </section>
+      {children}
+    </div>
   );
 }

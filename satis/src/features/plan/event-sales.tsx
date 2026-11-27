@@ -7,13 +7,14 @@ import { holdAction } from "@/features/checkout/actions";
 import type { Availability, EventDetail } from "@/lib/core/contract";
 import { ERROR_MESSAGES } from "@/lib/core/errors";
 import { imageUrl } from "@/lib/image-url";
-import { ActiveTableCard } from "./active-table-card";
+import { formatEventTime } from "@/lib/time-zone";
 import { dimmedTableIds, findTables, type KindFilter } from "./finder";
 import { buildPlanModel } from "./model";
 import { DEFAULT_PARTY_SIZE } from "./party";
-import { PartySizeField, PartyStep } from "./party-step";
+import { PartySizeField } from "./party-step";
 import {
   applyPick,
+  autoPick,
   holdSignature,
   initialPicks,
   partyLimit,
@@ -21,6 +22,8 @@ import {
   type PickRules,
   readiness,
   reconcilePicks,
+  samePick,
+  type TablePick,
 } from "./picks";
 import type { SeatView } from "./plan-3d";
 import { PlanLegend } from "./plan-legend";
@@ -30,6 +33,8 @@ import { picksTotal } from "./price";
 import { SalonBrowser } from "./salon-browser";
 import { SelectionSummary } from "./selection-summary";
 import { SightlinePanel } from "./sightline-panel";
+import { formatStageMetrics, tableStageMetrics } from "./stage-metrics";
+import { TableDialog } from "./table-dialog";
 import { TableFinder } from "./table-finder";
 import { useAvailability } from "./use-availability";
 
@@ -38,11 +43,15 @@ export const SEAT_TAKEN_MESSAGE = "Seçtiğiniz sandalyelerden biri az önce al�
 export type EventSalesProps = {
   event: EventDetail;
   initialAvailability: Availability;
-  /** "Bilet Al" adımında seçilen kişi sayısı (1..event.sale.maxSeatsPerOrder). Verilmezse PartyStep sorulur. */
+  /** "Bilet Al" penceresinde seçilen kişi sayısı (1..event.sale.maxSeatsPerOrder). Verilmezse 2 ile başlar; panelden değişir. */
   initialPartySize?: number;
 };
 
-/** 3B/2B salon planı, masa bulucu, numaralı sandalye seçimi, sahne görüşü ve tutma akışı. */
+/**
+ * 3B/2B salon planı, masa bulucu, masa penceresi (sahne görüşü, numaralı sandalye seçimi, ödemeye geçiş) ve tutma akışı.
+ * Masa açılınca kişi sayısı kadar boş sandalye (bütün satılan masada masanın tamamı) önseçilir;
+ * pencere seçime dokunulmadan kapatılırsa önseçim geri alınır.
+ */
 export function EventSales({ event, initialAvailability, initialPartySize }: EventSalesProps) {
   const router = useRouter();
   const { availability, stale, refresh, patch } = useAvailability(event.id, initialAvailability);
@@ -55,7 +64,6 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   );
   const limit = partyLimit(rules);
 
-  const [partyConfirmed, setPartyConfirmed] = useState(initialPartySize !== undefined);
   const [state, setState] = useState(() =>
     initialPicks(Math.max(1, Math.min(limit, initialPartySize ?? DEFAULT_PARTY_SIZE))),
   );
@@ -65,6 +73,9 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [dialogTableId, setDialogTableId] = useState<string | null>(null);
+  /** Pencere açılırken yapılan önseçim; pencere dokunulmadan kapanırsa geri alınır. */
+  const autoRef = useRef<TablePick | null>(null);
 
   const keyRef = useRef<{ signature: string; key: string } | null>(null);
 
@@ -77,22 +88,6 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   // Satış kapalıyken de salon 3B gezilir ve masadan sahne görüşü gösterilir; yalnızca seçim/tutma yoktur.
   if (event.sale.state !== "open") {
     return <SalonBrowser event={event} model={model} view={view} artworkUrl={artworkUrl} />;
-  }
-
-  if (!partyConfirmed) {
-    return (
-      <div className="flex flex-col gap-6">
-        <PartyStep
-          max={limit}
-          initial={Math.min(DEFAULT_PARTY_SIZE, limit)}
-          onConfirm={(partySize) => {
-            setState(initialPicks(partySize));
-            setPartyConfirmed(true);
-          }}
-        />
-        <SalonBrowser event={event} model={model} view={view} artworkUrl={artworkUrl} />
-      </div>
-    );
   }
 
   // Canlı yoklama seçimi geçersiz kıldıysa (tutma isteği sürerken değil) render sırasında uzlaştırılır.
@@ -111,17 +106,28 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
     setNotice(step.notice);
   };
 
-  const handleTable = (tableId: string) => {
-    const target = model.tables.find((t) => t.id === tableId);
-    if (target?.wholeOnly) {
-      const focused = applyPick(state, { type: "focus", tableId }, model, rules);
-      const toggled = applyPick(focused.state, { type: "toggleWhole", tableId }, model, rules);
-      setState(toggled.state);
-      setError(null);
-      setNotice(toggled.notice);
-      return;
+  /** Masayı pencerede açar; seçimi olmayan masada önseçim yapar. */
+  const openTable = (tableId: string) => {
+    const step = autoPick(state, tableId, model, rules);
+    const before = state.picks.find((p) => p.tableId === tableId);
+    const after = step.state.picks.find((p) => p.tableId === tableId) ?? null;
+    autoRef.current = !before && after ? after : null;
+    setState(step.state);
+    setError(null);
+    setNotice(step.notice);
+    setDialogTableId(tableId);
+  };
+
+  const closeDialog = (revert: boolean) => {
+    const auto = autoRef.current;
+    autoRef.current = null;
+    if (revert && auto && dialogTableId === auto.tableId) {
+      const current = state.picks.find((p) => p.tableId === auto.tableId);
+      if (samePick(current, auto)) {
+        setState({ ...state, picks: state.picks.filter((p) => p.tableId !== auto.tableId) });
+      }
     }
-    runAction({ type: "focus", tableId });
+    setDialogTableId(null);
   };
 
   const handleSeat = (tableId: string, seatNo: number) => {
@@ -132,12 +138,34 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   const dimmedIds = dimmedTableIds(model, { query, kind });
   const pickedIds = new Set(state.picks.map((p) => p.tableId));
   const activeTable = state.activeTableId ? (model.tables.find((t) => t.id === state.activeTableId) ?? null) : null;
-  const activePick = activeTable ? (state.picks.find((p) => p.tableId === activeTable.id) ?? null) : null;
-  const unitPrice = activeTable?.category
-    ? (event.prices.find((p) => p.category === activeTable.category)?.price ?? null)
-    : null;
   const total = picksTotal(state, model, event.prices);
   const readyInfo = readiness(state, model, rules);
+
+  const lookFromTable = (tableId: string) => {
+    view.setMode("3d");
+    setSeatView((sv) => ({ tableId, nonce: (sv?.nonce ?? 0) + 1 }));
+  };
+
+  const dialogTable = dialogTableId ? (model.tables.find((t) => t.id === dialogTableId) ?? null) : null;
+  const dialogPick = dialogTable ? (state.picks.find((p) => p.tableId === dialogTable.id) ?? null) : null;
+  const dialogPrice = dialogTable?.category
+    ? (event.prices.find((p) => p.category === dialogTable.category)?.price ?? null)
+    : null;
+  const dialogMetrics = dialogTable ? tableStageMetrics(model, dialogTable) : null;
+  const otherPicks = state.picks
+    .filter((p) => p.tableId !== dialogTableId)
+    .map((p) => {
+      const t = model.tables.find((x) => x.id === p.tableId);
+      const label = t ? `${t.isLoca ? "Loca" : "Masa"} ${t.label}` : p.tableId;
+      return p.whole ? `${label} · tamamı` : `${label} · sandalye ${p.seatNos.join(", ")}`;
+    });
+  const messages =
+    error || notice ? (
+      <>
+        {error ? <Notice tone="error">{error}</Notice> : null}
+        {notice ? <Notice>{notice}</Notice> : null}
+      </>
+    ) : null;
 
   const proceed = async () => {
     if (!readyInfo.ready || pending || total === null) return;
@@ -183,7 +211,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
           artworkUrl={artworkUrl}
           title={event.name}
           seatView={seatView}
-          onTable={handleTable}
+          onTable={openTable}
           onSeat={handleSeat}
         />
         <PlanLegend prices={event.prices} currency={event.currency} />
@@ -210,26 +238,15 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
           currency={event.currency}
           onQuery={setQuery}
           onKind={setKind}
-          onFocus={(tableId) => runAction({ type: "focus", tableId })}
+          onFocus={openTable}
         />
         <SightlinePanel
           set={event.site.sightlineSet}
           table={activeTable ? { label: activeTable.label, isLoca: activeTable.isLoca } : null}
           canLookIn3d={view.can3d && !view.failed}
           onLookIn3d={() => {
-            if (!activeTable) return;
-            view.setMode("3d");
-            setSeatView((sv) => ({ tableId: activeTable.id, nonce: (sv?.nonce ?? 0) + 1 }));
+            if (activeTable) lookFromTable(activeTable.id);
           }}
-        />
-        <ActiveTableCard
-          table={activeTable}
-          pick={activePick}
-          unitPrice={unitPrice}
-          currency={event.currency}
-          disabled={pending}
-          onToggleSeat={(seatNo) => activeTable && handleSeat(activeTable.id, seatNo)}
-          onToggleWhole={() => activeTable && runAction({ type: "toggleWhole", tableId: activeTable.id })}
         />
         <SelectionSummary
           state={state}
@@ -239,13 +256,46 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
           readiness={readyInfo}
           pending={pending}
           onRemove={(tableId) => runAction({ type: "removeTable", tableId })}
-          onFocus={(tableId) => runAction({ type: "focus", tableId })}
+          onFocus={openTable}
           onContinue={proceed}
         >
-          {error ? <Notice tone="error">{error}</Notice> : null}
-          {notice ? <Notice>{notice}</Notice> : null}
+          {dialogTable ? null : messages}
         </SelectionSummary>
       </aside>
+
+      <TableDialog
+        open={dialogTable !== null}
+        table={dialogTable}
+        eventName={event.name}
+        eventTime={formatEventTime(event.startsAt)}
+        sightlineSet={event.site.sightlineSet}
+        metrics={dialogMetrics ? formatStageMetrics(dialogMetrics) : null}
+        unitPrice={dialogPrice}
+        currency={event.currency}
+        canLookIn3d={view.can3d && !view.failed}
+        onLookIn3d={() => {
+          if (!dialogTable) return;
+          closeDialog(false);
+          lookFromTable(dialogTable.id);
+        }}
+        onClose={() => closeDialog(true)}
+        sale={{
+          pick: dialogPick,
+          otherPicks,
+          total,
+          readiness: readyInfo,
+          pending,
+          onToggleSeat: (seatNo) => {
+            if (dialogTable) handleSeat(dialogTable.id, seatNo);
+          },
+          onToggleWhole: () => {
+            if (dialogTable) runAction({ type: "toggleWhole", tableId: dialogTable.id });
+          },
+          onProceed: proceed,
+        }}
+      >
+        {dialogTable ? messages : null}
+      </TableDialog>
     </div>
   );
 }

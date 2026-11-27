@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventSales, SEAT_TAKEN_MESSAGE } from "@/features/plan/event-sales";
-import { seatTakenNotice } from "@/features/plan/picks";
+import { PARTY_FULL_NOTICE, PROCEED_LABEL, seatTakenNotice } from "@/features/plan/picks";
 import type { Availability, EventDetail } from "@/lib/core/contract";
 
 const pushMock = vi.fn();
@@ -155,101 +155,145 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe("EventSales", () => {
-  it("kişi sayısı verilmemişse önce kişi sayısı sorulur; onaylanınca plan ve panel açılır", () => {
-    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} />);
-    expect(screen.getByLabelText("Kaç kişisiniz?")).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "Seçiminiz" })).toBeNull();
+const closedSale: EventDetail["sale"] = {
+  state: "closed",
+  mode: "seat",
+  opensAt: null,
+  closesAt: null,
+  holdMinutes: 10,
+  maxSeatsPerOrder: 12,
+  blockSingleLeftover: true,
+  demo: false,
+};
 
-    fireEvent.submit(screen.getByLabelText("Kaç kişisiniz?").closest("form")!);
+const dialog = () => screen.getByRole("dialog");
+const inDialog = () => within(dialog());
+const proceedButton = () => inDialog().getByRole("button", { name: PROCEED_LABEL }) as HTMLButtonElement;
+
+describe("EventSales", () => {
+  it("kişi sayısı verilmemişse ayrı adım sorulmaz: 2 kişiyle plan, panel ve sahne görüşü açılır", () => {
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} />);
+    expect(screen.queryByText("Kaç kişisiniz?")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Masaları göster" })).toBeNull();
+    expect(screen.getByTestId("mock-plan-viewer")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Sahne görüşü" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Seçiminiz" })).toBeTruthy();
     expect(screen.getByRole("status").textContent).toContain("0/2 kişi seçildi");
+    expect((screen.getByLabelText("Kişi sayısı") as HTMLSelectElement).value).toBe("2");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("kişi sayısı verilmişse adım atlanır ve sayaç o sayıyla başlar", () => {
+  it("kişi sayısı verilmişse sayaç o sayıyla başlar", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={4} />);
-    expect(screen.queryByLabelText("Kaç kişisiniz?")).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("0/4 kişi seçildi");
   });
 
-  it("satış kapalıyken plan salt okunurdur: kişi adımı, panel ve Devam et yoktur", () => {
-    render(
-      <EventSales
-        event={makeEvent({
-          sale: {
-            state: "closed",
-            mode: "seat",
-            opensAt: null,
-            closesAt: null,
-            holdMinutes: 10,
-            maxSeatsPerOrder: 12,
-            blockSingleLeftover: true,
-            demo: false,
-          },
-        })}
-        initialAvailability={mockAvailability}
-      />,
-    );
+  it("satış kapalıyken plan salt okunurdur: kişi sayısı, panel ve Devam et yoktur", () => {
+    render(<EventSales event={makeEvent({ sale: closedSale })} initialAvailability={mockAvailability} />);
     expect(screen.getByTestId("mock-plan-viewer")).toBeTruthy();
-    expect(screen.queryByLabelText("Kaç kişisiniz?")).toBeNull();
+    expect(screen.queryByLabelText("Kişi sayısı")).toBeNull();
     expect(screen.queryByRole("region", { name: "Seçiminiz" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Devam et" })).toBeNull();
   });
 
-  it("satış kapalıyken de masaya dokununca sahne görüşü o masayı gösterir; sandalye seçimi yoktur", () => {
-    render(
-      <EventSales
-        event={makeEvent({
-          sale: {
-            state: "closed",
-            mode: "seat",
-            opensAt: null,
-            closesAt: null,
-            holdMinutes: 10,
-            maxSeatsPerOrder: 12,
-            blockSingleLeftover: true,
-            demo: false,
-          },
-        })}
-        initialAvailability={mockAvailability}
-      />,
-    );
-    expect(screen.getByRole("region", { name: "Sahne görüşü" })).toBeTruthy();
+  it("satış kapalıyken masaya dokununca masa penceresi açılır: bilgi ve satış durumu, sandalye seçimi ve ödeme yok", () => {
+    render(<EventSales event={makeEvent({ sale: closedSale })} initialAvailability={mockAvailability} />);
     expect(screen.queryByRole("button", { name: "PlanSeat-A1-4" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    expect(inDialog().getByRole("heading", { level: 2, name: "Masa A1" })).toBeTruthy();
+    expect(inDialog().getByText("Satış kapalı")).toBeTruthy();
+    expect(inDialog().getByText("Masa A1 — Sahne Görünümü")).toBeTruthy();
+    expect(inDialog().queryByRole("group", { name: /sandalyeleri/ })).toBeNull();
+    expect(inDialog().queryByRole("button", { name: PROCEED_LABEL })).toBeNull();
     expect(screen.getByText("Masa A1 · Sahne görüşü")).toBeTruthy();
-    expect(screen.queryByRole("group", { name: /Sandalye/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Devam et" })).toBeNull();
+    fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("satış kapalıyken masa listeden de seçilebilir (klavye erişimi)", () => {
+  it("satış kapalıyken masa listeden de seçilebilir (klavye erişimi) ve pencere açılır", () => {
     render(
       <EventSales
-        event={makeEvent({
-          sale: {
-            state: "not_started",
-            mode: "seat",
-            opensAt: null,
-            closesAt: null,
-            holdMinutes: 10,
-            maxSeatsPerOrder: 12,
-            blockSingleLeftover: true,
-            demo: false,
-          },
-        })}
+        event={makeEvent({ sale: { ...closedSale, state: "not_started" } })}
         initialAvailability={mockAvailability}
       />,
     );
     fireEvent.change(screen.getByLabelText("Masa veya loca"), { target: { value: "a1" } });
     expect(screen.getByText("Masa A1 · Sahne görüşü")).toBeTruthy();
+    expect(inDialog().getByText("Satış yakında")).toBeTruthy();
   });
 
-  it("kişi sayısı sorulurken salon planı ve sahne görüşü yine gösterilir", () => {
-    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} />);
-    expect(screen.getByLabelText("Kaç kişisiniz?")).toBeTruthy();
-    expect(screen.getByTestId("mock-plan-viewer")).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Sahne görüşü" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "PlanSeat-A1-4" })).toBeNull();
+  it("masa penceresi: başlık, müsait yer, tür rozeti, etkinlik, seçim, kişi başı ve toplam; KDV satırı yok", () => {
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    const d = inDialog();
+    expect(dialog().getAttribute("aria-modal")).toBe("true");
+    expect(screen.getByRole("dialog", { name: "Masa A1" })).toBeTruthy();
+    expect(d.getByText("8 kişilik yer müsait")).toBeTruthy();
+    expect(d.getByText("MASA")).toBeTruthy();
+    expect(d.getByText("Yılbaşı Galası · 22:00")).toBeTruthy();
+    expect(d.getByText("Masa A1 · 2 Kişi · Sandalye 1, 2")).toBeTruthy();
+    expect(d.getByText("Kişi Başı Fiyat").nextElementSibling?.textContent).toBe("1.500,00 ₺");
+    expect(d.getByText("Toplam Tutar").nextElementSibling?.textContent).toBe("3.000,00 ₺");
+    expect(d.queryByText(/KDV/)).toBeNull();
+    expect(d.getByRole("button", { name: "Kapat" })).toBeTruthy();
+    expect(d.getByRole("button", { name: "Pencereyi kapat" })).toBeTruthy();
+  });
+
+  it("numaralı masada kişi sayısı kadar boş sandalye önseçilir ve hemen ödemeye geçilebilir", async () => {
+    holdActionMock.mockResolvedValueOnce({ ok: true, data: { orderToken: "tok-auto" } });
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    expect(inDialog().getByRole("button", { name: "Sandalye 1, seçili" }).getAttribute("aria-pressed")).toBe("true");
+    expect(inDialog().getByRole("button", { name: "Sandalye 2, seçili" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("2/2 kişi seçildi");
+    await act(async () => {
+      fireEvent.click(proceedButton());
+    });
+    expect(holdActionMock).toHaveBeenCalledWith({
+      eventId: "evt-1",
+      clientKey: expect.any(String),
+      items: [{ tableId: "a1", quantity: 2, seatNos: [1, 2] }],
+    });
+    expect(pushMock).toHaveBeenCalledWith("/odeme/tok-auto");
+  });
+
+  it("pencere dokunulmadan kapatılırsa (Kapat, ×, Esc) önseçim geri alınır; değiştirilen seçim korunur", () => {
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("0/2 kişi seçildi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Pencereyi kapat" }));
+    expect(screen.getByRole("status").textContent).toContain("0/2 kişi seçildi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    fireEvent(dialog(), new Event("cancel", { cancelable: true }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("0/2 kişi seçildi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Sandalye 2, seçili" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Sandalye 5, boş" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
+    expect(screen.getByRole("status").textContent).toContain("2/2 kişi seçildi");
+    expect(screen.getByText("Masa A1 · sandalye 1, 5")).toBeTruthy();
+  });
+
+  it("sağdaki listeden seçilen masa da pencerede açılır", () => {
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Masa A2 ·/ }));
+    expect(screen.getByRole("dialog", { name: "Masa A2" })).toBeTruthy();
+  });
+
+  it("kişi sayısı dolunca pencerede yeni sandalye seçilmez ve uyarı pencerede çıkar", () => {
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Sandalye 3, boş" }));
+    expect(inDialog().getByText(PARTY_FULL_NOTICE)).toBeTruthy();
+    expect(inDialog().getByRole("button", { name: "Sandalye 3, boş" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("iki masadan seçilen sandalyeler tek tutma çağrısında numaralarıyla gider", async () => {
@@ -257,15 +301,19 @@ describe("EventSales", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={4} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 4, boş" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 7, boş" }));
+    for (const no of [1, 2, 3]) {
+      fireEvent.click(inDialog().getByRole("button", { name: `Sandalye ${no}, seçili` }));
+    }
+    fireEvent.click(inDialog().getByRole("button", { name: "Sandalye 7, boş" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Plan-A2" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 1, boş" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 2, boş" }));
+    expect(inDialog().getByText("Masa A2 · 2 Kişi · Sandalye 1, 2")).toBeTruthy();
+    expect(inDialog().getByText("Masa A1 · sandalye 4, 7")).toBeTruthy();
+    expect(inDialog().getByText("Toplam Tutar").nextElementSibling?.textContent).toBe("6.000,00 ₺");
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
+      fireEvent.click(proceedButton());
     });
 
     expect(holdActionMock).toHaveBeenCalledWith({
@@ -279,7 +327,7 @@ describe("EventSales", () => {
     expect(pushMock).toHaveBeenCalledWith("/odeme/tok");
   });
 
-  it("masa bazlı kipte masa bütün gider ve seatNos taşımaz", async () => {
+  it("masa bazlı kipte masa bütün önseçilir, sandalye düğmesi yoktur ve seatNos taşımaz", async () => {
     holdActionMock.mockResolvedValueOnce({ ok: true, data: { orderToken: "tok-table" } });
     const base = makeEvent();
     const tableEvent = makeEvent({
@@ -292,8 +340,11 @@ describe("EventSales", () => {
     render(<EventSales event={tableEvent} initialAvailability={mockAvailability} initialPartySize={2} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    expect(inDialog().queryByRole("button", { name: /Sandalye/ })).toBeNull();
+    expect(inDialog().getByText("8 kişilik masa · 8 bilet")).toBeTruthy();
+    expect(inDialog().getByText("Masa A1 · 8 Kişi (bütün masa)")).toBeTruthy();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
+      fireEvent.click(proceedButton());
     });
 
     expect(holdActionMock).toHaveBeenCalledWith({
@@ -303,25 +354,24 @@ describe("EventSales", () => {
     });
   });
 
-  it("yoklama seçili sandalyeyi dolu getirirse seçimden düşer ve uyarı duyurulur", () => {
+  it("yoklama seçili sandalyeyi dolu getirirse seçimden düşer ve uyarı pencerede duyurulur", () => {
     const { rerender } = render(
       <EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 4, boş" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 7, boş" }));
 
     mockAvailability = {
       at: "2026-12-01T10:00:10Z",
       tables: [
-        { id: "a1", free: 7, freeSeats: [1, 2, 3, 5, 6, 7, 8] },
+        { id: "a1", free: 7, freeSeats: [2, 3, 4, 5, 6, 7, 8] },
         { id: "a2", free: 8, freeSeats: seq(8) },
       ],
     };
     rerender(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
 
-    expect(screen.getByText(seatTakenNotice("Masa A1", [4]))).toBeTruthy();
+    expect(inDialog().getByText(seatTakenNotice("Masa A1", [1]))).toBeTruthy();
     expect(screen.getByText(/1\/2 kişi seçildi/)).toBeTruthy();
+    expect(proceedButton().disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Devam et" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -338,23 +388,21 @@ describe("EventSales", () => {
       <EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 4, boş" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 7, boş" }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
+      fireEvent.click(proceedButton());
     });
 
     mockAvailability = {
       at: "2026-12-01T10:00:10Z",
       tables: [
-        { id: "a1", free: 6, freeSeats: [1, 2, 3, 5, 6, 8] },
+        { id: "a1", free: 6, freeSeats: [3, 4, 5, 6, 7, 8] },
         { id: "a2", free: 8, freeSeats: seq(8) },
       ],
     };
     rerender(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
 
-    expect(screen.queryByText(seatTakenNotice("Masa A1", [4, 7]))).toBeNull();
+    expect(screen.queryByText(seatTakenNotice("Masa A1", [1, 2]))).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("2/2 kişi seçildi");
 
     await act(async () => {
@@ -363,7 +411,7 @@ describe("EventSales", () => {
     expect(pushMock).toHaveBeenCalledWith("/odeme/tok-pending");
   });
 
-  it("seats_unavailable: sandalye mesajı gösterilir, doluluk yenilenir, yerel yama uygulanır", async () => {
+  it("seats_unavailable: sandalye mesajı pencerede gösterilir, doluluk yenilenir, yerel yama uygulanır", async () => {
     holdActionMock.mockResolvedValueOnce({
       ok: false,
       code: "seats_unavailable",
@@ -373,14 +421,12 @@ describe("EventSales", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 4, boş" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 7, boş" }));
-
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
+      fireEvent.click(proceedButton());
     });
 
-    expect(screen.getByRole("alert").textContent).toBe(SEAT_TAKEN_MESSAGE);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(inDialog().getByRole("alert").textContent).toBe(SEAT_TAKEN_MESSAGE);
     expect(refreshAvailMock).toHaveBeenCalledTimes(1);
     expect(patchAvailMock).toHaveBeenCalledWith("a1", 6);
   });
@@ -390,33 +436,57 @@ describe("EventSales", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 4, boş" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 7, boş" }));
-
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
+      fireEvent.click(proceedButton());
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
+      fireEvent.click(proceedButton());
     });
 
     const key1 = holdActionMock.mock.calls[0]![0].clientKey;
     const key2 = holdActionMock.mock.calls[1]![0].clientKey;
     expect(key1).toBe(key2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 7, seçili" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sandalye 8, boş" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Sandalye 2, seçili" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Sandalye 8, boş" }));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
+      fireEvent.click(proceedButton());
     });
     const key3 = holdActionMock.mock.calls[2]![0].clientKey;
     expect(key3).not.toBe(key1);
   });
 
-  it("sahne görüşü etkin masayı izler ve 3B yokken düğme sunmaz", () => {
+  it("sahne görüşü etkin masayı izler; 3B yokken ne panelde ne pencerede masadan bakış düğmesi vardır", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
     expect(screen.getByText("Bu masa için sahne görüşü fotoğrafı yok.")).toBeTruthy();
+    expect(inDialog().getByText("Bu konum için sahne fotoğrafı yok.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "3B'de masadan bak" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Masadan Sahneye Bak" })).toBeNull();
+  });
+
+  it("pencere sahne görüşü fotoğrafını ve plandaki sahneye göre mesafe · açıyı gösterir; sahne yoksa açı yazılmaz", () => {
+    const base = makeEvent();
+    const withStage = makeEvent({
+      site: { ...base.site, sightlineSet: "diamond" },
+      plan: {
+        ...base.plan,
+        tables: base.plan.tables.map((t) => (t.id === "a1" ? { ...t, label: "M-1" } : t)),
+        // Sahne ortası (100, 25) px; M-1 (100, 100) tam karşıda 5 m.
+        decor: [{ id: "s", kind: "stage", x: 40, y: 10, width: 120, height: 30, rotation: 0, label: "Sahne" }],
+      },
+    });
+    const { unmount } = render(
+      <EventSales event={withStage} initialAvailability={mockAvailability} initialPartySize={2} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Plan-M-1" }));
+    expect(inDialog().getByRole("img").getAttribute("src")).toBe("/sightline/diamond/M-1.webp");
+    expect(inDialog().getByText("Masa M-1 — Sahne Görünümü")).toBeTruthy();
+    expect(inDialog().getByText("5m · Orta")).toBeTruthy();
+    unmount();
+
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    expect(inDialog().queryByText(/\dm · /)).toBeNull();
   });
 });

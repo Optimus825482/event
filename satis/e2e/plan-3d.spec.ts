@@ -26,7 +26,10 @@ test("yetenekli cihazda 3B kendiliğinden açılır, 2B düğmesi kalır, seçim
   await expect(page.getByRole("img", { name: "Salon planı (3B)" })).toBeVisible();
 
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
-  await page.getByRole("button", { name: "Sandalye 1, boş" }).click();
+  const a1Dialog = page.getByRole("dialog", { name: "Masa A1" });
+  await a1Dialog.getByRole("button", { name: "Sandalye 2, seçili" }).click();
+  await a1Dialog.getByRole("button", { name: "Kapat", exact: true }).click();
+  await expect(a1Dialog).toBeHidden();
 
   const toggle2d = page.getByRole("button", { name: "2B görünüm" });
   await expect(toggle2d).toHaveAttribute("aria-pressed", "true");
@@ -49,6 +52,12 @@ test("masa seçilince kamera masaya yakınlaşır; 3B'de sandalyeye tıklamak pa
   const a1Id = tableId(gala, "A1");
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
   await expect(sceneBox).toHaveAttribute("data-camera", `detail:${a1Id}`, { timeout: 10_000 });
+  // Dokunulmadan kapatılan pencere önseçimi geri alır; 3B'de sandalyeler tek tek seçilir.
+  const a1Dialog = page.getByRole("dialog", { name: "Masa A1" });
+  await a1Dialog.getByRole("button", { name: "Kapat", exact: true }).click();
+  await expect(a1Dialog).toBeHidden();
+  const summary = page.getByRole("region", { name: "Seçiminiz" });
+  await expect(summary.getByText("0/2 kişi seçildi")).toBeVisible();
 
   const availRes = await page.request.get(`/api/durum/${gala.id}`);
   const avail = await availRes.json();
@@ -70,10 +79,12 @@ test("masa seçilince kamera masaya yakınlaşır; 3B'de sandalyeye tıklamak pa
   const py = box!.y + ((1 - ndc.y) / 2) * box!.height;
 
   await page.mouse.click(px, py);
-  await expect(page.getByRole("button", { name: "Sandalye 3, seçili" })).toHaveAttribute("aria-pressed", "true");
+  await expect(summary.getByText("Masa A1 · sandalye 3")).toBeVisible();
+  await expect(summary.getByText("1/2 kişi seçildi")).toBeVisible();
 
   await page.mouse.click(px, py);
-  await expect(page.getByRole("button", { name: "Sandalye 3, boş" })).toHaveAttribute("aria-pressed", "false");
+  await expect(summary.getByText("0/2 kişi seçildi")).toBeVisible();
+  await expect(summary.getByText("Masa A1 · sandalye 3")).toHaveCount(0);
 });
 
 test("3B'de masadan bak kamerayı masadan sahneye çevirir", async ({ page }) => {
@@ -83,6 +94,10 @@ test("3B'de masadan bak kamerayı masadan sahneye çevirir", async ({ page }) =>
 
   const a1Id = tableId(gala, "A1");
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
+  await page.getByRole("dialog", { name: "Masa A1" }).getByRole("button", { name: "Masadan Sahneye Bak" }).click();
+  await expect(sceneBox).toHaveAttribute("data-camera", `seat:${a1Id}`, { timeout: 10_000 });
+  // Sağdaki panelin düğmesi de aynı bakışı açar.
+  await page.getByRole("group", { name: "Kamera" }).getByRole("button", { name: "Genel" }).click();
   await page.getByRole("button", { name: "3B'de masadan bak" }).click();
   await expect(sceneBox).toHaveAttribute("data-camera", `seat:${a1Id}`, { timeout: 10_000 });
 });
@@ -93,7 +108,10 @@ test("WebGL bağlamı kaybolursa 2B'ye bildirimle düşer, seçim korunur, masad
   await expect(sceneBox).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
 
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
-  await page.getByRole("button", { name: "Sandalye 1, boş" }).click();
+  const a1Dialog = page.getByRole("dialog", { name: "Masa A1" });
+  await a1Dialog.getByRole("button", { name: "Sandalye 2, seçili" }).click();
+  await a1Dialog.getByRole("button", { name: "Kapat", exact: true }).click();
+  await expect(a1Dialog).toBeHidden();
 
   const lost = await page.evaluate(() => {
     const gl = document.querySelector("canvas")?.getContext("webgl2") ?? document.querySelector("canvas")?.getContext("webgl");

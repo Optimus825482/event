@@ -17,6 +17,8 @@ export type PickStep = { state: PickState; notice: string | null };
 export type HoldItem = { tableId: string; quantity: number; seatNos?: number[] };
 export type Readiness = { ready: true; items: HoldItem[] } | { ready: false; reason: string | null };
 
+/** Masa penceresindeki ödemeye geçiş düğmesi. */
+export const PROCEED_LABEL = "Seç & Ödemeye Geç →";
 export const PARTY_FULL_NOTICE = "Kişi sayınız doldu. Başka sandalye için önce seçtiklerinizden birini bırakın.";
 export const TABLE_LIMIT_NOTICE = "Bir siparişte en çok 5 masadan seçim yapılabilir.";
 export const orderLimitNotice = (max: number) => `Tek siparişte en çok ${max} bilet alınabilir.`;
@@ -245,4 +247,38 @@ export function holdSignature(items: readonly HoldItem[]): string {
       return `${item.tableId}:${item.quantity}:${seats}`;
     })
     .join("|");
+}
+
+/**
+ * Masa penceresi açılırken önseçim: masa odaklanır; bütün satılan masa (loca / masa kipi) bütün seçilir,
+ * numaralı masada kalan kişi sayısı kadar boş sandalye sırayla seçilir. Masada zaten seçim varsa dokunulmaz.
+ * `blockSingleLeftover` açıkken masada tek boş sandalye bırakacak önseçim bir eksik yapılır.
+ */
+export function autoPick(state: PickState, tableId: string, model: PlanModel, rules: PickRules): PickStep {
+  const focused: PickState = { ...state, activeTableId: tableId };
+  const table = model.tables.find((t) => t.id === tableId);
+  if (!table || table.status !== "available") return { state: focused, notice: null };
+  if (state.picks.some((p) => p.tableId === tableId)) return { state: focused, notice: null };
+  if (table.wholeOnly) return applyPick(focused, { type: "toggleWhole", tableId }, model, rules);
+
+  const need = state.partySize - pickedCount(state, model);
+  if (need <= 0) return { state: focused, notice: null };
+  const free = [...table.freeSeats].sort((a, b) => a - b);
+  let count = Math.min(need, free.length);
+  if (rules.blockSingleLeftover && free.length - count === 1) count -= 1;
+  if (count <= 0) return { state: focused, notice: null };
+  if (state.picks.length >= MAX_ORDER_TABLES) return { state: focused, notice: TABLE_LIMIT_NOTICE };
+
+  return {
+    state: { ...focused, picks: [...state.picks, { tableId, whole: false, seatNos: free.slice(0, count) }] },
+    notice: null,
+  };
+}
+
+/** İki seçimin (aynı masa için) aynı olup olmadığı. */
+export function samePick(a: TablePick | null | undefined, b: TablePick | null | undefined): boolean {
+  if (!a || !b) return a === b;
+  if (a.tableId !== b.tableId || a.whole !== b.whole) return false;
+  if (a.whole || b.whole) return true;
+  return a.seatNos.length === b.seatNos.length && a.seatNos.every((n, i) => n === b.seatNos[i]);
 }

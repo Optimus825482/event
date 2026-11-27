@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { EventFacts } from "@/components/event/event-facts";
 import { eventFacts, saleModeNote } from "@/components/event/facts";
 import { eventHeroMedia } from "@/components/event/hero-media";
-import { PartyPicker } from "@/components/event/party-picker";
+import { TICKET_DIALOG_NOSCRIPT_CSS, TicketDialog } from "@/components/event/ticket-dialog";
 import { EventImage } from "@/components/event-image";
 import { PosterFallback } from "@/components/poster-fallback";
 import { Notice } from "@/components/ui/notice";
@@ -13,7 +13,7 @@ import { getReader } from "@/features/plan/read";
 import { saleStateLabel } from "@/features/plan/sale-state";
 import type { Availability, EventDetail } from "@/lib/core/contract";
 import { CoreError, messageFor } from "@/lib/core/errors";
-import { formatEventDate, formatEventTime } from "@/lib/time-zone";
+import { formatEventDate, formatEventDay, formatEventTime } from "@/lib/time-zone";
 
 // Her istekte çekirdek önbelleğinden okunur; derlemede çekirdeğe gidilmez.
 export const dynamic = "force-dynamic";
@@ -103,7 +103,15 @@ export default async function EventPage({ params, searchParams }: PageProps) {
           {summary ? <p className="text-base leading-relaxed text-ivory">{summary}</p> : null}
 
           {event.sale.state === "open" ? (
-            <PartyPicker eventId={event.id} maxSeatsPerOrder={event.sale.maxSeatsPerOrder} selected={partySize} />
+            <>
+              <TicketDialog
+                eventId={event.id}
+                eyebrow={`${event.artistName ?? event.name} · ${formatEventDay(event.startsAt)}`.toLocaleUpperCase("tr-TR")}
+                maxSeatsPerOrder={event.sale.maxSeatsPerOrder}
+                selected={partySize}
+              />
+              <noscript dangerouslySetInnerHTML={{ __html: TICKET_DIALOG_NOSCRIPT_CSS }} />
+            </>
           ) : (
             <Notice>{saleStateLabel(event.sale.state)}</Notice>
           )}

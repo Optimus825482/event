@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildPlanModel } from "@/features/plan/model";
 import {
   applyPick,
+  autoPick,
   holdSignature,
   initialPicks,
   orderLimitNotice,
@@ -12,6 +13,7 @@ import {
   pickedCount,
   readiness,
   reconcilePicks,
+  samePick,
   seatTakenNotice,
   seatsPicked,
   singleLeftReason,
@@ -310,5 +312,65 @@ describe("picks", () => {
       { tableId: "a2", quantity: 2, seatNos: [1, 2] },
     ]);
     expect(a).toBe(b);
+  });
+});
+
+describe("autoPick", () => {
+  it("numaralı masada kişi sayısı kadar boş sandalye sırayla önseçilir ve masa odaklanır", () => {
+    const step = autoPick(initialPicks(2), "a1", model, rules);
+    expect(step.state.activeTableId).toBe("a1");
+    expect(step.state.picks).toEqual([{ tableId: "a1", whole: false, seatNos: [1, 2] }]);
+    expect(readiness(step.state, model, rules).ready).toBe(true);
+  });
+
+  it("yuva boşluklarına ve dolu sandalyelere uyar", () => {
+    const m = modelWith({ g1: [2, 5, 6, 8] });
+    expect(autoPick(initialPicks(2), "g1", m, rules).state.picks).toEqual([
+      { tableId: "g1", whole: false, seatNos: [2, 5] },
+    ]);
+  });
+
+  it("başka masada seçilenler düşülür; kişi sayısı doluysa önseçim yapılmaz", () => {
+    const first = run(initialPicks(3), seat("a1", 1), seat("a1", 2)).state;
+    expect(autoPick(first, "a2", model, rules).state.picks[1]).toEqual({ tableId: "a2", whole: false, seatNos: [1] });
+    const full = run(initialPicks(2), seat("a1", 1), seat("a1", 2)).state;
+    const step = autoPick(full, "a2", model, rules);
+    expect(step.state.picks).toEqual(full.picks);
+    expect(step.state.activeTableId).toBe("a2");
+  });
+
+  it("masada tek boş sandalye bırakacaksa bir eksik önseçer (blockSingleLeftover)", () => {
+    const m = modelWith({ a1: [1, 2, 3] });
+    const step = autoPick(initialPicks(2), "a1", m, rules);
+    expect(step.state.picks).toEqual([{ tableId: "a1", whole: false, seatNos: [1] }]);
+    const free = autoPick(initialPicks(2), "a1", m, { ...rules, blockSingleLeftover: false });
+    expect(free.state.picks).toEqual([{ tableId: "a1", whole: false, seatNos: [1, 2] }]);
+  });
+
+  it("bütün satılan loca bütün seçilir; maxSeatsPerOrder aşılırsa seçilmez ve uyarı döner", () => {
+    expect(autoPick(initialPicks(2), "l1", model, rules).state.picks).toEqual([{ tableId: "l1", whole: true }]);
+    const step = autoPick(initialPicks(2), "l1", model, { ...rules, maxSeatsPerOrder: 4 });
+    expect(step.state.picks).toEqual([]);
+    expect(step.notice).toBe(orderLimitNotice(4));
+  });
+
+  it("masada zaten seçim varsa ya da masa satılamıyorsa dokunulmaz", () => {
+    const picked = run(initialPicks(2), seat("a1", 5)).state;
+    expect(autoPick(picked, "a1", model, rules).state.picks).toEqual(picked.picks);
+    expect(autoPick(initialPicks(2), "c1", model, rules).state.picks).toEqual([]);
+  });
+
+  it("5 masa sınırında yeni masaya önseçim yapılmaz", () => {
+    const five = run(initialPicks(12), seat("a1", 1), seat("a2", 1), seat("a3", 1), seat("a4", 1), seat("a5", 1)).state;
+    const step = autoPick(five, "a6", model, rules);
+    expect(step.state.picks).toHaveLength(5);
+    expect(step.notice).toBe(TABLE_LIMIT_NOTICE);
+  });
+
+  it("samePick sandalye listesini ve bütün seçimi karşılaştırır", () => {
+    expect(samePick({ tableId: "a1", whole: false, seatNos: [1, 2] }, { tableId: "a1", whole: false, seatNos: [1, 2] })).toBe(true);
+    expect(samePick({ tableId: "a1", whole: false, seatNos: [1, 2] }, { tableId: "a1", whole: false, seatNos: [1, 3] })).toBe(false);
+    expect(samePick({ tableId: "l1", whole: true }, { tableId: "l1", whole: true })).toBe(true);
+    expect(samePick(null, undefined)).toBe(false);
   });
 });

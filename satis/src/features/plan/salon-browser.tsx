@@ -2,12 +2,16 @@
 
 import { useId, useState } from "react";
 import type { EventDetail } from "@/lib/core/contract";
+import { formatEventTime } from "@/lib/time-zone";
 import type { PlanModel } from "./model";
 import type { SeatView } from "./plan-3d";
 import { PlanLegend } from "./plan-legend";
 import type { usePlanView } from "./plan-view";
 import { PlanViewer } from "./plan-viewer";
+import { saleStateLabel } from "./sale-state";
 import { SightlinePanel } from "./sightline-panel";
+import { formatStageMetrics, tableStageMetrics } from "./stage-metrics";
+import { TableDialog } from "./table-dialog";
 
 export type SalonBrowserProps = {
   event: EventDetail;
@@ -17,14 +21,28 @@ export type SalonBrowserProps = {
 };
 
 /**
- * Seçim yapılamazken (satış kapalı ya da kişi sayısı henüz sorulurken) salonu gezdirir:
- * 3B/2B plan, masaya dokununca o masanın sahne görüşü ve 3B göz hizası. Sandalye seçimi ve tutma yoktur.
+ * Satış kapalıyken salonu gezdirir: 3B/2B plan; masaya dokununca (ya da listeden seçilince) masa penceresi
+ * (sahne görüşü, fiyat, satış durumu) açılır ve sağdaki sahne görüşü o masayı izler. Sandalye seçimi ve tutma yoktur.
  */
 export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserProps) {
   const [tableId, setTableId] = useState<string | null>(null);
   const [seatView, setSeatView] = useState<SeatView | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const selectId = useId();
   const table = tableId ? (model.tables.find((t) => t.id === tableId) ?? null) : null;
+  const canLookIn3d = view.can3d && !view.failed;
+  const metrics = table ? tableStageMetrics(model, table) : null;
+  const unitPrice = table?.category ? (event.prices.find((p) => p.category === table.category)?.price ?? null) : null;
+
+  const openTable = (id: string | null) => {
+    setTableId(id);
+    setDialogOpen(id !== null);
+  };
+  const lookFromTable = () => {
+    if (!table) return;
+    view.setMode("3d");
+    setSeatView((sv) => ({ tableId: table.id, nonce: (sv?.nonce ?? 0) + 1 }));
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
@@ -36,7 +54,7 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
           artworkUrl={artworkUrl}
           title={event.name}
           seatView={seatView}
-          onTable={setTableId}
+          onTable={openTable}
         />
         <PlanLegend prices={event.prices} currency={event.currency} />
       </div>
@@ -48,7 +66,7 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
           <select
             id={selectId}
             value={tableId ?? ""}
-            onChange={(e) => setTableId(e.target.value || null)}
+            onChange={(e) => openTable(e.target.value || null)}
             className="min-h-11 rounded-lg border border-line bg-bg px-3 text-sm text-ivory"
           >
             <option value="">Masa veya loca seçin</option>
@@ -62,14 +80,29 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
         <SightlinePanel
           set={event.site.sightlineSet}
           table={table ? { label: table.label, isLoca: table.isLoca } : null}
-          canLookIn3d={view.can3d && !view.failed}
-          onLookIn3d={() => {
-            if (!table) return;
-            view.setMode("3d");
-            setSeatView((sv) => ({ tableId: table.id, nonce: (sv?.nonce ?? 0) + 1 }));
-          }}
+          canLookIn3d={canLookIn3d}
+          onLookIn3d={lookFromTable}
         />
       </aside>
+
+      <TableDialog
+        open={dialogOpen}
+        table={table}
+        eventName={event.name}
+        eventTime={formatEventTime(event.startsAt)}
+        sightlineSet={event.site.sightlineSet}
+        metrics={metrics ? formatStageMetrics(metrics) : null}
+        unitPrice={unitPrice}
+        currency={event.currency}
+        canLookIn3d={canLookIn3d}
+        onLookIn3d={() => {
+          setDialogOpen(false);
+          lookFromTable();
+        }}
+        onClose={() => setDialogOpen(false)}
+        sale={null}
+        closedLabel={saleStateLabel(event.sale.state)}
+      />
     </div>
   );
 }

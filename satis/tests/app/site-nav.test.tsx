@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 let path = "/";
 vi.mock("next/navigation", () => ({ usePathname: () => path }));
 
+import { TicketDialog } from "@/components/event/ticket-dialog";
 import { SiteNav } from "@/components/site-nav";
 import { isCurrentPath } from "@/content/site";
 
@@ -61,5 +62,30 @@ describe("SiteNav", () => {
     ["/etkinlik/x", "/etkinlikler", false],
   ])("isCurrentPath(%s, %s) = %s", (p, h, out) => {
     expect(isCurrentPath(p, h)).toBe(out);
+  });
+
+  it("Bilet Al: etkinlik sayfasında kişi sayısı penceresini açar, pencere yoksa etkinliklere gider", () => {
+    path = "/etkinlik/e1";
+    render(
+      <>
+        <SiteNav />
+        <TicketDialog eventId="e1" eyebrow="SANATÇI · 12 ARALIK 2026" maxSeatsPerOrder={8} />
+      </>,
+    );
+    const cta = within(document.querySelector('[data-nav="desktop"]') as HTMLElement).getByRole("link", { name: "Bilet Al" });
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    fireEvent(cta, click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(document.getElementById("bilet-al")).toHaveAttribute("open");
+  });
+
+  it("Bilet Al: pencere olmayan sayfada bağlantı olağan davranır", () => {
+    path = "/";
+    render(<SiteNav />);
+    const cta = within(document.querySelector('[data-nav="desktop"]') as HTMLElement).getByRole("link", { name: "Bilet Al" });
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    fireEvent(cta, click);
+    expect(cta).toHaveAttribute("href", "/etkinlikler");
+    expect(document.getElementById("bilet-al")).toBeNull();
   });
 });
