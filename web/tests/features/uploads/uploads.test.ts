@@ -5,6 +5,8 @@ import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteImage, ImageRejectedError, MAX_ANIMATION_FRAMES, MAX_IMAGE_BYTES, saveImage } from "@/features/uploads/images";
 import { resolveUploadPath, serveUpload } from "@/features/uploads/serve";
+import { saveVideo } from "@/features/uploads/videos";
+import { WEBM_BYTES } from "../../helpers/webm";
 
 let root: string;
 
@@ -152,6 +154,10 @@ describe("resolveUploadPath", () => {
   it("geçerli yolu kök altındaki mutlak yola çevirir", () => {
     expect(resolveUploadPath(root, ["avatar", "a.webp"])).toBe(path.join(root, "avatar", "a.webp"));
   });
+
+  it("webm yolunu da kök altındaki mutlak yola çevirir", () => {
+    expect(resolveUploadPath(root, ["event", "a.webm"])).toBe(path.join(root, "event", "a.webm"));
+  });
 });
 
 describe("serveUpload", () => {
@@ -174,6 +180,22 @@ describe("serveUpload", () => {
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("cache-control")).toMatch(/^private/);
     expect(Buffer.from(await res.arrayBuffer()).subarray(8, 12).toString("ascii")).toBe("WEBP");
+  });
+
+  it("webm dosyasını video/webm türüyle ve bayt aralığı desteğiyle sunar", async () => {
+    const { path: p } = await saveVideo(new File([new Uint8Array(WEBM_BYTES)], "v.webm"), root);
+    const full = await serveUpload(root, p.split("/"));
+    expect(full.status).toBe(200);
+    expect(full.headers.get("content-type")).toBe("video/webm");
+    expect(full.headers.get("accept-ranges")).toBe("bytes");
+    expect(full.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(Buffer.from(await full.arrayBuffer()).equals(WEBM_BYTES)).toBe(true);
+
+    const part = await serveUpload(root, p.split("/"), new Headers({ range: "bytes=0-3" }));
+    expect(part.status).toBe(206);
+    expect(part.headers.get("content-range")).toBe(`bytes 0-3/${WEBM_BYTES.length}`);
+    expect(part.headers.get("content-length")).toBe("4");
+    expect([...new Uint8Array(await part.arrayBuffer())]).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
   });
 
   it("webp olmayan dosya ve olmayan dosya 404 döner", async () => {

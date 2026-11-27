@@ -198,6 +198,22 @@ describe("demo kalıcı silme", () => {
     expect(res.imagePaths).not.toContain("event/../x.webp");
   });
 
+  it("hero WebM videosu silinecekler listesine girer; kapaktaki WebM girmez", async () => {
+    const { eventIds } = await seedOnce({ concerts: oneConcert() });
+    const id = eventIds[0]!;
+    const video = "event/00000000-0000-4000-8000-0000000000e1.webm";
+    const coverVideo = "event/00000000-0000-4000-8000-0000000000e2.webm";
+    await db.update(events).set({ coverImage: coverVideo }).where(eq(events.id, id));
+    await db
+      .insert(eventSiteContent)
+      .values({ eventId: id, heroImage: video })
+      .onConflictDoUpdate({ target: eventSiteContent.eventId, set: { heroImage: video } });
+
+    const res = await db.transaction((tx) => purgeDemoData(tx));
+    expect(res.imagePaths).toContain(video);
+    expect(res.imagePaths).not.toContain(coverVideo);
+  });
+
   it("demo veri yokken sıfır döner", async () => {
     const res = await db.transaction((tx) => purgeDemoData(tx));
     expect(res).toEqual({ events: 0, orders: 0, imagePaths: [] });

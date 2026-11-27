@@ -1,4 +1,4 @@
-import { IMAGE_PATH_PATTERN } from "@/lib/core/contract";
+import { HERO_VIDEO_PATH_PATTERN, IMAGE_PATH_PATTERN } from "@/lib/core/contract";
 
 export const IMAGE_ROUTE_PREFIX = "/api/gorsel";
 
@@ -6,4 +6,10 @@ export const IMAGE_ROUTE_PREFIX = "/api/gorsel";
 export function imageUrl(path: string | null | undefined): string | null {
   if (typeof path !== "string" || !IMAGE_PATH_PATTERN.test(path)) return null;
   return `${IMAGE_ROUTE_PREFIX}/${path}`;
+}
+
+/** Hero alanı: görsel ya da `event/<uuid>.webm` videosu; diğer alanlar yalnızca `imageUrl` kullanır. */
+export function heroMediaUrl(path: string | null | undefined): string | null {
+  if (typeof path === "string" && HERO_VIDEO_PATH_PATTERN.test(path)) return `${IMAGE_ROUTE_PREFIX}/${path}`;
+  return imageUrl(path);
 }

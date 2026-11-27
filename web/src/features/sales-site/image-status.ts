@@ -1,4 +1,4 @@
-import { IMAGE_PATH_PATTERN } from "@/features/sales-api/contract";
+import { HERO_VIDEO_PATH_PATTERN, IMAGE_PATH_PATTERN } from "@/features/sales-api/contract";
 
 export const IMAGE_SLOTS = ["cover", "hero", "artist"] as const;
 export type ImageSlot = (typeof IMAGE_SLOTS)[number];
@@ -16,6 +16,16 @@ export function validImagePath(value: string | null): string | null {
   return value && IMAGE_PATH_PATTERN.test(value) ? value : null;
 }
 
+/** Hero alanı: görsel yolu ya da `event/<uuid>.webm` video yolu; aksi hâlde `null`. */
+export function validHeroPath(value: string | null): string | null {
+  return validImagePath(value) ?? (value && HERO_VIDEO_PATH_PATTERN.test(value) ? value : null);
+}
+
+/** Yol hero WebM videosu ise `true`. */
+export function isHeroVideoPath(value: string | null): boolean {
+  return value !== null && HERO_VIDEO_PATH_PATTERN.test(value);
+}
+
 /** Etkinliğin satış sitesi için gereken görsellerinin tamlık durumunu hesaplar. */
 export function imageStatusOf(i: {
   coverImage: string | null;
@@ -25,7 +35,7 @@ export function imageStatusOf(i: {
 }): ImageStatus {
   const missing: ImageSlot[] = [];
   if (!validImagePath(i.coverImage)) missing.push("cover");
-  if (!validImagePath(i.heroImage)) missing.push("hero");
+  if (!validHeroPath(i.heroImage)) missing.push("hero");
   if (i.artistId !== null && !validImagePath(i.artistImage)) missing.push("artist");
   return { status: missing.length === 0 ? "complete" : "missing", missing };
 }

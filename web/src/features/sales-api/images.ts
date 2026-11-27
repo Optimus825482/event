@@ -2,16 +2,20 @@ import { readFile } from "node:fs/promises";
 import type { Db } from "@/db/client";
 import { db } from "@/db/client";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
+import { mediaResponse, uploadContentType } from "@/features/uploads/range";
 import { resolveUploadPath } from "@/features/uploads/serve";
 import { env } from "@/env";
 import { checkSalesAuth } from "./auth";
 import { isListedImagePath } from "./catalog";
-import { IMAGE_PATH_PATTERN } from "./contract";
+import { HERO_VIDEO_PATH_PATTERN, IMAGE_PATH_PATTERN } from "./contract";
 import { salesFailure, toSalesResponse } from "./http";
 
 export type SalesImageDeps = { db: Db; secret: string | undefined; root: string };
 
-/** Satış sitesinin çekirdekten etkinlik/sanatçı görsellerini çektiği uç işleyicisi. */
+/**
+ * Satış sitesinin çekirdekten etkinlik/sanatçı görsellerini (ve hero WebM videosunu) çektiği uç işleyicisi.
+ * `Range` isteği desteklenir (tarayıcıda video oynatma).
+ */
 export function createSalesImageHandler(
   deps: SalesImageDeps,
 ): (request: Request, kind: string, file: string) => Promise<Response> {
@@ -20,10 +24,11 @@ export function createSalesImageHandler(
     if (!auth.ok) return salesFailure(auth.code);
 
     const rel = `${kind}/${file}`;
-    if (!IMAGE_PATH_PATTERN.test(rel)) return salesFailure("event_not_found");
+    const video = HERO_VIDEO_PATH_PATTERN.test(rel);
+    if (!video && !IMAGE_PATH_PATTERN.test(rel)) return salesFailure("event_not_found");
 
     try {
-      const listed = await isListedImagePath(deps.db, rel);
+      const listed = await isListedImagePath(deps.db, rel, video ? "hero" : "any");
       if (!listed) return salesFailure("event_not_found");
 
       const resolved = resolveUploadPath(deps.root, [kind, file]);
@@ -36,14 +41,10 @@ export function createSalesImageHandler(
         return salesFailure("event_not_found");
       }
 
-      return new Response(new Uint8Array(data), {
-        status: 200,
-        headers: {
-          "Content-Type": "image/webp",
-          "Cache-Control": "private, max-age=300",
-          "X-Content-Type-Options": "nosniff",
-          "Content-Length": String(data.length),
-        },
+      return mediaResponse(data, {
+        contentType: uploadContentType(rel),
+        cacheControl: "private, max-age=300",
+        range: request.headers.get("range"),
       });
     } catch (error) {
       return toSalesResponse(error);

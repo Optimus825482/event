@@ -208,7 +208,14 @@ describe("çekirdek istemcisi", () => {
     expect(req?.clientIp).toBeNull();
   });
 
-  it.each(["logo/x.webp", "event/../a.webp", "event/a.webp", ""])(
+  it("getImage hero WebM videosunda video/webm türünü döner", async () => {
+    fake.addEvent({ site: { heroImage: FAKE_IMAGES.heroVideo } });
+    const result = await client.getImage(FAKE_IMAGES.heroVideo);
+    expect(result.contentType).toBe("video/webm");
+    expect(result.body.byteLength).toBeGreaterThan(0);
+  });
+
+  it.each(["logo/x.webp", "event/../a.webp", "event/a.webp", "", "artist/00000000-0000-4000-8000-0000000000a1.webm"])(
     "getImage(%s) çekirdeğe gitmeden reddeder",
     async (badPath) => {
       const before = fake.requests.length;

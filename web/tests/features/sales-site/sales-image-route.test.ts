@@ -11,6 +11,7 @@ import { createSalesImageHandler, type SalesImageDeps } from "@/features/sales-a
 import { truncateAll } from "../../helpers/db";
 import { bodyOf, req, TEST_SECRET } from "../sales-api/fixtures";
 import { saleEvent } from "../ticketing/fixtures";
+import { WEBM_BYTES } from "../../helpers/webm";
 
 const ID = "abcdef00-0000-4000-8000-000000000001";
 const COVER = "event/00000000-0000-4000-8000-000000000011.webp";
@@ -21,6 +22,7 @@ const MISSING = "event/00000000-0000-4000-8000-000000000099.webp";
 const ARTIST = "artist/00000000-0000-4000-8000-000000000021.webp";
 const ARTIST2 = "artist/00000000-0000-4000-8000-000000000022.webp";
 const LOGO = `logo/${ID}.webp`;
+const HERO_VIDEO = "event/00000000-0000-4000-8000-000000000015.webm";
 
 let tmpRoot = "";
 
@@ -65,6 +67,7 @@ describe("GET /api/sales/v1/images/{kind}/{file}", () => {
     for (const rel of [COVER, HERO, COVER2, ORPHAN, ARTIST, ARTIST2, LOGO]) {
       writeFileSync(path.join(tmpRoot, rel), webp);
     }
+    writeFileSync(path.join(tmpRoot, HERO_VIDEO), WEBM_BYTES);
   });
 
   afterAll(() => {
@@ -97,6 +100,33 @@ describe("GET /api/sales/v1/images/{kind}/{file}", () => {
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
       expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0);
     }
+  });
+
+  it("hero WebM videosu video/webm türüyle ve bayt aralığıyla verilir", async () => {
+    const { event } = await saleEvent();
+    await attachImages(event.id, { cover: COVER, hero: HERO_VIDEO });
+    const full = await get(handler(), HERO_VIDEO);
+    expect(full.status).toBe(200);
+    expect(full.headers.get("content-type")).toBe("video/webm");
+    expect(full.headers.get("accept-ranges")).toBe("bytes");
+    expect(full.headers.get("cache-control")).toBe("private, max-age=300");
+    expect(Buffer.from(await full.arrayBuffer()).equals(WEBM_BYTES)).toBe(true);
+
+    const [kind = "", file = ""] = HERO_VIDEO.split("/");
+    const ranged = new Request(`http://localhost/api/sales/v1/images/${HERO_VIDEO}`, {
+      headers: { authorization: `Bearer ${TEST_SECRET}`, range: "bytes=0-3" },
+    });
+    const part = await handler()(ranged, kind, file);
+    expect(part.status).toBe(206);
+    expect(part.headers.get("content-range")).toBe(`bytes 0-3/${WEBM_BYTES.length}`);
+    expect([...new Uint8Array(await part.arrayBuffer())]).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
+  });
+
+  it("WebM yalnızca hero alanında geçerlidir: kapak sütunundaki WebM 404", async () => {
+    const { event } = await saleEvent();
+    await attachImages(event.id, { cover: HERO_VIDEO });
+    const res = await get(handler(), HERO_VIDEO);
+    expect(res.status).toBe(404);
   });
 
   it("satışı kapanmış yayımlanmış etkinliğin görseli de verilir", async () => {
@@ -146,6 +176,8 @@ describe("GET /api/sales/v1/images/{kind}/{file}", () => {
     "event/a.webp",
     `event/${ID.toUpperCase()}.webp`,
     `event/${ID}.png`,
+    `artist/${ID}.webm`,
+    `event/${ID}.mkv`,
   ])("%s veritabanına gitmeden 404", async (p) => {
     const spyDb = new Proxy(db, {
       get() {

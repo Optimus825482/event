@@ -4,6 +4,7 @@ import { eventHeroMedia } from "@/components/event/hero-media";
 const HERO = "event/11111111-1111-4111-8111-111111111111.webp";
 const COVER = "event/22222222-2222-4222-8222-222222222222.webp";
 const ARTIST = "artist/33333333-3333-4333-8333-333333333333.webp";
+const VIDEO = "event/44444444-4444-4444-8444-444444444444.webm";
 
 const input = (o: { hero?: string | null; cover?: string | null; artist?: string | null }) => ({
   coverImage: o.cover ?? null,
@@ -17,6 +18,17 @@ describe("etkinlik üst görseli", () => {
       src: `/api/gorsel/${HERO}`,
       stillSrc: `/api/gorsel/${COVER}`,
     });
+  });
+
+  it("hero WebM videosu oynatılacak kaynaktır; sabit kapak yedek ve poster olur", () => {
+    expect(eventHeroMedia(input({ hero: VIDEO, cover: COVER, artist: ARTIST }))).toEqual({
+      src: `/api/gorsel/${VIDEO}`,
+      stillSrc: `/api/gorsel/${COVER}`,
+    });
+  });
+
+  it("kapak ve sanatçı alanındaki WebM sabit görsel sayılmaz", () => {
+    expect(eventHeroMedia(input({ cover: VIDEO, artist: VIDEO }))).toEqual({ src: null, stillSrc: null });
   });
 
   it("kapak yoksa sabit görsel sanatçı görselidir", () => {

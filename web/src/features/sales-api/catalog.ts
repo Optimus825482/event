@@ -22,6 +22,7 @@ import { DomainError } from "@/lib/action";
 import { SalesError } from "@/features/ticketing/orders-service";
 import { getFloorPlan } from "@/features/venue/plan-service";
 import {
+  HERO_VIDEO_PATH_PATTERN,
   IMAGE_PATH_PATTERN,
   SALES_CATEGORIES,
   SIGHTLINE_SETS,
@@ -42,6 +43,11 @@ type EventRow = typeof events.$inferSelect;
 
 function safeImagePath(value: string | null | undefined): string | null {
   return value && IMAGE_PATH_PATTERN.test(value) ? value : null;
+}
+
+/** Hero alanı görsel ya da WebM video olabilir. */
+function safeHeroPath(value: string | null | undefined): string | null {
+  return value && (IMAGE_PATH_PATTERN.test(value) || HERO_VIDEO_PATH_PATTERN.test(value)) ? value : null;
 }
 
 function safeSightlineSet(value: string | null | undefined): SightlineSet | null {
@@ -97,8 +103,15 @@ async function visibleEvents(ex: Db | Tx, eventId?: string): Promise<EventRow[]>
     .orderBy(asc(events.startsAt), asc(events.id));
 }
 
-/** Sitede listelenebilen en az bir etkinliğin kapak, hero veya bağlı sanatçı görseli ise `true`. */
-export async function isListedImagePath(ex: Db | Tx, imagePath: string): Promise<boolean> {
+/**
+ * Sitede listelenebilen en az bir etkinliğin kapak, hero veya bağlı sanatçı görseli ise `true`.
+ * `slot: "hero"` yalnızca hero sütununa bakar (WebM video yalnızca hero alanında geçerlidir).
+ */
+export async function isListedImagePath(
+  ex: Db | Tx,
+  imagePath: string,
+  slot: "any" | "hero" = "any",
+): Promise<boolean> {
   const [row] = await ex
     .select({ id: events.id })
     .from(events)
@@ -109,7 +122,9 @@ export async function isListedImagePath(ex: Db | Tx, imagePath: string): Promise
         inArray(events.planningStage, [...VISIBLE_STAGES]),
         inArray(events.status, [...VISIBLE_STATUSES]),
         matchesDemoMode(),
-        or(eq(events.coverImage, imagePath), eq(eventSiteContent.heroImage, imagePath), eq(artists.image, imagePath)),
+        slot === "hero"
+          ? eq(eventSiteContent.heroImage, imagePath)
+          : or(eq(events.coverImage, imagePath), eq(eventSiteContent.heroImage, imagePath), eq(artists.image, imagePath)),
       ),
     )
     .limit(1);
@@ -227,7 +242,7 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
     ...card,
     description: row.description,
     site: {
-      heroImage: safeImagePath(siteRow?.heroImage),
+      heroImage: safeHeroPath(siteRow?.heroImage),
       summary: siteRow?.summary ?? null,
       doorsOpenAt: siteRow?.doorsOpenAt ? siteRow.doorsOpenAt.toISOString() : null,
       ageLimit: siteRow?.ageLimit ?? null,

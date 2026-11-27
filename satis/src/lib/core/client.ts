@@ -1,5 +1,6 @@
 import { env } from "@/lib/env";
 import {
+  HERO_VIDEO_PATH_PATTERN,
   IMAGE_PATH_PATTERN,
   SALES_ERROR_CODES,
   type Availability,
@@ -31,7 +32,7 @@ export type CoreClient = {
   listEvents(): Promise<EventCard[]>;
   getEvent(eventId: string): Promise<EventDetail>;
   getAvailability(eventId: string): Promise<Availability>;
-  getImage(path: string): Promise<{ body: ArrayBuffer; contentType: "image/webp" }>;
+  getImage(path: string): Promise<{ body: ArrayBuffer; contentType: "image/webp" | "video/webm" }>;
   createHold(input: HoldInput, ctx: WriteContext): Promise<OrderResponse>;
   getOrder(orderToken: string): Promise<OrderResponse>;
   payOrder(orderToken: string, input: PayInput, ctx: WriteContext): Promise<OrderResponse>;
@@ -150,9 +151,11 @@ export function createCoreClient(config: CoreConfig): CoreClient {
       return (await request("GET", `/events/${encodeURIComponent(eventId)}/availability`)) as Availability;
     },
     async getImage(path) {
-      if (!IMAGE_PATH_PATTERN.test(path)) {
+      const video = HERO_VIDEO_PATH_PATTERN.test(path);
+      if (!video && !IMAGE_PATH_PATTERN.test(path)) {
         throw new CoreError("event_not_found", 404);
       }
+      const contentType = video ? ("video/webm" as const) : ("image/webp" as const);
       return requestRaw(
         "GET",
         `/images/${path}`,
@@ -160,7 +163,7 @@ export function createCoreClient(config: CoreConfig): CoreClient {
         undefined,
         async (response) => {
           try {
-            return { body: await response.arrayBuffer(), contentType: "image/webp" as const };
+            return { body: await response.arrayBuffer(), contentType };
           } catch {
             throw new CoreError("core_unreachable", response.status);
           }

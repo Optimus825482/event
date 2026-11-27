@@ -13,6 +13,7 @@ import { DomainError } from "@/lib/action";
 import { managerActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
 import { createEvent } from "../../helpers/factories";
+import { WEBM_BYTES } from "../../helpers/webm";
 
 const ent = managerActor("entertainment");
 const fnb = managerActor("fnb");
@@ -26,6 +27,10 @@ function exists(rel: string): boolean {
 
 function makePngFile(name = "gorsel.png"): File {
   return new File([new Uint8Array(pngBytes)], name, { type: "image/png" });
+}
+
+function makeWebmFile(name = "tanitim.webm"): File {
+  return new File([new Uint8Array(WEBM_BYTES)], name, { type: "video/webm" });
 }
 
 describe("sales-site images-service", () => {
@@ -82,6 +87,47 @@ describe("sales-site images-service", () => {
     const [s2] = await db.select().from(eventSiteContent).where(eq(eventSiteContent.eventId, event2.id));
     expect(s2!.summary).toBe("Gala");
     expect(s2!.heroImage).toBe(r2.path);
+  });
+
+  it("hero WebM video kabul eder: event/<uuid>.webm olduğu gibi yazılır, sütun dolar", async () => {
+    const event = await createEvent(db);
+    const res = await replaceSiteImage(db, ent, { eventId: event.id, slot: "hero" }, makeWebmFile(), tmpRoot);
+    expect(res.path).toMatch(/^event\/[0-9a-f-]{36}\.webm$/);
+    expect(exists(res.path)).toBe(true);
+    const [row] = await db.select().from(eventSiteContent).where(eq(eventSiteContent.eventId, event.id));
+    expect(row!.heroImage).toBe(res.path);
+  });
+
+  it("hero videosu görselle değiştirilince ve kaldırılınca eski dosya silinir", async () => {
+    const event = await createEvent(db);
+    const video = await replaceSiteImage(db, ent, { eventId: event.id, slot: "hero" }, makeWebmFile(), tmpRoot);
+    const image = await replaceSiteImage(db, ent, { eventId: event.id, slot: "hero" }, makePngFile(), tmpRoot);
+    expect(exists(video.path)).toBe(false);
+    expect(exists(image.path)).toBe(true);
+
+    const video2 = await replaceSiteImage(db, ent, { eventId: event.id, slot: "hero" }, makeWebmFile(), tmpRoot);
+    expect(exists(image.path)).toBe(false);
+    await removeSiteImage(db, ent, { eventId: event.id, slot: "hero" }, tmpRoot);
+    expect(exists(video2.path)).toBe(false);
+  });
+
+  it.each(["cover", "artist"] as const)("%s alanı WebM kabul etmez", async (slot) => {
+    const [artist] = await db.insert(artists).values({ name: "Sezen", nameKey: "sezen" }).returning();
+    const event = await createEvent(db);
+    await db.update(events).set({ artistId: artist!.id }).where(eq(events.id, event.id));
+    await expect(replaceSiteImage(db, ent, { eventId: event.id, slot }, makeWebmFile(), tmpRoot)).rejects.toMatchObject({
+      code: "invalid",
+      message: "Yalnızca JPG, PNG veya WebP görüntüleri yüklenebilir",
+    });
+  });
+
+  it("hero alanında görüntü ya da WebM olmayan dosya videoyu da anan iletiyle reddedilir", async () => {
+    const event = await createEvent(db);
+    const bad = new File(["metin"], "a.webm", { type: "video/webm" });
+    await expect(replaceSiteImage(db, ent, { eventId: event.id, slot: "hero" }, bad, tmpRoot)).rejects.toMatchObject({
+      code: "invalid",
+      message: "Yalnızca JPG, PNG, WebP görüntüsü veya WebM video yüklenebilir",
+    });
   });
 
   it("sanatçı görseli artist/ altına yazılır ve sanatçı kaydına işlenir", async () => {

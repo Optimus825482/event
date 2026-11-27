@@ -12,7 +12,7 @@ import {
   reservations,
   tickets,
 } from "@/db/schema";
-import { IMAGE_PATH_PATTERN } from "@/features/sales-api/contract";
+import { HERO_VIDEO_PATH_PATTERN, IMAGE_PATH_PATTERN } from "@/features/sales-api/contract";
 
 function pushValidImage(list: string[], imagePath: string | null | undefined): void {
   if (imagePath && IMAGE_PATH_PATTERN.test(imagePath)) {
@@ -51,7 +51,8 @@ export async function purgeDemoData(tx: Tx): Promise<{
       .from(eventSiteContent)
       .where(inArray(eventSiteContent.eventId, eventIds));
     for (const site of siteRows) {
-      pushValidImage(imagePaths, site.heroImage);
+      if (site.heroImage && HERO_VIDEO_PATH_PATTERN.test(site.heroImage)) imagePaths.push(site.heroImage);
+      else pushValidImage(imagePaths, site.heroImage);
     }
 
     const ticketIdsSq = tx
