@@ -20,7 +20,6 @@ export function ArtistDeleteButton({ id, name }: { id: string; name: string }) {
       if (result.ok) {
         toast.success("Sanatçı silindi");
         router.push("/artists");
-        router.refresh();
       } else {
         toast.error(result.message);
       }

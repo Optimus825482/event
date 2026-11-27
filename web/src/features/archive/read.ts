@@ -27,9 +27,17 @@ function normalizeDetails(details: Partial<ArchiveDetails> | null | undefined): 
 
 /** Net (gerçekleşen) = bilet geliri + diğer gelir − gider; demo hariç, saklanmaz (Karar 17). */
 export function toArchiveSummary(row: ArchiveRow): ArchiveSummary {
+  return { ...toArchiveListRow(row), details: normalizeDetails(row.details) };
+}
+
+/** `details` (ağır JSON) olmadan özet; dönem raporu gibi yalnızca sayısal sütun okuyanlar için. */
+export type ArchiveListRow = Omit<ArchiveSummary, "details">;
+
+export function toArchiveListRow(row: Omit<ArchiveRow, "details"> & { details?: unknown }): ArchiveListRow {
+  const { details, ...rest } = row;
+  void details;
   return {
-    ...row,
-    details: normalizeDetails(row.details),
+    ...rest,
     rates: archiveRates(row),
     netActual: subMoney(addMoney(row.ticketRevenue, row.actualOtherIncome), row.actualExpense),
     hasDemo: row.demoTicketsSold > 0,
