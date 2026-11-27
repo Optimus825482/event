@@ -16,6 +16,7 @@ import { getSaleSettings } from "@/features/seating/settings-service";
 import { SALES_ACTOR } from "@/features/ticketing/internal";
 import { minMoney } from "@/features/ticketing/money";
 import type { PaymentProvider } from "@/features/ticketing/payment/provider";
+import { providerForEvent } from "@/features/ticketing/payment/registry";
 import { saleStateOf } from "@/features/ticketing/sale-state";
 import { DomainError } from "@/lib/action";
 import { SalesError } from "@/features/ticketing/orders-service";
@@ -31,6 +32,7 @@ import {
   type SightlineSet,
 } from "./contract";
 
+/** `provider`: gerçek etkinliklerin genel sağlayıcısı; demo etkinlik `providerForEvent` ile demo sağlayıcıya çözülür. */
 type Ctx = { provider: PaymentProvider | null; now: Date };
 
 const VISIBLE_STAGES = ["on_sale", "sales_closed"] as const;
@@ -139,7 +141,7 @@ export async function listSaleEvents(ex: Db | Tx, ctx: Ctx): Promise<EventCard[]
       status: row.status,
       saleStartsAt: settings?.saleStartsAt ?? null,
       saleEndsAt: settings?.saleEndsAt ?? null,
-      providerActive: ctx.provider !== null,
+      providerActive: providerForEvent(row, ctx.provider) !== null,
       now: ctx.now,
     });
     if (state === null) continue;
@@ -162,7 +164,7 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
     status: row.status,
     saleStartsAt: settings.saleStartsAt,
     saleEndsAt: settings.saleEndsAt,
-    providerActive: ctx.provider !== null,
+    providerActive: providerForEvent(row, ctx.provider) !== null,
     now: ctx.now,
   });
   if (state === null) return null;
@@ -240,7 +242,7 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
       holdMinutes: settings.holdMinutes,
       maxSeatsPerOrder: settings.maxSeatsPerOrder,
       blockSingleLeftover: settings.blockSingleLeftover,
-      demo: ctx.provider?.isDemo ?? false,
+      demo: providerForEvent(row, ctx.provider)?.isDemo ?? false,
     },
     prices,
     plan: { canvas: plan.canvas, tables, decor: plan.decor, lines: plan.lines ?? [] },
