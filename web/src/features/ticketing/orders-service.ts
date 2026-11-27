@@ -307,10 +307,11 @@ export async function createHoldWithOutcome(
         if (winner) return { order: await viewOrThrow(db, winner), created: false };
       }
       if (constraint === "tickets_active_seat_uq") {
+        const failed = inserting as { tableId: string; bySeatChoice: boolean } | null;
         throw new SalesError(
           "seats_unavailable",
-          inserting ? { tableId: inserting.tableId } : undefined,
-          inserting?.bySeatChoice ? SEAT_TAKEN_MESSAGE : undefined,
+          failed ? { tableId: failed.tableId } : undefined,
+          failed?.bySeatChoice ? SEAT_TAKEN_MESSAGE : undefined,
         );
       }
     }
