@@ -43,8 +43,8 @@ describe("isWebm", () => {
 });
 
 describe("saveVideo", () => {
-  it("boyut sınırı 8 MB'tır", () => {
-    expect(MAX_VIDEO_BYTES).toBe(8 * 1024 * 1024);
+  it("boyut sınırı 15 MB'tır", () => {
+    expect(MAX_VIDEO_BYTES).toBe(15 * 1024 * 1024);
   });
 
   it("WebM'i olduğu gibi event/<rastgele-uuid>.webm yoluna yazar", async () => {
@@ -67,12 +67,12 @@ describe("saveVideo", () => {
     expect(eventDirFiles()).toHaveLength(before);
   });
 
-  it("8 MB üstü video reddedilir", async () => {
+  it("15 MB üstü video reddedilir", async () => {
     const big = ebml("webm", Buffer.alloc(MAX_VIDEO_BYTES));
-    await expect(saveVideo(asFile(big, "b.webm", "video/webm"), root)).rejects.toThrow(/8 MB/);
+    await expect(saveVideo(asFile(big, "b.webm", "video/webm"), root)).rejects.toThrow(/15 MB/);
   });
 
-  it("tam 8 MB video kabul edilir", async () => {
+  it("tam 15 MB video kabul edilir", async () => {
     const head = ebml("webm", Buffer.alloc(0));
     const exact = Buffer.concat([head, Buffer.alloc(MAX_VIDEO_BYTES - head.length)]);
     await expect(saveVideo(asFile(exact, "c.webm", "video/webm"), root)).resolves.toBeTruthy();

@@ -6,16 +6,16 @@ import { isWebm, MAX_VIDEO_BYTES, VideoRejectedError } from "./videos";
 
 /**
  * VP9 sabit kalite değeri (`-crf N -b:v 0`). Google'ın VP9 VOD önerisi 1080p için 31, 720p için 32'dir;
- * çıktı en fazla 1920 px'e ölçeklendiğinden 1080p değeri seçildi: hareketli, üstü metinle örtülen sessiz
+ * çıktı en fazla 1280 px'e (hero kutusu ekranda ~600 px) ölçeklenir; 720p önerisinden (32) bir kademe yüksek kalite seçildi: hareketli, üstü metinle örtülen sessiz
  * hero arka planında gözle ayırt edilemeyen kalite verir, H.264 girdilere göre genelde birkaç kat küçük dosya üretir.
- * Daha düşük değer (30) dosyayı belirgin büyütüp 8 MB sınırını zorlar; 33 ve üstü degrade ve karanlık
+ * Daha düşük değer (30) dosyayı belirgin büyütüp 15 MB sınırını zorlar; 33 ve üstü degrade ve karanlık
  * sahnelerde bantlaşma göstermeye başlar.
  */
 export const VIDEO_CRF = 31;
-/** Sıkıştırma öncesi kabul edilen en büyük yükleme. Çıktı ayrıca `MAX_VIDEO_BYTES` (8 MB) ile sınırlıdır. */
+/** Sıkıştırma öncesi kabul edilen en büyük yükleme. Çıktı ayrıca `MAX_VIDEO_BYTES` (15 MB) ile sınırlıdır. */
 export const MAX_VIDEO_INPUT_BYTES = 50 * 1024 * 1024;
 export const MAX_VIDEO_DURATION_SECONDS = 60;
-export const MAX_VIDEO_EDGE = 1920;
+export const MAX_VIDEO_EDGE = 1280;
 export const MAX_VIDEO_FPS = 30;
 export const FFMPEG_TIMEOUT_MS = 120_000;
 const FFPROBE_TIMEOUT_MS = 30_000;
@@ -54,14 +54,23 @@ export function sniffVideo(b: Uint8Array): VideoContainer | null {
   return null;
 }
 
+/**
+ * Girdi güvenliği: demuxer içerik koklamasıyla bulunan türe sabitlenir (ffmpeg kendi tahminiyle HLS/concat gibi
+ * dış kaynağa başvuran biçimlere geçemez), yalnız `file` protokolüne izin verilir (MP4 `dref` vb. ile ağ/başka
+ * dosya okunamaz) ve yol `file:` önekiyle verilir.
+ */
+function inputArgs(inputPath: string, kind: VideoContainer): string[] {
+  return ["-protocol_whitelist", "file", "-f", kind === "webm" ? "matroska" : "mov", "-i", `file:${inputPath}`];
+}
+
 /** ffmpeg argümanları (kabuk yok; her öğe ayrı argüman). Saf fonksiyon: testler doğrudan denetler. */
-export function buildFfmpegArgs(inputPath: string, outputPath: string): string[] {
+export function buildFfmpegArgs(inputPath: string, outputPath: string, kind: VideoContainer): string[] {
   const scale =
     `scale=w='min(${MAX_VIDEO_EDGE},iw)':h='min(${MAX_VIDEO_EDGE},ih)'` +
     ":force_original_aspect_ratio=decrease:force_divisible_by=2";
   return [
     "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
-    "-i", inputPath,
+    ...inputArgs(inputPath, kind),
     // Yalnız ilk görüntü akışı; ses (hero sessiz oynar), altyazı, veri akışı ve tüm metadata atılır.
     "-map", "0:v:0", "-an", "-sn", "-dn",
     "-map_metadata", "-1", "-map_chapters", "-1",
@@ -75,8 +84,8 @@ export function buildFfmpegArgs(inputPath: string, outputPath: string): string[]
   ];
 }
 
-function buildFfprobeArgs(inputPath: string): string[] {
-  return ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inputPath];
+export function buildFfprobeArgs(inputPath: string, kind: VideoContainer): string[] {
+  return ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", ...inputArgs(inputPath, kind)];
 }
 
 type Env = Record<string, string | undefined>;
@@ -141,7 +150,7 @@ export type CompressDeps = {
 class ToolFailure extends Error {}
 
 const TOO_LONG = `Video en fazla ${MAX_VIDEO_DURATION_SECONDS} saniye olabilir`;
-const STILL_TOO_LARGE = "Video sıkıştırıldıktan sonra da 8 MB'ı aşıyor; daha kısa bir video yükleyin.";
+const STILL_TOO_LARGE = "Video sıkıştırıldıktan sonra da 15 MB'ı aşıyor; daha kısa bir video yükleyin.";
 
 async function runTool(run: Runner, cmd: string, args: string[], timeoutMs: number): Promise<string> {
   let result: RunResult;
@@ -185,11 +194,11 @@ export async function compressHeroVideo(file: File | Uint8Array, deps: CompressD
 
       let output: Uint8Array;
       try {
-        const probed = await runTool(run, ffprobePath(env), buildFfprobeArgs(inputPath), FFPROBE_TIMEOUT_MS);
+        const probed = await runTool(run, ffprobePath(env), buildFfprobeArgs(inputPath, kind), FFPROBE_TIMEOUT_MS);
         const duration = Number.parseFloat(probed.trim());
         // Süresi başlıkta yazmayan (ör. MediaRecorder) WebM'lerde süre bilinemez; çıktı boyutu sınırı yine geçerlidir.
         if (Number.isFinite(duration) && duration > MAX_VIDEO_DURATION_SECONDS) throw new VideoRejectedError(TOO_LONG);
-        await runTool(run, ffmpegPath(env), buildFfmpegArgs(inputPath, outputPath), deps.timeoutMs ?? FFMPEG_TIMEOUT_MS);
+        await runTool(run, ffmpegPath(env), buildFfmpegArgs(inputPath, outputPath, kind), deps.timeoutMs ?? FFMPEG_TIMEOUT_MS);
         output = new Uint8Array(await readFile(outputPath));
         if (!isWebm(output)) throw new ToolFailure("ffmpeg çıktısı WebM değil");
       } catch (error) {

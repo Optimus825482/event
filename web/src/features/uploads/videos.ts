@@ -5,7 +5,7 @@ import { UPLOAD_ROOT } from "./root";
 import { resolveUploadPath } from "./serve";
 
 /** Hero (tanıtım) videosu için en büyük dosya boyutu. */
-export const MAX_VIDEO_BYTES = 8 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 15 * 1024 * 1024;
 
 /** Kullanıcıya gösterilebilir (Türkçe, ayrıntısız) video reddi. */
 export class VideoRejectedError extends Error {

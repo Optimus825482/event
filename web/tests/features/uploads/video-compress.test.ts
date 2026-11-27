@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   buildFfmpegArgs,
+  buildFfprobeArgs,
   compressHeroVideo,
   ffmpegPath,
   ffprobePath,
@@ -71,8 +72,19 @@ describe("sniffVideo", () => {
   });
 });
 
+describe("girdi güvenliği", () => {
+  it("ffmpeg ve ffprobe yalnız file protokolüne izin verir, demuxer koklanan türe sabitlenir", () => {
+    for (const [kind, demuxer] of [["webm", "matroska"], ["mp4", "mov"], ["mov", "mov"]] as const) {
+      for (const args of [buildFfmpegArgs("/t/girdi", "/t/c.webm", kind), buildFfprobeArgs("/t/girdi", kind)]) {
+        const i = args.indexOf("-i");
+        expect(args.slice(i - 4, i + 2)).toEqual(["-protocol_whitelist", "file", "-f", demuxer, "-i", "file:/t/girdi"]);
+      }
+    }
+  });
+});
+
 describe("buildFfmpegArgs", () => {
-  const args = buildFfmpegArgs("/t/girdi", "/t/cikti.webm");
+  const args = buildFfmpegArgs("/t/girdi", "/t/cikti.webm", "mp4");
   const after = (flag: string) => args[args.indexOf(flag) + 1];
 
   it("VP9, sabit kalite CRF (b:v 0), yuv420p ve WebM kabı kullanır", () => {
@@ -80,7 +92,8 @@ describe("buildFfmpegArgs", () => {
     expect(after("-crf")).toBe(String(VIDEO_CRF));
     expect(after("-b:v")).toBe("0");
     expect(after("-pix_fmt")).toBe("yuv420p");
-    expect(after("-f")).toBe("webm");
+    expect(args[args.length - 2]).toBe("webm");
+    expect(args[args.length - 3]).toBe("-f");
     expect(after("-deadline")).toBe("good");
     expect(after("-row-mt")).toBe("1");
   });
@@ -97,17 +110,17 @@ describe("buildFfmpegArgs", () => {
     expect(after("-map")).toBe("0:v:0");
   });
 
-  it("en uzun kenar 1920 px, büyütme yok, çift boyut; kare hızı en fazla 30", () => {
+  it("en uzun kenar 1280 px, büyütme yok, çift boyut; kare hızı en fazla 30", () => {
     const vf = after("-vf")!;
-    expect(vf).toContain("min(1920,iw)");
-    expect(vf).toContain("min(1920,ih)");
+    expect(vf).toContain("min(1280,iw)");
+    expect(vf).toContain("min(1280,ih)");
     expect(vf).toContain("force_original_aspect_ratio=decrease");
     expect(vf).toContain("force_divisible_by=2");
     expect(after("-fpsmax")).toBe("30");
   });
 
   it("girdi -i ardından, çıktı en sonda gelir; etkileşim kapalıdır", () => {
-    expect(after("-i")).toBe("/t/girdi");
+    expect(after("-i")).toBe("file:/t/girdi");
     expect(args[args.length - 1]).toBe("/t/cikti.webm");
     expect(args).toContain("-nostdin");
   });
@@ -197,10 +210,10 @@ describe("compressHeroVideo (sahte süreçlerle)", () => {
     );
   });
 
-  it("sıkıştırılmış çıktı 8 MB'ı aşarsa Türkçe hata verilir", async () => {
+  it("sıkıştırılmış çıktı 15 MB'ı aşarsa Türkçe hata verilir", async () => {
     const tooBig = ebml("webm", Buffer.alloc(MAX_VIDEO_BYTES + 1));
     await expect(compressHeroVideo(ftyp("isom"), { run: fakeRunner({ output: tooBig }), log: silent })).rejects.toThrow(
-      "Video sıkıştırıldıktan sonra da 8 MB'ı aşıyor; daha kısa bir video yükleyin.",
+      "Video sıkıştırıldıktan sonra da 15 MB'ı aşıyor; daha kısa bir video yükleyin.",
     );
   });
 
@@ -289,7 +302,7 @@ describe("compressHeroVideo (gerçek ffmpeg)", () => {
   }
 
   it.skipIf(!hasFfmpeg)(
-    "sesli 60 fps 2560x1440 MP4'ü sessiz, 30 fps, 1920x1080 VP9 WebM'e dönüştürür",
+    "sesli 60 fps 2560x1440 MP4'ü sessiz, 30 fps, 1280x720 VP9 WebM'e dönüştürür",
     async () => {
       const src = path.join(dir, "kaynak.mp4");
       const r = spawnSync("ffmpeg", [
@@ -305,7 +318,7 @@ describe("compressHeroVideo (gerçek ffmpeg)", () => {
       const out = await compressHeroVideo(input, { log: silent });
       expect(isWebm(out)).toBe(true);
       const info = probe(out);
-      expect([info.width, info.height]).toEqual([1920, 1080]);
+      expect([info.width, info.height]).toEqual([1280, 720]);
       expect(info.fps).toBe("30/1");
       expect(info.audio).toBe(false);
     },
