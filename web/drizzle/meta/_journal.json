@@ -162,6 +162,13 @@
       "when": 1795704990676,
       "tag": "0022_faz9_arsiv",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795774470681,
+      "tag": "0023_satis_sitesi",
+      "breakpoints": true
     }
   ]
 }
