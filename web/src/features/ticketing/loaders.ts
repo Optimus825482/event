@@ -4,6 +4,8 @@ import { requirePolicyActor } from "@/features/auth/permissions";
 import { authorize } from "@/features/auth/policy";
 import { DomainError } from "@/lib/action";
 import { isUuid } from "@/lib/identifiers";
+import { logError } from "@/lib/log";
+import { sweepExpiredHolds } from "./orders-service";
 import { getOrderDetail, getOrdersOverview, type OrderDetail, type OrdersOverview } from "./queries";
 
 /** Yetkisizlikte `ForbiddenError` (403) fırlar; geçersiz kimlik ve olmayan kayıt 404 verir. */
@@ -11,6 +13,8 @@ export async function loadOrdersOverview(eventId: string): Promise<OrdersOvervie
   const actor = await requirePolicyActor();
   authorize(actor, "ticketing", "view");
   if (!isUuid(eventId)) notFound();
+  // Fırsatçı süpürme: süresi dolan tutmalar veritabanında da `expired` olur (sınırlı; hata listeyi bozmaz).
+  await sweepExpiredHolds(db).catch((error: unknown) => logError("ticketing.sweepExpiredHolds", error));
   try {
     return await getOrdersOverview(db, actor, eventId);
   } catch (error) {
