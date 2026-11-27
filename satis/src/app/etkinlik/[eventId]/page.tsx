@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { EventFacts } from "@/components/event/event-facts";
 import { eventFacts, saleModeNote } from "@/components/event/facts";
+import { eventHeroMedia } from "@/components/event/hero-media";
 import { PartyPicker } from "@/components/event/party-picker";
 import { EventImage } from "@/components/event-image";
 import { PosterFallback } from "@/components/poster-fallback";
@@ -12,7 +13,6 @@ import { getReader } from "@/features/plan/read";
 import { saleStateLabel } from "@/features/plan/sale-state";
 import type { Availability, EventDetail } from "@/lib/core/contract";
 import { CoreError, messageFor } from "@/lib/core/errors";
-import { imageUrl } from "@/lib/image-url";
 import { formatEventDate, formatEventTime } from "@/lib/time-zone";
 
 // Her istekte çekirdek önbelleğinden okunur; derlemede çekirdeğe gidilmez.
@@ -60,8 +60,7 @@ export default async function EventPage({ params, searchParams }: PageProps) {
 
   const availability = await loadAvailability(eventId);
   const partySize = parsePartySize(sp.kisi, event.sale.maxSeatsPerOrder);
-  const posterSrc = imageUrl(event.coverImage ?? event.site.heroImage ?? event.artistImage);
-  const heroStripSrc = event.coverImage && event.site.heroImage ? imageUrl(event.site.heroImage) : null;
+  const hero = eventHeroMedia(event);
   const dateLabel = formatEventDate(event.startsAt);
   const timeLabel = formatEventTime(event.startsAt);
   const summary = event.site.summary ?? event.description;
@@ -71,10 +70,11 @@ export default async function EventPage({ params, searchParams }: PageProps) {
       <div className="grid grid-cols-1 items-start gap-8 min-[860px]:grid-cols-[0.9fr_1.1fr]">
         <div className="aspect-[4/5] w-full overflow-hidden rounded-[20px] border border-line-gold bg-surface">
           <EventImage
-            src={posterSrc}
+            src={hero.src}
+            stillSrc={hero.stillSrc}
             alt={event.artistName ?? event.name}
             priority
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-[center_15%]"
             fallback={
               <PosterFallback
                 title={event.artistName ?? event.name}
@@ -109,12 +109,6 @@ export default async function EventPage({ params, searchParams }: PageProps) {
           )}
         </div>
       </div>
-
-      {heroStripSrc ? (
-        <div className="aspect-[16/7] w-full overflow-hidden rounded-[22px] border border-line-gold bg-surface">
-          <EventImage src={heroStripSrc} alt="" className="h-full w-full object-cover" fallback={null} />
-        </div>
-      ) : null}
 
       <section id="masa-secimi" aria-labelledby="masa-secimi-baslik" className="scroll-mt-24 space-y-4">
         <h2 id="masa-secimi-baslik" className="text-[clamp(30px,4vw,44px)] text-ivory">

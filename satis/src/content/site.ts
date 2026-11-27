@@ -1,6 +1,14 @@
 export const SITE_NAME = "Merit Entertainment";
 export const SITE_TAGLINE = "Konser & Gala Biletleri";
 
+/** Altın vektör logo (bilet1 varlığı); oran 280×132. */
+export const BRAND_LOGO = {
+  src: "/brand/merit-entertainment-logo.svg",
+  width: 280,
+  height: 132,
+  homeLabel: `${SITE_NAME} — Ana sayfa`,
+} as const;
+
 export const NAV_ITEMS = [
   { href: "/", label: "Ana Sayfa" },
   { href: "/etkinlikler", label: "Yaklaşan Etkinlikler" },

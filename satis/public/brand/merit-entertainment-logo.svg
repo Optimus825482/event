@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 132" fill="none">
+  <defs>
+    <linearGradient id="goldShine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f3d89c"/>
+      <stop offset="48%" stop-color="#d4af68"/>
+      <stop offset="100%" stop-color="#b08844"/>
+    </linearGradient>
+    <linearGradient id="barShine" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#f7dfb0"/>
+      <stop offset="55%" stop-color="#d8b572"/>
+      <stop offset="100%" stop-color="#b38c48"/>
+    </linearGradient>
+    <!-- Periodic luxury shimmer gradient sweeping across ENTERTAINMENT -->
+    <linearGradient id="entShimmer" x1="-1" y1="0" x2="0" y2="0">
+      <stop offset="0%" stop-color="#e8c888"/>
+      <stop offset="42%" stop-color="#e8c888"/>
+      <stop offset="50%" stop-color="#fff8e1"/>
+      <stop offset="58%" stop-color="#e8c888"/>
+      <stop offset="100%" stop-color="#e8c888"/>
+      <animate attributeName="x1" values="-1; -1; 1.6; 1.6" keyTimes="0; 0.55; 0.85; 1" dur="4.5s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="0; 0; 2.6; 2.6" keyTimes="0; 0.55; 0.85; 1" dur="4.5s" repeatCount="indefinite"/>
+    </linearGradient>
+    <mask id="meritDotMask">
+      <rect width="280" height="132" fill="#fff"/>
+      <circle cx="179" cy="67.5" r="2.9" fill="#000"/>
+    </mask>
+  </defs>
+
+  <!-- 7 Gold Soundwave Bars (symmetrically centered on x=140) -->
+  <rect x="78"  y="16" width="10" height="22" rx="5" fill="url(#barShine)"/>
+  <rect x="97"  y="10" width="10" height="34" rx="5" fill="url(#barShine)"/>
+  <rect x="116" y="3"  width="10" height="48" rx="5" fill="url(#barShine)"/>
+  <rect x="135" y="3"  width="10" height="28" rx="5" fill="url(#barShine)"/>
+  <rect x="154" y="3"  width="10" height="48" rx="5" fill="url(#barShine)"/>
+  <rect x="173" y="10" width="10" height="34" rx="5" fill="url(#barShine)"/>
+  <rect x="192" y="16" width="10" height="22" rx="5" fill="url(#barShine)"/>
+
+  <!-- MERIT (centered on x=140) -->
+  <text x="140" y="92" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="42" letter-spacing="3.5" fill="url(#goldShine)" mask="url(#meritDotMask)">MERIT</text>
+
+  <!-- Larger ENTERTAINMENT with periodic gold-white shimmer sweep -->
+  <text x="140" y="119" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Segoe UI', sans-serif" font-weight="700" font-size="16.8" letter-spacing="3.2" fill="url(#entShimmer)">ENTERTΛINMENT</text>
+</svg>
