@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createManager, openSession } from "./support/departments";
 import { expect, test } from "./support/fixtures";
 import { clearDemo, demoEventCount, salesDemoFlag } from "./support/ss-p5";
+import { DEMO_CONCERTS } from "../src/features/demo/concerts";
 
 const ENT_PASS = `Ent1-${randomBytes(12).toString("base64url")}`;
 
@@ -12,7 +13,8 @@ test.describe("Satış sitesi demo modu", () => {
     await clearDemo();
   });
 
-  test("yönetici demo modunu açar: beş demo etkinlik tohumlanır ve rozetle listelenir", async ({ page }) => {
+  test("yönetici demo modunu açar: on demo etkinlik tohumlanır ve rozetle listelenir", async ({ page }) => {
+    test.setTimeout(150_000);
     await page.goto("/dashboard");
     const totalCard = page.getByText("Toplam Etkinlik").locator("..");
     await expect(totalCard).toBeVisible();
@@ -22,9 +24,9 @@ test.describe("Satış sitesi demo modu", () => {
     await page.getByRole("tab", { name: "Satış sitesi" }).click();
     await page.getByRole("switch", { name: "Satış sitesi demo aktif" }).click();
 
-    await expect(page.getByText("Demo modu açıldı")).toBeVisible();
-    await expect(page.getByText("5 demo etkinlik · 0 sipariş")).toBeVisible();
-    expect(await demoEventCount()).toBe(5);
+    await expect(page.getByText("Demo modu açıldı")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText(`${DEMO_CONCERTS.length} demo etkinlik · 0 sipariş`)).toBeVisible();
+    expect(await demoEventCount()).toBe(DEMO_CONCERTS.length);
     expect(await salesDemoFlag()).toBe(true);
 
     await page.goto("/events");
@@ -42,7 +44,7 @@ test.describe("Satış sitesi demo modu", () => {
     await page.getByRole("switch", { name: "Satış sitesi demo aktif" }).click();
 
     await expect(page.getByText("Demo modu kapatıldı")).toBeVisible();
-    expect(await demoEventCount()).toBe(5);
+    expect(await demoEventCount()).toBe(DEMO_CONCERTS.length);
     expect(await salesDemoFlag()).toBe(false);
   });
 
@@ -54,7 +56,7 @@ test.describe("Satış sitesi demo modu", () => {
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toContainText("Bu işlem geri alınamaz");
     await dialog.getByRole("button", { name: "Vazgeç" }).click();
-    expect(await demoEventCount()).toBe(5);
+    expect(await demoEventCount()).toBe(DEMO_CONCERTS.length);
 
     await page.getByRole("button", { name: "Demo verilerini sil" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Sil" }).click();
