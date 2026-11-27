@@ -4,6 +4,7 @@ import type { Db, Tx } from "@/db/client";
 import { eventSaleSettings, eventTables, events, orders, paymentAttempts, tableSeatSlots, tickets, type OrderStatus } from "@/db/schema";
 import { seatNoShown, wholeOnlyOf, type SaleCategory } from "@/domain/seating";
 import { normalizeEmail } from "@/features/customers/normalize";
+import { salesDemoEnabled } from "@/features/demo/flag";
 import { publish } from "@/features/realtime/publish";
 import { lockEvent } from "@/features/reservations/internal";
 import { signQrToken } from "@/features/reservations/qr-token";
@@ -185,6 +186,10 @@ export async function createHoldWithOutcome(
       const early = await orderIdByClientKey(tx, clientKey, eventId);
       if (early) return { orderId: early, created: false };
 
+      if (event.isDemo !== (await salesDemoEnabled(tx))) {
+        throw new SalesError("event_not_found");
+      }
+
       const settings = await getSaleSettings(tx, eventId);
       const state = saleStateOf({
         planningStage: event.planningStage,
@@ -275,6 +280,7 @@ export async function createHoldWithOutcome(
           holdExpiresAt: sql`clock_timestamp() + make_interval(mins => ${settings.holdMinutes}::int)`,
           totalAmount: total,
           currency: settings.currency,
+          isDemo: event.isDemo,
         })
         .returning({ id: orders.id });
       if (!order) throw new Error("Sipariş yazılamadı");
@@ -534,7 +540,7 @@ export async function payOrder(db: Db, orderId: string, input: PayInput, deps: O
               buyerPhone: phone,
               termsAcceptedAt: sql`clock_timestamp()`,
               paymentProvider: provider.id,
-              isDemo: provider.isDemo,
+              isDemo: provider.isDemo || event.isDemo,
             })
             .where(eq(orders.id, orderId));
         });
