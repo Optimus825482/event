@@ -150,6 +150,7 @@ test("reduced motion açıkken 3B açılır; WebGL yokken 2B plan gösterilir ve
   await page2.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expect(page2.getByRole("group", { name: "Salon planı" })).toBeVisible();
   await expect(page2.getByRole("button", { name: "3B görünüm" })).toHaveCount(0);
+  await expect(page2.getByText(/WebGL \(donanım hızlandırma\) kapalı veya desteklenmiyor/)).toBeVisible();
   await page2.waitForLoadState("networkidle");
   const hasThree = (
     await Promise.all(

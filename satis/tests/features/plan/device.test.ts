@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canOffer3d } from "@/features/plan/device";
+import { canOffer3d, unavailable3dReason } from "@/features/plan/device";
 
 const ok = { webgl: true, deviceMemory: 8, hardwareConcurrency: 8, saveData: false, reducedMotion: false };
 
@@ -23,5 +23,12 @@ describe("canOffer3d", () => {
   it("bilinmeyen değerler (Safari'de deviceMemory yok) engel sayılmaz", () => {
     expect(canOffer3d({ webgl: true, reducedMotion: false })).toBe(true);
     expect(canOffer3d({ ...ok, deviceMemory: undefined, hardwareConcurrency: undefined, saveData: undefined })).toBe(true);
+  });
+  it("unavailable3dReason doğru nedeni döndürür", () => {
+    expect(unavailable3dReason(ok)).toBeNull();
+    expect(unavailable3dReason({ ...ok, webgl: false })).toBe("no_webgl");
+    expect(unavailable3dReason({ ...ok, saveData: true })).toBe("save_data");
+    expect(unavailable3dReason({ ...ok, deviceMemory: 1 })).toBe("low_spec");
+    expect(unavailable3dReason({ ...ok, hardwareConcurrency: 1 })).toBe("low_spec");
   });
 });

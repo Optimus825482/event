@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import type { ThreeDUnavailableReason } from "./device";
 import type { PlanModel } from "./model";
 import type { TablePick } from "./picks";
 import { Plan3D, type SeatView } from "./plan-3d";
@@ -25,6 +26,13 @@ export type PlanViewerProps = {
 const BROWSE_3D_HINT =
   "Döndürmek için sürükleyin, yakınlaşmak için tekerleği ya da iki parmağınızı kullanın. Masaya dokununca o masadan sahne görüşü gösterilir.";
 
+const UNAVAILABLE_3D_MESSAGE: Record<ThreeDUnavailableReason, string> = {
+  no_webgl:
+    "Tarayıcınızda WebGL (donanım hızlandırma) kapalı veya desteklenmiyor; 2B salon krokisi gösteriliyor. 3B görünüm için tarayıcı ayarlarından donanım hızlandırmayı açabilirsiniz.",
+  save_data: "Tarayıcınızda veri tasarrufu modu açık olduğu için 2B salon krokisi gösteriliyor.",
+  low_spec: "Cihaz donanımı nedeniyle 2B salon krokisi gösteriliyor.",
+};
+
 /** 3B balo salonu (varsayılan) ve 2B plan görünümü; seçim üst bileşendedir, görünüm değişince korunur. */
 export function PlanViewer({
   model,
@@ -44,6 +52,7 @@ export function PlanViewer({
   return (
     <div className="flex flex-col gap-2.5">
       {view.failed ? <Notice>3B görünüm açılamadı; 2B plan gösteriliyor.</Notice> : null}
+      {!view.failed && !view.can3d && view.reason ? <Notice>{UNAVAILABLE_3D_MESSAGE[view.reason]}</Notice> : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-2 text-xs font-medium tracking-wider text-muted uppercase">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-gold" />

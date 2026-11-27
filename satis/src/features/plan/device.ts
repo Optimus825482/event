@@ -13,12 +13,20 @@ export type DeviceEnv = {
 const MIN_MEMORY_GB = 2;
 const MIN_CORES = 2;
 
+export type ThreeDUnavailableReason = "no_webgl" | "save_data" | "low_spec";
+
+/** 3B görünüm neden sunulamıyor? Sunulabiliyorsa `null` döner. */
+export function unavailable3dReason(env: DeviceEnv): ThreeDUnavailableReason | null {
+  if (!env.webgl) return "no_webgl";
+  if (env.saveData === true) return "save_data";
+  if (env.deviceMemory !== undefined && env.deviceMemory < MIN_MEMORY_GB) return "low_spec";
+  if (env.hardwareConcurrency !== undefined && env.hardwareConcurrency < MIN_CORES) return "low_spec";
+  return null;
+}
+
 /** 3B görünüm sunulur mu? Bilinmeyen değer (ör. Safari'de deviceMemory yok) engel sayılmaz; hareket azaltmada animasyonsuz açılır. */
 export function canOffer3d(env: DeviceEnv): boolean {
-  if (!env.webgl || env.saveData === true) return false;
-  if (env.deviceMemory !== undefined && env.deviceMemory < MIN_MEMORY_GB) return false;
-  if (env.hardwareConcurrency !== undefined && env.hardwareConcurrency < MIN_CORES) return false;
-  return true;
+  return unavailable3dReason(env) === null;
 }
 
 type NavigatorHints = Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
@@ -47,10 +55,17 @@ export function readDeviceEnv(): DeviceEnv {
   };
 }
 
-let cached: boolean | undefined;
+let cachedReason: ThreeDUnavailableReason | null | undefined;
 
 /** Sonuç sayfa ömrü boyunca önbelleklenir (WebGL bağlamı yoklaması pahalıdır). */
+export function detect3dReason(): ThreeDUnavailableReason | null {
+  if (cachedReason === undefined) {
+    cachedReason = unavailable3dReason(readDeviceEnv());
+  }
+  return cachedReason;
+}
+
+/** 3B görünümün sunulup sunulamayacağını önbellekli döndürür. */
 export function detectCanOffer3d(): boolean {
-  cached ??= canOffer3d(readDeviceEnv());
-  return cached;
+  return detect3dReason() === null;
 }
