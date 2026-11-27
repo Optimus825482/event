@@ -33,7 +33,7 @@ export function PlanViewer({ model, selectedId = null, onSelect }: { model: Plan
         </div>
       ) : null}
       {show3d ? (
-        <Plan3D model={model} selectedId={selectedId} onSelect={onSelect} onFail={fail} />
+        <Plan3D model={model} picks={[]} activeTableId={selectedId} onTable={onSelect} onFail={fail} />
       ) : (
         <PlanSvg model={model} selectedId={selectedId} onSelect={onSelect} />
       )}

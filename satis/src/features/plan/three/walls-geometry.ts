@@ -1,34 +1,46 @@
-/** Tuvalde 50 piksel = 3B sahnede 1 birim (venue-3d-preview ile aynı ölçek). */
-export const WALL_PX = 50;
-/** Üst kat locaları (kat yüksekliği 3) duvarın içinde kalsın diye iki kat boyu. */
-export const WALL_HEIGHT = 8;
+import { PX_PER_METER, roomSize, type Vec3 } from "./metric";
+
+export const WALL_HEIGHT = 7.75;
+export const WALL_THICKNESS = 0.42;
 export const WALL_MARGIN = 0.6;
 
-export type WallSide = "back" | "left" | "right";
+export type WallSide = "back" | "left" | "right" | "front";
 
 export type WallSpec = {
   side: WallSide;
-  /** Duvarın dünya konumu (taban ortası). */
-  position: [number, number, number];
-  /** Y ekseni dönüşü; duvarın "ön" yüzü salonun içine bakar. */
+  position: Vec3;
   rotationY: number;
-  /** Duvar uzunluğu. */
   length: number;
   height: number;
 };
 
-/**
- * Tuval genişliği/yüksekliğinden (piksel) arka, sol ve sağ duvarların yerleşimini üretir.
- * Zemin orijinde ortalıdır; ön taraf (+z) kamera için açık bırakılır.
- */
 export function wallLayout(canvasWidth: number, canvasHeight: number): WallSpec[] {
-  const w = Math.max(canvasWidth, 0) / WALL_PX;
-  const h = Math.max(canvasHeight, 0) / WALL_PX;
-  const xEdge = w / 2 + WALL_MARGIN;
-  const zEdge = h / 2 + WALL_MARGIN;
+  const room = roomSize({ width: Math.max(canvasWidth, 0), height: Math.max(canvasHeight, 0) });
+  const xEdge = room.width / 2 + WALL_MARGIN;
+  const zEdge = room.depth / 2 + WALL_MARGIN;
   return [
-    { side: "back", position: [0, 0, -zEdge], rotationY: 0, length: w + WALL_MARGIN * 2, height: WALL_HEIGHT },
-    { side: "left", position: [-xEdge, 0, 0], rotationY: Math.PI / 2, length: h + WALL_MARGIN * 2, height: WALL_HEIGHT },
-    { side: "right", position: [xEdge, 0, 0], rotationY: -Math.PI / 2, length: h + WALL_MARGIN * 2, height: WALL_HEIGHT },
+    { side: "back", position: [0, 0, -zEdge], rotationY: 0, length: room.width + WALL_MARGIN * 2, height: WALL_HEIGHT },
+    { side: "left", position: [-xEdge, 0, 0], rotationY: Math.PI / 2, length: room.depth + WALL_MARGIN * 2, height: WALL_HEIGHT },
+    { side: "right", position: [xEdge, 0, 0], rotationY: -Math.PI / 2, length: room.depth + WALL_MARGIN * 2, height: WALL_HEIGHT },
+    { side: "front", position: [0, 0, zEdge], rotationY: Math.PI, length: room.width + WALL_MARGIN * 2, height: WALL_HEIGHT },
   ];
 }
+
+export function wallVisibility(
+  room: { width: number; depth: number },
+  cameraPosition: Vec3,
+  pov: boolean,
+): Record<WallSide, boolean> {
+  if (pov) return { back: true, left: true, right: true, front: true };
+  const [cx, , cz] = cameraPosition;
+  const xEdge = room.width / 2 + WALL_MARGIN;
+  const zEdge = room.depth / 2 + WALL_MARGIN;
+  return {
+    back: cz >= -zEdge,
+    front: cz <= zEdge,
+    left: cx >= -xEdge,
+    right: cx <= xEdge,
+  };
+}
+
+export { PX_PER_METER };

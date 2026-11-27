@@ -205,59 +205,54 @@ function TableNode({
 }
 
 /** 2B masa yerleşim planı: yakınlaştırma/kaydırma ve erişilebilir masa seçimi. */
-export function PlanSvg({ model, pickedIds, activeId, dimmedIds, selectedId, onSelect, height }: PlanSvgProps) {
-  const { viewBox, zoomIn, zoomOut, reset, handlers } = usePanZoom(model.canvas);
+export function PlanSvg({ model, pickedIds, activeId, dimmedIds, selectedId, onSelect, height = 420 }: PlanSvgProps) {
+  const { ref, view, zoomIn, zoomOut, fit } = usePanZoom(model.canvas);
   const resolvedActive = activeId ?? selectedId ?? null;
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="glass" onClick={zoomIn}>
-          Yakınlaştır
+    <div className="relative w-full overflow-hidden rounded-xl border border-line bg-bg">
+      <div ref={ref} className="w-full touch-pan-y select-none" style={{ height }}>
+        <svg role="group" aria-label="Salon planı" width="100%" height="100%" className="block">
+          <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+            <rect width={model.canvas.width} height={model.canvas.height} strokeWidth={2} className="fill-surface stroke-line" />
+            {model.decor.map((decor) => (
+              <DecorShape key={decor.id} decor={decor} />
+            ))}
+            {model.lines.map((line) => (
+              <line
+                key={line.id}
+                x1={line.x1}
+                y1={line.y1}
+                x2={line.x2}
+                y2={line.y2}
+                strokeWidth={line.width}
+                aria-hidden="true"
+                className="stroke-muted"
+              />
+            ))}
+            {model.tables.map((table) => (
+              <TableNode
+                key={table.id}
+                table={table}
+                picked={pickedIds?.has(table.id) ?? false}
+                active={resolvedActive === table.id}
+                dimmed={dimmedIds?.has(table.id) ?? false}
+                onSelect={onSelect}
+              />
+            ))}
+          </g>
+        </svg>
+      </div>
+      <div className="absolute right-2 top-2 flex gap-2">
+        <Button variant="glass" aria-label="Yakınlaştır" onClick={zoomIn}>
+          +
         </Button>
-        <Button variant="glass" onClick={zoomOut}>
-          Uzaklaştır
+        <Button variant="glass" aria-label="Uzaklaştır" onClick={zoomOut}>
+          −
         </Button>
-        <Button variant="glass" onClick={reset}>
+        <Button variant="glass" aria-label="Sığdır" onClick={fit}>
           Sığdır
         </Button>
-      </div>
-      <div
-        className="w-full overflow-hidden rounded-xl border border-line bg-surface"
-        style={height ? { height } : undefined}
-      >
-        <svg
-          viewBox={viewBox}
-          role="img"
-          aria-label="Salon yerleşim planı"
-          className="h-auto w-full touch-none select-none"
-          {...handlers}
-        >
-          {model.lines.map((line) => (
-            <line
-              key={line.id}
-              x1={line.x1}
-              y1={line.y1}
-              x2={line.x2}
-              y2={line.y2}
-              strokeWidth={line.width}
-              className="stroke-line"
-            />
-          ))}
-          {model.decor.map((decor) => (
-            <DecorShape key={decor.id} decor={decor} />
-          ))}
-          {model.tables.map((table) => (
-            <TableNode
-              key={table.id}
-              table={table}
-              picked={pickedIds?.has(table.id) ?? false}
-              active={resolvedActive === table.id}
-              dimmed={dimmedIds?.has(table.id) ?? false}
-              onSelect={onSelect}
-            />
-          ))}
-        </svg>
       </div>
     </div>
   );

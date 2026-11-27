@@ -1,23 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Component, useId, useMemo, type ReactNode } from "react";
+import { Component, useCallback, useId, useMemo, useState, type ReactNode } from "react";
 import type { PlanModel } from "./model";
-import { planToSceneDecor, planToSceneLines, planToSceneTables } from "./three/scene-data";
+import type { TablePick } from "./picks";
+import type { SeatView } from "./three/scene";
+import { buildScene } from "./three/scene-data";
 
-// three.js yalnızca 3B açılınca indirilir; sunucuda çizilmez.
 const Scene3D = dynamic(() => import("./three/scene"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center text-muted" aria-busy="true">
-      3B plan yükleniyor…
-    </div>
-  ),
 });
 
 type BoundaryProps = { onFail: () => void; children: ReactNode };
 
-/** Sahne çizilirken oluşan hata (WebGL yok, bağlam açılamadı…) 2B'ye düşmek için üst bileşene bildirilir. */
 class SceneBoundary extends Component<BoundaryProps, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
@@ -31,29 +26,87 @@ class SceneBoundary extends Component<BoundaryProps, { failed: boolean }> {
   }
 }
 
+export type { SeatView };
+
 export type Plan3DProps = {
   model: PlanModel;
-  selectedId: string | null;
-  onSelect?: (tableId: string) => void;
-  /** Sahne açılamadı ya da WebGL bağlamı kayboldu: üst bileşen 2B'ye döner. */
-  onFail: () => void;
+  picks: readonly TablePick[];
+  activeTableId: string | null;
+  dimmedIds?: ReadonlySet<string>;
+  /** Sahne ekranı görseli (kendi kökenimizden) ve görsel yokken yazılacak ad. */
+  artworkUrl?: string | null;
+  title?: string;
+  onTable?(tableId: string): void;
+  onSeat?(tableId: string, seatNo: number): void;
+  /** Sahne açılamadı ya da WebGL bağlamı kayboldu. */
+  onFail(): void;
+  onReady?(): void;
+  /** nonce değişince kamera o masadan sahneye bakar. */
+  seatView?: SeatView | null;
+  /** Sahne hazır olana kadar gösterilecek içerik (2B plan). */
+  fallback?: ReactNode;
   height?: number;
 };
 
 /** Planın 3B balo salonu görünümü (tembel yüklenir, hata sınırıyla sarılıdır). */
-export function Plan3D({ model, selectedId, onSelect, onFail, height = 420 }: Plan3DProps) {
-  const tables = useMemo(() => planToSceneTables(model, { selectedId }), [model, selectedId]);
-  const decor = useMemo(() => planToSceneDecor(model), [model]);
-  const lines = useMemo(() => planToSceneLines(model), [model]);
+export function Plan3D({
+  model,
+  picks,
+  activeTableId,
+  dimmedIds,
+  artworkUrl,
+  title,
+  onTable,
+  onSeat,
+  onFail,
+  onReady,
+  seatView,
+  fallback,
+  height = 460,
+}: Plan3DProps) {
+  const scene = useMemo(
+    () => buildScene({ model, picks, activeTableId, dimmedIds }),
+    [model, picks, activeTableId, dimmedIds],
+  );
+  const [ready, setReady] = useState(false);
+  const [cameraTag, setCameraTag] = useState("overview");
   const helpId = useId();
+
+  const handleReady = useCallback(() => {
+    setReady(true);
+    onReady?.();
+  }, [onReady]);
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="w-full overflow-hidden rounded-xl border border-line bg-bg" style={{ height }}>
+      <div
+        data-testid="plan-3d-scene"
+        data-ready={ready ? "true" : "false"}
+        data-camera={cameraTag}
+        className="relative w-full overflow-hidden rounded-xl border border-line bg-bg"
+        style={{ height }}
+      >
+        {!ready && fallback ? <div className="absolute inset-0 z-10 overflow-auto">{fallback}</div> : null}
         <SceneBoundary onFail={onFail}>
-          <Scene3D tables={tables} decor={decor} lines={lines} canvas={model.canvas} onSelect={onSelect} onContextLost={onFail} describedBy={helpId} />
+          <Scene3D
+            scene={scene}
+            canvas={model.canvas}
+            activeTableId={activeTableId}
+            artworkUrl={artworkUrl}
+            title={title}
+            seatView={seatView}
+            onTable={onTable}
+            onSeat={onSeat}
+            onContextLost={onFail}
+            onReady={handleReady}
+            onCameraChange={setCameraTag}
+            describedBy={helpId}
+          />
         </SceneBoundary>
       </div>
-      <p id={helpId} className="text-sm text-muted">Seçim için 2B plan ya da liste görünümünü kullanın.</p>
+      <p id={helpId} className="text-sm text-muted">
+        Masaya dokununca yakınlaşır; sandalye seçimi sağdaki numaralı düğmelerle de yapılabilir.
+      </p>
     </div>
   );
 }

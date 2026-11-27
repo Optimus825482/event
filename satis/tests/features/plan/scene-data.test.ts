@@ -1,119 +1,192 @@
 import { describe, expect, it } from "vitest";
 import { buildPlanModel } from "@/features/plan/model";
-import { planToSceneDecor, planToSceneLines, planToSceneTables, WORLD_SCALE, toWorld } from "@/features/plan/three/scene-data";
-import { COLORS } from "@/lib/theme";
+import { buildScene, chairHit, LOCA_FLOOR_Y } from "@/features/plan/three/scene-data";
 import type { EventDetail } from "@/lib/core/contract";
 
-type Table = EventDetail["plan"]["tables"][number];
 const seq = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
-const t = (id: string, label: string, extra: Partial<Table> = {}): Table => ({
-  id,
-  label,
-  x: 100,
-  y: 100,
-  rotation: 0,
-  shape: "round",
-  isLoca: false,
-  sellable: true,
-  category: "standard",
-  capacity: 8,
-  seats: 8,
-  seatNos: seq(8),
-  wholeOnly: false,
-  ...extra,
-});
+
 const plan: EventDetail["plan"] = {
   canvas: { width: 1200, height: 800 },
   tables: [
-    t("free", "A1", { x: 200, y: 300, rotation: 30 }),
-    t("part", "A2"),
-    t("full", "A3"),
-    t("closed", "A4", { sellable: false, category: null, seats: null, seatNos: [] }),
-    t("prem", "P1", { category: "premium" }),
-    t("vip", "V1", { category: "vip", shape: "rectangle" }),
-    t("loca", "L1", { isLoca: true, category: "vip" }),
+    {
+      id: "a1",
+      label: "A1",
+      x: 150,
+      y: 150,
+      rotation: 0,
+      shape: "round",
+      isLoca: false,
+      sellable: true,
+      category: "standard",
+      capacity: 8,
+      seats: 8,
+      seatNos: seq(8),
+      wholeOnly: false,
+    },
+    {
+      id: "g1",
+      label: "G1",
+      x: 400,
+      y: 300,
+      rotation: 0,
+      shape: "round",
+      isLoca: false,
+      sellable: true,
+      category: "standard",
+      capacity: 8,
+      seats: 6,
+      seatNos: [1, 2, 3, 5, 6, 8],
+      wholeOnly: false,
+    },
+    {
+      id: "l1",
+      label: "L1",
+      x: 700,
+      y: 500,
+      rotation: 0,
+      shape: "rectangle",
+      isLoca: true,
+      sellable: true,
+      category: "vip",
+      capacity: 6,
+      seats: 6,
+      seatNos: seq(6),
+      wholeOnly: true,
+    },
+    {
+      id: "c1",
+      label: "C1",
+      x: 900,
+      y: 500,
+      rotation: 0,
+      shape: "square",
+      isLoca: false,
+      sellable: false,
+      category: null,
+      capacity: 8,
+      seats: null,
+      seatNos: [],
+      wholeOnly: false,
+    },
   ],
-  decor: [
-    { id: "s", kind: "stage", x: 500, y: 40, width: 200, height: 80, rotation: 90, label: "Sahne" },
-    { bozuk: true },
-  ],
-  lines: [{ id: "l", x1: 0, y1: 0, x2: 100, y2: 0, width: 4 }],
+  decor: [{ id: "st", kind: "stage", x: 450, y: 20, width: 300, height: 100, rotation: 0, label: "Sahne" }],
+  lines: [],
 };
-const prices: EventDetail["prices"] = [{ category: "standard", label: "Standart", price: "1500.00" }];
+
+const prices: EventDetail["prices"] = [
+  { category: "standard", label: "Standart", price: "1500.00" },
+  { category: "vip", label: "VIP", price: "4000.00" },
+];
+
 const model = buildPlanModel(
   plan,
   prices,
   {
-    at: "x",
+    at: "2026-12-01T10:00:00Z",
     tables: [
-      { id: "free", free: 8, freeSeats: seq(8) },
-      { id: "part", free: 3, freeSeats: seq(3) },
-      { id: "full", free: 0, freeSeats: [] },
-      { id: "prem", free: 8, freeSeats: seq(8) },
-      { id: "vip", free: 8, freeSeats: seq(8) },
-      { id: "loca", free: 4, freeSeats: seq(4) },
+      { id: "a1", free: 8, freeSeats: seq(8) },
+      { id: "g1", free: 2, freeSeats: [1, 2] },
+      { id: "l1", free: 6, freeSeats: seq(6) },
     ],
   },
   "seat",
 );
-const byKey = (rows: ReturnType<typeof planToSceneTables>, key: string) => rows.find((r) => r.key === key)!;
 
-describe("planToSceneTables", () => {
-  const rows = planToSceneTables(model, { selectedId: null });
-  it("konum, boyut, döndürme ve kapasite modelden gelir", () => {
-    const a = byKey(rows, "free");
-    expect(a).toMatchObject({ x: 200, y: 300, rotation: 30, width: 40, height: 40, capacity: 8, label: "A1", shape: "round", isLoca: false });
-    expect(byKey(rows, "vip")).toMatchObject({ width: 40, height: 24, shape: "rectangle" });
-    expect(byKey(rows, "loca")).toMatchObject({ width: 48, height: 36, isLoca: true });
+describe("scene-data", () => {
+  it("masa konumu metreye çevrilir ve gövdesi plandaki alandan küçüktür", () => {
+    const scene = buildScene({ model, picks: [], activeTableId: null });
+    const a1 = scene.tables.find((t) => t.key === "a1")!;
+    expect(a1.x).toBeCloseTo(-30, 2);
+    expect(a1.z).toBeCloseTo(-16.67, 2);
+    expect(a1.width).toBeCloseTo(1.87, 2);
   });
-  it("durumlar: boş, kısmen dolu, dolu, satışa kapalı", () => {
-    expect(byKey(rows, "free")).toMatchObject({ state: "free", selectable: true });
-    expect(byKey(rows, "part")).toMatchObject({ state: "partial", selectable: true });
-    expect(byKey(rows, "full")).toMatchObject({ state: "full", selectable: false });
-    expect(byKey(rows, "closed")).toMatchObject({ state: "closed", selectable: false, capacity: 0 });
-  });
-  it("renkler tema belirteçlerindendir ve durumlar birbirinden ayrışır", () => {
-    expect(byKey(rows, "free").color).toBe(COLORS.ivory);
-    expect(byKey(rows, "prem").color).toBe(COLORS.gold);
-    expect(byKey(rows, "vip").color).toBe(COLORS.gold);
-    expect(byKey(rows, "part").color).toBe(COLORS.muted);
-    expect(byKey(rows, "full").color).toBe(COLORS.disabledBg);
-    expect(byKey(rows, "closed").color).toBe(COLORS.surface);
-    expect(new Set([byKey(rows, "free").color, byKey(rows, "part").color, byKey(rows, "full").color]).size).toBe(3);
-  });
-  it("örtü rengi durumu büyük yüzeyde gösterir", () => {
-    expect(byKey(rows, "free").bodyColor).toBe(COLORS.ivory);
-    expect(byKey(rows, "part").bodyColor).toBe(COLORS.muted);
-    expect(byKey(rows, "full").bodyColor).toBe(COLORS.disabledBg);
-    expect(byKey(rows, "closed").bodyColor).toBe(COLORS.surface);
-    expect(byKey(planToSceneTables(model, { selectedId: "free" }), "free").bodyColor).toBe(COLORS.goldBright);
-  });
-  it("seçili masa işaretlenir ve seçili rengi alır; yalnız o masa", () => {
-    const sel = planToSceneTables(model, { selectedId: "part" });
-    expect(byKey(sel, "part")).toMatchObject({ selected: true, color: COLORS.goldBright });
-    expect(sel.filter((r) => r.selected)).toHaveLength(1);
-  });
-  it("dolu masa seçili gösterilmez", () => {
-    expect(byKey(planToSceneTables(model, { selectedId: "full" }), "full").selected).toBe(false);
-  });
-});
 
-describe("dünya dönüşümü", () => {
-  it("50 piksel 1 birimdir ve salon orijinde ortalıdır", () => {
-    expect(WORLD_SCALE).toBe(50);
-    expect(toWorld(model.canvas, 0, 0)).toEqual([-12, -8]);
-    expect(toWorld(model.canvas, 600, 400)).toEqual([0, 0]);
+  it("her masada kapasite kadar sandalye vardır; yuvasızlar closed, doluları taken, boşları free", () => {
+    const scene = buildScene({ model, picks: [], activeTableId: null });
+    const g1Chairs = scene.chairs.filter((c) => c.tableId === "g1");
+    expect(g1Chairs).toHaveLength(8);
+    expect(g1Chairs.map((c) => c.seatNo)).toEqual([1, 2, 3, null, 5, 6, null, 8]);
+    expect(g1Chairs.map((c) => c.state)).toEqual([
+      "free",
+      "free",
+      "taken",
+      "closed",
+      "taken",
+      "taken",
+      "closed",
+      "taken",
+    ]);
   });
-});
 
-describe("planToSceneDecor / planToSceneLines", () => {
-  it("dekor merkez noktasına ve radyana çevrilir; bozuk öğe atlanır", () => {
-    const decor = planToSceneDecor(model);
-    expect(decor).toHaveLength(1);
-    expect(decor[0]).toMatchObject({ id: "s", kind: "stage", x: 600, y: 80, width: 200, height: 80 });
-    expect(decor[0]!.angle).toBeCloseTo(Math.PI / 2);
+  it("seçili sandalye selected durumundadır ve seçili masa picked işaretlenir", () => {
+    const scene = buildScene({
+      model,
+      picks: [{ tableId: "a1", whole: false, seatNos: [4, 7] }],
+      activeTableId: "a1",
+    });
+    expect(scene.tables.find((t) => t.key === "a1")!.picked).toBe(true);
+    const a1Chairs = scene.chairs.filter((c) => c.tableId === "a1");
+    expect(a1Chairs.find((c) => c.seatNo === 4)!.state).toBe("selected");
+    expect(a1Chairs.find((c) => c.seatNo === 7)!.state).toBe("selected");
+    expect(a1Chairs.find((c) => c.seatNo === 1)!.state).toBe("free");
   });
-  it("çizgi şeride çevrilir", () => {
-    expect(planToSceneLines(model)).toEqual([{ id: "l", cx: 50, cy: 0, length: 100, angle: 0, width: 4 }]);
+
+  it("bütün seçilen locada sandalyeler numarasızdır, masa picked'dir", () => {
+    const scene = buildScene({
+      model,
+      picks: [{ tableId: "l1", whole: true }],
+      activeTableId: "l1",
+    });
+    const l1 = scene.tables.find((t) => t.key === "l1")!;
+    expect(l1.picked).toBe(true);
+    expect(l1.floorY).toBe(LOCA_FLOOR_Y);
+    const l1Chairs = scene.chairs.filter((c) => c.tableId === "l1");
+    expect(l1Chairs).toHaveLength(6);
+    expect(l1Chairs.every((c) => c.seatNo === null)).toBe(true);
+  });
+
+  it("etkin masa active, süzgeç dışı masa dimmed'dir; dolu ve kapalı masa selectable değildir", () => {
+    const scene = buildScene({
+      model,
+      picks: [],
+      activeTableId: "a1",
+      dimmedIds: new Set(["g1"]),
+    });
+    expect(scene.tables.find((t) => t.key === "a1")!.active).toBe(true);
+    expect(scene.tables.find((t) => t.key === "g1")!.dimmed).toBe(true);
+    expect(scene.tables.find((t) => t.key === "c1")!.selectable).toBe(false);
+  });
+
+  it("durum renkleri tema belirteçlerindendir ve dört sandalye durumu birbirinden ayrışır", () => {
+    const scene = buildScene({
+      model,
+      picks: [{ tableId: "g1", whole: false, seatNos: [1] }],
+      activeTableId: "g1",
+    });
+    const g1Chairs = scene.chairs.filter((c) => c.tableId === "g1");
+    const selectedColor = g1Chairs.find((c) => c.state === "selected")!.color;
+    const freeColor = g1Chairs.find((c) => c.state === "free")!.color;
+    const takenColor = g1Chairs.find((c) => c.state === "taken")!.color;
+    const closedColor = g1Chairs.find((c) => c.state === "closed")!.color;
+    expect(freeColor).not.toBe(takenColor);
+    expect(freeColor).not.toBe(selectedColor);
+    expect(takenColor).not.toBe(selectedColor);
+    expect(closedColor).toBe(takenColor);
+  });
+
+  it("chairHit örnek sırasını masaya ve yuva numarasına çevirir; aralık dışı null", () => {
+    const scene = buildScene({ model, picks: [], activeTableId: null });
+    scene.chairs.forEach((c, idx) => {
+      expect(chairHit(scene, idx)).toEqual({ tableId: c.tableId, seatNo: c.seatNo });
+    });
+    expect(chairHit(scene, -1)).toBeNull();
+    expect(chairHit(scene, scene.chairs.length)).toBeNull();
+  });
+
+  it("satışa kapalı masanın sandalyeleri closed çizilir", () => {
+    const scene = buildScene({ model, picks: [], activeTableId: null });
+    const c1Chairs = scene.chairs.filter((c) => c.tableId === "c1");
+    expect(c1Chairs).toHaveLength(8);
+    expect(c1Chairs.every((c) => c.state === "closed")).toBe(true);
   });
 });
