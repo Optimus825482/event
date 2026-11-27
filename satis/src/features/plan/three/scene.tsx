@@ -143,6 +143,7 @@ function InstancedTables({
       roundRef.current.count = roundTables.length;
       roundRef.current.instanceMatrix.needsUpdate = true;
       if (roundRef.current.instanceColor) roundRef.current.instanceColor.needsUpdate = true;
+      roundRef.current.computeBoundingSphere();
     }
 
     if (boxRef.current) {
@@ -157,6 +158,7 @@ function InstancedTables({
       boxRef.current.count = boxTables.length;
       boxRef.current.instanceMatrix.needsUpdate = true;
       if (boxRef.current.instanceColor) boxRef.current.instanceColor.needsUpdate = true;
+      boxRef.current.computeBoundingSphere();
     }
 
     invalidate();
@@ -186,13 +188,13 @@ function InstancedTables({
   return (
     <group>
       {roundTables.length > 0 ? (
-        <instancedMesh ref={roundRef} key={`r-${roundTables.length}`} args={[undefined, undefined, roundTables.length]} {...handle(roundTables)}>
+        <instancedMesh ref={roundRef} frustumCulled={false} key={`r-${roundTables.length}`} args={[undefined, undefined, roundTables.length]} {...handle(roundTables)}>
           <cylinderGeometry args={[0.5, 0.45, 1, 24]} />
           <meshStandardMaterial roughness={0.38} metalness={0.25} />
         </instancedMesh>
       ) : null}
       {boxTables.length > 0 ? (
-        <instancedMesh ref={boxRef} key={`b-${boxTables.length}`} args={[undefined, undefined, boxTables.length]} {...handle(boxTables)}>
+        <instancedMesh ref={boxRef} frustumCulled={false} key={`b-${boxTables.length}`} args={[undefined, undefined, boxTables.length]} {...handle(boxTables)}>
           <boxGeometry args={[1, 1, 1]} />
           <meshStandardMaterial roughness={0.38} metalness={0.25} />
         </instancedMesh>

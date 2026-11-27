@@ -58,6 +58,7 @@ test("masa seçilince kamera masaya yakınlaşır; 3B'de sandalyeye tıklamak pa
   const pose = detailPose({ x: t.x, z: t.z }, t.floorY, towardStage(scene.stage, { x: t.x, z: t.z }));
   const chair3 = scene.chairs.find((c) => c.tableId === a1Id && c.seatNo === 3)!;
 
+  await sceneBox.scrollIntoViewIfNeeded();
   const box = await sceneBox.boundingBox();
   expect(box).not.toBeNull();
   const cam = new PerspectiveCamera(FOV_HALL, box!.width / box!.height, 0.1, 1000);

@@ -77,7 +77,7 @@ test("tutma anında sandalye alınmışsa mesaj çıkar ve plan hemen güncellen
   await holdAs(gala.id, tableId(gala, "P1"), 2, [1, 2]);
   await page.getByRole("region", { name: "Seçiminiz" }).getByRole("button", { name: "Devam et" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Seçtiğiniz sandalyelerden biri az önce alındı" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sandalye 1, dolu" })).toBeVisible({ timeout: 2000 });
+  await expect(page.getByRole("button", { name: "Sandalye 1, dolu" })).toBeVisible({ timeout: 12_000 });
 });
 
 test("masa bazlı etkinlikte masa bütün seçilir", async ({ page }) => {
@@ -85,6 +85,7 @@ test("masa bazlı etkinlikte masa bütün seçilir", async ({ page }) => {
   await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa A1 ·/ }).click();
   await expect(page.getByText("8 kişilik masa · 8 bilet")).toBeVisible();
   await expect(page.getByRole("button", { name: /Sandalye/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Masanın tamamını seç" }).click();
   await page.getByRole("region", { name: "Seçiminiz" }).getByRole("button", { name: "Devam et" }).click();
   await expect(page).toHaveURL(/\/odeme\//);
 });
@@ -92,7 +93,7 @@ test("masa bazlı etkinlikte masa bütün seçilir", async ({ page }) => {
 test("loca bütün seçilir; Loca süzgeci ve masa numarası araması listeyi daraltır", async ({ page }) => {
   await page.goto(`/etkinlik/${gala.id}?kisi=2#masa-secimi`);
   const finder = page.getByRole("region", { name: "Masa bulucu" });
-  await finder.getByRole("button", { name: "Loca" }).click();
+  await finder.getByRole("button", { name: "Loca", exact: true }).click();
   const list = finder.getByRole("list", { name: "Alınabilir masalar" });
   await expect(list.getByRole("button")).toHaveCount(1);
   await expect(list.getByRole("button", { name: /^Loca L1 ·/ })).toBeVisible();

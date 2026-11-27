@@ -216,10 +216,12 @@ export function Chairs({
     seatMesh.count = chairs.length;
     seatMesh.instanceMatrix.needsUpdate = true;
     if (seatMesh.instanceColor) seatMesh.instanceColor.needsUpdate = true;
+    seatMesh.computeBoundingSphere();
 
     backMesh.count = chairs.length;
     backMesh.instanceMatrix.needsUpdate = true;
     if (backMesh.instanceColor) backMesh.instanceColor.needsUpdate = true;
+    backMesh.computeBoundingSphere();
 
     invalidate();
   }, [chairs, invalidate]);
@@ -230,6 +232,7 @@ export function Chairs({
     <group key={chairs.length}>
       <instancedMesh
         ref={seatRef}
+        frustumCulled={false}
         args={[undefined, undefined, chairs.length]}
         onClick={(e) => {
           if (e.instanceId !== undefined) onClick?.(e.instanceId, e.delta, () => e.stopPropagation());
@@ -244,6 +247,7 @@ export function Chairs({
       </instancedMesh>
       <instancedMesh
         ref={backRef}
+        frustumCulled={false}
         args={[undefined, undefined, chairs.length]}
         onClick={(e) => {
           if (e.instanceId !== undefined) onClick?.(e.instanceId, e.delta, () => e.stopPropagation());
