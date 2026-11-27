@@ -49,16 +49,13 @@ export function StageScreen({
   title?: string;
 }) {
   const invalidate = useThree((s) => s.invalidate);
-  const [loadedTex, setLoadedTex] = useState<Texture | null>(null);
+  const [loaded, setLoaded] = useState<{ url: string; tex: Texture } | null>(null);
   const fallbackTex = useMemo(() => createFallbackTexture(title || "Merit Entertainment"), [title]);
 
   useEffect(() => () => fallbackTex?.dispose(), [fallbackTex]);
 
   useEffect(() => {
-    if (!artworkUrl) {
-      setLoadedTex(null);
-      return;
-    }
+    if (!artworkUrl) return;
     let active = true;
     const loader = new TextureLoader();
     loader.load(
@@ -69,12 +66,12 @@ export function StageScreen({
           return;
         }
         tex.colorSpace = SRGBColorSpace;
-        setLoadedTex(tex);
+        setLoaded({ url: artworkUrl, tex });
         invalidate();
       },
       undefined,
       () => {
-        if (active) setLoadedTex(null);
+        if (active) setLoaded(null);
       },
     );
     return () => {
@@ -82,9 +79,9 @@ export function StageScreen({
     };
   }, [artworkUrl, invalidate]);
 
-  useEffect(() => () => loadedTex?.dispose(), [loadedTex]);
+  useEffect(() => () => loaded?.tex.dispose(), [loaded]);
 
-  const map = loadedTex ?? fallbackTex;
+  const map = (artworkUrl && loaded?.url === artworkUrl ? loaded.tex : null) ?? fallbackTex;
   const { position, rotationY, width, height } = stage.screen;
   const showSideScreens = room.depth >= 20;
   const sideX = room.width / 2 + WALL_MARGIN - 0.14;

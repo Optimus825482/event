@@ -241,18 +241,19 @@ function CameraController({
   onPovChange: (pov: boolean) => void;
   onCamPos: (pos: Vec3) => void;
 }) {
-  const { camera, size, invalidate } = useThree();
+  const { get, size, invalidate } = useThree();
   const flightRef = useRef<Flight | null>(null);
   const narrow = size.height > 0 ? size.width / size.height < 1.15 : false;
   const maxDist = maxDistance(scene.room);
 
   const startFlight = useCallback(
     (to: CameraPose, tag: string) => {
+      const cam = get().camera;
       const ctrl = orbitRef.current;
       const curTarget: Vec3 = ctrl ? [ctrl.target.x, ctrl.target.y, ctrl.target.z] : [0, 1, 1];
-      const fov = camera instanceof PerspectiveCamera ? camera.fov : FOV_HALL;
+      const fov = cam instanceof PerspectiveCamera ? cam.fov : FOV_HALL;
       flightRef.current = {
-        fromPos: [camera.position.x, camera.position.y, camera.position.z],
+        fromPos: [cam.position.x, cam.position.y, cam.position.z],
         fromTarget: curTarget,
         fromFov: fov,
         to,
@@ -263,7 +264,7 @@ function CameraController({
       onPovChange(tag.startsWith("seat:"));
       invalidate();
     },
-    [camera, orbitRef, onPovChange, invalidate],
+    [get, orbitRef, onPovChange, invalidate],
   );
 
   // Etkin masa değişince yakınlaş
@@ -301,21 +302,22 @@ function CameraController({
       startFlight(topPose(scene.room, narrow), "top");
       return;
     }
+    const cam = get().camera;
     const ctrl = orbitRef.current;
     const curTarget: Vec3 = ctrl ? [ctrl.target.x, ctrl.target.y, ctrl.target.z] : [0, 1, 1];
     const next = orbitMove(
-      { position: [camera.position.x, camera.position.y, camera.position.z], target: curTarget },
+      { position: [cam.position.x, cam.position.y, cam.position.z], target: curTarget },
       command.type,
       maxDist,
     );
     flightRef.current = null;
-    camera.position.set(...next.position);
+    cam.position.set(...next.position);
     ctrl?.target.set(...next.target);
     ctrl?.update();
     onCamPos(next.position);
     onPoseDone("free");
     invalidate();
-  }, [command, scene.room, narrow, maxDist, camera, orbitRef, startFlight, onCamPos, onPoseDone, invalidate]);
+  }, [command, scene.room, narrow, maxDist, get, orbitRef, startFlight, onCamPos, onPoseDone, invalidate]);
 
   // Kullanıcı tutunca uçuş iptal
   useEffect(() => {
@@ -330,9 +332,10 @@ function CameraController({
     return () => ctrl.removeEventListener?.("start", onStart);
   }, [orbitRef, onPovChange, onPoseDone]);
 
-  useFrame(() => {
+  useFrame((state) => {
     const f = flightRef.current;
     if (!f) return;
+    const cam = state.camera;
     const elapsed = performance.now() - f.startedAt;
     const raw = Math.min(1, elapsed / f.duration);
     const t = raw * raw * (3 - 2 * raw);
@@ -340,16 +343,16 @@ function CameraController({
     const px = f.fromPos[0] + (f.to.position[0] - f.fromPos[0]) * t;
     const py = f.fromPos[1] + (f.to.position[1] - f.fromPos[1]) * t;
     const pz = f.fromPos[2] + (f.to.position[2] - f.fromPos[2]) * t;
-    camera.position.set(px, py, pz);
+    cam.position.set(px, py, pz);
 
     const tx = f.fromTarget[0] + (f.to.target[0] - f.fromTarget[0]) * t;
     const ty = f.fromTarget[1] + (f.to.target[1] - f.fromTarget[1]) * t;
     const tz = f.fromTarget[2] + (f.to.target[2] - f.fromTarget[2]) * t;
     orbitRef.current?.target.set(tx, ty, tz);
 
-    if (camera instanceof PerspectiveCamera) {
-      camera.fov = f.fromFov + (f.to.fov - f.fromFov) * t;
-      camera.updateProjectionMatrix();
+    if (cam instanceof PerspectiveCamera) {
+      cam.fov = f.fromFov + (f.to.fov - f.fromFov) * t;
+      cam.updateProjectionMatrix();
     }
     orbitRef.current?.update();
     onCamPos([px, py, pz]);
