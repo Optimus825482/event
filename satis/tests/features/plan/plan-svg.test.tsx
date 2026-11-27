@@ -97,4 +97,11 @@ describe("PlanSvg", () => {
     const ring = container.querySelector("[data-focus-ring]");
     expect(ring?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
   });
+  it("seçimde olan masalar basılı, etkin masa ayrıca vurgulu, süzgeç dışı masalar soluk çizilir", () => {
+    const { container } = render(
+      <PlanSvg model={m} pickedIds={new Set(["a1"])} activeId="a1" dimmedIds={new Set(["a2"])} onSelect={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: /Masa A1/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector('[data-table-id="a2"]')?.getAttribute("data-dimmed")).toBe("true");
+  });
 });
