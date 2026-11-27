@@ -148,7 +148,7 @@ async function slotsByTable(tx: Tx, tableIds: readonly string[]): Promise<Map<st
 }
 
 type HoldInput = { eventId: string; items: HoldItem[]; clientKey: string };
-type HoldLine = { tableId: string; category: SaleCategory; unitPrice: string; slotIds: string[] };
+type HoldLine = { tableId: string; category: SaleCategory; unitPrice: string; slotIds: string[]; bySeatChoice: boolean };
 
 /**
  * Süreli tutma. Kilit sırası (sistem geneli): etkinlik `FOR SHARE` → istenen masalar tek sorguda kimlik
@@ -168,8 +168,8 @@ export async function createHoldWithOutcome(
   if (items.length === 0) throw new SalesError("invalid");
   const provider = deps.provider !== undefined ? deps.provider : activeProvider();
   const { eventId, clientKey } = input;
-  // Tekil indeks çakışmasında hangi masanın biletleri yazılıyordu: `seats_unavailable` ayrıntısı için.
-  let inserting: string | null = null;
+  // Tekil indeks çakışmasında hangi masanın biletleri yazılıyordu: `seats_unavailable` ayrıntısı ve mesajı için.
+  let inserting: { tableId: string; bySeatChoice: boolean } | null = null;
 
   let outcome: { orderId: string; created: boolean };
   try {
@@ -261,6 +261,7 @@ export async function createHoldWithOutcome(
           category: table.saleCategory,
           unitPrice,
           slotIds,
+          bySeatChoice: item.seatNos !== undefined,
         });
       }
 
@@ -279,7 +280,7 @@ export async function createHoldWithOutcome(
       if (!order) throw new Error("Sipariş yazılamadı");
 
       for (const line of lines) {
-        inserting = line.tableId;
+        inserting = { tableId: line.tableId, bySeatChoice: line.bySeatChoice };
         await tx.insert(tickets).values(
           line.slotIds.map((seatSlotId) => ({
             orderId: order.id,
@@ -306,7 +307,11 @@ export async function createHoldWithOutcome(
         if (winner) return { order: await viewOrThrow(db, winner), created: false };
       }
       if (constraint === "tickets_active_seat_uq") {
-        throw new SalesError("seats_unavailable", inserting ? { tableId: inserting } : undefined);
+        throw new SalesError(
+          "seats_unavailable",
+          inserting ? { tableId: inserting.tableId } : undefined,
+          inserting?.bySeatChoice ? SEAT_TAKEN_MESSAGE : undefined,
+        );
       }
     }
     throw error;
