@@ -3,20 +3,27 @@ import { DEMO_CONCERTS, concertTimes, demoPrices } from "@/features/demo/concert
 import { dateToZonedWallClock } from "@/lib/time-zone";
 
 describe("demo konser verisi", () => {
-  it("beş konser tablodaki sırayla ve ofsetlerle tanımlıdır", () => {
+  it("on konser tablodaki sırayla ve ofsetlerle tanımlıdır", () => {
     expect(DEMO_CONCERTS.map((c) => [c.key, c.dayOffset, c.time, c.doors, c.basePrice])).toEqual([
       ["selcuk", 8, "22:00", "20:00", 6500],
+      ["yorgo", 12, "22:00", "20:00", 6000],
       ["levent", 15, "22:00", "20:00", 7500],
+      ["buray", 22, "22:00", "20:00", 8500],
       ["serkan", 34, "22:30", "20:30", 11000],
       ["ziynet", 36, "22:00", "20:00", 9000],
+      ["nukhet", 48, "22:00", "20:00", 9000],
       ["kirac", 50, "22:00", "20:00", 8500],
+      ["umit-pamela", 70, "22:30", "20:30", 8000],
+      ["ziynet-bahar", 100, "22:00", "20:00", 9500],
     ]);
+    expect(new Set(DEMO_CONCERTS.map((c) => c.key)).size).toBe(DEMO_CONCERTS.length);
+    expect(DEMO_CONCERTS.every((c) => c.dayOffset >= 5 && c.dayOffset <= 120)).toBe(true);
     expect(DEMO_CONCERTS.find((c) => c.key === "levent")?.name).toBe("Levent Yüksel · Aralık Galası");
   });
 
   it("tarih Kıbrıs gününe göre ofsetlenir; saatler Kıbrıs duvar saatidir", () => {
     const now = new Date("2026-11-27T21:30:00Z"); // Kıbrıs'ta 27 Kasım 23:30
-    const levent = DEMO_CONCERTS[1]!;
+    const levent = DEMO_CONCERTS.find((c) => c.key === "levent")!;
     const t = concertTimes(now, levent);
     expect(dateToZonedWallClock(t.startsAt)).toBe("2026-12-12T22:00");
     expect(dateToZonedWallClock(t.doorsOpenAt)).toBe("2026-12-12T20:00");
@@ -24,7 +31,7 @@ describe("demo konser verisi", () => {
   });
 
   it("gün sınırında Kıbrıs günü esas alınır", () => {
-    const t = concertTimes(new Date("2026-11-27T22:30:00Z"), DEMO_CONCERTS[1]!);
+    const t = concertTimes(new Date("2026-11-27T22:30:00Z"), DEMO_CONCERTS.find((c) => c.key === "levent")!);
     expect(dateToZonedWallClock(t.startsAt)).toBe("2026-12-13T22:00");
   });
 

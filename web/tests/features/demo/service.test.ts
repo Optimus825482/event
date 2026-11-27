@@ -19,6 +19,9 @@ import { createEvent } from "../../helpers/factories";
 import { createPaidOrder } from "../../helpers/ticketing";
 import { filesUnder, oneConcert, tmpUploadRoot } from "./fixtures";
 
+// Tam küme 10 konser tohumlar; hareketli klipler kare kare yeniden kodlandığından varsayılan 5 sn yetmez.
+const FULL_SET_TIMEOUT_MS = 60_000;
+
 describe("demo servisi", () => {
   beforeEach(async () => {
     await truncateAll();
@@ -63,17 +66,17 @@ describe("demo servisi", () => {
       setSalesDemoEnabled(db, admin, { enabled: true }, { uploadRoot }),
     ]);
 
-    expect(a).toEqual({ enabled: true, eventCount: 5, orderCount: 0 });
-    expect(b).toEqual({ enabled: true, eventCount: 5, orderCount: 0 });
+    expect(a).toEqual({ enabled: true, eventCount: 10, orderCount: 0 });
+    expect(b).toEqual({ enabled: true, eventCount: 10, orderCount: 0 });
 
     const [demoEvRow] = await db.select({ value: count() }).from(events).where(eq(events.isDemo, true));
     const [tblRow] = await db.select({ value: count() }).from(eventTables);
     const [artRow] = await db.select({ value: count() }).from(artists);
-    expect(Number(demoEvRow?.value ?? 0)).toBe(5);
-    expect(Number(tblRow?.value ?? 0)).toBe(865);
-    expect(Number(artRow?.value ?? 0)).toBe(5);
-    expect(await filesUnder(uploadRoot)).toHaveLength(15);
-  });
+    expect(Number(demoEvRow?.value ?? 0)).toBe(10);
+    expect(Number(tblRow?.value ?? 0)).toBe(1730);
+    expect(Number(artRow?.value ?? 0)).toBe(9);
+    expect(await filesUnder(uploadRoot)).toHaveLength(29);
+  }, FULL_SET_TIMEOUT_MS);
 
   it("tohumlama yarıda kesilirse hiçbir şey kalmaz", async () => {
     const admin = await persistActor(db, adminActor());

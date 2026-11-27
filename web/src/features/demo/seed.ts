@@ -21,7 +21,6 @@ import {
   DEMO_ASSET_DIR,
   DEMO_CONCERTS,
   DEMO_DESCRIPTION,
-  DEMO_HERO_FILE,
   concertTimes,
   demoPrices,
   type DemoConcert,
@@ -114,7 +113,7 @@ export async function seedDemoData(
     }
 
     const posterPath = await saveAsset(ctx, concert.poster, "event");
-    const heroPath = await saveAsset(ctx, DEMO_HERO_FILE, "event");
+    const heroPath = await saveAsset(ctx, concert.hero, "event");
     const { startsAt, endsAt, doorsOpenAt } = concertTimes(ctx.now, concert);
 
     const [createdEvent] = await tx
