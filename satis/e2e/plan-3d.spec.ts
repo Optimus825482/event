@@ -126,26 +126,18 @@ test("WebGL bağlamı kaybolursa 2B'ye bildirimle düşer, seçim korunur, masad
   await expect(page.getByRole("button", { name: "3B'de masadan bak" })).toHaveCount(0);
 });
 
-test("reduced motion ya da WebGL yokken 2B plan gösterilir ve three.js parçası indirilmez", async ({ browser }) => {
+test("reduced motion açıkken 3B açılır; WebGL yokken 2B plan gösterilir ve three.js parçası indirilmez", async ({ browser }) => {
   const ctx1 = await browser.newContext({ reducedMotion: "reduce" });
   const page1 = await ctx1.newPage();
-  const urls: string[] = [];
-  page1.on("request", (r) => urls.push(r.url()));
   await page1.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
-  await expect(page1.getByRole("group", { name: "Salon planı" })).toBeVisible();
-  await page1.waitForLoadState("networkidle");
-  const hasThree = (
-    await Promise.all(
-      urls
-        .filter((u) => u.includes("/_next/static/") && u.endsWith(".js"))
-        .map(async (u) => (await (await page1.request.get(u)).text()).includes("WebGLRenderer")),
-    )
-  ).some(Boolean);
-  expect(hasThree).toBe(false);
+  await expect(page1.getByTestId("plan-3d-scene")).toHaveAttribute("data-ready", "true", { timeout: 15_000 });
+  await expect(page1.getByRole("button", { name: "2B görünüm" })).toBeVisible();
   await ctx1.close();
 
   const ctx2 = await browser.newContext();
   const page2 = await ctx2.newPage();
+  const urls: string[] = [];
+  page2.on("request", (r) => urls.push(r.url()));
   await page2.addInitScript(() => {
     Object.defineProperty(window, "WebGLRenderingContext", { value: undefined });
     Object.defineProperty(window, "WebGL2RenderingContext", { value: undefined });
@@ -158,5 +150,14 @@ test("reduced motion ya da WebGL yokken 2B plan gösterilir ve three.js parças�
   await page2.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expect(page2.getByRole("group", { name: "Salon planı" })).toBeVisible();
   await expect(page2.getByRole("button", { name: "3B görünüm" })).toHaveCount(0);
+  await page2.waitForLoadState("networkidle");
+  const hasThree = (
+    await Promise.all(
+      urls
+        .filter((u) => u.includes("/_next/static/") && u.endsWith(".js"))
+        .map(async (u) => (await (await page2.request.get(u)).text()).includes("WebGLRenderer")),
+    )
+  ).some(Boolean);
+  expect(hasThree).toBe(false);
   await ctx2.close();
 });

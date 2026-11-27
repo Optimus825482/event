@@ -18,7 +18,8 @@ describe("canOffer3d", () => {
     expect(canOffer3d({ ...ok, hardwareConcurrency: 4 })).toBe(true);
   });
   it("veri tasarrufu açıksa sunulmaz", () => expect(canOffer3d({ ...ok, saveData: true })).toBe(false));
-  it("hareket azaltma isteniyorsa sunulmaz", () => expect(canOffer3d({ ...ok, reducedMotion: true })).toBe(false));
+  it("hareket azaltma isteniyorsa da WebGL varsa 3B sunulur (animasyonsuz açılır)", () =>
+    expect(canOffer3d({ ...ok, reducedMotion: true })).toBe(true));
   it("bilinmeyen değerler (Safari'de deviceMemory yok) engel sayılmaz", () => {
     expect(canOffer3d({ webgl: true, reducedMotion: false })).toBe(true);
     expect(canOffer3d({ ...ok, deviceMemory: undefined, hardwareConcurrency: undefined, saveData: undefined })).toBe(true);

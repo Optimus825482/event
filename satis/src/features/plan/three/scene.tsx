@@ -274,6 +274,22 @@ function CameraController({
     (to: CameraPose, tag: string, duration = 580) => {
       const cam = get().camera;
       const ctrl = orbitRef.current;
+      const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reducedMotion) {
+        flightRef.current = null;
+        cam.position.set(...to.position);
+        ctrl?.target.set(...to.target);
+        if (cam instanceof PerspectiveCamera) {
+          cam.fov = to.fov;
+          cam.updateProjectionMatrix();
+        }
+        ctrl?.update();
+        onPovChange(tag.startsWith("seat:"));
+        onCamPos(to.position);
+        onPoseDone(tag);
+        invalidate();
+        return;
+      }
       const curTarget: Vec3 = ctrl ? [ctrl.target.x, ctrl.target.y, ctrl.target.z] : [0, 1, 1];
       const fov = cam instanceof PerspectiveCamera ? cam.fov : FOV_HALL;
       flightRef.current = {
@@ -288,7 +304,7 @@ function CameraController({
       onPovChange(tag.startsWith("seat:"));
       invalidate();
     },
-    [get, orbitRef, onPovChange, invalidate],
+    [get, orbitRef, onPovChange, onCamPos, onPoseDone, invalidate],
   );
 
   // Etkin masa değişince yakınlaş

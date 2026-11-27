@@ -13,9 +13,9 @@ export type DeviceEnv = {
 const MIN_MEMORY_GB = 2;
 const MIN_CORES = 2;
 
-/** 3B görünüm sunulur mu? Bilinmeyen değer (ör. Safari'de deviceMemory yok) engel sayılmaz. */
+/** 3B görünüm sunulur mu? Bilinmeyen değer (ör. Safari'de deviceMemory yok) engel sayılmaz; hareket azaltmada animasyonsuz açılır. */
 export function canOffer3d(env: DeviceEnv): boolean {
-  if (!env.webgl || env.reducedMotion || env.saveData === true) return false;
+  if (!env.webgl || env.saveData === true) return false;
   if (env.deviceMemory !== undefined && env.deviceMemory < MIN_MEMORY_GB) return false;
   if (env.hardwareConcurrency !== undefined && env.hardwareConcurrency < MIN_CORES) return false;
   return true;
