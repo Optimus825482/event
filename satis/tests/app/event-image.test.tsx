@@ -43,4 +43,33 @@ describe("EventImage", () => {
     expect(await screen.findByTestId("fb")).toBeInTheDocument();
     expect(screen.queryByRole("img")).toBeNull();
   });
+  it("sabit görsel verilirse hareketli görsel azaltılmış harekette sabite döner", () => {
+    render(
+      <EventImage src="/api/gorsel/event/hero.webp" stillSrc="/api/gorsel/event/cover.webp" alt="Sanatçı" fallback={fb} />,
+    );
+    const img = screen.getByRole("img", { name: "Sanatçı" });
+    expect(img).toHaveAttribute("src", "/api/gorsel/event/hero.webp");
+    const picture = img.parentElement as HTMLElement;
+    expect(picture.tagName).toBe("PICTURE");
+    const source = picture.querySelector("source");
+    expect(source).toHaveAttribute("media", "(prefers-reduced-motion: reduce)");
+    expect(source).toHaveAttribute("srcset", "/api/gorsel/event/cover.webp");
+  });
+
+  it("sabit görsel yoksa picture sarmalayıcısı çizilmez", () => {
+    render(<EventImage src="/api/gorsel/event/hero.webp" alt="x" fallback={fb} />);
+    expect(screen.getByRole("img").parentElement?.tagName).not.toBe("PICTURE");
+  });
+
+  it("hareketli görsel yüklenemezse sabit görsele düşer", () => {
+    render(
+      <EventImage src="/api/gorsel/event/hero.webp" stillSrc="/api/gorsel/event/cover.webp" alt="x" fallback={fb} />,
+    );
+    fireEvent.error(screen.getByRole("img"));
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "/api/gorsel/event/cover.webp");
+    expect(img.parentElement?.tagName).not.toBe("PICTURE");
+    fireEvent.error(img);
+    expect(screen.getByTestId("fb")).toBeInTheDocument();
+  });
 });
