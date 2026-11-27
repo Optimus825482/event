@@ -65,17 +65,39 @@ export class SalesError extends DomainError {
   }
 }
 
+export const SEAT_TAKEN_MESSAGE = "Seçtiğiniz sandalyelerden biri az önce alındı";
+
 /** Aynı masanın kalemlerini birleştirir; masa kimliğine göre artan sıralar (kilit sırası). */
-// SÖZLEŞME: seatNos P2'ye kadar yok sayılır; sunucu en küçük numaralı boş yuvaları seçer (spec §5.3).
 function mergeItems(items: readonly HoldItem[]): HoldItem[] {
-  const merged = new Map<string, number>();
+  const merged = new Map<string, { quantity: number; seatNos?: number[] }>();
   for (const item of items) {
     if (!Number.isSafeInteger(item.quantity) || item.quantity < 1) throw new SalesError("invalid");
-    merged.set(item.tableId, (merged.get(item.tableId) ?? 0) + item.quantity);
+    const prev = merged.get(item.tableId);
+    if (!prev) {
+      merged.set(item.tableId, {
+        quantity: item.quantity,
+        ...(item.seatNos !== undefined ? { seatNos: [...item.seatNos] } : {}),
+      });
+      continue;
+    }
+    if ((prev.seatNos !== undefined) !== (item.seatNos !== undefined)) {
+      throw new SalesError("invalid");
+    }
+    prev.quantity += item.quantity;
+    if (prev.seatNos && item.seatNos) prev.seatNos.push(...item.seatNos);
   }
-  return [...merged.entries()]
-    .map(([tableId, quantity]) => ({ tableId, quantity }))
-    .sort((a, b) => (a.tableId < b.tableId ? -1 : a.tableId > b.tableId ? 1 : 0));
+  const result: HoldItem[] = [];
+  for (const [tableId, { quantity, seatNos }] of merged.entries()) {
+    if (seatNos !== undefined) {
+      if (seatNos.length !== quantity || new Set(seatNos).size !== seatNos.length) {
+        throw new SalesError("invalid");
+      }
+      result.push({ tableId, quantity, seatNos });
+    } else {
+      result.push({ tableId, quantity });
+    }
+  }
+  return result.sort((a, b) => (a.tableId < b.tableId ? -1 : a.tableId > b.tableId ? 1 : 0));
 }
 
 /** Anahtarla bulunan sipariş başka bir etkinliğe aitse `invalid`: başka etkinliğin siparişi sızmaz. */
@@ -95,7 +117,7 @@ async function viewOrThrow(ex: Db | Tx, orderId: string): Promise<OrderView> {
   return view;
 }
 
-type TableSlots = { total: number; free: string[] };
+type TableSlots = { total: number; free: { id: string; seatNo: number }[] };
 
 /**
  * Masa başına yuva sayısı ve etkin bileti olmayan yuvalar (`seat_no` sırasıyla). Masa kilitleri tutulurken
@@ -112,7 +134,7 @@ async function slotsByTable(tx: Tx, tableIds: readonly string[]): Promise<Map<st
     .groupBy(tableSeatSlots.tableId);
   for (const row of totals) result.set(row.tableId, { total: row.total, free: [] });
   const freeRows = await tx
-    .select({ id: tableSeatSlots.id, tableId: tableSeatSlots.tableId })
+    .select({ id: tableSeatSlots.id, tableId: tableSeatSlots.tableId, seatNo: tableSeatSlots.seatNo })
     .from(tableSeatSlots)
     .where(
       and(
@@ -121,7 +143,7 @@ async function slotsByTable(tx: Tx, tableIds: readonly string[]): Promise<Map<st
       ),
     )
     .orderBy(asc(tableSeatSlots.tableId), asc(tableSeatSlots.seatNo));
-  for (const row of freeRows) result.get(row.tableId)?.free.push(row.id);
+  for (const row of freeRows) result.get(row.tableId)?.free.push({ id: row.id, seatNo: row.seatNo });
   return result;
 }
 
@@ -211,11 +233,23 @@ export async function createHoldWithOutcome(
         }
         const { total: seats, free: slots } = slotMap.get(table.id) ?? { total: 0, free: [] };
         const wholeOnly = wholeOnlyOf({ saleMode: settings.saleMode, sharedTables: settings.sharedTables, isLoca: table.isLoca });
+        if (wholeOnly && item.seatNos) throw new SalesError("invalid");
         if (wholeOnly && item.quantity !== seats) {
           throw new SalesError("whole_table_required", { tableId: table.id, seats });
         }
-        if (item.quantity > slots.length) {
-          throw new SalesError("seats_unavailable", { tableId: table.id, free: slots.length });
+        let slotIds: string[];
+        if (item.seatNos) {
+          const byNo = new Map(slots.map((s) => [s.seatNo, s.id]));
+          slotIds = item.seatNos.map((no) => {
+            const id = byNo.get(no);
+            if (!id) throw new SalesError("seats_unavailable", { tableId: table.id, free: slots.length }, SEAT_TAKEN_MESSAGE);
+            return id;
+          });
+        } else {
+          if (item.quantity > slots.length) {
+            throw new SalesError("seats_unavailable", { tableId: table.id, free: slots.length });
+          }
+          slotIds = slots.slice(0, item.quantity).map((s) => s.id);
         }
         if (settings.blockSingleLeftover && slots.length - item.quantity === 1) {
           throw new SalesError("leaves_single_seat", { tableId: table.id });
@@ -226,7 +260,7 @@ export async function createHoldWithOutcome(
           tableId: table.id,
           category: table.saleCategory,
           unitPrice,
-          slotIds: slots.slice(0, item.quantity),
+          slotIds,
         });
       }
 
