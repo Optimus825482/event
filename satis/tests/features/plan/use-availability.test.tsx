@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAvailability } from "@/features/plan/use-availability";
 import type { Availability } from "@/lib/core/contract";
 
-const initial: Availability = { at: "2026-12-01T10:00:00.000Z", tables: [{ id: "t", free: 8 }] };
-const body = (at: string, free: number): Availability => ({ at, tables: [{ id: "t", free }] });
+const seq = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+const initial: Availability = { at: "2026-12-01T10:00:00.000Z", tables: [{ id: "t", free: 8, freeSeats: seq(8) }] };
+const body = (at: string, free: number): Availability => ({ at, tables: [{ id: "t", free, freeSeats: seq(free) }] });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -129,5 +130,18 @@ describe("useAvailability", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.current.availability).toBe(initial);
     expect(result.current.stale).toBe(false);
+  });
+
+  it("freeSeats taşımayan yanıt geçersiz sayılır ve durum korunur", async () => {
+    fetchMock.mockImplementation(async () => json({ at: "2026-12-01T10:00:20.000Z", tables: [{ id: "t", free: 4 }] }));
+    const { result } = renderHook(() => useAvailability("ev1", initial));
+    await advance(5000);
+    expect(result.current.availability).toBe(initial);
+
+    fetchMock.mockImplementation(async () =>
+      json({ at: "2026-12-01T10:00:25.000Z", tables: [{ id: "t", free: 4, freeSeats: [0, 1] }] }),
+    );
+    await advance(10_000);
+    expect(result.current.availability).toBe(initial);
   });
 });

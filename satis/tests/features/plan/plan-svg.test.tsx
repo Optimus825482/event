@@ -8,17 +8,46 @@ import type { EventDetail } from "@/lib/core/contract";
 afterEach(cleanup);
 
 type Table = EventDetail["plan"]["tables"][number];
+const seq = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 const t = (id: string, label: string, extra: Partial<Table> = {}): Table => ({
-  id, label, x: 100, y: 100, rotation: 0, shape: "round", isLoca: false, sellable: true, category: "standard", seats: 8, wholeOnly: false, ...extra,
+  id,
+  label,
+  x: 100,
+  y: 100,
+  rotation: 0,
+  shape: "round",
+  isLoca: false,
+  sellable: true,
+  category: "standard",
+  capacity: 8,
+  seats: 8,
+  seatNos: seq(8),
+  wholeOnly: false,
+  ...extra,
 });
 const plan: EventDetail["plan"] = {
   canvas: { width: 1200, height: 800 },
-  tables: [t("a1", "A1"), t("a2", "A2", { x: 200 }), t("c1", "C1", { x: 300, sellable: false, category: null, seats: null })],
+  tables: [
+    t("a1", "A1"),
+    t("a2", "A2", { x: 200 }),
+    t("c1", "C1", { x: 300, sellable: false, category: null, seats: null, seatNos: [] }),
+  ],
   decor: [{ id: "s", kind: "stage", x: 600, y: 60, width: 300, height: 80, label: "Sahne" }],
   lines: [],
 };
 const prices: EventDetail["prices"] = [{ category: "standard", label: "Standart", price: "1500.00" }];
-const m = buildPlanModel(plan, prices, { at: "x", tables: [{ id: "a1", free: 5 }, { id: "a2", free: 0 }] });
+const m = buildPlanModel(
+  plan,
+  prices,
+  {
+    at: "x",
+    tables: [
+      { id: "a1", free: 5, freeSeats: seq(5) },
+      { id: "a2", free: 0, freeSeats: [] },
+    ],
+  },
+  "seat",
+);
 
 describe("PlanSvg", () => {
   it("masalar erişilebilir adla ve kalan sandalyeyle çizilir", () => {

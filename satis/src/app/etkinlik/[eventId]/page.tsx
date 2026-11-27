@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Notice } from "@/components/ui/notice";
-import { buildPlanModel } from "@/features/plan/model";
 import { EventSales } from "@/features/plan/event-sales";
-import { PlanLegend } from "@/features/plan/plan-legend";
-import { PlanViewer } from "@/features/plan/plan-viewer";
+import { parsePartySize } from "@/features/plan/party";
 import { getReader } from "@/features/plan/read";
 import { saleStateLabel } from "@/features/plan/sale-state";
 import type { Availability, EventDetail } from "@/lib/core/contract";
@@ -14,7 +12,10 @@ import { formatEventWhen } from "@/lib/time-zone";
 // Her istekte çekirdek önbelleğinden okunur; derlemede çekirdeğe gidilmez.
 export const dynamic = "force-dynamic";
 
-type PageProps = { params: Promise<{ eventId: string }> };
+type PageProps = {
+  params: Promise<{ eventId: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+};
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { eventId } = await params;
@@ -46,8 +47,8 @@ function Header({ event }: { event: EventDetail }) {
   );
 }
 
-export default async function EventPage({ params }: PageProps) {
-  const { eventId } = await params;
+export default async function EventPage({ params, searchParams }: PageProps) {
+  const [{ eventId }, sp] = await Promise.all([params, searchParams]);
 
   let event: EventDetail | null;
   try {
@@ -69,13 +70,14 @@ export default async function EventPage({ params }: PageProps) {
       <Header event={event} />
       {event.sale.state !== "open" ? <Notice>{saleStateLabel(event.sale.state)}</Notice> : null}
       <p className="text-muted">Fiyatlar sandalye başınadır; salon planından masa seçilir.</p>
-      <PlanLegend prices={event.prices} currency={event.currency} />
       {availability ? (
-        event.sale.state === "open" ? (
-          <EventSales event={event} initialAvailability={availability} />
-        ) : (
-          <PlanViewer model={buildPlanModel(event.plan, event.prices, availability)} />
-        )
+        <section id="masa-secimi">
+          <EventSales
+            event={event}
+            initialAvailability={availability}
+            initialPartySize={parsePartySize(sp.kisi, event.sale.maxSeatsPerOrder)}
+          />
+        </section>
       ) : (
         <Notice tone="error">Canlı masa durumu alınamadı. Sayfayı yenileyin.</Notice>
       )}

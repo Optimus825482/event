@@ -14,10 +14,9 @@ const id = (label: string) => {
   if (!table) throw new Error(`masa yok: ${label}`);
   return table.id;
 };
-const input = (label: string, quantity: number, clientKey: string = crypto.randomUUID()) => ({
+const input = (label: string, quantity: number, clientKey: string = crypto.randomUUID(), seatNos?: number[]) => ({
   eventId: ev.id,
-  tableId: id(label),
-  quantity,
+  items: [{ tableId: id(label), quantity, ...(seatNos === undefined ? {} : { seatNos }) }],
   clientKey,
 });
 
@@ -63,5 +62,38 @@ describe("holdFlow", () => {
       code: "core_unreachable",
       message: "Satış sistemine ulaşılamıyor. Lütfen biraz sonra tekrar deneyin.",
     });
+  });
+
+  it("seatNos çekirdeğe aynen iletilir", async () => {
+    const res = await holdFlow(core, input("A1", 2, crypto.randomUUID(), [4, 7]), ctx);
+    expect(res).toEqual({ ok: true, data: { orderToken: expect.any(String) } });
+    expect(fake.freeSeats(ev.id, id("A1"))).toEqual([1, 2, 3, 5, 6, 8]);
+  });
+
+  it("adetle uyuşmayan seatNos çekirdeğe gitmeden invalid", async () => {
+    const before = fake.requests.length;
+    expect(await holdFlow(core, input("A1", 2, crypto.randomUUID(), [4]), ctx)).toMatchObject({
+      ok: false,
+      code: "invalid",
+    });
+    expect(fake.requests).toHaveLength(before);
+  });
+
+  it("birden çok kalem tek siparişte tutulur", async () => {
+    const res = await holdFlow(
+      core,
+      {
+        eventId: ev.id,
+        items: [
+          { tableId: id("A1"), quantity: 2 },
+          { tableId: id("A2"), quantity: 2 },
+        ],
+        clientKey: crypto.randomUUID(),
+      },
+      ctx,
+    );
+    expect(res).toEqual({ ok: true, data: { orderToken: expect.any(String) } });
+    expect(fake.free(ev.id, id("A1"))).toBe(6);
+    expect(fake.free(ev.id, id("A2"))).toBe(6);
   });
 });

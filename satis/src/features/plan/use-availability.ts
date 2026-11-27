@@ -4,13 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Availability } from "@/lib/core/contract";
 import { applyAvailability, PATCH_TTL_MS, pollDelayAfter, STALE_AFTER_FAILURES } from "./poll";
 
+const isSeatNo = (s: unknown): boolean => typeof s === "number" && Number.isInteger(s) && s >= 1;
+
 const isRow = (row: unknown): boolean =>
   typeof row === "object" &&
   row !== null &&
   typeof (row as { id?: unknown }).id === "string" &&
   typeof (row as { free?: unknown }).free === "number" &&
   Number.isFinite((row as { free: number }).free) &&
-  (row as { free: number }).free >= 0;
+  (row as { free: number }).free >= 0 &&
+  Array.isArray((row as { freeSeats?: unknown }).freeSeats) &&
+  (row as { freeSeats: unknown[] }).freeSeats.every(isSeatNo);
 
 const isAvailability = (value: unknown): value is Availability =>
   typeof value === "object" &&

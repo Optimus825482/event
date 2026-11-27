@@ -5,8 +5,22 @@ import { COLORS } from "@/lib/theme";
 import type { EventDetail } from "@/lib/core/contract";
 
 type Table = EventDetail["plan"]["tables"][number];
+const seq = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 const t = (id: string, label: string, extra: Partial<Table> = {}): Table => ({
-  id, label, x: 100, y: 100, rotation: 0, shape: "round", isLoca: false, sellable: true, category: "standard", seats: 8, wholeOnly: false, ...extra,
+  id,
+  label,
+  x: 100,
+  y: 100,
+  rotation: 0,
+  shape: "round",
+  isLoca: false,
+  sellable: true,
+  category: "standard",
+  capacity: 8,
+  seats: 8,
+  seatNos: seq(8),
+  wholeOnly: false,
+  ...extra,
 });
 const plan: EventDetail["plan"] = {
   canvas: { width: 1200, height: 800 },
@@ -14,7 +28,7 @@ const plan: EventDetail["plan"] = {
     t("free", "A1", { x: 200, y: 300, rotation: 30 }),
     t("part", "A2"),
     t("full", "A3"),
-    t("closed", "A4", { sellable: false, category: null, seats: null }),
+    t("closed", "A4", { sellable: false, category: null, seats: null, seatNos: [] }),
     t("prem", "P1", { category: "premium" }),
     t("vip", "V1", { category: "vip", shape: "rectangle" }),
     t("loca", "L1", { isLoca: true, category: "vip" }),
@@ -26,10 +40,22 @@ const plan: EventDetail["plan"] = {
   lines: [{ id: "l", x1: 0, y1: 0, x2: 100, y2: 0, width: 4 }],
 };
 const prices: EventDetail["prices"] = [{ category: "standard", label: "Standart", price: "1500.00" }];
-const model = buildPlanModel(plan, prices, {
-  at: "x",
-  tables: [{ id: "free", free: 8 }, { id: "part", free: 3 }, { id: "full", free: 0 }, { id: "prem", free: 8 }, { id: "vip", free: 8 }, { id: "loca", free: 4 }],
-});
+const model = buildPlanModel(
+  plan,
+  prices,
+  {
+    at: "x",
+    tables: [
+      { id: "free", free: 8, freeSeats: seq(8) },
+      { id: "part", free: 3, freeSeats: seq(3) },
+      { id: "full", free: 0, freeSeats: [] },
+      { id: "prem", free: 8, freeSeats: seq(8) },
+      { id: "vip", free: 8, freeSeats: seq(8) },
+      { id: "loca", free: 4, freeSeats: seq(4) },
+    ],
+  },
+  "seat",
+);
 const byKey = (rows: ReturnType<typeof planToSceneTables>, key: string) => rows.find((r) => r.key === key)!;
 
 describe("planToSceneTables", () => {
