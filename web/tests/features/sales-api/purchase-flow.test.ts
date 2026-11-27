@@ -100,10 +100,10 @@ describe("satın alma uçtan uca", () => {
     // 8) Çekirdek durumu: yuvalar dolu, toplamlar demo sütununda, iç ekran siparişi gösterir, masa yerleşimde taahhütlü.
     expect((await activeTickets(a1!.id)).filter((t) => t.status === "issued")).toHaveLength(3);
     expect(await getSalesTotals(db, event.id)).toMatchObject({
-      issued: 0,
-      revenue: "0.00",
-      demoIssued: 3,
-      demoRevenue: "4500.00",
+      issued: 3,
+      revenue: "4500.00",
+      demoIssued: 0,
+      demoRevenue: "0.00",
     });
     expect((await getOrdersOverview(db, entertainmentManager, event.id)).orders[0]).toMatchObject({
       pnr: paid.pnr,

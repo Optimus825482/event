@@ -13,6 +13,7 @@ import {
   notifications,
   orders,
   paymentAttempts,
+  systemSettings,
   tableSeatSlots,
   tickets,
 } from "@/db/schema";
@@ -40,16 +41,19 @@ describe("demo kalıcı silme", () => {
     expect(res).toMatchObject({ events: 1, orders: 0 });
     expect(res.imagePaths).toHaveLength(3);
 
-    const [{ value: demoCount }] = await db.select({ value: count() }).from(events).where(eq(events.isDemo, true));
+    const [demoCountRow] = await db.select({ value: count() }).from(events).where(eq(events.isDemo, true));
+    const demoCount = demoCountRow?.value ?? 0;
     expect(Number(demoCount)).toBe(0);
     for (const table of [eventTables, tableSeatSlots, eventSeatPrices, eventSaleSettings, eventSiteContent]) {
-      const [{ value: c }] = await db.select({ value: count() }).from(table).where(eq(table.eventId, demoId));
+      const [cRow] = await db.select({ value: count() }).from(table).where(eq(table.eventId, demoId));
+    const c = cRow?.value ?? 0;
       expect(Number(c)).toBe(0);
     }
   });
 
   it("siparişi, bileti, ödeme denemesi, check-in kaydı ve arşivi olan demo etkinlik de silinir", async () => {
     const { admin, eventIds } = await seedOnce({ concerts: oneConcert() });
+    await db.insert(systemSettings).values({ salesDemoEnabled: true });
     const demoId = eventIds[0]!;
     const [demoEvent] = await db.select().from(events).where(eq(events.id, demoId));
     const [m1] = await db.select().from(eventTables).where(eq(eventTables.eventId, demoId));
@@ -83,12 +87,15 @@ describe("demo kalıcı silme", () => {
     expect(res).toMatchObject({ events: 1, orders: 3 });
 
     for (const table of [orders, tickets, eventArchives, notifications]) {
-      const [{ value: c }] = await db.select({ value: count() }).from(table).where(eq(table.eventId, demoId));
+      const [cRow] = await db.select({ value: count() }).from(table).where(eq(table.eventId, demoId));
+    const c = cRow?.value ?? 0;
       expect(Number(c)).toBe(0);
     }
-    const [{ value: paCount }] = await db.select({ value: count() }).from(paymentAttempts);
+    const [paCountRow] = await db.select({ value: count() }).from(paymentAttempts);
+    const paCount = paCountRow?.value ?? 0;
     expect(Number(paCount)).toBe(0);
-    const [{ value: checkIns }] = await db.select({ value: count() }).from(checkInEvents);
+    const [checkInsRow] = await db.select({ value: count() }).from(checkInEvents);
+    const checkIns = checkInsRow?.value ?? 0;
     expect(Number(checkIns)).toBe(0);
   });
 
@@ -111,9 +118,12 @@ describe("demo kalıcı silme", () => {
     expect(res.imagePaths).not.toContain(realCover);
     expect(res.imagePaths).not.toContain(realArtistImg);
 
-    const [{ value: realEv }] = await db.select({ value: count() }).from(events).where(eq(events.isDemo, false));
-    const [{ value: realOrd }] = await db.select({ value: count() }).from(orders);
-    const [{ value: realArch }] = await db.select({ value: count() }).from(eventArchives);
+    const [realEvRow] = await db.select({ value: count() }).from(events).where(eq(events.isDemo, false));
+    const realEv = realEvRow?.value ?? 0;
+    const [realOrdRow] = await db.select({ value: count() }).from(orders);
+    const realOrd = realOrdRow?.value ?? 0;
+    const [realArchRow] = await db.select({ value: count() }).from(eventArchives);
+    const realArch = realArchRow?.value ?? 0;
     const [keptArtist] = await db.select().from(artists).where(eq(artists.id, realArtist!.id));
     expect(Number(realEv)).toBe(2); // saleEvent + insertArchive
     expect(Number(realOrd)).toBe(1);
@@ -128,7 +138,8 @@ describe("demo kalıcı silme", () => {
     const [art] = await db.select().from(artists).where(eq(artists.id, ev!.artistId!));
 
     const res = await db.transaction((tx) => purgeDemoData(tx));
-    const [{ value: artCount }] = await db.select({ value: count() }).from(artists);
+    const [artCountRow] = await db.select({ value: count() }).from(artists);
+    const artCount = artCountRow?.value ?? 0;
     expect(Number(artCount)).toBe(0);
     expect(new Set(res.imagePaths)).toEqual(new Set([ev!.coverImage!, site!.heroImage!, art!.image!]));
   });
