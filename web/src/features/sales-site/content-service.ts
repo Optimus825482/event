@@ -30,7 +30,10 @@ export type SiteContentView = {
   images: ImageStatus;
 };
 
-/** Etkinliğin satış sitesi içeriğini ve görsel durumunu okur. */
+/** Etkinliğin satış sitesi içeriğini ve görsel durumunu okur.
+ * `providerActive` gerçek etkinliklerin genel sağlayıcısıdır; demo etkinlik `providerForEvent` gereği
+ * her zaman demo sağlayıcıyla satılır.
+ */
 export async function getSiteContentView(
   ex: Db | Tx,
   actor: Actor,
@@ -58,7 +61,7 @@ export async function getSiteContentView(
     status: event.status,
     saleStartsAt: settings.saleStartsAt,
     saleEndsAt: settings.saleEndsAt,
-    providerActive: ctx.providerActive,
+    providerActive: ctx.providerActive || event.isDemo,
     now: ctx.now,
   });
 

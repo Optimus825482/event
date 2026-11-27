@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { artists, eventTables, events, systemSettings } from "@/db/schema";
@@ -18,6 +18,9 @@ import { truncateAll } from "../../helpers/db";
 import { createEvent } from "../../helpers/factories";
 import { createPaidOrder } from "../../helpers/ticketing";
 import { filesUnder, oneConcert, tmpUploadRoot } from "./fixtures";
+
+// Tam küme 10 konser tohumlar; hareketli klipler kare kare yeniden kodlandığından varsayılan 5 sn yetmez.
+const FULL_SET_TIMEOUT_MS = 60_000;
 
 describe("demo servisi", () => {
   beforeEach(async () => {
@@ -63,17 +66,17 @@ describe("demo servisi", () => {
       setSalesDemoEnabled(db, admin, { enabled: true }, { uploadRoot }),
     ]);
 
-    expect(a).toEqual({ enabled: true, eventCount: 5, orderCount: 0 });
-    expect(b).toEqual({ enabled: true, eventCount: 5, orderCount: 0 });
+    expect(a).toEqual({ enabled: true, eventCount: 10, orderCount: 0 });
+    expect(b).toEqual({ enabled: true, eventCount: 10, orderCount: 0 });
 
     const [demoEvRow] = await db.select({ value: count() }).from(events).where(eq(events.isDemo, true));
     const [tblRow] = await db.select({ value: count() }).from(eventTables);
     const [artRow] = await db.select({ value: count() }).from(artists);
-    expect(Number(demoEvRow?.value ?? 0)).toBe(5);
-    expect(Number(tblRow?.value ?? 0)).toBe(865);
-    expect(Number(artRow?.value ?? 0)).toBe(5);
-    expect(await filesUnder(uploadRoot)).toHaveLength(15);
-  });
+    expect(Number(demoEvRow?.value ?? 0)).toBe(10);
+    expect(Number(tblRow?.value ?? 0)).toBe(1730);
+    expect(Number(artRow?.value ?? 0)).toBe(9);
+    expect(await filesUnder(uploadRoot)).toHaveLength(29);
+  }, FULL_SET_TIMEOUT_MS);
 
   it("tohumlama yarıda kesilirse hiçbir şey kalmaz", async () => {
     const admin = await persistActor(db, adminActor());
@@ -112,7 +115,11 @@ describe("demo servisi", () => {
 
     await setSalesDemoEnabled(db, admin, { enabled: true }, ctx);
     const [oldEv] = await db.select().from(events).where(eq(events.isDemo, true));
-    const [oldTable] = await db.select().from(eventTables).where(eq(eventTables.eventId, oldEv!.id));
+    // Loca masaları bütün satılır; iki koltukluk sipariş için açıkça loca olmayan `M-1` seçilir.
+    const [oldTable] = await db
+      .select()
+      .from(eventTables)
+      .where(and(eq(eventTables.eventId, oldEv!.id), eq(eventTables.label, "M-1")));
     await createPaidOrder(db, { eventId: oldEv!.id, items: [{ tableId: oldTable!.id, quantity: 2 }] });
     const oldFiles = await filesUnder(ctx.uploadRoot);
     expect(oldFiles).toHaveLength(3);

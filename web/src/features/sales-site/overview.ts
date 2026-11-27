@@ -49,7 +49,10 @@ export type SalesSiteOverview = {
 
 const MAX_ROWS = 500;
 
-/** Satış sitesi yönetim ekranı için demo durumu, gerçek/demo ayrı satış özeti ve etkinlik tablosunu döndürür. */
+/** Satış sitesi yönetim ekranı için demo durumu, gerçek/demo ayrı satış özeti ve etkinlik tablosunu döndürür.
+ * `providerActive` gerçek etkinliklerin genel sağlayıcısıdır; demo etkinlik `providerForEvent` gereği
+ * her zaman demo sağlayıcıyla satılır.
+ */
 export async function getSalesSiteOverview(
   ex: Db | Tx,
   actor: Actor,
@@ -101,7 +104,7 @@ export async function getSalesSiteOverview(
           status: r.status,
           saleStartsAt: r.saleStartsAt ?? null,
           saleEndsAt: r.saleEndsAt ?? null,
-          providerActive: ctx.providerActive,
+          providerActive: ctx.providerActive || r.isDemo,
           now: ctx.now,
         }),
         saleMode: r.saleMode ?? "seat",
@@ -180,7 +183,7 @@ export async function getSalesSiteOverview(
           status: r.status,
           saleStartsAt: r.saleStartsAt ?? null,
           saleEndsAt: r.saleEndsAt ?? null,
-          providerActive: ctx.providerActive,
+          providerActive: ctx.providerActive || r.isDemo,
           now: ctx.now,
         }),
         saleMode: r.saleMode ?? "seat",

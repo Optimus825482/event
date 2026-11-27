@@ -10,7 +10,10 @@ export const IMAGE_KINDS = ["avatar", "event", "invitation", "logo", "artist"] a
 export type ImageKind = (typeof IMAGE_KINDS)[number];
 
 const MAX_DIMENSION = 2048;
+/** Hareketli görüntüde tüm karelerin toplam piksel sınırı da budur (libvips kareleri alt alta tutar). */
 const MAX_INPUT_PIXELS = 50_000_000;
+/** Hareketli WebP için en fazla kare sayısı. */
+export const MAX_ANIMATION_FRAMES = 150;
 
 /** Kullanıcıya gösterilebilir (Türkçe, ayrıntısız) görüntü reddi. */
 export class ImageRejectedError extends Error {
@@ -33,6 +36,7 @@ function hasImageSignature(b: Buffer): boolean {
 /**
  * Görüntüyü doğrular (imza, ≤5 MB), `sharp` ile yeniden kodlayıp WebP olarak
  * `<kök>/<tür>/<rastgele-uuid>.webp` yoluna yazar. Yeniden kodlama meta verileri ve gömülü içeriği atar.
+ * Hareketli WebP, en fazla `MAX_ANIMATION_FRAMES` kareyle animasyonu korunarak kaydedilir.
  * `root` yalnızca testler içindir.
  */
 export async function saveImage(
@@ -46,9 +50,20 @@ export async function saveImage(
   if (input.length > MAX_IMAGE_BYTES) throw new ImageRejectedError("Dosya boyutu en fazla 5 MB olabilir");
   if (!hasImageSignature(input)) throw new ImageRejectedError(REJECTED);
 
+  let pages: number;
+  try {
+    pages = (await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS, animated: true }).metadata()).pages ?? 1;
+  } catch {
+    throw new ImageRejectedError(REJECTED);
+  }
+  if (pages > MAX_ANIMATION_FRAMES) {
+    throw new ImageRejectedError(`Hareketli görüntü en fazla ${MAX_ANIMATION_FRAMES} kare olabilir`);
+  }
+
   let output: Buffer;
   try {
-    output = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+    // Hareketli girdi kare kare yeniden kodlanır: animasyon korunur, boyut sınırı her kareye uygulanır.
+    output = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS, animated: pages > 1 })
       .rotate()
       .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 82 })

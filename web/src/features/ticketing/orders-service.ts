@@ -20,7 +20,7 @@ import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
 import { SALES_ACTOR } from "./internal";
 import { lineTotal, sumMoney } from "./money";
 import type { PaymentProvider, PaymentRequest } from "./payment/provider";
-import { activeProvider } from "./payment/registry";
+import { activeProvider, providerForEvent } from "./payment/registry";
 import { generatePnr, parsePnr } from "./pnr";
 import { saleStateOf } from "./sale-state";
 
@@ -167,7 +167,7 @@ export async function createHoldWithOutcome(
 
   const items = mergeItems(input.items);
   if (items.length === 0) throw new SalesError("invalid");
-  const provider = deps.provider !== undefined ? deps.provider : activeProvider();
+  const baseProvider = deps.provider !== undefined ? deps.provider : activeProvider();
   const { eventId, clientKey } = input;
   // Tekil indeks çakışmasında hangi masanın biletleri yazılıyordu: `seats_unavailable` ayrıntısı ve mesajı için.
   let inserting: { tableId: string; bySeatChoice: boolean } | null = null;
@@ -196,7 +196,7 @@ export async function createHoldWithOutcome(
         status: event.status,
         saleStartsAt: settings.saleStartsAt,
         saleEndsAt: settings.saleEndsAt,
-        providerActive: provider !== null,
+        providerActive: providerForEvent(event, baseProvider) !== null,
         now: new Date(),
       });
       if (state === null) throw new SalesError("event_not_found");
@@ -456,7 +456,7 @@ type PayOutcome = { kind: "already_paid" } | { kind: "declined" } | { kind: "pai
  * satırı atlar. Durum ve süre kilitler alındıktan sonra DB saatiyle (`clock_timestamp()`) doğrulanır.
  */
 export async function payOrder(db: Db, orderId: string, input: PayInput, deps: OrderDeps = {}): Promise<OrderView> {
-  const provider = deps.provider !== undefined ? deps.provider : activeProvider();
+  const baseProvider = deps.provider !== undefined ? deps.provider : activeProvider();
   const email = normalizeEmail(input.buyer.email);
   const firstName = input.buyer.firstName.trim();
   const lastName = input.buyer.lastName.trim();
@@ -499,6 +499,8 @@ export async function payOrder(db: Db, orderId: string, input: PayInput, deps: O
     if (!order) throw new SalesError("order_not_found");
     // Ödenmiş siparişin yinelemesi sağlayıcı ve etkinlik durumundan bağımsız aynı görünümü alır.
     if (order.status === "paid") return { kind: "already_paid" };
+    // Demo etkinliğin siparişi genel sağlayıcı kapalıyken de temsili demo sağlayıcıyla ödenir.
+    const provider = providerForEvent(event, baseProvider);
     if (provider === null || provider.id !== input.payment.provider) throw new SalesError("payments_disabled");
     // Satış aşaması `sales_closed` olsa da canlı tutma ödenebilir (T13); ama etkinlik yayından kalktıysa
     // (taslak, iptal, tamamlandı) ödeme alınmaz.
@@ -666,7 +668,12 @@ export async function getOrderView(ex: Db | Tx, orderId: string): Promise<OrderV
     row.rawStatus === "paid"
       ? ticketRows
           .filter((t): t is typeof t & { qrToken: string } => t.status === "issued" && t.qrToken !== null)
-          .sort((a, b) => byLabel(a.tableLabel, b.tableLabel) || (a.seatNo ?? 0) - (b.seatNo ?? 0))
+          .sort(
+            (a, b) =>
+              byLabel(a.tableLabel, b.tableLabel) ||
+              (a.seatNo ?? 0) - (b.seatNo ?? 0) ||
+              (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+          )
           .map((t) => ({
             ticketId: t.id,
             tableId: t.tableId,

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { asc, count, eq } from "drizzle-orm";
+import sharp from "sharp";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import {
@@ -26,6 +27,9 @@ import { IMAGE_PATH_PATTERN } from "@/features/sales-api/contract";
 import { dateToZonedWallClock } from "@/lib/time-zone";
 import { truncateAll } from "../../helpers/db";
 import { filesUnder, oneConcert, seedOnce } from "./fixtures";
+
+// Tam küme 10 konser tohumlar; hareketli klipler kare kare yeniden kodlandığından varsayılan 5 sn yetmez.
+const FULL_SET_TIMEOUT_MS = 60_000;
 
 describe("demo tohumlama servisi", () => {
   beforeEach(async () => {
@@ -182,6 +186,16 @@ describe("demo tohumlama servisi", () => {
     }
   });
 
+  it("hero klibinin animasyonu yüklemede korunur", async () => {
+    const { ctx, eventIds } = await seedOnce({ concerts: oneConcert() });
+    const [site] = await db.select().from(eventSiteContent).where(eq(eventSiteContent.eventId, eventIds[0]!));
+    const [ev] = await db.select().from(events).where(eq(events.id, eventIds[0]!));
+    const hero = await sharp(await readFile(path.join(ctx.uploadRoot, site!.heroImage!)), { animated: true }).metadata();
+    expect(hero.pages ?? 1).toBeGreaterThan(1);
+    const cover = await sharp(await readFile(path.join(ctx.uploadRoot, ev!.coverImage!)), { animated: true }).metadata();
+    expect(cover.pages ?? 1).toBe(1);
+  });
+
   it("sanatçı yoksa demo işaretli oluşturulur", async () => {
     const { eventIds } = await seedOnce({ concerts: oneConcert() });
     const [ev] = await db.select().from(events).where(eq(events.id, eventIds[0]!));
@@ -250,7 +264,7 @@ describe("demo tohumlama servisi", () => {
     expect(await filesUnder(ctx.uploadRoot)).toEqual(beforeFiles);
   });
 
-  it("tam küme: beş etkinlik, beş sanatçı, on beş görsel", async () => {
+  it("tam küme: on etkinlik, dokuz sanatçı, yirmi dokuz görsel", async () => {
     const { ctx } = await seedOnce();
     const demoEvents = await db
       .select()
@@ -260,9 +274,12 @@ describe("demo tohumlama servisi", () => {
     const [tblCountRow] = await db.select({ value: count() }).from(eventTables);
     const tblCount = tblCountRow?.value ?? 0;
 
-    expect(demoEvents).toHaveLength(5);
+    expect(demoEvents).toHaveLength(10);
     expect(demoEvents.map((e) => e.name)).toEqual(DEMO_CONCERTS.map((c) => c.name));
-    expect(Number(tblCount)).toBe(865);
-    expect(ctx.written).toHaveLength(15);
-  });
+    expect(Number(tblCount)).toBe(1730);
+    // Ziynet Sali iki konserde aynı sanatçı satırını paylaşır: 10 afiş + 10 hero + 9 sanatçı görseli.
+    const [artCountRow] = await db.select({ value: count() }).from(artists);
+    expect(Number(artCountRow?.value ?? 0)).toBe(9);
+    expect(ctx.written).toHaveLength(29);
+  }, FULL_SET_TIMEOUT_MS);
 });
