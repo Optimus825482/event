@@ -1,107 +1,209 @@
 import { COLORS } from "@/lib/theme";
 import { decorCenter, type PlanDecor } from "../decor";
 import type { PlanModel, PlanTableModel } from "../model";
+import type { TablePick } from "../picks";
+import { PX_PER_METER, roomSize, tableBody, toMeters } from "./metric";
+import { chairSpots, chairState, type ChairState } from "./seating";
+import { stageInfo, towardStage, type StageInfo } from "./stage";
 
-/** Tuvalde 50 piksel = 3B sahnede 1 birim (~1 metre). */
-export const WORLD_SCALE = 50;
-
-/** Tuval pikselini salon-orijinli dünya koordinatına (x, z) çevirir. */
-export function toWorld(canvas: { width: number; height: number }, x: number, y: number): [number, number] {
-  return [x / WORLD_SCALE - canvas.width / WORLD_SCALE / 2, y / WORLD_SCALE - canvas.height / WORLD_SCALE / 2];
-}
+export const LOCA_FLOOR_Y = 0.12;
 
 export type SceneState = "free" | "partial" | "full" | "closed";
 
-/** 3B sahnenin çizdiği masa (saf veri). */
 export type SceneTable = {
   key: string;
   label: string;
-  capacity: number;
   x: number;
-  y: number;
-  rotation: number;
+  z: number;
+  floorY: number;
+  width: number;
+  depth: number;
+  rotationY: number;
   shape: PlanTableModel["shape"];
   isLoca: boolean;
-  width: number;
-  height: number;
-  /** Masa üst tablası rengi (tema belirteci). */
-  color: string;
-  /** Masa örtüsü/gövde rengi: durumu büyük yüzeyde gösterir (tema belirteci). */
-  bodyColor: string;
   state: SceneState;
-  selected: boolean;
+  picked: boolean;
+  active: boolean;
+  dimmed: boolean;
   selectable: boolean;
+  color: string;
 };
 
-function sceneState(table: PlanTableModel): SceneState {
+export type SceneChair = {
+  tableId: string;
+  seatNo: number | null;
+  x: number;
+  y: number;
+  z: number;
+  rotationY: number;
+  state: ChairState;
+  color: string;
+};
+
+export type SceneDecor = {
+  id: string;
+  kind: PlanDecor["kind"];
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  angle: number;
+};
+
+export type SceneLine = {
+  id: string;
+  cx: number;
+  cz: number;
+  length: number;
+  angle: number;
+  width: number;
+};
+
+export type SceneInput = {
+  model: PlanModel;
+  picks: readonly TablePick[];
+  activeTableId: string | null;
+  dimmedIds?: ReadonlySet<string>;
+};
+
+export type SceneData = {
+  room: { width: number; depth: number };
+  stage: StageInfo;
+  tables: SceneTable[];
+  chairs: SceneChair[];
+  decor: SceneDecor[];
+  lines: SceneLine[];
+};
+
+function tableSceneState(table: PlanTableModel): SceneState {
   if (table.status === "not_sellable") return "closed";
   if (table.status === "sold_out") return "full";
   return table.free !== null && table.seats !== null && table.free < table.seats ? "partial" : "free";
 }
 
-/** 2B `table-style.ts` anlamları: seçili > kapalı > dolu > kısmen dolu (soluk ton) > boş (standart fildişi, premium/VIP altın). */
-function sceneColor(table: PlanTableModel, state: SceneState, selected: boolean): string {
-  if (selected) return COLORS.goldBright;
+function tableColor(table: PlanTableModel, state: SceneState, picked: boolean, active: boolean): string {
+  if (active) return COLORS.goldBright;
+  if (picked) return COLORS.gold;
   if (state === "closed") return COLORS.surface;
   if (state === "full") return COLORS.disabledBg;
   if (state === "partial") return COLORS.muted;
   return table.category === "premium" || table.category === "vip" ? COLORS.gold : COLORS.ivory;
 }
 
-/** Örtü rengi: seçili > kapalı > dolu > kısmen dolu > boş (2B `table-style.ts` anlamları). */
-function bodyColorOf(state: SceneState, selected: boolean): string {
-  if (selected) return COLORS.goldBright;
-  if (state === "closed") return COLORS.surface;
-  if (state === "full") return COLORS.disabledBg;
-  if (state === "partial") return COLORS.muted;
-  return COLORS.ivory;
+function chairColor(state: ChairState): string {
+  if (state === "selected") return COLORS.goldBright;
+  if (state === "free") return COLORS.ivory;
+  return COLORS.disabledBg;
 }
 
-export function planToSceneTables(model: PlanModel, opts: { selectedId: string | null }): SceneTable[] {
-  return model.tables.map((table) => {
-    const state = sceneState(table);
+export function buildScene({ model, picks, activeTableId, dimmedIds }: SceneInput): SceneData {
+  const room = roomSize(model.canvas);
+  const stage = stageInfo(model);
+  const pickByTable = new Map(picks.map((p) => [p.tableId, p]));
+
+  const tables: SceneTable[] = [];
+  const chairs: SceneChair[] = [];
+
+  for (const table of model.tables) {
+    const pos = toMeters(model.canvas, table.x, table.y);
+    const body = tableBody(table);
+    const floorY = table.isLoca ? LOCA_FLOOR_Y : 0;
+    const state = tableSceneState(table);
     const selectable = table.status === "available";
-    const selected = selectable && table.id === opts.selectedId;
-    return {
+    const pick = pickByTable.get(table.id);
+    const picked = pick !== undefined;
+    const active = table.id === activeTableId;
+    const dimmed = dimmedIds?.has(table.id) ?? false;
+
+    tables.push({
       key: table.id,
       label: table.label,
-      capacity: table.seats ?? 0,
-      x: table.x,
-      y: table.y,
-      rotation: table.rotation,
+      x: pos.x,
+      z: pos.z,
+      floorY,
+      width: body.width,
+      depth: body.depth,
+      rotationY: (-table.rotation * Math.PI) / 180,
       shape: table.shape,
       isLoca: table.isLoca,
-      width: table.width,
-      height: table.height,
-      color: sceneColor(table, state, selected),
-      bodyColor: bodyColorOf(state, selected),
       state,
-      selected,
+      picked,
+      active,
+      dimmed,
       selectable,
+      color: tableColor(table, state, picked, active),
+    });
+
+    const selectedSeats = pick && !pick.whole ? pick.seatNos : [];
+    const toStage = towardStage(stage, pos);
+    const spots = chairSpots(
+      {
+        center: pos,
+        width: body.width,
+        depth: body.depth,
+        rotationDeg: table.rotation,
+        shape: table.shape,
+        isLoca: table.isLoca,
+        capacity: table.capacity,
+        seatNos: table.seatNos,
+      },
+      toStage,
+    );
+
+    for (const spot of spots) {
+      let cState: ChairState;
+      if (table.status === "not_sellable" || spot.seatNo === null) {
+        cState = "closed";
+      } else if (table.status === "sold_out") {
+        cState = "taken";
+      } else {
+        cState = chairState(spot.seatNo, table.freeSeats, selectedSeats);
+      }
+
+      chairs.push({
+        tableId: table.id,
+        seatNo: spot.seatNo,
+        x: spot.x,
+        y: floorY,
+        z: spot.z,
+        rotationY: spot.rotationY,
+        state: cState,
+        color: chairColor(cState),
+      });
+    }
+  }
+
+  const decor: SceneDecor[] = model.decor.map((d) => {
+    const c = decorCenter(d);
+    const m = toMeters(model.canvas, c.x, c.y);
+    return {
+      id: d.id,
+      kind: d.kind,
+      x: m.x,
+      z: m.z,
+      width: d.width / PX_PER_METER,
+      depth: d.height / PX_PER_METER,
+      angle: (-d.rotation * Math.PI) / 180,
     };
   });
-}
 
-/** Dekor: merkez noktası (2B'deki döndürme pivotu) ve radyan cinsinden açı. */
-export type SceneDecor = { id: string; kind: PlanDecor["kind"]; x: number; y: number; width: number; height: number; angle: number };
-
-export function planToSceneDecor(model: PlanModel): SceneDecor[] {
-  return model.decor.map((d) => {
-    const c = decorCenter(d);
-    return { id: d.id, kind: d.kind, x: c.x, y: c.y, width: d.width, height: d.height, angle: (d.rotation * Math.PI) / 180 };
+  const lines: SceneLine[] = model.lines.map((l) => {
+    const m = toMeters(model.canvas, (l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2);
+    return {
+      id: l.id,
+      cx: m.x,
+      cz: m.z,
+      length: Math.hypot(l.x2 - l.x1, l.y2 - l.y1) / PX_PER_METER,
+      angle: -Math.atan2(l.y2 - l.y1, l.x2 - l.x1),
+      width: l.width / PX_PER_METER,
+    };
   });
+
+  return { room, stage, tables, chairs, decor, lines };
 }
 
-/** Ayırıcı çizgi: zeminde ince şerit. */
-export type SceneLine = { id: string; cx: number; cy: number; length: number; angle: number; width: number };
-
-export function planToSceneLines(model: PlanModel): SceneLine[] {
-  return model.lines.map((l) => ({
-    id: l.id,
-    cx: (l.x1 + l.x2) / 2,
-    cy: (l.y1 + l.y2) / 2,
-    length: Math.hypot(l.x2 - l.x1, l.y2 - l.y1),
-    angle: Math.atan2(l.y2 - l.y1, l.x2 - l.x1),
-    width: l.width,
-  }));
+export function chairHit(scene: SceneData, instanceId: number): { tableId: string; seatNo: number | null } | null {
+  if (!Number.isInteger(instanceId) || instanceId < 0 || instanceId >= scene.chairs.length) return null;
+  const chair = scene.chairs[instanceId]!;
+  return { tableId: chair.tableId, seatNo: chair.seatNo };
 }

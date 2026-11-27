@@ -1,315 +1,518 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { Canvas, useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { DoubleSide } from "three";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Color, type InstancedMesh, Object3D, PerspectiveCamera } from "three";
 import { Button } from "@/components/ui/button";
-import { COLORS } from "@/lib/theme";
-import { BallroomFloor, BallroomLights, CameraRig, Chairs, Chandeliers, StageBeams, type ChairInstance } from "./ballroom";
-import { cameraPresets, chairPlacements, chairSize, TABLE_BODY_SCALE, tableHeight, type CameraPresetId } from "./layout";
+import { BallroomFloor, BallroomLights, Chairs, Chandeliers, StageBeams } from "./ballroom";
+import {
+  type CameraPose,
+  CHAIR_PICK_DISTANCE,
+  detailPose,
+  FOV_HALL,
+  maxDistance,
+  MIN_DISTANCE,
+  orbitMove,
+  type OrbitMove,
+  overviewPose,
+  seatPose,
+  topPose,
+} from "./camera";
+import { SeatLabels, TableLabels } from "./labels";
 import { SceneLines } from "./lines";
+import { type Vec3 } from "./metric";
 import { BALLROOM } from "./palette";
-import { toWorld, WORLD_SCALE, type SceneDecor, type SceneLine, type SceneTable } from "./scene-data";
+import { chairHit, type SceneData, type SceneDecor, type SceneTable } from "./scene-data";
+import { StageScreen } from "./screen";
+import { towardStage } from "./stage";
 import { SceneWalls } from "./walls";
 import { WALL_HEIGHT } from "./walls-geometry";
 
-const LOCA_HEIGHT = 0.9;
-const STAGE_HEIGHT = 0.6;
-const DECOR_HEIGHT: Record<SceneDecor["kind"], number> = { stage: STAGE_HEIGHT, area: 0.02, wall: 2.6, label: 0, bar: 1.1, catwalk: STAGE_HEIGHT };
-
-type ToWorld = (x: number, y: number) => [number, number];
-type StagePoint = { x: number; z: number };
+export type SeatView = { tableId: string; nonce: number };
 
 export type SceneProps = {
-  tables: readonly SceneTable[];
-  decor: readonly SceneDecor[];
-  lines: readonly SceneLine[];
+  scene: SceneData;
   canvas: { width: number; height: number };
-  onSelect?: (tableId: string) => void;
-  /** WebGL bağlamı kaybolunca çağrılır; üst bileşen 2B'ye düşer. */
+  activeTableId: string | null;
+  artworkUrl?: string | null;
+  title?: string;
+  seatView?: SeatView | null;
+  onTable?(tableId: string): void;
+  onSeat?(tableId: string, seatNo: number): void;
   onContextLost?: () => void;
-  /** Kanvasın açıklaması (yardımcı metin) için kimlik. */
+  onReady?: () => void;
+  onCameraChange?: (tag: string) => void;
   describedBy?: string;
 };
 
-/** WebGL bağlam kaybını dinler; kaldırılırken dinleyiciyi söker (R3F kaldırırken bağlamı kendisi kaybettirir). */
+type OrbitHandle = {
+  target: { set(x: number, y: number, z: number): void; x: number; y: number; z: number };
+  update(): void;
+};
+
 function ContextLossGuard({ onLost }: { onLost?: () => void }) {
-  const canvas = useThree((s) => s.gl.domElement);
+  const dom = useThree((s) => s.gl.domElement);
   useEffect(() => {
     if (!onLost) return;
-    canvas.addEventListener("webglcontextlost", onLost);
-    return () => canvas.removeEventListener("webglcontextlost", onLost);
-  }, [canvas, onLost]);
+    const handler = (e: Event) => {
+      e.preventDefault();
+      onLost();
+    };
+    dom.addEventListener("webglcontextlost", handler);
+    return () => dom.removeEventListener("webglcontextlost", handler);
+  }, [dom, onLost]);
   return null;
 }
 
-type TableGeometry = { x: number; z: number; w: number; d: number; rot: number };
+const DECOR_HEIGHT: Record<SceneDecor["kind"], number> = {
+  stage: 0.58,
+  catwalk: 0.58,
+  area: 0.02,
+  wall: 2.6,
+  label: 0,
+  bar: 1.1,
+};
 
-function tableGeometry(table: SceneTable, world: ToWorld): TableGeometry {
-  const [x, z] = world(table.x, table.y);
-  // Masa gövdesi plandaki alanından küçük çizilir; sandalyelerle birlikte o alana sığar.
-  const scale = table.isLoca ? 1 : TABLE_BODY_SCALE;
-  return { x, z, w: (table.width / WORLD_SCALE) * scale, d: (table.height / WORLD_SCALE) * scale, rot: (-table.rotation * Math.PI) / 180 };
-}
+function DecorMesh({ element }: { element: SceneDecor }) {
+  const { width, depth, x, z, angle, kind } = element;
+  const h = DECOR_HEIGHT[kind];
+  if (h === 0) return null;
+  const isStage = kind === "stage" || kind === "catwalk";
+  const color =
+    kind === "stage" || kind === "catwalk"
+      ? BALLROOM.stage
+      : kind === "bar"
+        ? BALLROOM.wood
+        : kind === "wall"
+          ? BALLROOM.wall
+          : BALLROOM.areaFallback;
 
-/** Seçili masanın altında altın halka. */
-function SelectionRing({ g }: { g: TableGeometry }) {
-  const r = Math.max(g.w, g.d);
   return (
-    <mesh position={[g.x, 0.03, g.z]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[r * 0.82, r * 0.82 + 0.18, 40]} />
-      <meshBasicMaterial color={COLORS.goldBright} toneMapped={false} />
-    </mesh>
+    <group>
+      <group position={[x, h / 2, z]} rotation={[0, angle, 0]}>
+        <mesh>
+          <boxGeometry args={[width, h, depth]} />
+          <meshStandardMaterial
+            color={color}
+            roughness={kind === "area" ? 0.9 : 0.72}
+            metalness={kind === "bar" ? 0.25 : 0.08}
+            transparent={kind === "area"}
+            opacity={kind === "area" ? 0.35 : 1}
+          />
+        </mesh>
+        {isStage ? (
+          <mesh position={[0, h / 2 - 0.022, 0]}>
+            <boxGeometry args={[width + 0.08, 0.045, depth + 0.08]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.28} metalness={0.82} />
+          </mesh>
+        ) : null}
+      </group>
+      {kind === "stage" ? <StageBeams position={[x, z]} width={Math.max(width, depth)} base={h} /> : null}
+    </group>
   );
 }
 
-/** Masaya dokunma: yalnızca seçilebilir masa `onSelect` çağırır; imleç ona göre değişir. */
-function useTablePointer(table: SceneTable, onSelect?: (id: string) => void) {
-  // Üzerindeyken masa kaldırılırsa imleç takılı kalmasın.
+function InstancedTables({
+  tables,
+  onTable,
+}: {
+  tables: readonly SceneTable[];
+  onTable?: (tableId: string) => void;
+}) {
+  const roundTables = useMemo(() => tables.filter((t) => t.shape === "round" && !t.isLoca), [tables]);
+  const boxTables = useMemo(() => tables.filter((t) => t.shape !== "round" || t.isLoca), [tables]);
+
+  const roundRef = useRef<InstancedMesh>(null);
+  const boxRef = useRef<InstancedMesh>(null);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useLayoutEffect(() => {
+    const dummy = new Object3D();
+    const color = new Color();
+
+    if (roundRef.current) {
+      roundTables.forEach((t, i) => {
+        dummy.position.set(t.x, t.floorY + 0.325, t.z);
+        dummy.rotation.set(0, t.rotationY, 0);
+        dummy.scale.set(t.width, 0.65, t.depth);
+        dummy.updateMatrix();
+        roundRef.current!.setMatrixAt(i, dummy.matrix);
+        roundRef.current!.setColorAt(i, color.set(t.dimmed ? BALLROOM.dimmed : t.color));
+      });
+      roundRef.current.count = roundTables.length;
+      roundRef.current.instanceMatrix.needsUpdate = true;
+      if (roundRef.current.instanceColor) roundRef.current.instanceColor.needsUpdate = true;
+      roundRef.current.computeBoundingSphere();
+    }
+
+    if (boxRef.current) {
+      boxTables.forEach((t, i) => {
+        dummy.position.set(t.x, t.floorY + 0.325, t.z);
+        dummy.rotation.set(0, t.rotationY, 0);
+        dummy.scale.set(t.width, 0.65, t.depth);
+        dummy.updateMatrix();
+        boxRef.current!.setMatrixAt(i, dummy.matrix);
+        boxRef.current!.setColorAt(i, color.set(t.dimmed ? BALLROOM.dimmed : t.color));
+      });
+      boxRef.current.count = boxTables.length;
+      boxRef.current.instanceMatrix.needsUpdate = true;
+      if (boxRef.current.instanceColor) boxRef.current.instanceColor.needsUpdate = true;
+      boxRef.current.computeBoundingSphere();
+    }
+
+    invalidate();
+  }, [roundTables, boxTables, invalidate]);
+
   useEffect(() => () => {
     document.body.style.cursor = "";
   }, []);
-  return {
-    onClick: (event: { stopPropagation: () => void }) => {
-      event.stopPropagation();
-      if (table.selectable) onSelect?.(table.key);
+
+  const handle = (list: readonly SceneTable[]) => ({
+    onClick: (e: { instanceId?: number; delta: number; stopPropagation: () => void }) => {
+      if (e.delta > 6 || e.instanceId === undefined) return;
+      e.stopPropagation();
+      const t = list[e.instanceId];
+      if (t?.selectable) onTable?.(t.key);
     },
-    onPointerOver: () => {
-      if (table.selectable) document.body.style.cursor = "pointer";
+    onPointerOver: (e: { instanceId?: number }) => {
+      if (e.instanceId === undefined) return;
+      const t = list[e.instanceId];
+      document.body.style.cursor = t?.selectable ? "pointer" : "not-allowed";
     },
     onPointerOut: () => {
       document.body.style.cursor = "";
     },
-  };
-}
+  });
 
-/** Fildişi örtülü masa; üst tablası masanın durum rengini taşır. */
-function TableMesh({ table, world, onSelect }: { table: SceneTable; world: ToWorld; onSelect?: (id: string) => void }) {
-  const g = tableGeometry(table, world);
-  const round = table.shape === "round";
-  const pointer = useTablePointer(table, onSelect);
-  const height = tableHeight(g.w, g.d);
-  const rim = height * 0.11;
-  return (
-    <group name={`table-${table.key}`} {...pointer}>
-      <group position={[g.x, 0, g.z]} rotation={[0, g.rot, 0]}>
-        <mesh position={[0, height / 2, 0]} castShadow>
-          {round ? <cylinderGeometry args={[g.w / 2 - 0.02, g.w / 2, height, 24]} /> : <boxGeometry args={[g.w, height, g.d]} />}
-          <meshStandardMaterial color={table.bodyColor} roughness={0.6} metalness={0.08} />
-        </mesh>
-        <mesh position={[0, height + rim / 2, 0]}>
-          {round ? <cylinderGeometry args={[g.w / 2, g.w / 2, rim, 24]} /> : <boxGeometry args={[g.w + 0.02, rim, g.d + 0.02]} />}
-          <meshStandardMaterial
-            color={table.color}
-            roughness={0.32}
-            metalness={0.35}
-            emissive={table.selected ? COLORS.goldBright : BALLROOM.black}
-            emissiveIntensity={table.selected ? 0.6 : 0}
-          />
-        </mesh>
-      </group>
-      {table.selected ? <SelectionRing g={g} /> : null}
-    </group>
-  );
-}
-
-function locaFacing(g: TableGeometry, stage: StagePoint | null): number {
-  if (!stage) return g.rot;
-  const dx = stage.x - g.x;
-  const dz = stage.z - g.z;
-  const len = Math.hypot(dx, dz);
-  return len < 0.01 ? g.rot : Math.atan2(-dx / len, -dz / len);
-}
-
-const locaRadius = (g: TableGeometry): number => (Math.max(g.w, g.d) / 2) * 1.1;
-
-/** Loca: opera kabini; yarım daire fildişi korkuluk, pirinç tırabzan ve içinde özel masa. */
-function LocaMesh({ table, world, stage, onSelect }: { table: SceneTable; world: ToWorld; stage: StagePoint | null; onSelect?: (id: string) => void }) {
-  const g = tableGeometry(table, world);
-  const r = locaRadius(g);
-  const facing = locaFacing(g, stage);
-  const pointer = useTablePointer(table, onSelect);
-  const dimmed = table.state === "full" || table.state === "closed";
-  const opacity = dimmed ? 0.5 : 1;
-  const inner = r * 0.42;
-  const wallHeight = Math.min(LOCA_HEIGHT * 0.9, r * 0.42);
-  const th = tableHeight(inner * 2, inner * 2);
-  return (
-    <group name={`table-${table.key}`} {...pointer}>
-      <group position={[g.x, 0, g.z]} rotation={[0, facing, 0]}>
-        <mesh position={[0, 0.06, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <cylinderGeometry args={[r, r * 0.9, 0.12, 22, 1, false, 0, Math.PI]} />
-          <meshStandardMaterial color={BALLROOM.deck} roughness={0.7} transparent={dimmed} opacity={opacity} />
-        </mesh>
-        <mesh position={[0, 0.12 + wallHeight / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <cylinderGeometry args={[r, r * 0.93, wallHeight, 22, 1, true, 0, Math.PI]} />
-          <meshStandardMaterial color={table.bodyColor} roughness={0.6} metalness={0.08} side={DoubleSide} />
-        </mesh>
-        <mesh position={[0, 0.12 + wallHeight, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[r, 0.05, 8, 24, Math.PI]} />
-          <meshStandardMaterial color={BALLROOM.gold} roughness={0.28} metalness={0.82} />
-        </mesh>
-        <mesh position={[0, 0.12 + th / 2, -r * 0.2]}>
-          <cylinderGeometry args={[inner, inner * 0.9, th, 18]} />
-          <meshStandardMaterial color={BALLROOM.wood} roughness={0.35} metalness={0.15} transparent={dimmed} opacity={opacity} />
-        </mesh>
-        <mesh position={[0, 0.12 + th + th * 0.055, -r * 0.2]}>
-          <cylinderGeometry args={[inner * 1.04, inner * 1.04, th * 0.11, 18]} />
-          <meshStandardMaterial
-            color={table.color}
-            roughness={0.32}
-            metalness={0.35}
-            emissive={table.selected ? COLORS.goldBright : BALLROOM.black}
-            emissiveIntensity={table.selected ? 0.6 : 0}
-          />
-        </mesh>
-      </group>
-      {table.selected ? <SelectionRing g={g} /> : null}
-    </group>
-  );
-}
-
-/** Masaların ve locaların çevresindeki sandalyeler (kapasite kadar; tek örneklenmiş ağ). */
-function sceneChairs(tables: readonly SceneTable[], world: ToWorld, stage: StagePoint | null): ChairInstance[] {
-  const chairs: ChairInstance[] = [];
-  for (const table of tables) {
-    const g = tableGeometry(table, world);
-    const dimmed = table.state === "full" || table.state === "closed";
-    if (table.isLoca) {
-      const r = locaRadius(g);
-      const inner = r * 0.42;
-      const size = chairSize(inner * 2, inner * 2);
-      const facing = locaFacing(g, stage);
-      const cos = Math.cos(facing);
-      const sin = Math.sin(facing);
-      const color = dimmed ? BALLROOM.dimmed : BALLROOM.loca;
-      for (const c of chairPlacements(inner * 2, inner * 2, 0, Math.min(table.capacity, 8))) {
-        const lx = c.x;
-        const lz = c.z - r * 0.2;
-        chairs.push({ x: g.x + lx * cos + lz * sin, y: 0.12, z: g.z - lx * sin + lz * cos, rotationY: c.rotationY + facing, size, color });
-      }
-      continue;
-    }
-    const color = dimmed ? BALLROOM.dimmed : BALLROOM.chair;
-    const size = chairSize(g.w, g.d);
-    for (const c of chairPlacements(g.w, g.d, table.rotation, table.capacity)) {
-      chairs.push({ x: g.x + c.x, y: 0, z: g.z + c.z, rotationY: c.rotationY, size, color });
-    }
-  }
-  return chairs;
-}
-
-const DECOR_STYLE: Record<Exclude<SceneDecor["kind"], "label" | "area">, { color: string; roughness: number; metalness: number; trim: boolean }> = {
-  stage: { color: BALLROOM.stage, roughness: 0.42, metalness: 0.35, trim: true },
-  catwalk: { color: BALLROOM.stage, roughness: 0.42, metalness: 0.35, trim: true },
-  bar: { color: BALLROOM.wood, roughness: 0.35, metalness: 0.15, trim: true },
-  wall: { color: BALLROOM.wall, roughness: 0.72, metalness: 0.12, trim: false },
-};
-
-function DecorMesh({ element, world }: { element: SceneDecor; world: ToWorld }) {
-  // Yazı etiketi 3B'de çizilmez (yazı tipi/işçi dosyası gerekir; dış kaynak yok).
-  if (element.kind === "label") return null;
-  const [x, z] = world(element.x, element.y);
-  const height = DECOR_HEIGHT[element.kind];
-  const w = element.width / WORLD_SCALE;
-  const d = element.height / WORLD_SCALE;
-  const style = element.kind === "area" ? null : DECOR_STYLE[element.kind];
   return (
     <group>
-      <group position={[x, 0, z]} rotation={[0, -element.angle, 0]}>
-        <mesh position={[0, height / 2, 0]} castShadow>
-          <boxGeometry args={[w, height, d]} />
-          {style ? (
-            <meshStandardMaterial color={style.color} roughness={style.roughness} metalness={style.metalness} />
-          ) : (
-            <meshStandardMaterial color={BALLROOM.areaFallback} transparent opacity={0.5} />
-          )}
-        </mesh>
-        {style?.trim ? (
-          <mesh position={[0, height - 0.04, 0]}>
-            <boxGeometry args={[w + 0.08, 0.05, d + 0.08]} />
-            <meshStandardMaterial color={BALLROOM.gold} roughness={0.28} metalness={0.82} />
-          </mesh>
-        ) : null}
-      </group>
-      {element.kind === "stage" ? <StageBeams position={[x, z]} width={Math.max(w, d)} base={height} /> : null}
+      {roundTables.length > 0 ? (
+        <instancedMesh ref={roundRef} frustumCulled={false} key={`r-${roundTables.length}`} args={[undefined, undefined, roundTables.length]} {...handle(roundTables)}>
+          <cylinderGeometry args={[0.5, 0.45, 1, 24]} />
+          <meshStandardMaterial roughness={0.38} metalness={0.25} />
+        </instancedMesh>
+      ) : null}
+      {boxTables.length > 0 ? (
+        <instancedMesh ref={boxRef} frustumCulled={false} key={`b-${boxTables.length}`} args={[undefined, undefined, boxTables.length]} {...handle(boxTables)}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial roughness={0.38} metalness={0.25} />
+        </instancedMesh>
+      ) : null}
+      {tables
+        .filter((t) => t.picked || t.active)
+        .map((t) => {
+          const inner = (1.36 * Math.max(t.width, t.depth)) / 1.86;
+          return (
+            <mesh key={t.key} position={[t.x, t.floorY + 0.03, t.z]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[inner, inner + 0.16, 40]} />
+              <meshBasicMaterial color={t.active ? BALLROOM.goldBright : BALLROOM.gold} toneMapped={false} />
+            </mesh>
+          );
+        })}
     </group>
   );
 }
 
-/**
- * Satış planının 3B balo salonu sahnesi: desenli halı, altın ayrıntılı duvarlar, örtülü masalar ve sandalyeler,
- * loca kabinleri, avizeler, sahne ışıkları ve kamera açıları. Masaya dokunmak 2B'deki seçimle aynı yolu çağırır.
- */
-export default function Scene3D({ tables, decor, lines, canvas, onSelect, onContextLost, describedBy }: SceneProps) {
-  const w = canvas.width / WORLD_SCALE;
-  const h = canvas.height / WORLD_SCALE;
-  const world = useCallback<ToWorld>((x, y) => toWorld(canvas, x, y), [canvas]);
+type Flight = {
+  fromPos: Vec3;
+  fromTarget: Vec3;
+  fromFov: number;
+  to: CameraPose;
+  tag: string;
+  startedAt: number;
+  duration: number;
+};
 
-  const presets = useMemo(() => {
-    const stageEl = decor.find((e) => e.kind === "stage");
-    const loca = tables.find((t) => t.isLoca);
-    const point = (px: number, py: number) => {
-      const [x, z] = world(px, py);
-      return { x, z };
-    };
-    return cameraPresets(w, h, stageEl ? point(stageEl.x, stageEl.y) : null, loca ? { ...point(loca.x, loca.y), y: 0 } : null);
-  }, [decor, tables, world, w, h]);
-  const stagePoint = presets.find((p) => p.id === "stage")?.target;
-  const stage = useMemo<StagePoint | null>(
-    () => (stagePoint ? { x: stagePoint[0], z: stagePoint[2] } : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnızca koordinatlar değişince
-    [stagePoint?.[0], stagePoint?.[2]],
+function CameraController({
+  scene,
+  activeTableId,
+  seatView,
+  command,
+  orbitRef,
+  onPoseDone,
+  onPovChange,
+  onCamPos,
+}: {
+  scene: SceneData;
+  activeTableId: string | null;
+  seatView?: SeatView | null;
+  command: { type: "overview" | "top" | OrbitMove; nonce: number } | null;
+  orbitRef: React.RefObject<OrbitHandle | null>;
+  onPoseDone: (tag: string) => void;
+  onPovChange: (pov: boolean) => void;
+  onCamPos: (pos: Vec3) => void;
+}) {
+  const { get, size, invalidate } = useThree();
+  const flightRef = useRef<Flight | null>(null);
+  const narrow = size.height > 0 ? size.width / size.height < 1.15 : false;
+  const maxDist = maxDistance(scene.room);
+
+  const startFlight = useCallback(
+    (to: CameraPose, tag: string) => {
+      const cam = get().camera;
+      const ctrl = orbitRef.current;
+      const curTarget: Vec3 = ctrl ? [ctrl.target.x, ctrl.target.y, ctrl.target.z] : [0, 1, 1];
+      const fov = cam instanceof PerspectiveCamera ? cam.fov : FOV_HALL;
+      flightRef.current = {
+        fromPos: [cam.position.x, cam.position.y, cam.position.z],
+        fromTarget: curTarget,
+        fromFov: fov,
+        to,
+        tag,
+        startedAt: performance.now(),
+        duration: 580,
+      };
+      onPovChange(tag.startsWith("seat:"));
+      invalidate();
+    },
+    [get, orbitRef, onPovChange, invalidate],
   );
-  const chairs = useMemo(() => sceneChairs(tables, world, stage), [tables, world, stage]);
-  const [view, setView] = useState<{ id: CameraPresetId; nonce: number }>({ id: "overview", nonce: 0 });
-  const activePreset = presets.find((p) => p.id === view.id) ?? null;
-  const overview = presets[0]?.position ?? [0, 10, 10];
+
+  // Etkin masa değişince yakınlaş
+  const prevTableRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTableId === prevTableRef.current) return;
+    prevTableRef.current = activeTableId;
+    if (!activeTableId) return;
+    const t = scene.tables.find((x) => x.key === activeTableId);
+    if (!t) return;
+    const toStage = towardStage(scene.stage, { x: t.x, z: t.z });
+    startFlight(detailPose({ x: t.x, z: t.z }, t.floorY, toStage), `detail:${t.key}`);
+  }, [activeTableId, scene.tables, scene.stage, startFlight]);
+
+  // Masadan bakış
+  const prevSeatNonceRef = useRef<number>(0);
+  useEffect(() => {
+    if (!seatView || seatView.nonce === prevSeatNonceRef.current) return;
+    prevSeatNonceRef.current = seatView.nonce;
+    const t = scene.tables.find((x) => x.key === seatView.tableId);
+    if (!t) return;
+    startFlight(seatPose({ x: t.x, z: t.z }, t.floorY, scene.stage), `seat:${t.key}`);
+  }, [seatView, scene.tables, scene.stage, startFlight]);
+
+  // Kamera düğmeleri
+  const prevCmdRef = useRef<number>(0);
+  useEffect(() => {
+    if (!command || command.nonce === prevCmdRef.current) return;
+    prevCmdRef.current = command.nonce;
+    if (command.type === "overview") {
+      startFlight(overviewPose(scene.room, narrow), "overview");
+      return;
+    }
+    if (command.type === "top") {
+      startFlight(topPose(scene.room, narrow), "top");
+      return;
+    }
+    const cam = get().camera;
+    const ctrl = orbitRef.current;
+    const curTarget: Vec3 = ctrl ? [ctrl.target.x, ctrl.target.y, ctrl.target.z] : [0, 1, 1];
+    const next = orbitMove(
+      { position: [cam.position.x, cam.position.y, cam.position.z], target: curTarget },
+      command.type,
+      maxDist,
+    );
+    flightRef.current = null;
+    cam.position.set(...next.position);
+    ctrl?.target.set(...next.target);
+    ctrl?.update();
+    onCamPos(next.position);
+    onPoseDone("free");
+    invalidate();
+  }, [command, scene.room, narrow, maxDist, get, orbitRef, startFlight, onCamPos, onPoseDone, invalidate]);
+
+  // Kullanıcı tutunca uçuş iptal
+  useEffect(() => {
+    const ctrl = orbitRef.current as unknown as { addEventListener?: (e: string, fn: () => void) => void; removeEventListener?: (e: string, fn: () => void) => void } | null;
+    if (!ctrl?.addEventListener) return;
+    const onStart = () => {
+      if (flightRef.current) flightRef.current = null;
+      onPovChange(false);
+      onPoseDone("free");
+    };
+    ctrl.addEventListener("start", onStart);
+    return () => ctrl.removeEventListener?.("start", onStart);
+  }, [orbitRef, onPovChange, onPoseDone]);
+
+  useFrame((state) => {
+    const f = flightRef.current;
+    if (!f) return;
+    const cam = state.camera;
+    const elapsed = performance.now() - f.startedAt;
+    const raw = Math.min(1, elapsed / f.duration);
+    const t = raw * raw * (3 - 2 * raw);
+
+    const px = f.fromPos[0] + (f.to.position[0] - f.fromPos[0]) * t;
+    const py = f.fromPos[1] + (f.to.position[1] - f.fromPos[1]) * t;
+    const pz = f.fromPos[2] + (f.to.position[2] - f.fromPos[2]) * t;
+    cam.position.set(px, py, pz);
+
+    const tx = f.fromTarget[0] + (f.to.target[0] - f.fromTarget[0]) * t;
+    const ty = f.fromTarget[1] + (f.to.target[1] - f.fromTarget[1]) * t;
+    const tz = f.fromTarget[2] + (f.to.target[2] - f.fromTarget[2]) * t;
+    orbitRef.current?.target.set(tx, ty, tz);
+
+    if (cam instanceof PerspectiveCamera) {
+      cam.fov = f.fromFov + (f.to.fov - f.fromFov) * t;
+      cam.updateProjectionMatrix();
+    }
+    orbitRef.current?.update();
+    onCamPos([px, py, pz]);
+
+    if (raw >= 1) {
+      const doneTag = f.tag;
+      flightRef.current = null;
+      onPoseDone(doneTag);
+    } else {
+      invalidate();
+    }
+  });
+
+  return null;
+}
+
+export default function Scene3D({
+  scene,
+  canvas,
+  activeTableId,
+  artworkUrl,
+  title,
+  seatView,
+  onTable,
+  onSeat,
+  onContextLost,
+  onReady,
+  onCameraChange,
+  describedBy,
+}: SceneProps) {
+  const orbitRef = useRef<OrbitHandle | null>(null);
+  const initialPose = useMemo(() => overviewPose(scene.room, false), [scene.room]);
+  const [camPos, setCamPos] = useState<Vec3>(initialPose.position);
+  const [pov, setPov] = useState(false);
+  const [cmd, setCmd] = useState<{ type: "overview" | "top" | OrbitMove; nonce: number } | null>(null);
+
+  const activeTable = useMemo(
+    () => (activeTableId ? (scene.tables.find((t) => t.key === activeTableId) ?? null) : null),
+    [activeTableId, scene.tables],
+  );
+  const activeChairs = useMemo(
+    () => (activeTableId ? scene.chairs.filter((c) => c.tableId === activeTableId) : []),
+    [activeTableId, scene.chairs],
+  );
+  const nearActive = useMemo(() => {
+    if (!activeTable) return false;
+    return Math.hypot(camPos[0] - activeTable.x, camPos[1] - activeTable.floorY, camPos[2] - activeTable.z) <= CHAIR_PICK_DISTANCE;
+  }, [activeTable, camPos]);
+
+  const sendCmd = (type: "overview" | "top" | OrbitMove) => setCmd((c) => ({ type, nonce: (c?.nonce ?? 0) + 1 }));
+
+  const handleChairClick = useCallback(
+    (instanceId: number, delta: number, stopPropagation: () => void) => {
+      if (delta > 6) return;
+      stopPropagation();
+      const hit = chairHit(scene, instanceId);
+      if (!hit) return;
+      if (hit.tableId === activeTableId && hit.seatNo !== null && nearActive) {
+        onSeat?.(hit.tableId, hit.seatNo);
+      } else {
+        onTable?.(hit.tableId);
+      }
+    },
+    [scene, activeTableId, nearActive, onSeat, onTable],
+  );
+
+  const handleChairHover = useCallback(
+    (instanceId: number) => {
+      const hit = chairHit(scene, instanceId);
+      if (!hit) return;
+      const t = scene.tables.find((x) => x.key === hit.tableId);
+      document.body.style.cursor = t?.selectable ? "pointer" : "not-allowed";
+    },
+    [scene],
+  );
 
   return (
-    <div className="relative h-full w-full bg-bg" data-testid="plan-3d-scene">
+    <div className="relative h-full w-full bg-bg">
       <div role="img" aria-label="Salon planı (3B)" aria-describedby={describedBy} className="h-full w-full">
-      <Canvas
-        camera={{ position: overview, fov: 46 }}
-        shadows
-        gl={{ toneMappingExposure: 1.15 }}
-      >
-        <ContextLossGuard onLost={onContextLost} />
-        <color attach="background" args={[BALLROOM.background]} />
-        <fogExp2 attach="fog" args={[BALLROOM.background, 0.35 / Math.max(w, h, 20)]} />
-        <BallroomLights width={w} depth={h} ceiling={WALL_HEIGHT} />
-        <BallroomFloor width={w} depth={h} />
-        <Chandeliers width={w} height={WALL_HEIGHT - 0.7} />
-        {decor.map((e) => (
-          <DecorMesh key={e.id} element={e} world={world} />
-        ))}
-        <SceneLines lines={lines} canvas={canvas} />
-        {tables.map((t) =>
-          t.isLoca ? (
-            <LocaMesh key={t.key} table={t} world={world} stage={stage} onSelect={onSelect} />
-          ) : (
-            <TableMesh key={t.key} table={t} world={world} onSelect={onSelect} />
-          ),
-        )}
-        <Chairs chairs={chairs} />
-        <SceneWalls canvasWidth={canvas.width} canvasHeight={canvas.height} />
-        <OrbitControls makeDefault enableDamping maxPolarAngle={Math.PI / 2.04} />
-        <CameraRig preset={activePreset} nonce={view.nonce} />
-      </Canvas>
+        <Canvas
+          frameloop="demand"
+          dpr={[1, 1.65]}
+          camera={{ position: initialPose.position, fov: initialPose.fov }}
+          gl={{ antialias: true, powerPreference: "low-power", toneMappingExposure: 1.15 }}
+          style={{ touchAction: "pan-y" }}
+          onCreated={() => {
+            onReady?.();
+            onCameraChange?.("overview");
+          }}
+        >
+          <ContextLossGuard onLost={onContextLost} />
+          <color attach="background" args={[BALLROOM.background]} />
+          <BallroomLights />
+          <BallroomFloor width={scene.room.width} depth={scene.room.depth} />
+          <Chandeliers width={scene.room.width} height={WALL_HEIGHT - 0.7} />
+          {scene.decor.map((e) => (
+            <DecorMesh key={e.id} element={e} />
+          ))}
+          <StageScreen stage={scene.stage} room={scene.room} artworkUrl={artworkUrl} title={title} />
+          <SceneLines lines={scene.lines} />
+          <InstancedTables tables={scene.tables} onTable={onTable} />
+          <Chairs
+            chairs={scene.chairs}
+            onClick={handleChairClick}
+            onPointerOver={handleChairHover}
+            onPointerOut={() => {
+              document.body.style.cursor = "";
+            }}
+          />
+          <TableLabels tables={scene.tables} />
+          <SeatLabels chairs={activeChairs} visible={nearActive} />
+          <SceneWalls
+            canvasWidth={canvas.width}
+            canvasHeight={canvas.height}
+            room={scene.room}
+            cameraPosition={camPos}
+            pov={pov}
+          />
+          <OrbitControls
+            ref={orbitRef as never}
+            makeDefault
+            enablePan={false}
+            target={initialPose.target}
+            minDistance={MIN_DISTANCE}
+            maxDistance={maxDistance(scene.room)}
+            maxPolarAngle={Math.PI / 2 - 0.012}
+          />
+          <CameraController
+            scene={scene}
+            activeTableId={activeTableId}
+            seatView={seatView}
+            command={cmd}
+            orbitRef={orbitRef}
+            onPoseDone={(tag) => onCameraChange?.(tag)}
+            onPovChange={setPov}
+            onCamPos={setCamPos}
+          />
+        </Canvas>
       </div>
-      <div role="group" aria-label="Kamera açıları" className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap gap-2">
-        {presets.map((p) => (
-          <Button
-            key={p.id}
-            variant="glass"
-            aria-pressed={view.id === p.id}
-            className="aria-pressed:bg-gold aria-pressed:text-on-gold"
-            onClick={() => setView((v) => ({ id: p.id, nonce: v.nonce + 1 }))}
-          >
-            {p.label}
-          </Button>
-        ))}
+      <div role="group" aria-label="Kamera" className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap gap-1.5">
+        <Button variant="glass" onClick={() => sendCmd("left")}>
+          Sola döndür
+        </Button>
+        <Button variant="glass" onClick={() => sendCmd("right")}>
+          Sağa döndür
+        </Button>
+        <Button variant="glass" onClick={() => sendCmd("in")}>
+          Yakınlaştır
+        </Button>
+        <Button variant="glass" onClick={() => sendCmd("out")}>
+          Uzaklaştır
+        </Button>
+        <Button variant="glass" onClick={() => sendCmd("top")}>
+          Üstten
+        </Button>
+        <Button variant="glass" onClick={() => sendCmd("overview")}>
+          Genel
+        </Button>
       </div>
     </div>
   );

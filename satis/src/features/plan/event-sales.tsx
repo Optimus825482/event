@@ -2,95 +2,167 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { holdAction } from "@/features/checkout/actions";
 import type { Availability, EventDetail } from "@/lib/core/contract";
 import { ERROR_MESSAGES } from "@/lib/core/errors";
+import { imageUrl } from "@/lib/image-url";
+import { ActiveTableCard } from "./active-table-card";
+import { dimmedTableIds, findTables, type KindFilter } from "./finder";
 import { buildPlanModel } from "./model";
 import { DEFAULT_PARTY_SIZE } from "./party";
+import { PartySizeField, PartyStep } from "./party-step";
+import {
+  applyPick,
+  holdSignature,
+  initialPicks,
+  partyLimit,
+  type PickAction,
+  type PickRules,
+  readiness,
+  reconcilePicks,
+} from "./picks";
+import type { SeatView } from "./plan-3d";
 import { PlanLegend } from "./plan-legend";
+import { usePlanView } from "./plan-view";
 import { PlanViewer } from "./plan-viewer";
-import { optionsFor, reconcileSelection, type Selection } from "./selection";
-import { SelectionPanel } from "./selection-panel";
-import { TableList } from "./table-list";
+import { picksTotal } from "./price";
+import { SelectionSummary } from "./selection-summary";
+import { SightlinePanel } from "./sightline-panel";
+import { TableFinder } from "./table-finder";
 import { useAvailability } from "./use-availability";
 
-type View = "plan" | "list";
+export const SEAT_TAKEN_MESSAGE = "Seçtiğiniz sandalyelerden biri az önce alındı. Seçiminiz güncellendi.";
 
 export type EventSalesProps = {
   event: EventDetail;
   initialAvailability: Availability;
-  /** "Bilet Al" adımında seçilen kişi sayısı (1..event.sale.maxSeatsPerOrder). Verilmezse DEFAULT_PARTY_SIZE. */
+  /** "Bilet Al" adımında seçilen kişi sayısı (1..event.sale.maxSeatsPerOrder). Verilmezse PartyStep sorulur. */
   initialPartySize?: number;
 };
 
-/** Plan + liste görünümü, canlı durum ve masa/adet seçimi; "Devam et" masayı tutar. */
+/** 3B/2B salon planı, masa bulucu, numaralı sandalye seçimi, sahne görüşü ve tutma akışı. */
 export function EventSales({ event, initialAvailability, initialPartySize }: EventSalesProps) {
   const router = useRouter();
   const { availability, stale, refresh, patch } = useAvailability(event.id, initialAvailability);
-  const [view, setView] = useState<View>("plan");
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const view = usePlanView();
+
+  const { maxSeatsPerOrder, blockSingleLeftover } = event.sale;
+  const rules: PickRules = useMemo(
+    () => ({ maxSeatsPerOrder, blockSingleLeftover }),
+    [maxSeatsPerOrder, blockSingleLeftover],
+  );
+  const limit = partyLimit(rules);
+
+  const [partyConfirmed, setPartyConfirmed] = useState(initialPartySize !== undefined);
+  const [state, setState] = useState(() =>
+    initialPicks(Math.max(1, Math.min(limit, initialPartySize ?? DEFAULT_PARTY_SIZE))),
+  );
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<KindFilter>("all");
+  const [seatView, setSeatView] = useState<SeatView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  // Tutma isteğinin yeniden denenmesi için: aynı seçimde aynı anahtar; yalnızca bellekte tutulur.
+
   const keyRef = useRef<{ signature: string; key: string } | null>(null);
 
-  const { maxSeatsPerOrder, blockSingleLeftover } = event.sale;
-  const rules = useMemo(() => ({ maxSeatsPerOrder, blockSingleLeftover }), [maxSeatsPerOrder, blockSingleLeftover]);
   const model = useMemo(
     () => buildPlanModel(event.plan, event.prices, availability, event.sale.mode),
     [event.plan, event.prices, availability, event.sale.mode],
   );
+  const artworkUrl = useMemo(() => imageUrl(event.site.heroImage ?? event.artistImage), [event.site.heroImage, event.artistImage]);
 
-  // Canlı durum seçimi geçersiz kıldıysa render sırasında düzeltilir.
-  const reconciled = reconcileSelection(selection, model, rules);
-  if (reconciled.selection !== selection) {
-    setSelection(reconciled.selection);
-    setNotice(reconciled.notice);
+  if (event.sale.state !== "open") {
+    return (
+      <div className="flex flex-col gap-4">
+        <PlanViewer model={model} view={view} artworkUrl={artworkUrl} title={event.name} />
+        <PlanLegend prices={event.prices} currency={event.currency} />
+      </div>
+    );
   }
 
-  const table = selection ? (model.tables.find((t) => t.id === selection.tableId) ?? null) : null;
-  const options = selection ? optionsFor(model, selection.tableId, rules) : [];
-  const unitPrice = table?.category ? (event.prices.find((p) => p.category === table.category)?.price ?? null) : null;
+  if (!partyConfirmed) {
+    return (
+      <PartyStep
+        max={limit}
+        initial={Math.min(DEFAULT_PARTY_SIZE, limit)}
+        onConfirm={(partySize) => {
+          setState(initialPicks(partySize));
+          setPartyConfirmed(true);
+        }}
+      />
+    );
+  }
 
-  const choose = (tableId: string) => {
-    const list = optionsFor(model, tableId, rules);
-    const target = initialPartySize ?? DEFAULT_PARTY_SIZE;
-    const preferred = list.filter((q) => q <= target).at(-1) ?? list[0];
-    if (preferred === undefined) return;
+  // Canlı yoklama seçimi geçersiz kıldıysa (tutma isteği sürerken değil) render sırasında uzlaştırılır.
+  if (!pending) {
+    const reconciled = reconcilePicks(state, model);
+    if (reconciled.state !== state) {
+      setState(reconciled.state);
+      setNotice(reconciled.notice);
+    }
+  }
+
+  const runAction = (action: PickAction) => {
+    const step = applyPick(state, action, model, rules);
+    setState(step.state);
     setError(null);
-    setNotice(null);
-    setSelection({ tableId, quantity: preferred });
+    setNotice(step.notice);
   };
 
-  const changeQuantity = (quantity: number) => {
-    if (!selection) return;
-    setError(null);
-    setNotice(null);
-    setSelection({ tableId: selection.tableId, quantity });
+  const handleTable = (tableId: string) => {
+    const target = model.tables.find((t) => t.id === tableId);
+    if (target?.wholeOnly) {
+      const focused = applyPick(state, { type: "focus", tableId }, model, rules);
+      const toggled = applyPick(focused.state, { type: "toggleWhole", tableId }, model, rules);
+      setState(toggled.state);
+      setError(null);
+      setNotice(toggled.notice);
+      return;
+    }
+    runAction({ type: "focus", tableId });
   };
+
+  const handleSeat = (tableId: string, seatNo: number) => {
+    runAction({ type: "toggleSeat", tableId, seatNo });
+  };
+
+  const finderTables = findTables(model, { query, kind, partySize: state.partySize });
+  const dimmedIds = dimmedTableIds(model, { query, kind });
+  const pickedIds = new Set(state.picks.map((p) => p.tableId));
+  const activeTable = state.activeTableId ? (model.tables.find((t) => t.id === state.activeTableId) ?? null) : null;
+  const activePick = activeTable ? (state.picks.find((p) => p.tableId === activeTable.id) ?? null) : null;
+  const unitPrice = activeTable?.category
+    ? (event.prices.find((p) => p.category === activeTable.category)?.price ?? null)
+    : null;
+  const total = picksTotal(state, model, event.prices);
+  const readyInfo = readiness(state, model, rules);
 
   const proceed = async () => {
-    if (!selection || pending) return;
-    const signature = `${selection.tableId}:${selection.quantity}`;
-    if (keyRef.current?.signature !== signature) keyRef.current = { signature, key: crypto.randomUUID() };
+    if (!readyInfo.ready || pending || total === null) return;
+    const signature = holdSignature(readyInfo.items);
+    if (keyRef.current?.signature !== signature) {
+      keyRef.current = { signature, key: crypto.randomUUID() };
+    }
     setPending(true);
     setError(null);
     setNotice(null);
     try {
       const result = await holdAction({
         eventId: event.id,
-        items: [{ tableId: selection.tableId, quantity: selection.quantity }],
+        items: readyInfo.items,
         clientKey: keyRef.current.key,
       });
       if (result.ok) {
         router.push(`/odeme/${result.data.orderToken}`);
         return;
       }
-      setError(result.message);
-      if (result.details?.tableId !== undefined && result.details.free !== undefined) patch(result.details.tableId, result.details.free);
+      const hasSeatItems = readyInfo.items.some((i) => i.seatNos !== undefined);
+      setError(result.code === "seats_unavailable" && hasSeatItems ? SEAT_TAKEN_MESSAGE : result.message);
+      if (result.details?.tableId !== undefined && result.details.free !== undefined) {
+        patch(result.details.tableId, result.details.free);
+      }
       refresh();
       if (result.code === "sales_closed") router.refresh();
     } catch {
@@ -99,50 +171,81 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
     setPending(false);
   };
 
-  if (event.sale.state !== "open") {
-    return (
-      <div className="flex flex-col gap-4">
-        <PlanLegend prices={event.prices} currency={event.currency} />
-        <PlanViewer model={model} selectedId={null} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4">
-      <PlanLegend prices={event.prices} currency={event.currency} />
-      <div role="group" aria-label="Görünüm" className="flex gap-2">
-        {(["plan", "list"] as const).map((v) => (
-          <Button
-            key={v}
-            variant={view === v ? "gold" : "glass"}
-            aria-pressed={view === v}
-            className="flex-1 sm:flex-none"
-            onClick={() => setView(v)}
-          >
-            {v === "plan" ? "Plan" : "Liste"}
-          </Button>
-        ))}
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
+      <div className="flex flex-col gap-3">
+        <PlanViewer
+          model={model}
+          view={view}
+          picks={state.picks}
+          activeTableId={state.activeTableId}
+          dimmedIds={dimmedIds}
+          artworkUrl={artworkUrl}
+          title={event.name}
+          seatView={seatView}
+          onTable={handleTable}
+          onSeat={handleSeat}
+        />
+        <PlanLegend prices={event.prices} currency={event.currency} />
+        {stale ? (
+          <Notice>Canlı doluluk güncellenemedi; bilgiler birkaç saniye gecikmeli olabilir.</Notice>
+        ) : null}
       </div>
-      {stale ? <Notice>Canlı durum güncellenemiyor.</Notice> : null}
-      {view === "plan" ? (
-        <PlanViewer model={model} selectedId={selection?.tableId ?? null} onSelect={choose} />
-      ) : (
-        <TableList model={model} selectedId={selection?.tableId ?? null} onSelect={choose} prices={event.prices} currency={event.currency} />
-      )}
-      <SelectionPanel
-        table={table}
-        quantity={selection?.quantity ?? 0}
-        options={options}
-        unitPrice={unitPrice}
-        currency={event.currency}
-        pending={pending}
-        onQuantity={changeQuantity}
-        onContinue={() => void proceed()}
-      >
-        {error ? <Notice tone="error">{error}</Notice> : null}
-        {notice ? <Notice>{notice}</Notice> : null}
-      </SelectionPanel>
+
+      <aside aria-label="Bilet seçimi" className="flex flex-col gap-4">
+        <PartySizeField
+          value={state.partySize}
+          max={limit}
+          disabled={pending}
+          onChange={(partySize) => runAction({ type: "setPartySize", partySize })}
+        />
+        <TableFinder
+          tables={finderTables}
+          query={query}
+          kind={kind}
+          partySize={state.partySize}
+          activeTableId={state.activeTableId}
+          pickedIds={pickedIds}
+          prices={event.prices}
+          currency={event.currency}
+          onQuery={setQuery}
+          onKind={setKind}
+          onFocus={(tableId) => runAction({ type: "focus", tableId })}
+        />
+        <ActiveTableCard
+          table={activeTable}
+          pick={activePick}
+          unitPrice={unitPrice}
+          currency={event.currency}
+          disabled={pending}
+          onToggleSeat={(seatNo) => activeTable && handleSeat(activeTable.id, seatNo)}
+          onToggleWhole={() => activeTable && runAction({ type: "toggleWhole", tableId: activeTable.id })}
+        />
+        <SelectionSummary
+          state={state}
+          model={model}
+          total={total}
+          currency={event.currency}
+          readiness={readyInfo}
+          pending={pending}
+          onRemove={(tableId) => runAction({ type: "removeTable", tableId })}
+          onFocus={(tableId) => runAction({ type: "focus", tableId })}
+          onContinue={proceed}
+        >
+          {error ? <Notice tone="error">{error}</Notice> : null}
+          {notice ? <Notice>{notice}</Notice> : null}
+        </SelectionSummary>
+        <SightlinePanel
+          set={event.site.sightlineSet}
+          table={activeTable ? { label: activeTable.label, isLoca: activeTable.isLoca } : null}
+          canLookIn3d={view.can3d && !view.failed}
+          onLookIn3d={() => {
+            if (!activeTable) return;
+            view.setMode("3d");
+            setSeatView((sv) => ({ tableId: activeTable.id, nonce: (sv?.nonce ?? 0) + 1 }));
+          }}
+        />
+      </aside>
     </div>
   );
 }

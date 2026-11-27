@@ -11,7 +11,11 @@ import { usePanZoom } from "./use-pan-zoom";
 
 export type PlanSvgProps = {
   model: PlanModel;
-  selectedId: string | null;
+  pickedIds?: ReadonlySet<string>;
+  activeId?: string | null;
+  dimmedIds?: ReadonlySet<string>;
+  /** @deprecated Task 6 ile kaldırılır; geçici olarak activeId yerine kullanılır. */
+  selectedId?: string | null;
   onSelect?: (tableId: string) => void;
   height?: number;
 };
@@ -64,7 +68,15 @@ function DecorShape({ decor }: { decor: PlanDecor }) {
   const { x, y } = decorCenter(decor);
   return (
     <g transform={`translate(${x} ${y}) rotate(${rotation})`} aria-hidden="true">
-      <rect x={-width / 2} y={-height / 2} width={width} height={height} rx={kind === "wall" ? 0 : 6} strokeWidth={2} className={DECOR_STYLE[kind]} />
+      <rect
+        x={-width / 2}
+        y={-height / 2}
+        width={width}
+        height={height}
+        rx={kind === "wall" ? 0 : 6}
+        strokeWidth={2}
+        className={DECOR_STYLE[kind]}
+      />
       {label ? (
         <text textAnchor="middle" dominantBaseline="central" fontSize={kind === "label" ? 16 : 14} className="fill-ivory">
           {label}
@@ -78,23 +90,36 @@ function DecorShape({ decor }: { decor: PlanDecor }) {
 function FocusRing({ table }: { table: PlanTableModel }) {
   const pad = 6;
   const className = "fill-none stroke-transparent group-focus-visible:stroke-ivory";
-  const common = { strokeWidth: 3, strokeDasharray: "5 3", vectorEffect: "non-scaling-stroke" as const, className, "data-focus-ring": "" };
+  const common = {
+    strokeWidth: 3,
+    strokeDasharray: "5 3",
+    vectorEffect: "non-scaling-stroke" as const,
+    className,
+    "data-focus-ring": "",
+  };
   const { width, height } = table;
   return (
     <g transform={`rotate(${table.rotation})`} aria-hidden="true" pointerEvents="none">
       {table.shape === "round" && !table.isLoca ? (
         <circle r={width / 2 + pad} {...common} />
       ) : (
-        <rect x={-width / 2 - pad} y={-height / 2 - pad} width={width + 2 * pad} height={height + 2 * pad} rx={8} {...common} />
+        <rect
+          x={-width / 2 - pad}
+          y={-height / 2 - pad}
+          width={width + 2 * pad}
+          height={height + 2 * pad}
+          rx={8}
+          {...common}
+        />
       )}
     </g>
   );
 }
 
-function TableShape({ table, selected }: { table: PlanTableModel; selected: boolean }) {
-  const style = TABLE_STYLES[tableVisual(table, selected)];
+function TableShape({ table, mark }: { table: PlanTableModel; mark: "none" | "picked" | "active" }) {
+  const style = TABLE_STYLES[tableVisual(table, mark)];
   const className = cn(FILL[style.fill], STROKE[style.stroke]);
-  const strokeWidth = selected ? 4 : 2;
+  const strokeWidth = mark === "active" ? 4 : mark === "picked" ? 3 : 2;
   const { width, height } = table;
   return (
     <g transform={`rotate(${table.rotation})`}>
@@ -107,9 +132,22 @@ function TableShape({ table, selected }: { table: PlanTableModel; selected: bool
   );
 }
 
-function TableNode({ table, selected, onSelect }: { table: PlanTableModel; selected: boolean; onSelect?: (id: string) => void }) {
+function TableNode({
+  table,
+  picked,
+  active,
+  dimmed,
+  onSelect,
+}: {
+  table: PlanTableModel;
+  picked: boolean;
+  active: boolean;
+  dimmed: boolean;
+  onSelect?: (id: string) => void;
+}) {
   const available = table.status === "available";
-  const style = TABLE_STYLES[tableVisual(table, selected)];
+  const mark = active ? "active" : picked ? "picked" : "none";
+  const style = TABLE_STYLES[tableVisual(table, mark)];
   const interactive = onSelect !== undefined;
   const choose = () => {
     if (available) onSelect?.(table.id);
@@ -126,21 +164,39 @@ function TableNode({ table, selected, onSelect }: { table: PlanTableModel; selec
       role={interactive ? "button" : "img"}
       data-table-id={table.id}
       data-status={table.status}
+      data-dimmed={dimmed ? "true" : undefined}
       aria-label={table.ariaLabel}
-      aria-pressed={interactive ? selected : undefined}
+      aria-pressed={interactive ? picked || active : undefined}
       aria-disabled={interactive ? !available : undefined}
       tabIndex={interactive ? (available ? 0 : -1) : undefined}
       onClick={interactive ? choose : undefined}
       onKeyDown={interactive ? onKeyDown : undefined}
-      className={cn("group outline-none", interactive && available ? "cursor-pointer" : "cursor-default")}
+      className={cn(
+        "group outline-none transition-opacity",
+        interactive && available ? "cursor-pointer" : "cursor-default",
+        dimmed && "opacity-35",
+      )}
     >
       {interactive ? <FocusRing table={table} /> : null}
-      <TableShape table={table} selected={selected} />
-      <text textAnchor="middle" y={secondary ? -6 : 0} dominantBaseline="central" fontSize={12} fontWeight={700} className={cn("pointer-events-none", FILL[style.text])}>
+      <TableShape table={table} mark={mark} />
+      <text
+        textAnchor="middle"
+        y={secondary ? -6 : 0}
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight={700}
+        className={cn("pointer-events-none", FILL[style.text])}
+      >
         {table.label}
       </text>
       {secondary ? (
-        <text textAnchor="middle" y={8} dominantBaseline="central" fontSize={10} className={cn("pointer-events-none", FILL[style.text])}>
+        <text
+          textAnchor="middle"
+          y={8}
+          dominantBaseline="central"
+          fontSize={10}
+          className={cn("pointer-events-none", FILL[style.text])}
+        >
           {secondary}
         </text>
       ) : null}
@@ -148,8 +204,11 @@ function TableNode({ table, selected, onSelect }: { table: PlanTableModel; selec
   );
 }
 
-export function PlanSvg({ model, selectedId, onSelect, height = 420 }: PlanSvgProps) {
+/** 2B masa yerleşim planı: yakınlaştırma/kaydırma ve erişilebilir masa seçimi. */
+export function PlanSvg({ model, pickedIds, activeId, dimmedIds, selectedId, onSelect, height = 420 }: PlanSvgProps) {
   const { ref, view, zoomIn, zoomOut, fit } = usePanZoom(model.canvas);
+  const resolvedActive = activeId ?? selectedId ?? null;
+
   return (
     <div className="relative w-full overflow-hidden rounded-xl border border-line bg-bg">
       <div ref={ref} className="w-full touch-pan-y select-none" style={{ height }}>
@@ -160,10 +219,26 @@ export function PlanSvg({ model, selectedId, onSelect, height = 420 }: PlanSvgPr
               <DecorShape key={decor.id} decor={decor} />
             ))}
             {model.lines.map((line) => (
-              <line key={line.id} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} strokeWidth={line.width} aria-hidden="true" className="stroke-muted" />
+              <line
+                key={line.id}
+                x1={line.x1}
+                y1={line.y1}
+                x2={line.x2}
+                y2={line.y2}
+                strokeWidth={line.width}
+                aria-hidden="true"
+                className="stroke-muted"
+              />
             ))}
             {model.tables.map((table) => (
-              <TableNode key={table.id} table={table} selected={table.id === selectedId} onSelect={onSelect} />
+              <TableNode
+                key={table.id}
+                table={table}
+                picked={pickedIds?.has(table.id) ?? false}
+                active={resolvedActive === table.id}
+                dimmed={dimmedIds?.has(table.id) ?? false}
+                onSelect={onSelect}
+              />
             ))}
           </g>
         </svg>

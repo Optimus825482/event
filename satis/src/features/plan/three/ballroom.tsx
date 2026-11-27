@@ -2,12 +2,22 @@
 
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { CanvasTexture, Color, type InstancedMesh, type Mesh, Object3D, RepeatWrapping, SRGBColorSpace, Vector3 } from "three";
-import { chandelierPositions, type CameraPreset } from "./layout";
+import {
+  CanvasTexture,
+  Color,
+  type InstancedMesh,
+  type Mesh,
+  Object3D,
+  RepeatWrapping,
+  SRGBColorSpace,
+} from "three";
+import { chandelierPositions } from "./layout";
 import { BALLROOM } from "./palette";
+import type { SceneChair } from "./scene-data";
 
 /** Altın/antrasit geometrik desenli halı (yerelde üretilir; dış kaynak indirilmez). */
 function useCarpetTexture(width: number, depth: number): CanvasTexture | null {
+  const invalidate = useThree((s) => s.invalidate);
   const texture = useMemo(() => {
     if (typeof document === "undefined") return null;
     const c = document.createElement("canvas");
@@ -39,32 +49,62 @@ function useCarpetTexture(width: number, depth: number): CanvasTexture | null {
     tex.colorSpace = SRGBColorSpace;
     return tex;
   }, []);
+
   useEffect(() => {
-    texture?.repeat.set(Math.max(1, width / 4), Math.max(1, depth / 4));
-  }, [texture, width, depth]);
+    if (!texture) return;
+    texture.repeat.set(Math.max(1, width / 4), Math.max(1, depth / 4));
+    invalidate();
+  }, [texture, width, depth, invalidate]);
+
   useEffect(() => () => texture?.dispose(), [texture]);
   return texture;
 }
 
 export function BallroomFloor({ width, depth }: { width: number; depth: number }) {
-  const carpet = useCarpetTexture(width, depth);
+  const carpetW = Math.max(2, width - 2.2);
+  const carpetD = Math.max(2, depth - 2.2);
+  const carpet = useCarpetTexture(carpetW, carpetD);
+
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[width, depth]} />
-      <meshStandardMaterial map={carpet} color={carpet ? BALLROOM.white : BALLROOM.carpet} roughness={0.8} metalness={0.06} />
-    </mesh>
+    <group>
+      {/* Taban levhası */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+        <planeGeometry args={[width + 1.2, depth + 1.2]} />
+        <meshStandardMaterial color={BALLROOM.riser} roughness={0.85} metalness={0.05} />
+      </mesh>
+      {/* Halı */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[carpetW, carpetD]} />
+        <meshStandardMaterial map={carpet} color={carpet ? BALLROOM.white : BALLROOM.carpet} roughness={0.82} metalness={0.05} />
+      </mesh>
+      {/* Halı kenarında pirinç şerit */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, -carpetD / 2]}>
+        <planeGeometry args={[carpetW + 0.14, 0.07]} />
+        <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.6} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, carpetD / 2]}>
+        <planeGeometry args={[carpetW + 0.14, 0.07]} />
+        <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.6} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-carpetW / 2, 0.004, 0]}>
+        <planeGeometry args={[0.07, carpetD]} />
+        <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.6} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[carpetW / 2, 0.004, 0]}>
+        <planeGeometry args={[0.07, carpetD]} />
+        <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.6} />
+      </mesh>
+    </group>
   );
 }
 
-/** Sıcak, parlak balo salonu aydınlatması. */
-export function BallroomLights({ width, depth, ceiling }: { width: number; depth: number; ceiling: number }) {
-  const span = Math.max(width, depth);
+/** Sıcak balo salonu aydınlatması (gölge haritası yok). */
+export function BallroomLights() {
   return (
     <>
-      <ambientLight color={BALLROOM.warmWhite} intensity={1.35} />
-      <hemisphereLight args={[BALLROOM.hemiSky, BALLROOM.hemiGround, 1.05]} />
-      <directionalLight color={BALLROOM.warmLight} position={[width * 0.22, span * 0.55, depth * 0.35]} intensity={1.45} castShadow />
-      <pointLight color={BALLROOM.warmPoint} position={[0, ceiling + 1, 0]} intensity={2.8} distance={span * 1.2} decay={0.6} />
+      <hemisphereLight args={[BALLROOM.hemiSky, BALLROOM.hemiGround, 2.15]} />
+      <directionalLight color={BALLROOM.warmLight} position={[-8, 22, 6]} intensity={2.3} />
+      <directionalLight color={BALLROOM.fillLight} position={[9, 13, -24]} intensity={0.65} />
     </>
   );
 }
@@ -119,72 +159,107 @@ export function StageBeams({ position, width, base }: { position: [number, numbe
           position={[position[0] + dx, base + beamHeight / 2, position[1]]}
         >
           <coneGeometry args={[0.7, beamHeight, 16, 1, true]} />
-          <meshBasicMaterial color={i % 2 === 0 ? BALLROOM.gold : BALLROOM.beamBlue} transparent opacity={0.07} side={2} depthWrite={false} />
+          <meshBasicMaterial
+            color={i % 2 === 0 ? BALLROOM.gold : BALLROOM.beamBlue}
+            transparent
+            opacity={0.07}
+            side={2}
+            depthWrite={false}
+          />
         </mesh>
       ))}
     </>
   );
 }
 
-export type ChairInstance = { x: number; y: number; z: number; rotationY: number; size: number; color: string };
+/** Sandalyeler iki örneklenmiş ağ ile çizilir (oturak + arkalık); örnek sırası `chairs` dizisiyle birebir aynıdır. */
+export function Chairs({
+  chairs,
+  onClick,
+  onPointerOver,
+  onPointerOut,
+}: {
+  chairs: readonly SceneChair[];
+  onClick?: (instanceId: number, delta: number, stopPropagation: () => void) => void;
+  onPointerOver?: (instanceId: number) => void;
+  onPointerOut?: () => void;
+}) {
+  const seatRef = useRef<InstancedMesh>(null);
+  const backRef = useRef<InstancedMesh>(null);
+  const invalidate = useThree((s) => s.invalidate);
 
-/** Tüm sandalyeler tek örneklenmiş ağ ile çizilir (yüzlerce masada da akıcı). */
-export function Chairs({ chairs }: { chairs: readonly ChairInstance[] }) {
-  const ref = useRef<InstancedMesh>(null);
   useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
+    const seatMesh = seatRef.current;
+    const backMesh = backRef.current;
+    if (!seatMesh || !backMesh) return;
+
     const dummy = new Object3D();
     const color = new Color();
+
     chairs.forEach((chair, i) => {
-      dummy.position.set(chair.x, chair.y + chair.size * 0.9, chair.z);
+      dummy.position.set(chair.x, chair.y + 0.21, chair.z);
       dummy.rotation.set(0, chair.rotationY, 0);
-      dummy.scale.set(chair.size, chair.size * 1.8, chair.size);
+      dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, color.set(chair.color));
+      seatMesh.setMatrixAt(i, dummy.matrix);
+      seatMesh.setColorAt(i, color.set(chair.color));
+
+      const outX = -Math.sin(chair.rotationY) * 0.12;
+      const outZ = -Math.cos(chair.rotationY) * 0.12;
+      dummy.position.set(chair.x + outX, chair.y + 0.4, chair.z + outZ);
+      dummy.rotation.set(0, chair.rotationY, 0);
+      dummy.updateMatrix();
+      backMesh.setMatrixAt(i, dummy.matrix);
+      backMesh.setColorAt(i, color.set(chair.color));
     });
-    mesh.count = chairs.length;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [chairs]);
+
+    seatMesh.count = chairs.length;
+    seatMesh.instanceMatrix.needsUpdate = true;
+    if (seatMesh.instanceColor) seatMesh.instanceColor.needsUpdate = true;
+    seatMesh.computeBoundingSphere();
+
+    backMesh.count = chairs.length;
+    backMesh.instanceMatrix.needsUpdate = true;
+    if (backMesh.instanceColor) backMesh.instanceColor.needsUpdate = true;
+    backMesh.computeBoundingSphere();
+
+    invalidate();
+  }, [chairs, invalidate]);
+
   if (chairs.length === 0) return null;
-  // Anahtar: kapasite değişince tampon yeniden ayrılır.
+
   return (
-    <instancedMesh key={chairs.length} ref={ref} args={[undefined, undefined, chairs.length]} frustumCulled={false}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={BALLROOM.white} roughness={0.45} />
-    </instancedMesh>
+    <group key={chairs.length}>
+      <instancedMesh
+        ref={seatRef}
+        frustumCulled={false}
+        args={[undefined, undefined, chairs.length]}
+        onClick={(e) => {
+          if (e.instanceId !== undefined) onClick?.(e.instanceId, e.delta, () => e.stopPropagation());
+        }}
+        onPointerOver={(e) => {
+          if (e.instanceId !== undefined) onPointerOver?.(e.instanceId);
+        }}
+        onPointerOut={onPointerOut}
+      >
+        <boxGeometry args={[0.31, 0.28, 0.31]} />
+        <meshStandardMaterial roughness={0.55} metalness={0.1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={backRef}
+        frustumCulled={false}
+        args={[undefined, undefined, chairs.length]}
+        onClick={(e) => {
+          if (e.instanceId !== undefined) onClick?.(e.instanceId, e.delta, () => e.stopPropagation());
+        }}
+        onPointerOver={(e) => {
+          if (e.instanceId !== undefined) onPointerOver?.(e.instanceId);
+        }}
+        onPointerOut={onPointerOut}
+      >
+        <boxGeometry args={[0.32, 0.34, 0.085]} />
+        <meshStandardMaterial roughness={0.55} metalness={0.1} />
+      </instancedMesh>
+    </group>
   );
-}
-
-type ControlsLike = { target: Vector3; update: () => void };
-
-/** Seçilen kamera açısına yumuşak geçiş (kübik yavaşlama). `nonce` aynı açıya yeniden uçmayı sağlar. */
-export function CameraRig({ preset, nonce }: { preset: CameraPreset | null; nonce: number }) {
-  const camera = useThree((s) => s.camera);
-  const controls = useThree((s) => s.controls) as ControlsLike | null;
-  const flight = useRef<{ fromPos: Vector3; toPos: Vector3; fromTarget: Vector3; toTarget: Vector3; start: number } | null>(null);
-  useEffect(() => {
-    if (!preset || !controls) return;
-    flight.current = {
-      fromPos: camera.position.clone(),
-      toPos: new Vector3(...preset.position),
-      fromTarget: controls.target.clone(),
-      toTarget: new Vector3(...preset.target),
-      start: performance.now(),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnızca yeni seçimde uç
-  }, [nonce]);
-  useFrame(() => {
-    const f = flight.current;
-    if (!f || !controls) return;
-    const p = Math.min(1, (performance.now() - f.start) / 650);
-    const eased = 1 - (1 - p) ** 3;
-    camera.position.lerpVectors(f.fromPos, f.toPos, eased);
-    controls.target.lerpVectors(f.fromTarget, f.toTarget, eased);
-    controls.update();
-    if (p >= 1) flight.current = null;
-  });
-  return null;
 }
