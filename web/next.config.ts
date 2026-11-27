@@ -9,8 +9,13 @@ const nextConfig: NextConfig = {
   // Sürüm bilgisini sızdıran `X-Powered-By` başlığı gönderilmez.
   poweredByHeader: false,
   experimental: {
-    // 10 MB'a kadar Excel yüklemeleri sunucu eylemine ulaşsın (varsayılan 1 MB).
-    serverActions: { bodySizeLimit: "11mb" },
+    // Sunucu eylemi gövde sınırı (varsayılan 1 MB): 10 MB Excel ve 50 MB hero videosu (sunucuda sıkıştırılır,
+    // bkz. features/uploads/video-compress.ts) + multipart payı. Next.js bu sınırı yalnız genel olarak sunar
+    // (eylem başına değil); her eylem kendi dosya boyutu sınırını ayrıca uygular.
+    serverActions: { bodySizeLimit: "55mb" },
+    // `src/proxy.ts` tüm istekleri karşıladığından gövde ara belleğe alınır (varsayılan 10 MB'ta kesilir);
+    // sunucu eylemi sınırıyla aynı tutulur, yoksa büyük yüklemeler yarım gövdeyle ulaşır.
+    proxyClientMaxBodySize: "55mb",
     // `forbidden.tsx` ve 403 durum kodu (yetkisiz kullanıcı için, bkz. features/auth/errors.ts).
     authInterrupts: true,
   },

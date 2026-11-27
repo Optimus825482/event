@@ -121,12 +121,24 @@ describe("sales-site images-service", () => {
     });
   });
 
+  it("hero MP4 videosu dönüştürülemezse (bozuk içerik) 'Video dönüştürülemedi' ile reddedilir, dosya yazılmaz", async () => {
+    const event = await createEvent(db);
+    const box = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypisom\0\0\0\0isommp42", "latin1")]);
+    const mp4 = new File([new Uint8Array(Buffer.concat([box, Buffer.alloc(64, 0x55)]))], "a.mp4", { type: "video/mp4" });
+    await expect(replaceSiteImage(db, ent, { eventId: event.id, slot: "hero" }, mp4, tmpRoot)).rejects.toMatchObject({
+      code: "invalid",
+      message: "Video dönüştürülemedi",
+    });
+    const [row] = await db.select().from(eventSiteContent).where(eq(eventSiteContent.eventId, event.id));
+    expect(row?.heroImage ?? null).toBeNull();
+  });
+
   it("hero alanında görüntü ya da WebM olmayan dosya videoyu da anan iletiyle reddedilir", async () => {
     const event = await createEvent(db);
     const bad = new File(["metin"], "a.webm", { type: "video/webm" });
     await expect(replaceSiteImage(db, ent, { eventId: event.id, slot: "hero" }, bad, tmpRoot)).rejects.toMatchObject({
       code: "invalid",
-      message: "Yalnızca JPG, PNG, WebP görüntüsü veya WebM video yüklenebilir",
+      message: "Yalnızca JPG, PNG, WebP görüntüsü veya WebM, MP4, MOV video yüklenebilir",
     });
   });
 

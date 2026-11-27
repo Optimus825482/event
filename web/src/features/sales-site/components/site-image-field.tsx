@@ -10,10 +10,14 @@ import { removeSiteImageAction, uploadSiteImageAction } from "../actions";
 import { IMAGE_SLOT_LABELS, isHeroVideoPath, type ImageSlot } from "../image-status";
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
-/** Yalnızca hero alanı WebM video kabul eder (sunucu içeriği ayrıca koklar). */
-const HERO_ACCEPT = `${IMAGE_ACCEPT},video/webm`;
+/** Yalnızca hero alanı video kabul eder (sunucu içeriği ayrıca koklar ve VP9 WebM'e sıkıştırır). */
+const HERO_ACCEPT = `${IMAGE_ACCEPT},video/webm,video/mp4,video/quicktime`;
 const IMAGE_HELP = "JPG, PNG veya WebP, en fazla 5 MB";
-const HERO_HELP = "JPG, PNG, WebP veya WebM video, en fazla 5 MB görsel / 8 MB video";
+const HERO_HELP =
+  "JPG, PNG, WebP görsel (en fazla 5 MB) ya da WebM/MP4/MOV video (en fazla 50 MB, 60 sn; otomatik sıkıştırılır)";
+/** Sunucudaki `MAX_VIDEO_INPUT_BYTES` ile aynı; büyük dosya hiç gönderilmeden reddedilir. */
+const MAX_VIDEO_INPUT_BYTES = 50 * 1024 * 1024;
+const VIDEO_TOO_LARGE = "Video boyutu en fazla 50 MB olabilir";
 
 export function SiteImageField({
   eventId,
@@ -30,6 +34,7 @@ export function SiteImageField({
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
 
   const label = `${IMAGE_SLOT_LABELS[slot]} görseli`;
   const inputId = `site-image-${slot}`;
@@ -42,12 +47,20 @@ export function SiteImageField({
     const file = input.files?.[0];
     if (!file || !canEdit) return;
     setError(null);
+    const isVideo = acceptsVideo && file.type.startsWith("video/");
+    if (isVideo && file.size > MAX_VIDEO_INPUT_BYTES) {
+      input.value = "";
+      setError(VIDEO_TOO_LARGE);
+      toast.error(VIDEO_TOO_LARGE);
+      return;
+    }
+    setCompressing(isVideo);
     const data = new FormData();
     data.set("eventId", eventId);
     data.set("slot", slot);
     data.set("file", file);
     startTransition(async () => {
-      const result = await uploadSiteImageAction(data);
+      const result = await uploadSiteImageAction(data).finally(() => setCompressing(false));
       input.value = "";
       if (!result.ok) {
         setError(result.message);
@@ -116,6 +129,11 @@ export function SiteImageField({
           <p id={helpId} className="w-full text-xs text-muted-foreground">
             {acceptsVideo ? HERO_HELP : IMAGE_HELP}
           </p>
+          {pending && compressing ? (
+            <p role="status" className="w-full text-xs text-muted-foreground">
+              Video sıkıştırılıyor…
+            </p>
+          ) : null}
         </div>
       ) : null}
       {error ? (

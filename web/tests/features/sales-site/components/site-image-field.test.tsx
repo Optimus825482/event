@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/sales-site/actions", () => ({
@@ -9,6 +9,7 @@ vi.mock("@/features/sales-site/actions", () => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
+import { uploadSiteImageAction } from "@/features/sales-site/actions";
 import { SiteImageField } from "@/features/sales-site/components/site-image-field";
 
 afterEach(cleanup);
@@ -18,11 +19,46 @@ const WEBP = "event/00000000-0000-4000-8000-000000000001.webp";
 const WEBM = "event/00000000-0000-4000-8000-000000000002.webm";
 
 describe("SiteImageField", () => {
-  it("hero alanı WebM videoyu da kabul eder ve yardım metninde söyler", () => {
+  it("hero alanı WebM/MP4/MOV videoyu da kabul eder ve yardım metninde söyler", () => {
     render(<SiteImageField eventId={EVENT} slot="hero" path={null} canEdit />);
     const input = screen.getByLabelText("Hero görseli yükle");
-    expect(input.getAttribute("accept")).toBe("image/jpeg,image/png,image/webp,video/webm");
-    expect(screen.getByText("JPG, PNG, WebP veya WebM video, en fazla 5 MB görsel / 8 MB video")).toBeTruthy();
+    expect(input.getAttribute("accept")).toBe("image/jpeg,image/png,image/webp,video/webm,video/mp4,video/quicktime");
+    expect(
+      screen.getByText(
+        "JPG, PNG, WebP görsel (en fazla 5 MB) ya da WebM/MP4/MOV video (en fazla 50 MB, 60 sn; otomatik sıkıştırılır)",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("video yüklenirken 'Video sıkıştırılıyor…' durumu gösterilir, bitince kalkar", async () => {
+    let finish!: (v: { ok: true; data: unknown }) => void;
+    vi.mocked(uploadSiteImageAction).mockReturnValueOnce(new Promise((r) => (finish = r)) as never);
+    render(<SiteImageField eventId={EVENT} slot="hero" path={null} canEdit />);
+    const input = screen.getByLabelText("Hero görseli yükle");
+    fireEvent.change(input, { target: { files: [new File(["x"], "a.mp4", { type: "video/mp4" })] } });
+    expect((await screen.findByRole("status")).textContent).toBe("Video sıkıştırılıyor…");
+    await act(async () => finish({ ok: true, data: {} }));
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+  });
+
+  it("görsel yüklenirken sıkıştırma durumu gösterilmez", async () => {
+    vi.mocked(uploadSiteImageAction).mockReturnValueOnce(new Promise(() => undefined) as never);
+    render(<SiteImageField eventId={EVENT} slot="hero" path={null} canEdit />);
+    fireEvent.change(screen.getByLabelText("Hero görseli yükle"), {
+      target: { files: [new File(["x"], "a.png", { type: "image/png" })] },
+    });
+    await waitFor(() => expect(uploadSiteImageAction).toHaveBeenCalled());
+    expect(screen.queryByText("Video sıkıştırılıyor…")).toBeNull();
+  });
+
+  it("50 MB üstü video sunucuya gönderilmeden reddedilir", () => {
+    vi.mocked(uploadSiteImageAction).mockClear();
+    render(<SiteImageField eventId={EVENT} slot="hero" path={null} canEdit />);
+    const big = new File(["x"], "b.mov", { type: "video/quicktime" });
+    Object.defineProperty(big, "size", { value: 50 * 1024 * 1024 + 1 });
+    fireEvent.change(screen.getByLabelText("Hero görseli yükle"), { target: { files: [big] } });
+    expect(screen.getByRole("alert").textContent).toBe("Video boyutu en fazla 50 MB olabilir");
+    expect(uploadSiteImageAction).not.toHaveBeenCalled();
   });
 
   it.each(["cover", "artist"] as const)("%s alanı yalnızca görüntü kabul eder", (slot) => {

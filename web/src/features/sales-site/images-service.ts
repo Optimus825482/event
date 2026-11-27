@@ -12,7 +12,8 @@ import {
   type ImageKind,
 } from "@/features/uploads/images";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
-import { isWebm, saveVideo, VideoRejectedError } from "@/features/uploads/videos";
+import { compressHeroVideo, sniffVideo } from "@/features/uploads/video-compress";
+import { saveVideo, VideoRejectedError } from "@/features/uploads/videos";
 import { DomainError } from "@/lib/action";
 import { validHeroPath, type ImageSlot } from "./image-status";
 import type { SiteImageInput } from "./schemas";
@@ -40,14 +41,15 @@ async function isImageStillUsed(db: Db, imagePath: string): Promise<boolean> {
   return art !== undefined;
 }
 
-/** Yalnızca hero alanı WebM video kabul eder; diğer alanlarda video görüntü reddiyle geri çevrilir. */
-const HERO_REJECTED = "Yalnızca JPG, PNG, WebP görüntüsü veya WebM video yüklenebilir";
+/** Yalnızca hero alanı video (WebM/MP4/MOV) kabul eder; diğer alanlarda video görüntü reddiyle geri çevrilir. */
+const HERO_REJECTED = "Yalnızca JPG, PNG, WebP görüntüsü veya WebM, MP4, MOV video yüklenebilir";
 
 async function saveSlotFile(file: File, slot: ImageSlot, root: string): Promise<{ path: string }> {
   if (slot !== "hero") return saveImage(file, slot === "artist" ? "artist" : "event", root);
   // Karar istemcinin bildirdiği türe değil içeriğe göre verilir.
   const head = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
-  if (isWebm(head)) return saveVideo(file, root);
+  // Video önce VP9 WebM'e sıkıştırılır (MP4/MOV her zaman dönüştürülür), sonra doğrulanıp yazılır.
+  if (sniffVideo(head)) return saveVideo(await compressHeroVideo(file), root);
   try {
     return await saveImage(file, "event" satisfies ImageKind, root);
   } catch (error) {
@@ -91,7 +93,7 @@ async function readCurrentImage(
   return { oldPath: artist?.image ?? null, artistId };
 }
 
-/** Kapak, hero (görsel ya da WebM video) veya sanatçı görselini yükler; DB hatasında yeni dosyayı geri alır, paylaşılmayan eskiyi siler. */
+/** Kapak, hero (görsel ya da sıkıştırılmış WebM video) veya sanatçı görselini yükler; DB hatasında yeni dosyayı geri alır, paylaşılmayan eskiyi siler. */
 export async function replaceSiteImage(
   db: Db,
   actor: Actor,
