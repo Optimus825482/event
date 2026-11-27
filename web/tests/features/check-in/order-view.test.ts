@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { CheckInSuccess } from "@/features/check-in/result-schema";
+import { checkInSuccessSchema, type CheckInSuccess } from "@/features/check-in/result-schema";
 import type { DoorOrder } from "@/features/check-in/order-lookup";
-import { orderSummary, resultLine, selectableTicketIds } from "@/features/check-in/components/order-view";
+import { orderSummary, resultLine, selectableTicketIds, ticketName } from "@/features/check-in/components/order-view";
 
 const order: DoorOrder = {
   orderId: "o1",
   pnr: "ABCD2345",
   buyerName: "Deniz Yılmaz",
   tickets: [
-    { ticketId: "t1", tableId: "b1", tableLabel: "B1", checkedInAt: "2026-11-26T18:00:00.000Z" },
-    { ticketId: "t2", tableId: "b1", tableLabel: "B1", checkedInAt: null },
-    { ticketId: "t3", tableId: "b2", tableLabel: "B2", checkedInAt: null },
+    { ticketId: "t1", tableId: "b1", tableLabel: "B1", seatNo: 5, checkedInAt: "2026-11-26T18:00:00.000Z" },
+    { ticketId: "t2", tableId: "b1", tableLabel: "B1", seatNo: 6, checkedInAt: null },
+    { ticketId: "t3", tableId: "b2", tableLabel: "B2", seatNo: null, checkedInAt: null },
   ],
 };
 
@@ -21,6 +21,7 @@ const base: CheckInSuccess = {
   ticketId: null,
   pnr: null,
   gate: null,
+  seatNo: null,
   eventId: "e1",
   guestName: null,
   guestCount: 1,
@@ -50,4 +51,12 @@ describe("kapı sipariş görünümü", () => {
     ).toBe("Misafir · 4 kişi"));
   it("rezervasyon kapı doluysa kapıyı ekler", () =>
     expect(resultLine({ ...base, kind: "reservation", reservationId: "r1", gate: 1, guestCount: 4 })).toBe("Misafir · 4 kişi · Kapı 1"));
+  it("bilet adı sandalye numarasını taşır; null ise taşımaz", () => {
+    expect(ticketName(0, { tableLabel: "B1", seatNo: 5 })).toBe("Bilet 1 · Masa B1 · Sandalye 5");
+    expect(ticketName(2, { tableLabel: "B2", seatNo: null })).toBe("Bilet 3 · Masa B2");
+  });
+  it("seatNo'suz eski saklı yanıt null okunur", () => {
+    const { seatNo: _omit, ...legacy } = base;
+    expect(checkInSuccessSchema.parse(legacy).seatNo).toBeNull();
+  });
 });

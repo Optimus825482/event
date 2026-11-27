@@ -56,6 +56,6 @@ describe("giriş şemaları", () => {
       checkedInAt: "2026-11-26T18:00:00.000Z",
       checkedInBy: null,
     };
-    expect(checkInSuccessSchema.parse(old)).toEqual({ ...old, kind: "reservation", ticketId: null, pnr: null, gate: null });
+    expect(checkInSuccessSchema.parse(old)).toEqual({ ...old, kind: "reservation", ticketId: null, pnr: null, gate: null, seatNo: null });
   });
 });

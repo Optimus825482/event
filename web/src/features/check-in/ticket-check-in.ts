@@ -2,7 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { ticketStatusSql } from "@/db/sql-fragments";
 import { joinFullName } from "@/lib/full-name";
-import { eventTables, orders, tickets, users } from "@/db/schema";
+import { eventSaleSettings, eventTables, orders, tableSeatSlots, tickets, users } from "@/db/schema";
+import { seatNoShown } from "@/domain/seating";
 import type { EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
 import { CHECK_IN_MSG, checkedInAtExpr, publishCheckIn, type CheckInOutcome, type CheckInSuccess } from "./internal";
@@ -48,6 +49,9 @@ export async function readTicketCheckIn(
       eventId: tickets.eventId,
       tableId: tickets.tableId,
       tableLabel: eventTables.label,
+      isLoca: eventTables.isLoca,
+      saleMode: eventSaleSettings.saleMode,
+      seatNo: tableSeatSlots.seatNo,
       pnr: orders.pnr,
       buyerFirstName: orders.buyerFirstName,
       buyerLastName: orders.buyerLastName,
@@ -59,6 +63,8 @@ export async function readTicketCheckIn(
     .from(tickets)
     .innerJoin(orders, eq(orders.id, tickets.orderId))
     .innerJoin(eventTables, and(eq(eventTables.eventId, tickets.eventId), eq(eventTables.id, tickets.tableId)))
+    .leftJoin(tableSeatSlots, eq(tableSeatSlots.id, tickets.seatSlotId))
+    .leftJoin(eventSaleSettings, eq(eventSaleSettings.eventId, tickets.eventId))
     .leftJoin(users, eq(users.id, tickets.checkedInBy))
     .where(eq(tickets.id, ticketId));
   if (!row) throw new DomainError("not_found", CHECK_IN_MSG.ticketNotFound);
@@ -76,6 +82,7 @@ export async function readTicketCheckIn(
     guestCount: 1,
     tableId: row.tableId,
     tableLabel: row.tableLabel,
+    seatNo: seatNoShown({ saleMode: row.saleMode ?? "seat", isLoca: row.isLoca }) ? row.seatNo : null,
     checkedInAt: row.checkedInAt.toISOString(),
     checkedInBy: row.byId && row.byUsername ? { id: row.byId, username: row.byUsername } : null,
   };

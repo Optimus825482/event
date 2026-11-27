@@ -16,6 +16,7 @@ export const checkInSuccessSchema = z.object({
   guestCount: z.number(),
   tableId: z.string(),
   tableLabel: z.string(),
+  seatNo: z.number().nullable().default(null),
   checkedInAt: z.string(),
   checkedInBy: z.object({ id: z.string(), username: z.string() }).nullable(),
 });

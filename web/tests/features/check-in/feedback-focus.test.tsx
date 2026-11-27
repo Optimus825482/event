@@ -31,4 +31,61 @@ describe("check-in sonuç bandı odağı", () => {
     expect(document.activeElement).toBe(input);
     input.remove();
   });
+
+  it("başarı bandı masa ve sandalyeyi gösterir", () => {
+    render(
+      <CheckInFeedbackBanner
+        feedback={{
+          kind: "success",
+          result: {
+            outcome: "checked_in",
+            kind: "ticket",
+            reservationId: null,
+            ticketId: "t1",
+            pnr: "ABCD2345",
+            gate: null,
+            seatNo: 5,
+            eventId: "e1",
+            guestName: "Deniz Yılmaz",
+            guestCount: 1,
+            tableId: "b1",
+            tableLabel: "B1",
+            checkedInAt: "2026-11-26T18:00:00.000Z",
+            checkedInBy: null,
+          },
+        }}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.getByText("Masa B1 · Sandalye 5")).toBeTruthy();
+  });
+
+  it("seatNo null iken bant yalnızca masayı gösterir", () => {
+    render(
+      <CheckInFeedbackBanner
+        feedback={{
+          kind: "success",
+          result: {
+            outcome: "checked_in",
+            kind: "ticket",
+            reservationId: null,
+            ticketId: "t1",
+            pnr: "ABCD2345",
+            gate: null,
+            seatNo: null,
+            eventId: "e1",
+            guestName: "Deniz Yılmaz",
+            guestCount: 1,
+            tableId: "b1",
+            tableLabel: "B1",
+            checkedInAt: "2026-11-26T18:00:00.000Z",
+            checkedInBy: null,
+          },
+        }}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.getByText("Masa B1")).toBeTruthy();
+    expect(screen.queryByText(/Sandalye/)).toBeNull();
+  });
 });

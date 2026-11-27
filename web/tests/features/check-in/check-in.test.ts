@@ -39,6 +39,7 @@ describe("checkIn", () => {
       guestCount: 2,
       checkedInBy: { id: door.id, username: door.username },
     });
+    expect(result.seatNo).toBeNull();
     expect(Date.parse(result.checkedInAt)).toBeGreaterThanOrEqual(before - 1000);
     const row = await reservationRow(reservation.id);
     expect(row.status).toBe("checked_in");

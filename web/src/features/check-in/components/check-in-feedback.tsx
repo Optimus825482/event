@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, Clock, MapPin, XCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import { seatLabel } from "@/domain/seating";
 import { cn } from "@/lib/utils";
 import { batchMessage, batchTone } from "./batch-feedback";
 import { resultLine } from "./order-view";
@@ -153,7 +154,7 @@ export function CheckInFeedbackBanner({
         <Icon className={`mt-1 h-6 w-6 shrink-0 ${success ? "text-emerald-400" : "text-amber-400"}`} aria-hidden="true" />
         <div className="space-y-1">
           <p className="text-lg font-semibold">{success ? "Giriş yapıldı" : "Bu misafir zaten giriş yaptı"}</p>
-          <p className="text-2xl font-bold text-white">Masa {result.tableLabel}</p>
+          <p className="text-2xl font-bold text-white">{seatLabel(result.tableLabel, result.seatNo)}</p>
           <p>{resultLine(result)}</p>
           {!success ? (
             <p className="text-sm">

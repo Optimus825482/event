@@ -204,6 +204,7 @@ export async function readCheckIn(tx: Tx, reservationId: string, outcome: CheckI
     guestCount: row.guestCount,
     tableId: row.tableId,
     tableLabel: row.tableLabel,
+    seatNo: null,
     // Eski verideki giriş zamanı boş olabilir; yanıt her zaman bir zaman taşır.
     checkedInAt: (row.checkedInAt ?? new Date(0)).toISOString(),
     checkedInBy: row.byId && row.byUsername ? { id: row.byId, username: row.byUsername } : null,

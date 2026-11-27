@@ -10,6 +10,8 @@ import { createAction } from "@/lib/action";
 import { memberActor, noAccessActor } from "../../helpers/actors";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { doorActor, stampTicketCheckIn, ticketIdsOf, ticketedEvent } from "../../helpers/door";
+import { createPaidOrder } from "../../helpers/ticketing";
+import { saleEvent } from "../ticketing/fixtures";
 import { bookedGuest, expectDomain, reservationRow } from "./fixtures";
 
 describe("kapıda rezervasyon kodu ve PNR araması", () => {
@@ -123,5 +125,24 @@ describe("kapıda rezervasyon kodu ve PNR araması", () => {
       getActor: async () => memberActor("casino", { check_in: "v---" }),
     }).defineAction(checkInActionDefs.findOrder);
     expect(await view({ eventId: te.event.id, pnr: "ABCD2345" })).toMatchObject({ ok: true, data: null });
+  });
+
+  it("kapı siparişi biletleri sandalye numarasıyla, masa → sandalye sırasında döner", async () => {
+    const door = await doorActor();
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const paid = await createPaidOrder(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [6, 5] }] });
+    const found = await findOrderAtDoor(db, door, { eventId: event.id, pnr: paid.pnr! });
+    expect(found?.tickets.map((t) => t.seatNo)).toEqual([5, 6]);
+
+    const tableMode = await saleEvent({ settings: { saleMode: "table" } });
+    const tableOrder = await createPaidOrder(db, {
+      eventId: tableMode.event.id,
+      items: [{ tableId: tableMode.tables[0]!.id, quantity: 8 }],
+    });
+    const tableFound = await findOrderAtDoor(db, door, { eventId: tableMode.event.id, pnr: tableOrder.pnr! });
+    expect(tableFound?.tickets.every((t) => t.seatNo === null)).toBe(true);
   });
 });

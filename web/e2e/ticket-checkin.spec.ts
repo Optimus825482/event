@@ -43,8 +43,8 @@ test("PNR ile toplu ve tek tek giriş: tek istek, farklı anahtarlar, kapı 2", 
   await expect(order.getByRole("heading")).toHaveText(
     `Sipariş · PNR ${seed.pnr.slice(0, 4)}-${seed.pnr.slice(4)} · ${seed.buyerFirstName} ${seed.buyerLastName}`,
   );
-  await expect(order.getByText("Masa B1", { exact: true })).toHaveCount(2);
-  await expect(order.getByText("Masa B2", { exact: true })).toHaveCount(1);
+  await expect(order.getByText(/Masa B1 · Sandalye \d+/)).toHaveCount(2);
+  await expect(order.getByText(/Masa B2 · Sandalye \d+/)).toHaveCount(1);
   await expect(order.getByRole("checkbox")).toHaveCount(3);
 
   // Bir bilet seçimden çıkarılır, kalan ikisi tek toplu istekle girer.

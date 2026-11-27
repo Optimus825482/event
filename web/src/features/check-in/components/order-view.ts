@@ -1,7 +1,12 @@
+import { seatLabel } from "@/domain/seating";
 import { displayPnr } from "../door-code";
 import { gateLabel } from "../gates";
 import type { DoorOrder } from "../order-lookup";
 import type { CheckInSuccess } from "../result-schema";
+
+export function ticketName(index: number, t: { tableLabel: string; seatNo: number | null }): string {
+  return `Bilet ${index + 1} · ${seatLabel(t.tableLabel, t.seatNo)}`;
+}
 
 /** Giriş yapmamış ve gönderimi reddedilmemiş biletler, liste sırasıyla. */
 export function selectableTicketIds(order: DoorOrder, failedIds: readonly string[] = []): string[] {
