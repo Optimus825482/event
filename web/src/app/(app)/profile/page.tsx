@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { eq } from "drizzle-orm";
 import { Mail, Phone, ShieldCheck, User as UserIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -7,11 +6,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { actorLabel } from "@/components/layout/role-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db/client";
-import { users } from "@/db/schema";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { displayableAvatar } from "@/features/users/avatar";
 import { AvatarUpload } from "@/features/users/components/avatar-upload";
 import { ChangePasswordForm } from "@/features/users/components/change-password-form";
+import { getOwnProfile } from "@/features/users/profile";
 
 export const metadata: Metadata = { title: "Profilim | EventFlow" };
 
@@ -30,17 +29,7 @@ function Row({ icon, label, value }: { icon: ReactNode; label: string; value: st
 /** Her giriş yapmış kullanıcının kendi hesabı: bilgiler salt okunur; fotoğraf ve parola değiştirilebilir. */
 export default async function ProfilePage() {
   const actor = await requirePolicyActor();
-  const [me] = await db
-    .select({
-      name: users.name,
-      username: users.username,
-      email: users.email,
-      phone: users.phone,
-      position: users.position,
-      image: users.image,
-    })
-    .from(users)
-    .where(eq(users.id, actor.id));
+  const me = await getOwnProfile(db, actor);
   if (!me) notFound();
 
   return (

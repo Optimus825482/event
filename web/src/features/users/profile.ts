@@ -31,6 +31,25 @@ export async function setOwnAvatar(
   return { hasAvatar: input.image !== null };
 }
 
+/**
+ * Profil sayfasının salt okunur hesap bilgileri. Yetki: yalnızca kendi satırı (`actor.id`);
+ * `image` ham değerdir, gösterim süzgecini (`displayableAvatar`) çağıran uygular.
+ */
+export async function getOwnProfile(db: Db | Tx, actor: Actor) {
+  const [row] = await db
+    .select({
+      name: users.name,
+      username: users.username,
+      email: users.email,
+      phone: users.phone,
+      position: users.position,
+      image: users.image,
+    })
+    .from(users)
+    .where(eq(users.id, actor.id));
+  return row ?? null;
+}
+
 /** Kabuk ve profil sayfası için kendi fotoğrafı; gösterilemeyecek eski değerler `null` döner. */
 export async function getOwnAvatar(db: Db | Tx, actor: Actor): Promise<string | null> {
   const [row] = await db.select({ image: users.image }).from(users).where(eq(users.id, actor.id));
