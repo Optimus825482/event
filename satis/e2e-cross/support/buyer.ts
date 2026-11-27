@@ -20,9 +20,12 @@ async function focusTable(page: Page, tableLabel: string): Promise<void> {
   const finder = page.getByRole("region", { name: "Masa bulucu" });
   const list = finder.getByRole("list", { name: "Alınabilir masalar" });
   const pattern = new RegExp(`^(Masa|Loca) ${escapeRegex(tableLabel)} ·`);
-  await list.getByRole("button", { name: pattern }).click();
   const activeCard = page.getByRole("region", { name: "Seçili masa" });
-  await expect(activeCard.getByRole("heading", { name: new RegExp(`^(Masa|Loca) ${escapeRegex(tableLabel)}$`) })).toBeVisible();
+  const heading = activeCard.getByRole("heading", { name: new RegExp(`^(Masa|Loca) ${escapeRegex(tableLabel)}$`) });
+  await expect(async () => {
+    await list.getByRole("button", { name: pattern }).click();
+    await expect(heading).toBeVisible({ timeout: 2000 });
+  }).toPass();
 }
 
 export async function pickSeats(page: Page, tableLabel: string, seatNos: readonly number[]): Promise<void> {
