@@ -10,6 +10,7 @@ import {
   getOrderView,
   releaseHold,
   SalesError,
+  sweepExpiredHolds,
 } from "@/features/ticketing/orders-service";
 import { truncateAll } from "../../helpers/db";
 import { createPendingHold, expireOrder } from "../../helpers/ticketing";
@@ -366,5 +367,37 @@ describe("süre dolumu ve bırakma eşzamanlılığı", () => {
     // Bırakmadan sonra başlayan tutma en çok bir tanedir; kazanan varsa masanın tamamını tutar.
     expect(ok.length - 1).toBeLessThanOrEqual(1);
     if (ok.length === 2) expect(active).toHaveLength(8);
+  });
+  it("kapsamsız süpürme: tüm masalardaki süresi dolan tutmalar expired olur, süresi dolmayan dokunulmaz", async () => {
+    const {
+      event,
+      tables: [a1, b1],
+    } = await twoTables();
+    const staleA = await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2 }] });
+    const staleB = await createPendingHold(db, { eventId: event.id, items: [{ tableId: b1!.id, quantity: 2 }] });
+    const live = await createPendingHold(db, { eventId: event.id, items: [{ tableId: b1!.id, quantity: 1 }] });
+    await expireOrder(db, staleA.orderId);
+    await expireOrder(db, staleB.orderId);
+    expect(await sweepExpiredHolds(db)).toBe(2);
+    expect((await orderRow(staleA.orderId))?.status).toBe("expired");
+    expect((await orderRow(staleB.orderId))?.status).toBe("expired");
+    expect((await ticketsOf(staleA.orderId)).every((t) => t.status === "expired" && t.seatSlotId === null)).toBe(true);
+    expect((await orderRow(live.orderId))?.status).toBe("pending");
+    expect(await sweepExpiredHolds(db)).toBe(0);
+  });
+
+  it("süpürme sınırlıdır: tek çağrıda en çok `limit` sipariş işlenir", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await twoTables();
+    const holds = [];
+    for (let i = 0; i < 3; i += 1) {
+      holds.push(await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 1 }] }));
+    }
+    for (const h of holds) await expireOrder(db, h.orderId);
+    expect(await sweepExpiredHolds(db, 2)).toBe(2);
+    expect(await sweepExpiredHolds(db, 2)).toBe(1);
+    expect(await sweepExpiredHolds(db, 2)).toBe(0);
   });
 });

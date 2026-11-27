@@ -5,6 +5,7 @@ import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
 import type { RebuildArchiveInput } from "./schemas";
+import { mapArchiveWriteError } from "./errors";
 import { archiveEvent } from "./snapshot";
 
 /** Tamamlanmış etkinliğin arşivini güncel veriden yeniden yazar (yoksa oluşturur). */
@@ -14,6 +15,18 @@ export async function rebuildArchive(
   input: RebuildArchiveInput,
 ): Promise<{ eventId: string; revision: number }> {
   authorize(actor, "archive", "edit");
+  try {
+    return await rebuildArchiveTx(db, actor, input);
+  } catch (error) {
+    return mapArchiveWriteError(error);
+  }
+}
+
+async function rebuildArchiveTx(
+  db: Db,
+  actor: Actor,
+  input: RebuildArchiveInput,
+): Promise<{ eventId: string; revision: number }> {
   // Anlık görüntü tek tutarlı zamanda okunsun diye repeatable read.
   return db.transaction(async (tx) => {
     const [locked] = await tx.select().from(events).where(eq(events.id, input.eventId)).for("update");

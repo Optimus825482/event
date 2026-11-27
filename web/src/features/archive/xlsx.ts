@@ -10,9 +10,14 @@ export type SheetSpec = {
   rows: XlsxCell[][];
   /** 1 tabanlı sütun numaraları; `#,##0.00` biçimi uygulanır. */
   moneyColumns?: number[];
+  /** 1 tabanlı sütun numaraları; değer zaten yüzde sayısıdır (42.9), `0.0" %"` biçimi uygulanır (bölme yok). */
+  percentColumns?: number[];
+  /** 1 tabanlı satır numarası (başlık = 1) → "Değer" (2. sütun) hücre biçimi; karışık değerli sütunlar için. */
+  rowFormats?: Record<number, string>;
 };
 
-const MONEY_FORMAT = "#,##0.00";
+export const MONEY_FORMAT = "#,##0.00";
+export const PERCENT_FORMAT = '0.0" %"';
 
 /**
  * Para dizgesini Excel sayı hücresine çevirir (Karar 16). `numeric(12,2)` en çok 12 basamaktır,
@@ -34,6 +39,10 @@ export async function buildWorkbook(sheets: SheetSpec[]): Promise<Uint8Array> {
       column.width = 20;
     });
     for (const index of spec.moneyColumns ?? []) sheet.getColumn(index).numFmt = MONEY_FORMAT;
+    for (const index of spec.percentColumns ?? []) sheet.getColumn(index).numFmt = PERCENT_FORMAT;
+    for (const [rowNumber, format] of Object.entries(spec.rowFormats ?? {})) {
+      sheet.getRow(Number(rowNumber)).getCell(2).numFmt = format;
+    }
     sheet.views = [{ state: "frozen", ySplit: 1 }];
   }
   return new Uint8Array(await workbook.xlsx.writeBuffer());

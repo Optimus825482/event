@@ -84,3 +84,10 @@ describe("dönem raporu", () => {
     expect(() => assertCanViewReports(actor)).not.toThrow();
   });
 });
+
+describe("getPeriodReport girdi doğrulaması", () => {
+  it("geçersiz dönem hata fırlatır", async () => {
+    await expect(getPeriodReport(db, actor, { from: "2027-02-30", to: "2027-01-01" })).rejects.toThrow();
+    await expect(getPeriodReport(db, actor, { from: "2027-03-01", to: "2027-01-01" })).rejects.toThrow();
+  });
+});

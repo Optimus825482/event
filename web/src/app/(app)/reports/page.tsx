@@ -19,7 +19,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   assertCanViewReports(actor);
   const params = await searchParams;
   const fallback = defaultPeriod(new Date());
-  const input = { from: first(params.from)?.trim() || fallback.from, to: first(params.to)?.trim() || fallback.to };
+  const rawFrom = first(params.from)?.trim();
+  const rawTo = first(params.to)?.trim();
+  const input = { from: rawFrom || fallback.from, to: rawTo || fallback.to };
+  const usedDefault = !rawFrom || !rawTo;
   const parsed = periodSchema.safeParse(input);
   const report = parsed.success ? await getPeriodReport(db, actor, parsed.data) : null;
   const errors = parsed.success ? [] : [...new Set(parsed.error.issues.map((i) => i.message))];
@@ -40,6 +43,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
         }
       />
       <PeriodForm from={input.from} to={input.to} errorId={errors.length > 0 ? "period-error" : undefined} />
+      {usedDefault ? (
+        <p className="text-xs text-muted-foreground">
+          {!rawFrom && !rawTo ? "Tarih seçilmedi" : "Eksik tarih tamamlandı"}; varsayılan dönem kullanıldı ({input.from} – {input.to}).
+        </p>
+      ) : null}
       {errors.length > 0 ? (
         <div id="period-error" role="alert" className="rounded-lg border border-red-700 p-3 text-sm text-red-800 dark:border-red-300 dark:text-red-200">
           {errors.join(" ")}

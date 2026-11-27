@@ -17,6 +17,7 @@ import {
 import { parsePnr } from "@/features/ticketing/pnr";
 import type { PaymentProvider } from "@/features/ticketing/payment/provider";
 import { activeProvider } from "@/features/ticketing/payment/registry";
+import { sha256Hex } from "@/lib/digest";
 import { checkSalesAuth, salesClientIp } from "./auth";
 import { computeAvailability, getSaleEventDetail, listSaleEvents } from "./catalog";
 import {
@@ -139,7 +140,7 @@ export function createSalesHandlers(deps: SalesDeps): SalesHandlers {
         if (!body.ok) return body.response;
         const pnr = parsePnr(body.data.pnr);
         if (pnr === null) return salesFailure("order_not_found");
-        const deniedPnr = await limited("sales_lookup_pnr", pnr);
+        const deniedPnr = await limited("sales_lookup_pnr", sha256Hex(pnr));
         if (deniedPnr) return deniedPnr;
         const found = await findOrderByPnr(deps.db, { pnr, lastName: body.data.lastName });
         return found ? salesJson(200, { orderToken: signOrderToken(found.orderId) }) : salesFailure("order_not_found");

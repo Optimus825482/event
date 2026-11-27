@@ -5,7 +5,7 @@ import { DomainError } from "@/lib/action";
 import { dateToZonedWallClock } from "@/lib/time-zone";
 import { formatDate } from "@/lib/utils";
 import { getArchiveView, type ArchiveSummary } from "./read";
-import { buildWorkbook, moneyCell, type SheetSpec } from "./xlsx";
+import { buildWorkbook, MONEY_FORMAT, moneyCell, PERCENT_FORMAT, type SheetSpec } from "./xlsx";
 
 export type ExportResult =
   | { ok: true; bytes: Uint8Array; filename: string }
@@ -21,6 +21,17 @@ export function exportFailure(error: unknown): ExportResult {
   }
   throw error;
 }
+
+const MONEY_LABELS = new Set([
+  "Bilet geliri",
+  "Demo bilet geliri (gerçek ödeme alınmadı)",
+  "Sanatçı ücreti",
+  "Tahmini gider",
+  "Gerçekleşen gider",
+  "Tahmini diğer gelir",
+  "Gerçekleşen diğer gelir",
+  "Net (gerçekleşen)",
+]);
 
 export function archiveSheets(view: ArchiveSummary): SheetSpec[] {
   const money = (v: string | null) => moneyCell(v);
@@ -59,9 +70,14 @@ export function archiveSheets(view: ArchiveSummary): SheetSpec[] {
     ["Katılım %", view.rates.attendance],
     ["No-show %", view.rates.noShow],
   ];
-  // "Değer" sütunu adet, para ve yüzde karışıktır; sütun biçimi uygulanmaz (para yine sayı hücresidir).
+  // "Değer" sütunu adet, para ve yüzde karışıktır; biçim satır başına uygulanır (başlık 1. satırdır).
+  const rowFormats: Record<number, string> = {};
+  summary.forEach(([label], index) => {
+    if (label.endsWith(" %")) rowFormats[index + 2] = PERCENT_FORMAT;
+    else if (MONEY_LABELS.has(label)) rowFormats[index + 2] = MONEY_FORMAT;
+  });
   return [
-    { name: "Özet", headers: ["Alan", "Değer"], rows: summary },
+    { name: "Özet", headers: ["Alan", "Değer"], rows: summary, rowFormats },
     {
       name: "Kategoriler",
       headers: ["Kategori", "Satılan bilet", "Gelir"],
