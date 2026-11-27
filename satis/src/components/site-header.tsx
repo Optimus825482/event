@@ -1,20 +1,18 @@
 import Link from "next/link";
-import { buttonClass } from "@/components/ui/button";
-import { cn } from "@/lib/cn";
+import { SiteNav } from "@/components/site-nav";
+import { SITE_NAME } from "@/content/site";
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-line bg-surface">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2">
+    <header className="no-print sticky top-0 z-40 border-b border-line bg-surface">
+      <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4 px-[clamp(16px,4vw,44px)] py-3.5">
         <Link
           href="/"
-          className={cn("inline-flex min-h-11 items-center font-serif text-lg font-semibold text-gold no-underline")}
+          className="inline-flex min-h-11 items-center text-[13.5px] font-bold uppercase tracking-[0.2em] text-gold-bright no-underline"
         >
-          Merit Royal Bilet
+          {SITE_NAME}
         </Link>
-        <Link href="/biletimi-bul" className={buttonClass("ghost")}>
-          Biletimi bul
-        </Link>
+        <SiteNav />
       </div>
     </header>
   );

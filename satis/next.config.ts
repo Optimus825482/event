@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
       { source: "/odeme/:path*", headers: privateHeaders() },
       { source: "/bilet/:path*", headers: privateHeaders() },
       { source: "/biletimi-bul", headers: privateHeaders() },
+      { source: "/fonts/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=2592000" }] },
     ];
   },
   turbopack: {

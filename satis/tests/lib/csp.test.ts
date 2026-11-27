@@ -22,4 +22,9 @@ describe("CSP", () => {
     expect(csp).toContain("img-src 'self' data:");
   });
   it("nonce her çağrıda farklıdır", () => expect(generateNonce()).not.toBe(generateNonce()));
+  it("yazı tipi ve görsel yalnızca kendi kökenimizden; politika dış köken içermez", () => {
+    const csp = buildCsp({ nonce: "N", production: true });
+    expect(csp).toContain("font-src 'self' data:");
+    expect(csp).not.toMatch(/https?:\/\//);
+  });
 });

@@ -5,10 +5,33 @@ import { expectNoHorizontalOverflow } from "./support/layout";
 test("ana sayfa satıştaki etkinliği durumuyla listeler ve 375 px'te taşmaz", async ({ page }) => {
   await page.goto("/");
   const card = page.getByRole("article").filter({ hasText: "Yılbaşı Galası" });
-  await expect(card.getByText("Satışta")).toBeVisible();
-  await expect(card.getByText("Başlangıç fiyatı: 1.500,00 ₺")).toBeVisible();
-  await expect(card.getByRole("link", { name: "Masa seç" })).toHaveAttribute("href", `/etkinlik/${fakeState().events.gala.id}`);
+  await expect(card.getByText("Başlangıç: 1.500,00 ₺")).toBeVisible();
+  await expect(card.getByRole("link", { name: "Bilet Al" })).toHaveAttribute(
+    "href",
+    `/etkinlik/${fakeState().events.gala.id}#bilet-al`,
+  );
   await expect(page.getByRole("article").filter({ hasText: "Bahar Konseri" }).getByText("Satış yakında")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test("üst menü ve alt bilgi: bağlantılar, içeriğe geç, 375 px'te menü açılır", async ({ page }) => {
+  await page.goto("/");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "İçeriğe geç" })).toBeFocused();
+  await page.getByText("Menü", { exact: true }).click();
+  const menu = page.getByRole("navigation", { name: "Ana menü" });
+  for (const name of ["Ana Sayfa", "Yaklaşan Etkinlikler", "Takvim", "Biletim (PNR)", "Hakkımızda", "Bilet Al"]) {
+    await expect(menu.getByRole("link", { name }).last()).toBeVisible();
+  }
+  await expect(page.getByRole("navigation", { name: "Keşfet" }).getByRole("link", { name: "İade Koşulları" })).toHaveAttribute(
+    "href",
+    "/iade",
+  );
+  await expect(page.getByRole("navigation", { name: "Hukuki" }).getByRole("link", { name: "KVKK" })).toHaveAttribute(
+    "href",
+    "/kvkk",
+  );
+  await expect(page.getByText("© 2026 Merit Entertainment. Tüm hakları saklıdır.")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -30,9 +53,9 @@ test("hukuki sayfalar yer tutucu olduğunu açıkça söyler", async ({ page }) 
 
 test("altın düğmenin metni okunur: hesaplanan renkler token'lardır", async ({ page }) => {
   await page.goto("/");
-  const link = page.getByRole("link", { name: "Masa seç" }).first();
+  const link = page.getByRole("article").first().getByRole("link", { name: "Bilet Al" });
   expect(await link.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor])).toEqual([
-    "rgb(20, 27, 45)",
+    "rgb(8, 9, 13)",
     "rgb(212, 175, 55)",
   ]);
 });

@@ -1,47 +1,159 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/cormorant-garamond-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0100-02FF, U+1E00-1EFF;
+  src: url("/fonts/cormorant-garamond-latin-ext-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/cormorant-garamond-latin-500-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0100-02FF, U+1E00-1EFF;
+  src: url("/fonts/cormorant-garamond-latin-ext-500-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin-wght-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  unicode-range: U+0100-02FF, U+1E00-1EFF;
+  src: url("/fonts/dm-sans-latin-ext-wght-normal.woff2") format("woff2");
+}
+
 /* Renk token'ları src/lib/theme.ts ile birebir aynıdır (tests/lib/theme.test.ts eşitliği zorlar). */
 @theme {
   --color-*: initial;
-  --color-bg: #0b1220;
-  --color-surface: #141b2d;
-  --color-surface-raised: #1c2540;
-  --color-line: #2a3555;
+  --color-bg: #08090d;
+  --color-surface: #11131a;
+  --color-surface-raised: #161923;
+  --color-footer: #06070a;
+  --color-line: #24262c;
+  --color-line-gold: #352e16;
   --color-gold: #d4af37;
-  --color-gold-bright: #e6c558;
-  --color-ivory: #f4f0e8;
-  --color-muted: #b9ae9a;
-  --color-on-gold: #141b2d;
-  --color-glass: #262c3c;
-  --color-danger: #ff8a80;
-  --color-success: #7fd1a3;
-  --color-disabled-bg: #2a3555;
-  --color-disabled-text: #b9ae9a;
+  --color-gold-bright: #f0d068;
+  --color-ivory: #f7f5f0;
+  --color-muted: #a6aab8;
+  --color-on-gold: #08090d;
+  --color-glass: #252013;
+  --color-danger: #fda4af;
+  --color-success: #34d399;
+  --color-disabled-bg: #24262c;
+  --color-disabled-text: #a6aab8;
 }
 
-/* Web yazı tipi yok: sistem yazı tipi yığını (dış ağa bağımlılık olmasın). */
 @theme inline {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
 }
 
 html {
   color-scheme: dark;
+  scroll-padding-top: 88px;
 }
 
 body {
   background-color: var(--color-bg);
   color: var(--color-ivory);
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
 }
 
 h1,
 h2,
 h3 {
   font-family: var(--font-serif);
+  font-weight: 500;
+  font-synthesis-weight: none;
+  line-height: 1.05;
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-gold);
+  outline: 2px solid var(--color-gold-bright);
   outline-offset: 2px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+}
+
+.eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 28px;
+  height: 1px;
+  background-color: var(--color-gold);
+}
+
+.page-gutter {
+  padding-inline: clamp(16px, 3.5vw, 36px);
+}
+
+.hero-glow {
+  background-image: radial-gradient(
+    900px 500px at 75% 25%,
+    color-mix(in srgb, var(--color-gold) 16%, transparent),
+    transparent 65%
+  );
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }

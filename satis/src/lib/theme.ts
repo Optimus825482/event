@@ -1,22 +1,24 @@
 /** Renk token'ları: bileşenler yalnızca bunlardan (Tailwind `--color-*` değişkenleri üzerinden) renk alır. */
 export const COLORS = {
-  bg: "#0b1220",
-  surface: "#141b2d",
-  surfaceRaised: "#1c2540",
-  line: "#2a3555",
+  bg: "#08090d",
+  surface: "#11131a",
+  surfaceRaised: "#161923",
+  footer: "#06070a",
+  line: "#24262c",
+  lineGold: "#352e16",
   gold: "#d4af37",
-  goldBright: "#e6c558",
-  ivory: "#f4f0e8",
-  muted: "#b9ae9a",
-  onGold: "#141b2d",
-  glass: "#262c3c",
-  danger: "#ff8a80",
-  success: "#7fd1a3",
-  disabledBg: "#2a3555",
-  disabledText: "#b9ae9a",
+  goldBright: "#f0d068",
+  ivory: "#f7f5f0",
+  muted: "#a6aab8",
+  onGold: "#08090d",
+  glass: "#252013",
+  danger: "#fda4af",
+  success: "#34d399",
+  disabledBg: "#24262c",
+  disabledText: "#a6aab8",
 } as const;
 
-export type ColorName = keyof typeof COLORS;
+export type ColorName = Exclude<keyof typeof COLORS, "footer" | "lineGold">;
 
 function channel(value: number): number {
   const c = value / 255;
@@ -35,20 +37,29 @@ export function contrastRatio(fg: string, bg: string): number {
 }
 
 /** Metin taşıyan renk çiftleri; hepsi en az 4.5:1 olmalıdır (test zorlar). */
-export const TEXT_PAIRS: readonly { fg: ColorName; bg: ColorName }[] = [
+export const TEXT_PAIRS: readonly { fg: keyof typeof COLORS; bg: keyof typeof COLORS }[] = [
   { fg: "ivory", bg: "bg" },
   { fg: "ivory", bg: "surface" },
   { fg: "ivory", bg: "surfaceRaised" },
+  { fg: "ivory", bg: "footer" },
   { fg: "ivory", bg: "glass" },
   { fg: "muted", bg: "bg" },
   { fg: "muted", bg: "surface" },
+  { fg: "muted", bg: "surfaceRaised" },
+  { fg: "muted", bg: "footer" },
   { fg: "gold", bg: "bg" },
   { fg: "gold", bg: "surface" },
   { fg: "gold", bg: "surfaceRaised" },
   { fg: "gold", bg: "glass" },
+  { fg: "goldBright", bg: "bg" },
+  { fg: "goldBright", bg: "surface" },
+  { fg: "goldBright", bg: "surfaceRaised" },
+  { fg: "goldBright", bg: "footer" },
   { fg: "onGold", bg: "gold" },
   { fg: "onGold", bg: "goldBright" },
+  { fg: "danger", bg: "bg" },
   { fg: "danger", bg: "surface" },
+  { fg: "success", bg: "bg" },
   { fg: "success", bg: "surface" },
   { fg: "disabledText", bg: "disabledBg" },
 ];
