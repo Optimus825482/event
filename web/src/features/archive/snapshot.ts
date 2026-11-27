@@ -6,13 +6,15 @@ import {
   eventExtraStaff,
   eventStaffAssignments,
   eventTables,
+  events,
+  orders,
   reservations,
   tickets,
 } from "@/db/schema";
 import { effectiveSellable, SALE_CATEGORIES, SALE_CATEGORY_LABELS } from "@/domain/seating";
-import { getEventOrThrow } from "@/features/events/service";
 import { getFinanceSummary } from "@/features/finance/queries";
 import { getSalesTotals } from "@/features/ticketing/stats";
+import { DomainError } from "@/lib/action";
 
 /** `archivedAt` (zorunlu sütun) `archiveEvent`'te eklenir; anlık görüntü onu taşımaz. */
 type ArchiveInsert = Omit<typeof eventArchives.$inferInsert, "archivedAt">;
@@ -114,13 +116,30 @@ async function gateBreakdown(tx: Tx, eventId: string): Promise<ArchiveDetails["g
 }
 
 /**
+ * Satış ayarlarının para birimi ile gelir getiren (bilet kesilmiş) siparişlerin para birimi aynı olmalı;
+ * karışık para biriminde toplam anlamsızdır, sessizce yanlış arşiv yazmak yerine hata verilir.
+ */
+async function assertSingleCurrency(tx: Tx, eventId: string, settingsCurrency: string): Promise<void> {
+  const rows = await tx
+    .selectDistinct({ currency: orders.currency })
+    .from(orders)
+    .innerJoin(tickets, eq(tickets.orderId, orders.id))
+    .where(and(eq(orders.eventId, eventId), eq(tickets.status, "issued")));
+  if (rows.length > 1 || (rows[0] && rows[0].currency !== settingsCurrency)) {
+    throw new DomainError("conflict", "Siparişlerin para birimi satış ayarlarındaki para birimiyle uyuşmuyor");
+  }
+}
+
+/**
  * Etkinliğin anlık görüntüsünü kaynak tablolardan kurar; yalnızca okur. `revision`, `archivedAt` ve
  * `archivedBy` `archiveEvent`'indir. Para alanları kaynak dizgelerden aynen kopyalanır (aritmetik yok).
  */
 export async function buildArchiveSnapshot(tx: Tx, eventId: string): Promise<ArchiveInsert> {
-  const event = await getEventOrThrow(tx, eventId);
+  const [event] = await tx.select().from(events).where(eq(events.id, eventId));
+  if (!event) throw new DomainError("not_found", "Etkinlik bulunamadı");
   // Aynı işlem tek istemcide çalışır; eşzamanlı sorgu yerine sıralı beklenir.
   const finance = await getFinanceSummary(tx, eventId);
+  await assertSingleCurrency(tx, eventId, finance.currency);
   const sales = await getSalesTotals(tx, eventId);
   const tablesM = await tableMetrics(tx, eventId);
   const resM = await reservationMetrics(tx, eventId);

@@ -189,3 +189,18 @@ describe("arşiv anlık görüntüsü", () => {
     expect(await read()).toEqual(before);
   });
 });
+
+describe("arşiv para birimi denetimi", () => {
+  it("sipariş para birimi satış ayarlarından farklıysa conflict", async () => {
+    const s = await seedScenario(db);
+    await db.update(orders).set({ currency: "USD" }).where(eq(orders.eventId, s.event.id));
+    await expect(build(s.event.id)).rejects.toMatchObject({ code: "conflict" });
+  });
+
+  it("siparişler arasında karışık para birimi conflict", async () => {
+    const s = await seedScenario(db);
+    const [first] = await db.select().from(orders).where(eq(orders.eventId, s.event.id));
+    await db.update(orders).set({ currency: "USD" }).where(eq(orders.id, first!.id));
+    await expect(build(s.event.id)).rejects.toMatchObject({ code: "conflict" });
+  });
+});
