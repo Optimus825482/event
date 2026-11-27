@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { db } from "@/db/client";
-import { artists, eventSiteContent, events, tableGroupTables, tableSeatSlots, tableTypes } from "@/db/schema";
+import { artists, eventSiteContent, events, systemSettings, tableGroupTables, tableSeatSlots, tableTypes } from "@/db/schema";
 import {
   availabilitySchema,
   eventDetailSchema,
@@ -228,12 +228,16 @@ describe("satış API okuma uçları", () => {
     const { event: e2 } = await saleEvent();
     await db.update(events).set({ coverImage: "invalid/path.png" }).where(eq(events.id, e2.id));
 
-    const res = await makeApi().listEvents(req("GET", "/api/sales/v1/events"));
-    const body = eventsResponseSchema.parse(await res.json());
-    const card1 = body.events.find((e) => e.id === e1.id);
-    const card2 = body.events.find((e) => e.id === e2.id);
-    expect(card1).toMatchObject({ coverImage: coverPath, artistImage: artistPath, isDemo: true });
+    const resReal = await makeApi().listEvents(req("GET", "/api/sales/v1/events"));
+    const bodyReal = eventsResponseSchema.parse(await resReal.json());
+    const card2 = bodyReal.events.find((e) => e.id === e2.id);
     expect(card2).toMatchObject({ coverImage: null, artistImage: null, isDemo: false });
+
+    await db.insert(systemSettings).values({ salesDemoEnabled: true });
+    const resDemo = await makeApi().listEvents(req("GET", "/api/sales/v1/events"));
+    const bodyDemo = eventsResponseSchema.parse(await resDemo.json());
+    const card1 = bodyDemo.events.find((e) => e.id === e1.id);
+    expect(card1).toMatchObject({ coverImage: coverPath, artistImage: artistPath, isDemo: true });
   });
 
   it("ayrıntı: site içeriği satırı yokken tüm alanlar null, satış şekli seat", async () => {

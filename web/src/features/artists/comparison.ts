@@ -1,7 +1,7 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventArchives } from "@/db/schema";
-import { type ArchiveSummary, toArchiveSummary } from "@/features/archive/read";
+import { type ArchiveSummary, realArchivesOnly, toArchiveSummary } from "@/features/archive/read";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
@@ -31,9 +31,12 @@ export async function listArtistComparison(
     .select()
     .from(eventArchives)
     .where(
-      inArray(
-        eventArchives.artistId,
-        artistRows.map((a) => a.id),
+      and(
+        inArray(
+          eventArchives.artistId,
+          artistRows.map((a) => a.id),
+        ),
+        realArchivesOnly(),
       ),
     )
     .orderBy(asc(eventArchives.startsAt), asc(eventArchives.eventId));
@@ -67,7 +70,7 @@ export async function getArtistHistory(
     await ex
       .select()
       .from(eventArchives)
-      .where(eq(eventArchives.artistId, artistId))
+      .where(and(eq(eventArchives.artistId, artistId), realArchivesOnly()))
       .orderBy(desc(eventArchives.startsAt), desc(eventArchives.eventId))
   ).map(toArchiveSummary);
   return { artist, events, totals: totalsByCurrency(events) };

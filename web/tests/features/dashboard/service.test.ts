@@ -85,4 +85,25 @@ describe("dashboard service", () => {
       await expect(getAdminDashboard(db, await makeActor(managerActor("entertainment")))).rejects.toThrow();
     });
   });
+
+  it("pano sayıları ve yaklaşan listesi demo etkinliği içermez", async () => {
+    const admin = await makeActor(adminActor());
+    const real = await f.createEvent(db, { organizerId: admin.id, startsAt: inDays(2), name: "Gerçek" });
+    await f.createTable(db, real.id);
+    const person = await f.createStaff(db);
+    await f.createAssignment(db, { eventId: real.id, staffId: person.id });
+
+    const demo = await f.createEvent(db, { organizerId: admin.id, startsAt: inDays(3), name: "Demo", isDemo: true });
+    await f.createTable(db, demo.id);
+    await f.createAssignment(db, { eventId: demo.id, staffId: person.id });
+
+    const evDash = await getEventsDashboard(db, admin);
+    expect(evDash.totalEvents).toBe(1);
+    expect(evDash.upcomingEvents).toBe(1);
+    expect(evDash.upcoming.map((u) => u.id)).toEqual([real.id]);
+
+    const admDash = await getAdminDashboard(db, admin);
+    expect(admDash.events.total).toBe(1);
+    expect(admDash.events.upcoming).toBe(1);
+  });
 });

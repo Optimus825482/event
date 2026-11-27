@@ -42,7 +42,7 @@ describe("iç sipariş okuma", () => {
       { tableId: a1!.id, label: "A1", category: "standard", seats: 8, held: 2, issued: 3 },
       { tableId: b1!.id, label: "B1", category: "standard", seats: 8, held: 0, issued: 0 },
     ]);
-    expect(view.totals).toEqual({ issued: 0, revenue: "0.00", demoIssued: 3, demoRevenue: "4500.00" });
+    expect(view.totals).toEqual({ issued: 3, revenue: "4500.00", demoIssued: 0, demoRevenue: "0.00" });
   });
 
   it("olmayan etkinlik not_found", async () => {

@@ -10,6 +10,7 @@ import {
   tableSeatSlots,
 } from "@/db/schema";
 import { SALE_CATEGORY_LABELS, wholeOnlyOf, type SaleCategory } from "@/domain/seating";
+import { matchesDemoMode } from "@/features/demo/flag";
 import { getSeatPrices } from "@/features/seating/prices";
 import { getSaleSettings } from "@/features/seating/settings-service";
 import { SALES_ACTOR } from "@/features/ticketing/internal";
@@ -84,6 +85,7 @@ async function visibleEvents(ex: Db | Tx, eventId?: string): Promise<EventRow[]>
   const conditions = [
     inArray(events.planningStage, [...VISIBLE_STAGES]),
     inArray(events.status, [...VISIBLE_STATUSES]),
+    matchesDemoMode(),
   ];
   if (eventId) conditions.push(eq(events.id, eventId));
   return ex
@@ -104,6 +106,7 @@ export async function isListedImagePath(ex: Db | Tx, imagePath: string): Promise
       and(
         inArray(events.planningStage, [...VISIBLE_STAGES]),
         inArray(events.status, [...VISIBLE_STATUSES]),
+        matchesDemoMode(),
         or(eq(events.coverImage, imagePath), eq(eventSiteContent.heroImage, imagePath), eq(artists.image, imagePath)),
       ),
     )

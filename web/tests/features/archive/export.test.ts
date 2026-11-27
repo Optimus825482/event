@@ -36,12 +36,12 @@ describe("arşiv Excel", () => {
     expect(res.filename).toBe("arsiv-2027-01-10.xlsx");
     const summary = Object.fromEntries((await readSheet(res.bytes, "Özet")).slice(1) as [string, unknown][]);
     expect(summary).toMatchObject({
-      "Etkinlik": "Gala", "Sanatçı": "Sezen Aksu", "Satılan bilet": 4, "Bilet geliri": 550.5,
-      "Demo bilet (gerçek ödeme alınmadı)": 2, "Demo bilet geliri (gerçek ödeme alınmadı)": 501,
-      "Net (gerçekleşen)": -879.25, "F&B personel": 4, "Doluluk %": 42.9, "Katılım %": 50, "No-show %": 50,
+      "Etkinlik": "Gala", "Sanatçı": "Sezen Aksu", "Satılan bilet": 6, "Bilet geliri": 1051.5,
+      "Demo bilet (gerçek ödeme alınmadı)": 0, "Demo bilet geliri (gerçek ödeme alınmadı)": 0,
+      "Net (gerçekleşen)": -378.25, "F&B personel": 4, "Doluluk %": 42.9, "Katılım %": 50, "No-show %": 50,
     });
     expect(await readSheet(res.bytes, "Kategoriler")).toEqual([
-      ["Kategori", "Satılan bilet", "Gelir"], ["Standart", 3, 300], ["Premium", 0, 0], ["VIP", 1, 250.5],
+      ["Kategori", "Satılan bilet", "Gelir"], ["Standart", 3, 300], ["Premium", 0, 0], ["VIP", 3, 751.5],
     ]);
     expect((await readSheet(res.bytes, "Finans kalemleri"))[1]).toEqual(["Gider", "artist_fee", "Sanatçı ücreti", 1000, 1200]);
     expect(await readSheet(res.bytes, "Kapılar")).toEqual([["Kapı", "Bilet", "Rezervasyon"], [1, 2, 0], [2, 0, 1]]);

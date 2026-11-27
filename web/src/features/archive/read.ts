@@ -1,4 +1,4 @@
-import { count, desc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { type ArchiveDetails, eventArchives } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
@@ -8,7 +8,12 @@ import { escapeLike, isUuid } from "@/lib/identifiers";
 import { archiveRates, type ArchiveRates } from "./metrics";
 import { addMoney, subMoney } from "./money";
 
-// Okuma işlevleri yalnızca `event_archives`'ı sorgular; canlı tablolara birleştirme yapılmaz.
+// Okuma işlevleri yalnızca `event_archives`'ı sorgular; tek istisna demo etkinlikleri listelerden/raporlardan ayıran `realArchivesOnly`'dir.
+
+/** Demo etkinliklerin arşiv satırlarını liste ve raporlardan ayıklar. */
+export function realArchivesOnly(): SQL {
+  return sql`not exists (select 1 from events e where e.id = ${eventArchives.eventId} and e.is_demo)`;
+}
 
 export type ArchiveRow = typeof eventArchives.$inferSelect;
 export type ArchiveSummary = ArchiveRow & { rates: ArchiveRates; netActual: string; hasDemo: boolean };
@@ -52,12 +57,13 @@ export async function listArchives(
   authorize(actor, "archive", "view");
   const page = filter.page && Number.isInteger(filter.page) && filter.page > 0 ? filter.page : 1;
   const term = filter.search?.trim();
-  const where: SQL | undefined = term
+  const searchWhere: SQL | undefined = term
     ? or(
         ilike(eventArchives.eventName, `%${escapeLike(term)}%`),
         ilike(eventArchives.artistName, `%${escapeLike(term)}%`),
       )
     : undefined;
+  const where = searchWhere ? and(realArchivesOnly(), searchWhere) : realArchivesOnly();
 
   // Aynı istemcide sıralı beklenir.
   const [totalRow] = await ex.select({ value: count() }).from(eventArchives).where(where);

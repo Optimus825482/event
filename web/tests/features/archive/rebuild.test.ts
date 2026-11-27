@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { eventArchives, eventFinanceItems, orders } from "@/db/schema";
+import { eventArchives, eventFinanceItems, events } from "@/db/schema";
 import { archiveActionDefs } from "@/features/archive/action-defs";
 import { rebuildArchive } from "@/features/archive/service";
 import type { Actor } from "@/features/auth/session";
@@ -20,7 +20,7 @@ describe("arşivi yeniden oluşturma", () => {
     const actor = await persistActor(db, managerActor("entertainment"));
     await changeEventStatus(db, actor, { id: s.event.id, status: "completed" });
     await db.update(eventFinanceItems).set({ actualAmount: "2000.00" }).where(eq(eventFinanceItems.label, "Sahne"));
-    await db.update(orders).set({ isDemo: true }).where(eq(orders.eventId, s.event.id));
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, s.event.id));
     expect(await rebuildArchive(db, actor, { eventId: s.event.id })).toEqual({ eventId: s.event.id, revision: 2 });
     expect(await getArchiveRow(db, s.event.id)).toMatchObject({
       revision: 2,

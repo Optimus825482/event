@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { eventArchives, eventExtraStaff, eventStaffAssignments, eventTables, orders, reservations, tickets } from "@/db/schema";
+import { eventArchives, eventExtraStaff, eventStaffAssignments, eventTables, events, orders, reservations, tickets } from "@/db/schema";
 import { archiveEvent, buildArchiveSnapshot } from "@/features/archive/snapshot";
 import { addFinanceItem, checkInTicket, getArchiveRow, seedScenario } from "../../helpers/archive";
 import { managerActor, persistActor } from "../../helpers/actors";
@@ -30,10 +30,10 @@ describe("arşiv anlık görüntüsü", () => {
       casinoSeatCount: 20,
       onlineTableCount: 2,
       sellableSeatCount: 14,
-      ticketsSold: 4,
-      ticketRevenue: "550.50",
-      demoTicketsSold: 2,
-      demoTicketRevenue: "501.00",
+      ticketsSold: 6,
+      ticketRevenue: "1051.50",
+      demoTicketsSold: 0,
+      demoTicketRevenue: "0.00",
       ticketsCheckedIn: 2,
       reservationCount: 2,
       reservationsCheckedIn: 1,
@@ -51,7 +51,7 @@ describe("arşiv anlık görüntüsü", () => {
       categories: [
         { category: "standard", label: "Standart", issued: 3, revenue: "300.00" },
         { category: "premium", label: "Premium", issued: 0, revenue: "0.00" },
-        { category: "vip", label: "VIP", issued: 1, revenue: "250.50" },
+        { category: "vip", label: "VIP", issued: 3, revenue: "751.50" },
       ],
       financeItems: [
         { direction: "expense", category: "artist_fee", label: "Sanatçı ücreti", estimatedAmount: "1000.00", actualAmount: "1200.00" },
@@ -68,7 +68,7 @@ describe("arşiv anlık görüntüsü", () => {
 
   it("yalnızca demo satışı olan etkinlikte gerçek bilet ve gelir sıfırdır", async () => {
     const s = await seedScenario(db);
-    await db.update(orders).set({ isDemo: true }).where(eq(orders.eventId, s.event.id));
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, s.event.id));
     const snap = await build(s.event.id);
     expect(snap).toMatchObject({ ticketsSold: 0, ticketRevenue: "0.00", demoTicketsSold: 6, demoTicketRevenue: "1051.50" });
     expect(snap.details!.categories.map((c) => c.issued)).toEqual([0, 0, 0]);
@@ -163,7 +163,7 @@ describe("arşiv anlık görüntüsü", () => {
     const s = await seedScenario(db);
     const actor = await persistActor(db, managerActor("entertainment"));
     await db.transaction((tx) => archiveEvent(tx, s.event.id, actor.id));
-    expect(await getArchiveRow(db, s.event.id)).toMatchObject({ revision: 1, archivedBy: actor.id, ticketsSold: 4 });
+    expect(await getArchiveRow(db, s.event.id)).toMatchObject({ revision: 1, archivedBy: actor.id, ticketsSold: 6 });
     await addFinanceItem(db, s.event.id, {
       direction: "expense",
       category: "other",
@@ -202,5 +202,19 @@ describe("arşiv para birimi denetimi", () => {
     const [first] = await db.select().from(orders).where(eq(orders.eventId, s.event.id));
     await db.update(orders).set({ currency: "USD" }).where(eq(orders.id, first!.id));
     await expect(build(s.event.id)).rejects.toMatchObject({ code: "conflict" });
+  });
+});
+
+describe("demo arşiv anlık görüntüsü", () => {
+  it("demo etkinliğin arşivinde gerçek bilet ve ciro sıfırdır", async () => {
+    const s = await seedScenario(db);
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, s.event.id));
+    const snap = await build(s.event.id);
+    expect(snap).toMatchObject({
+      ticketsSold: 0,
+      ticketRevenue: "0.00",
+      demoTicketsSold: 6,
+      demoTicketRevenue: "1051.50",
+    });
   });
 });

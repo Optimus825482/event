@@ -49,6 +49,7 @@ describe("sales-site overview", () => {
 
     const e2 = await saleEvent();
     await db.update(events).set({ isDemo: true }).where(eq(events.id, e2.event.id));
+    await db.insert(systemSettings).values({ salesDemoEnabled: true });
     await createPaidOrder(db, { eventId: e2.event.id, items: [{ tableId: e2.tables[0]!.id, quantity: 3 }] });
 
     const { summary } = await getSalesSiteOverview(db, ent, { now: new Date(), providerActive: true });

@@ -200,6 +200,7 @@ export async function listEvents(db: Executor, actor: Actor, filter: ListEventsF
         endsAt: events.endsAt,
         eventType: events.eventType,
         artistName: events.artistName,
+        isDemo: events.isDemo,
         reservationCount,
       })
       .from(events)
@@ -260,6 +261,7 @@ export async function listEventBoard(db: Executor, actor: Actor, filter: { searc
       reservationCount,
       tableCount,
       assignmentCount,
+      isDemo: events.isDemo,
     })
     .from(events)
     .where(where)
