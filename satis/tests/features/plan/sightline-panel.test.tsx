@@ -7,13 +7,22 @@ import { SightlinePanel } from "@/features/plan/sightline-panel";
 afterEach(cleanup);
 
 describe("SightlinePanel", () => {
-  it("etiket kurala uyuyorsa fotoğraf ve temsili görünüm etiketi gösterilir", () => {
-    render(<SightlinePanel set="diamond" table={{ label: "M-12", isLoca: false }} canLookIn3d onLookIn3d={() => {}} />);
+  it("etiket kurala uyuyorsa fotoğraf, masa başlığı ve temsili görünüm etiketi gösterilir; 3B'de masadan bak da sunulur", () => {
+    const onLookIn3d = vi.fn();
+    render(<SightlinePanel set="diamond" table={{ label: "M-12", isLoca: false }} canLookIn3d onLookIn3d={onLookIn3d} />);
     const img = screen.getByRole("img");
     expect(img.getAttribute("src")).toBe("/sightline/diamond/M-12.webp");
     expect(img.getAttribute("alt")).toContain("Masa M-12");
+    expect(screen.getByText("Masa M-12 · Sahne görüşü")).toBeTruthy();
     expect(screen.getByText(SIGHTLINE_CAPTION)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "3B'de masadan bak" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "3B'de masadan bak" }));
+    expect(onLookIn3d).toHaveBeenCalledTimes(1);
+  });
+
+  it("loca için başlık Loca ile yazılır", () => {
+    render(<SightlinePanel set="diamond" table={{ label: "L-3A", isLoca: true }} canLookIn3d={false} onLookIn3d={() => {}} />);
+    expect(screen.getByText("Loca L-3A · Sahne görüşü")).toBeTruthy();
+    expect(screen.getByRole("img").getAttribute("src")).toBe("/sightline/diamond/L-3A.webp");
   });
 
   it("fotoğraf yüklenemezse (404) yerine 3B'de masadan bak düğmesi gelir", () => {
@@ -50,6 +59,8 @@ describe("SightlinePanel", () => {
   it("masa seçili değilken genel görünüm fotoğrafı gösterilir", () => {
     render(<SightlinePanel set="diamond" table={null} canLookIn3d onLookIn3d={() => {}} />);
     expect(screen.getByRole("img").getAttribute("src")).toBe("/sightline/diamond/overview.webp");
+    expect(screen.getByText("Salon ortasından sahne görüşü")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "3B'de masadan bak" })).toBeNull();
   });
 
   it("masa değişince önceki hata durumu sıfırlanır", () => {

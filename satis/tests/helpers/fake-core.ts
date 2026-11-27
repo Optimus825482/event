@@ -56,6 +56,7 @@ export type FakeEventSeed = {
   tables?: FakeTable[];
   decor?: unknown[];
   lines?: unknown[];
+  canvas?: { width: number; height: number };
 };
 
 export type FakeRequest = {
@@ -129,6 +130,98 @@ export function defaultTables(): FakeTable[] {
     });
   }
   return tables;
+}
+
+/** Demo Diamond salonu (çekirdek `web/src/features/demo/diamond-plan.ts`): masa no, x ve z metre (15 px = 1 m). */
+const DIAMOND_COORDS =
+  "1,-26.94,-18.85;2,-23.38,-18.85;3,-19.82,-18.85;4,-16.25,-18.85;5,-12.69,-18.85;6,12.69,-18.85;" +
+  "7,16.25,-18.85;8,19.82,-18.85;9,23.38,-18.85;10,26.94,-18.85;11,-25.82,-15.88;12,-22.2,-15.88;" +
+  "13,-18.58,-15.88;14,-14.96,-15.88;15,-11.34,-15.88;16,11.34,-15.88;17,14.96,-15.88;18,18.58,-15.88;" +
+  "19,22.2,-15.88;20,25.82,-15.88;21,-26.06,-12.91;22,-22.55,-12.91;23,-19.04,-12.91;24,-15.52,-12.91;" +
+  "25,-12.01,-12.91;26,12.01,-12.91;27,15.52,-12.91;28,19.04,-12.91;29,22.55,-12.91;30,26.06,-12.91;" +
+  "31,-25.32,-9.9;32,-21.7,-9.9;33,-18.08,-9.9;34,-14.45,-9.9;35,-10.83,-9.9;36,-7.21,-9.9;" +
+  "37,-3.59,-9.9;38,3.59,-9.9;39,7.21,-9.9;40,10.83,-9.9;41,14.45,-9.9;42,18.08,-9.9;43,21.7,-9.9;" +
+  "44,25.32,-9.9;45,-25.43,-6.85;46,-21.83,-6.85;47,-18.24,-6.85;48,-14.65,-6.85;49,-11.06,-6.85;" +
+  "50,-7.47,-6.85;51,-3.87,-6.85;52,3.87,-6.85;53,7.47,-6.85;54,11.06,-6.85;55,14.65,-6.85;" +
+  "56,18.24,-6.85;57,21.83,-6.85;58,25.43,-6.85;59,-24.19,-3.65;60,-20.8,-3.65;61,-17.4,-3.65;" +
+  "62,-14.01,-3.65;63,-10.61,-3.65;64,-7.22,-3.65;65,7.22,-3.65;66,10.61,-3.65;67,14.01,-3.65;" +
+  "68,17.4,-3.65;69,20.8,-3.65;70,24.19,-3.65;71,-24.81,-0.35;72,-21.22,-0.35;73,-17.64,-0.35;" +
+  "74,-14.05,-0.35;75,-10.46,-0.35;76,-6.87,-0.35;77,-3.28,-0.35;78,0.31,-0.35;79,3.9,-0.35;" +
+  "80,7.49,-0.35;81,11.08,-0.35;82,14.67,-0.35;83,18.26,-0.35;84,21.84,-0.35;85,25.43,-0.35;" +
+  "86,-24.81,2.65;87,-21.22,2.65;88,-17.64,2.65;89,-14.05,2.65;90,-10.46,2.65;91,-6.87,2.65;" +
+  "92,-3.28,2.65;93,0.31,2.65;94,3.9,2.65;95,7.49,2.65;96,11.08,2.65;97,14.67,2.65;98,18.26,2.65;" +
+  "99,21.84,2.65;100,25.43,2.65;101,-23.65,6.08;102,-20.08,6.08;103,-16.51,6.08;104,-12.95,6.08;" +
+  "105,-9.38,6.08;106,-5.81,6.08;107,-2.24,6.08;108,1.32,6.08;109,4.89,6.08;110,8.46,6.08;" +
+  "111,12.03,6.08;112,15.59,6.08;113,19.16,6.08;114,22.73,6.08;115,26.3,6.08;116,-24.23,9.5;" +
+  "117,-20.72,9.5;118,-17.22,9.5;119,-13.71,9.5;120,-10.2,9.5;121,-6.69,9.5;122,-3.19,9.5;123,0.32,9.5;" +
+  "124,3.83,9.5;125,7.33,9.5;126,10.84,9.5;127,14.35,9.5;128,17.85,9.5;129,21.36,9.5;130,24.87,9.5;" +
+  "131,28.37,9.5;132,-26.19,12.92;133,-22.78,12.92;134,-19.37,12.92;135,-15.96,12.92;136,-12.55,12.92;" +
+  "137,-9.14,12.92;138,-5.73,12.92;139,8.86,12.92;140,12.55,12.92;141,16.25,12.92;142,19.94,12.92;" +
+  "143,23.63,12.92;144,27.33,12.92;145,-28.7,-1.03;146,-28.7,1.76;147,-28.7,4.55;148,29,-11.21;" +
+  "149,29,-8.18;150,29,-4.22;151,29,1.02;152,29,-13.93;153,20.52,16.26;154,15.35,16.26;" +
+  "155,-11.34,16.26;156,-16.5,16.26;157,-28.7,8.13;158,-28.7,-6.27;159,-28.7,-9.71;160,-20.66,16.26;" +
+  "161,-25.4,16.26";
+const DIAMOND_STAGE_TABLES = new Set([
+  4, 5, 6, 7, 14, 15, 16, 17, 24, 25, 26, 27, 34, 35, 36, 37, 38, 39, 40, 41, 49, 50, 51, 52, 53, 54, 63, 64, 65, 66,
+  75, 76, 77, 78, 79, 80, 81, 91, 92, 93, 94, 95,
+]);
+const DIAMOND_BOXES = ["9B", "9A", "8B", "8", "7", "6", "5", "4", "3B", "3A", "2", "1"];
+
+/** Demo Diamond salonuna benzer tohum: 161 masa (M-1…M-161), 12 loca (L-…), sahne + podyum, 960×710 tuval. */
+export function diamondSeed(): Required<Pick<FakeEventSeed, "tables" | "decor" | "lines" | "canvas">> {
+  const px = 15;
+  const cx = (xm: number) => 480 + xm * px;
+  const cy = (zm: number) => (zm + 22) * px;
+  let index = 0x0d00;
+  const tables: FakeTable[] = DIAMOND_COORDS.split(";").map((row) => {
+    const [num, xm, zm] = row.split(",").map(Number) as [number, number, number];
+    const category: SaleCategory = DIAMOND_STAGE_TABLES.has(num) ? "vip" : zm / 18.9 < 0.28 ? "premium" : "standard";
+    return {
+      id: tableId(index++),
+      label: `M-${num}`,
+      x: cx(xm),
+      y: cy(zm),
+      rotation: 0,
+      shape: "round",
+      isLoca: false,
+      sellable: true,
+      category,
+      capacity: 12,
+      seats: 12,
+      seatNos: Array.from({ length: 12 }, (_, i) => i + 1),
+      wholeOnly: false,
+    };
+  });
+  DIAMOND_BOXES.forEach((box, i) => {
+    tables.push({
+      id: tableId(index++),
+      label: `L-${box}`,
+      x: cx((i - 5.5) * 4.97),
+      y: cy(21.18),
+      rotation: 0,
+      shape: "rectangle",
+      isLoca: true,
+      sellable: true,
+      category: "vip",
+      capacity: 12,
+      seats: 12,
+      seatNos: Array.from({ length: 12 }, (_, n) => n + 1),
+      wholeOnly: true,
+    });
+  });
+  const decor = [
+    { id: "stage", kind: "stage", x: cx(-17.4 / 2), y: cy(-15.9 - 8.5 / 2), width: 17.4 * px, height: 8.5 * px, label: "SAHNE" },
+    { id: "catwalk-stem", kind: "catwalk", x: cx(-2.7 / 2), y: cy(-7.9 - 8 / 2), width: 2.7 * px, height: 8 * px, label: "" },
+    { id: "catwalk-cross", kind: "catwalk", x: cx(-10.6 / 2), y: cy(-3.15 - 2.7 / 2), width: 10.6 * px, height: 2.7 * px, label: "" },
+  ];
+  const b = { left: 30, top: 20, right: 930, bottom: 680 };
+  const lines = [
+    { id: "border-top", x1: b.left, y1: b.top, x2: b.right, y2: b.top, width: 4 },
+    { id: "border-left", x1: b.left, y1: b.top, x2: b.left, y2: b.bottom, width: 4 },
+    { id: "border-right", x1: b.right, y1: b.top, x2: b.right, y2: b.bottom, width: 4 },
+    { id: "border-bottom", x1: b.left, y1: b.bottom, x2: b.right, y2: b.bottom, width: 4 },
+  ];
+  return { tables, decor, lines, canvas: { width: 960, height: 710 } };
 }
 
 const priceToCents = (price: string): bigint => {
@@ -292,7 +385,7 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
         demo: seed.demo ?? true,
       },
       prices,
-      plan: { canvas: { width: 1200, height: 800 }, tables, decor: seed.decor ?? [], lines: seed.lines ?? [] },
+      plan: { canvas: seed.canvas ?? { width: 1200, height: 800 }, tables, decor: seed.decor ?? [], lines: seed.lines ?? [] },
     };
     const freeSeats = new Map<string, number[]>();
     for (const t of tables) {

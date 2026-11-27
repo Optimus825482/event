@@ -4,7 +4,6 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Color, type InstancedMesh, Object3D, PerspectiveCamera } from "three";
-import { Button } from "@/components/ui/button";
 import { BallroomFloor, BallroomLights, Chairs, Chandeliers, StageBeams } from "./ballroom";
 import {
   type CameraPose,
@@ -30,6 +29,8 @@ import { SceneWalls } from "./walls";
 import { WALL_HEIGHT } from "./walls-geometry";
 
 export type SeatView = { tableId: string; nonce: number };
+/** Kamera düğmeleri (tuvalin dışında, `Plan3D` içinde) bu komutu üretir; nonce değişince uygulanır. */
+export type CameraCommand = { type: "overview" | "top" | OrbitMove; nonce: number };
 
 export type SceneProps = {
   scene: SceneData;
@@ -44,6 +45,7 @@ export type SceneProps = {
   onReady?: () => void;
   onCameraChange?: (tag: string) => void;
   describedBy?: string;
+  command?: CameraCommand | null;
 };
 
 type OrbitHandle = {
@@ -105,6 +107,12 @@ function DecorMesh({ element }: { element: SceneDecor }) {
           <mesh position={[0, h / 2 - 0.022, 0]}>
             <boxGeometry args={[width + 0.08, 0.045, depth + 0.08]} />
             <meshStandardMaterial color={BALLROOM.trim} roughness={0.28} metalness={0.82} />
+          </mesh>
+        ) : null}
+        {isStage ? (
+          <mesh position={[0, h / 2 + 0.02, 0]}>
+            <boxGeometry args={[Math.max(0.1, width - 0.13), 0.05, Math.max(0.1, depth - 0.13)]} />
+            <meshStandardMaterial color={BALLROOM.stage} roughness={0.72} metalness={0.08} />
           </mesh>
         ) : null}
       </group>
@@ -237,7 +245,7 @@ function CameraController({
   scene: SceneData;
   activeTableId: string | null;
   seatView?: SeatView | null;
-  command: { type: "overview" | "top" | OrbitMove; nonce: number } | null;
+  command: CameraCommand | null;
   orbitRef: React.RefObject<OrbitHandle | null>;
   onPoseDone: (tag: string) => void;
   onPovChange: (pov: boolean) => void;
@@ -384,12 +392,12 @@ export default function Scene3D({
   onReady,
   onCameraChange,
   describedBy,
+  command = null,
 }: SceneProps) {
   const orbitRef = useRef<OrbitHandle | null>(null);
   const initialPose = useMemo(() => overviewPose(scene.room, false), [scene.room]);
   const [camPos, setCamPos] = useState<Vec3>(initialPose.position);
   const [pov, setPov] = useState(false);
-  const [cmd, setCmd] = useState<{ type: "overview" | "top" | OrbitMove; nonce: number } | null>(null);
 
   const activeTable = useMemo(
     () => (activeTableId ? (scene.tables.find((t) => t.key === activeTableId) ?? null) : null),
@@ -403,8 +411,6 @@ export default function Scene3D({
     if (!activeTable) return false;
     return Math.hypot(camPos[0] - activeTable.x, camPos[1] - activeTable.floorY, camPos[2] - activeTable.z) <= CHAIR_PICK_DISTANCE;
   }, [activeTable, camPos]);
-
-  const sendCmd = (type: "overview" | "top" | OrbitMove) => setCmd((c) => ({ type, nonce: (c?.nonce ?? 0) + 1 }));
 
   const handleChairClick = useCallback(
     (instanceId: number, delta: number, stopPropagation: () => void) => {
@@ -486,33 +492,13 @@ export default function Scene3D({
             scene={scene}
             activeTableId={activeTableId}
             seatView={seatView}
-            command={cmd}
+            command={command}
             orbitRef={orbitRef}
             onPoseDone={(tag) => onCameraChange?.(tag)}
             onPovChange={setPov}
             onCamPos={setCamPos}
           />
         </Canvas>
-      </div>
-      <div role="group" aria-label="Kamera" className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap gap-1.5">
-        <Button variant="glass" onClick={() => sendCmd("left")}>
-          Sola döndür
-        </Button>
-        <Button variant="glass" onClick={() => sendCmd("right")}>
-          Sağa döndür
-        </Button>
-        <Button variant="glass" onClick={() => sendCmd("in")}>
-          Yakınlaştır
-        </Button>
-        <Button variant="glass" onClick={() => sendCmd("out")}>
-          Uzaklaştır
-        </Button>
-        <Button variant="glass" onClick={() => sendCmd("top")}>
-          Üstten
-        </Button>
-        <Button variant="glass" onClick={() => sendCmd("overview")}>
-          Genel
-        </Button>
       </div>
     </div>
   );

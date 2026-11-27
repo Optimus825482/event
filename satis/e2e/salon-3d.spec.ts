@@ -1,0 +1,139 @@
+import { expect, test, type Page } from "@playwright/test";
+import { PerspectiveCamera, Vector3 } from "three";
+import type { EventDetail } from "../src/lib/core/contract";
+import { buildPlanModel } from "../src/features/plan/model";
+import { detailPose, FOV_HALL, maxDistance, orbitMove } from "../src/features/plan/three/camera";
+import { buildScene } from "../src/features/plan/three/scene-data";
+import { towardStage } from "../src/features/plan/three/stage";
+import { addDiamondEvent, gotoListedEvent } from "./support/diamond";
+import { fakeState, tableId } from "./support/fake";
+
+// Başsız Chromium'da WebGL için yazılım oluşturucu; salon masaüstü genişliğinde gezilir.
+test.use({
+  viewport: { width: 1280, height: 900 },
+  launchOptions: { args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] },
+});
+
+let open: EventDetail;
+let closed: EventDetail;
+
+test.beforeAll(async ({ browser }) => {
+  open = await addDiamondEvent("Diamond Açık Gece", "open");
+  closed = await addDiamondEvent("Diamond Kapalı Gece", "closed");
+  // Soğuk geliştirme sunucusu ilk derlemede sayfayı art arda yeniler; tohumlu etkinlikle bir kez ısıtılır.
+  test.setTimeout(180_000);
+  const page = await browser.newPage();
+  await page.goto(`/etkinlik/${fakeState().events.gala.id}?kisi=2#masa-secimi`);
+  await expect(page.getByTestId("plan-3d-scene")).toHaveAttribute("data-ready", "true", { timeout: 120_000 });
+  await page.close();
+});
+
+async function sceneReady(page: Page) {
+  const scene = page.getByTestId("plan-3d-scene");
+  await expect(scene).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
+  return scene;
+}
+
+async function expectSightlinePhoto(page: Page, label: string) {
+  const panel = page.getByRole("region", { name: "Sahne görüşü" });
+  const img = panel.getByRole("img");
+  await expect(img).toHaveAttribute("src", `/sightline/diamond/${label}.webp`);
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+  await expect(panel.getByText(`Masa ${label} · Sahne görüşü`)).toBeVisible();
+}
+
+test("satış kapalıyken de 3B salon açılır; masaya dokununca o masanın sahne görüşü fotoğrafı gelir", async ({ page }) => {
+  test.setTimeout(180_000);
+  await gotoListedEvent(page, `/etkinlik/${closed.id}#masa-secimi`);
+  const scene = await sceneReady(page);
+  await expect(page.getByRole("img", { name: "Salon planı (3B)" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Sahne görüşü" }).getByRole("img")).toHaveAttribute(
+    "src",
+    "/sightline/diamond/overview.webp",
+  );
+
+  // Listeden M-40 seçilince kamera ona yakınlaşır; oradan görünen başka bir masaya 3B'de dokunulur.
+  const m40Id = tableId(closed, "M-40");
+  await page.getByLabel("Masa veya loca").selectOption({ label: "Masa M-40" });
+  await expect(scene).toHaveAttribute("data-camera", `detail:${m40Id}`, { timeout: 10_000 });
+  await expectSightlinePhoto(page, "M-40");
+
+  // Yerleşim doluluktan bağımsızdır; tazeyken tüm sandalyeler boştur.
+  const availability = {
+    at: new Date().toISOString(),
+    tables: closed.plan.tables.map((t) => ({ id: t.id, free: t.seatNos.length, freeSeats: [...t.seatNos] })),
+  };
+  const model = buildPlanModel(closed.plan, closed.prices, availability, closed.sale.mode);
+  const data = buildScene({ model, picks: [], activeTableId: m40Id });
+  const m40 = data.tables.find((t) => t.key === m40Id)!;
+  // İki kez uzaklaştırınca komşu masalar kadraja girer (kamera düğmesi uçuşsuz, belirlenimli konum verir).
+  const bar = page.getByRole("group", { name: "Kamera" });
+  await bar.getByRole("button", { name: "Uzaklaştır" }).click();
+  await bar.getByRole("button", { name: "Uzaklaştır" }).click();
+  await expect(scene).toHaveAttribute("data-camera", "free");
+  const detail = detailPose({ x: m40.x, z: m40.z }, m40.floorY, towardStage(data.stage, { x: m40.x, z: m40.z }));
+  const pose = orbitMove(orbitMove(detail, "out", maxDistance(data.room)), "out", maxDistance(data.room));
+  await scene.scrollIntoViewIfNeeded();
+  const box = (await scene.boundingBox())!;
+  const cam = new PerspectiveCamera(FOV_HALL, box.width / box.height, 0.1, 1000);
+  cam.position.set(...pose.position);
+  cam.lookAt(...pose.target);
+  cam.updateMatrixWorld();
+  // Kadrajda, ekran ortasına en yakın ikinci masa (M-40'ın kendisi değil).
+  const [other, ndc] = data.tables
+    .filter((t) => t.key !== m40Id && !t.isLoca)
+    .map((t) => [t, new Vector3(t.x, t.floorY + 0.65, t.z).project(cam)] as const)
+    .filter(([, p]) => Math.abs(p.x) < 0.7 && Math.abs(p.y) < 0.7 && p.z < 1)
+    .sort(([, a], [, b]) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y))[0]!;
+  await page.mouse.click(box.x + ((ndc.x + 1) / 2) * box.width, box.y + ((1 - ndc.y) / 2) * box.height);
+
+  await expect(scene).toHaveAttribute("data-camera", `detail:${other.key}`, { timeout: 10_000 });
+  await expectSightlinePhoto(page, other.label);
+  await expect(page.getByRole("button", { name: "Devam et" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Sandalye \d+/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "3B'de masadan bak" }).click();
+  await expect(scene).toHaveAttribute("data-camera", `seat:${other.key}`, { timeout: 10_000 });
+});
+test("satış kapalıyken 2B planda da masaya dokununca sahne görüşü değişir", async ({ page }) => {
+  test.setTimeout(180_000);
+  await gotoListedEvent(page, `/etkinlik/${closed.id}#masa-secimi`);
+  await sceneReady(page);
+
+  await page.getByRole("button", { name: "2B görünüm" }).click();
+  await page.getByRole("group", { name: "Salon planı" }).getByRole("button", { name: /^Masa M-90,/ }).click();
+  await expectSightlinePhoto(page, "M-90");
+});
+
+test("açık satışta kişi sayısı sorulurken de 3B salon ve sahne görüşü görünür", async ({ page }) => {
+  test.setTimeout(180_000);
+  await gotoListedEvent(page, `/etkinlik/${open.id}#masa-secimi`);
+  await expect(page.getByLabel("Kaç kişisiniz?")).toBeVisible();
+  await sceneReady(page);
+  await expect(page.getByRole("region", { name: "Sahne görüşü" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Seçiminiz" })).toHaveCount(0);
+});
+
+test("açık satışta masa seçilince sahne görüşü fotoğrafı gelir ve masadan bakış da sunulur", async ({ page }) => {
+  test.setTimeout(180_000);
+  await gotoListedEvent(page, `/etkinlik/${open.id}?kisi=2#masa-secimi`);
+  const scene = await sceneReady(page);
+  await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa M-40 ·/ }).click();
+  await expectSightlinePhoto(page, "M-40");
+  await page.getByRole("button", { name: "3B'de masadan bak" }).click();
+  await expect(scene).toHaveAttribute("data-camera", `seat:${tableId(open, "M-40")}`, { timeout: 10_000 });
+});
+
+test("kamera düğmeleri tuvalin dışındadır ve genel görünüme döndürür", async ({ page }) => {
+  test.setTimeout(180_000);
+  await gotoListedEvent(page, `/etkinlik/${closed.id}#masa-secimi`);
+  const scene = await sceneReady(page);
+  const bar = page.getByRole("group", { name: "Kamera" });
+  const barBox = (await bar.boundingBox())!;
+  const sceneBox = (await scene.boundingBox())!;
+  expect(barBox.y + barBox.height).toBeLessThanOrEqual(sceneBox.y);
+  await bar.getByRole("button", { name: "Üstten" }).click();
+  await expect(scene).toHaveAttribute("data-camera", "top", { timeout: 10_000 });
+  await bar.getByRole("button", { name: "Genel" }).click();
+  await expect(scene).toHaveAttribute("data-camera", "overview", { timeout: 10_000 });
+});

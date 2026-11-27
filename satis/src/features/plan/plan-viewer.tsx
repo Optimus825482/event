@@ -22,6 +22,9 @@ export type PlanViewerProps = {
   onSeat?(tableId: string, seatNo: number): void;
 };
 
+const BROWSE_3D_HINT =
+  "Döndürmek için sürükleyin, yakınlaşmak için tekerleği ya da iki parmağınızı kullanın. Masaya dokununca o masadan sahne görüşü gösterilir.";
+
 /** 3B balo salonu (varsayılan) ve 2B plan görünümü; seçim üst bileşendedir, görünüm değişince korunur. */
 export function PlanViewer({
   model,
@@ -59,6 +62,7 @@ export function PlanViewer({
           seatView={seatView}
           onTable={onTable}
           onSeat={onSeat}
+          hint={onSeat ? undefined : BROWSE_3D_HINT}
           onFail={view.fail}
           fallback={<PlanSvg model={model} pickedIds={pickedIds} activeId={activeTableId} dimmedIds={dimmedIds} />}
         />
