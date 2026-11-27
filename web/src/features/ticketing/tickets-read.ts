@@ -84,7 +84,7 @@ export async function findTicketByQr(ex: Db | Tx, token: string): Promise<Ticket
   return row ? toLookup(row) : null;
 }
 
-/** Siparişin biletleri: masa etiketi, sonra oluşturulma sırası. */
+/** Siparişin biletleri: masa etiketi, sonra sandalye numarası, sonra bilet kimliği (kalıcı sıra). */
 export async function listOrderTickets(ex: Db | Tx, orderId: string): Promise<TicketLookup[]> {
   const rows = await ex
     .select(columns)
@@ -94,7 +94,14 @@ export async function listOrderTickets(ex: Db | Tx, orderId: string): Promise<Ti
     .leftJoin(tableSeatSlots, eq(tableSeatSlots.id, tickets.seatSlotId))
     .leftJoin(eventSaleSettings, eq(eventSaleSettings.eventId, tickets.eventId))
     .where(eq(tickets.orderId, orderId))
-    .orderBy(asc(tickets.createdAt), asc(tickets.id));
-  // Dizi sıralaması kararlıdır: aynı etiketin biletleri `created_at` sırasını korur.
-  return rows.map(toLookup).sort((a, b) => byLabel(a.tableLabel, b.tableLabel));
+    .orderBy(sql`${tableSeatSlots.seatNo} asc nulls last`, asc(tickets.id));
+  // Aynı işlemde yazılan biletlerin `created_at` değeri eşittir; sıra etikete ve sandalyeye dayanır.
+  return rows
+    .sort(
+      (a, b) =>
+        byLabel(a.tableLabel, b.tableLabel) ||
+        (a.rawSeatNo ?? Number.MAX_SAFE_INTEGER) - (b.rawSeatNo ?? Number.MAX_SAFE_INTEGER) ||
+        (a.ticketId < b.ticketId ? -1 : a.ticketId > b.ticketId ? 1 : 0),
+    )
+    .map(toLookup);
 }

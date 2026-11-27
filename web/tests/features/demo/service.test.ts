@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { artists, eventTables, events, systemSettings } from "@/db/schema";
@@ -112,7 +112,11 @@ describe("demo servisi", () => {
 
     await setSalesDemoEnabled(db, admin, { enabled: true }, ctx);
     const [oldEv] = await db.select().from(events).where(eq(events.isDemo, true));
-    const [oldTable] = await db.select().from(eventTables).where(eq(eventTables.eventId, oldEv!.id));
+    // Loca masaları bütün satılır; iki koltukluk sipariş için açıkça loca olmayan `M-1` seçilir.
+    const [oldTable] = await db
+      .select()
+      .from(eventTables)
+      .where(and(eq(eventTables.eventId, oldEv!.id), eq(eventTables.label, "M-1")));
     await createPaidOrder(db, { eventId: oldEv!.id, items: [{ tableId: oldTable!.id, quantity: 2 }] });
     const oldFiles = await filesUnder(ctx.uploadRoot);
     expect(oldFiles).toHaveLength(3);

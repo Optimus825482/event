@@ -668,7 +668,12 @@ export async function getOrderView(ex: Db | Tx, orderId: string): Promise<OrderV
     row.rawStatus === "paid"
       ? ticketRows
           .filter((t): t is typeof t & { qrToken: string } => t.status === "issued" && t.qrToken !== null)
-          .sort((a, b) => byLabel(a.tableLabel, b.tableLabel) || (a.seatNo ?? 0) - (b.seatNo ?? 0))
+          .sort(
+            (a, b) =>
+              byLabel(a.tableLabel, b.tableLabel) ||
+              (a.seatNo ?? 0) - (b.seatNo ?? 0) ||
+              (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+          )
           .map((t) => ({
             ticketId: t.id,
             tableId: t.tableId,
