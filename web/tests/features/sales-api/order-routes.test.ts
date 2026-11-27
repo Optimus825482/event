@@ -318,4 +318,81 @@ describe("satış API sipariş uçları", () => {
       expect((await bodyOf<ErrorBody>(res)).error.code).toBe("sales_api_disabled");
     }
   });
+
+  it("seatNos biçimi kabul edilir ama P2'ye kadar yok sayılır: en küçük numaralı yuvalar verilir", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent({ tables: [{ capacity: 8 }] });
+    const a = makeApi();
+    const res = await a.createOrder(
+      req("POST", ORDERS, {
+        body: { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [5, 6] }], clientKey: randomUUID() },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const created = orderResponseSchema.parse(await res.json());
+    const paidRes = await pay(a, created.orderToken);
+    expect(paidRes.status).toBe(200);
+    const paid = orderResponseSchema.parse(await paidRes.json());
+    expect(paid.tickets.map((t) => t.seatNo)).toEqual([1, 2]);
+  });
+
+  it("biçimi bozuk seatNos 400 invalid", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const res = await makeApi().createOrder(
+      req("POST", ORDERS, {
+        body: { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [5] }], clientKey: randomUUID() },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await errorCode(res)).toBe("invalid");
+  });
+
+  it("bilet satırı sandalye numarası taşır; masa bazlı kipte ve locada null", async () => {
+    const {
+      event: seatEvent,
+      tables: [a1, l1],
+    } = await saleEvent({
+      tables: [
+        { label: "A1", capacity: 4, category: "standard" },
+        { label: "L1", capacity: 4, category: "vip", isLoca: true },
+      ],
+      settings: { locaOnline: true },
+    });
+    const a = makeApi();
+    const seatHeld = await hold(a, seatEvent.id, a1!.id, 2);
+    const seatPaid = orderResponseSchema.parse(await (await pay(a, seatHeld.orderToken)).json());
+    expect(seatPaid.tickets.map((t) => t.seatNo)).toEqual([1, 2]);
+
+    const locaHeld = await hold(a, seatEvent.id, l1!.id, 4);
+    const locaPaid = orderResponseSchema.parse(await (await pay(a, locaHeld.orderToken)).json());
+    expect(locaPaid.tickets.every((t) => t.seatNo === null)).toBe(true);
+
+    const {
+      event: tableEvent,
+      tables: [t1],
+    } = await saleEvent({
+      tables: [{ label: "T1", capacity: 4 }],
+      settings: { saleMode: "table" } as Record<string, unknown>,
+    });
+    const tableHeld = await hold(a, tableEvent.id, t1!.id, 4);
+    const tablePaid = orderResponseSchema.parse(await (await pay(a, tableHeld.orderToken)).json());
+    expect(tablePaid.tickets.every((t) => t.seatNo === null)).toBe(true);
+  });
+
+  it("sipariş yanıtı sözleşme şemasından geçer", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const a = makeApi();
+    const held = await hold(a, event.id, a1!.id, 2);
+    expect(() => orderResponseSchema.parse(held)).not.toThrow();
+    const paid = await (await pay(a, held.orderToken)).json();
+    expect(() => orderResponseSchema.parse(paid)).not.toThrow();
+  });
 });

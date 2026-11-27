@@ -66,9 +66,16 @@ export const SALES_ERROR_MESSAGES: Readonly<Record<SalesErrorCode, string>> = {
 export const DEMO_NOTICE = "DEMO - gerçek ödeme alınmadı";
 export const MAX_ORDER_TABLES = 5;
 export const MAX_BODY_BYTES = 16 * 1024;
+export const MAX_SEAT_NO = 999;
 export const SALES_CATEGORIES = ["standard", "premium", "vip"] as const;
 export const SALE_STATES = ["open", "not_started", "ended", "closed"] as const;
 export type SaleState = (typeof SALE_STATES)[number];
+export const SALE_MODES = ["table", "seat"] as const;
+export type SaleMode = (typeof SALE_MODES)[number];
+export const SIGHTLINE_SETS = ["diamond"] as const;
+export type SightlineSet = (typeof SIGHTLINE_SETS)[number];
+export const IMAGE_PATH_PATTERN =
+  /^(event|artist)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 // UUID'ler küçük harfe indirilir: büyük harfli yineleme (`clientKey`) aynı siparişi bulur.
@@ -80,7 +87,18 @@ const saleStateSchema = z.enum(SALE_STATES);
 export const createOrderBodySchema = z.strictObject({
   eventId: uuid(),
   items: z
-    .array(z.strictObject({ tableId: uuid(), quantity: z.number().int().min(1).max(50) }))
+    .array(
+      z
+        .strictObject({
+          tableId: uuid(),
+          quantity: z.number().int().min(1).max(50),
+          seatNos: z.array(z.number().int().min(1).max(MAX_SEAT_NO)).min(1).max(50).optional(),
+        })
+        .refine(
+          (v) => v.seatNos === undefined || (v.seatNos.length === v.quantity && new Set(v.seatNos).size === v.seatNos.length),
+          "seatNos adetle eşit uzunlukta ve tekil olmalıdır",
+        ),
+    )
     .min(1)
     .max(20),
   clientKey: uuid(),
@@ -119,6 +137,9 @@ export const eventCardSchema = z.strictObject({
   currency: z.string(),
   minPrice: z.string().nullable(),
   saleState: saleStateSchema,
+  coverImage: z.string().nullable(),
+  artistImage: z.string().nullable(),
+  isDemo: z.boolean(),
 });
 export type EventCard = z.infer<typeof eventCardSchema>;
 
@@ -134,15 +155,26 @@ export const planTablePublicSchema = z.strictObject({
   isLoca: z.boolean(),
   sellable: z.boolean(),
   category: categorySchema.nullable(),
+  capacity: z.number(),
   seats: z.number().nullable(),
+  seatNos: z.array(z.number()),
   wholeOnly: z.boolean(),
 });
 export type PlanTablePublic = z.infer<typeof planTablePublicSchema>;
 
 export const eventDetailSchema = eventCardSchema.extend({
   description: z.string().nullable(),
+  site: z.strictObject({
+    heroImage: z.string().nullable(),
+    summary: z.string().nullable(),
+    doorsOpenAt: z.string().nullable(),
+    ageLimit: z.string().nullable(),
+    dressCode: z.string().nullable(),
+    sightlineSet: z.enum(SIGHTLINE_SETS).nullable(),
+  }),
   sale: z.strictObject({
     state: saleStateSchema,
+    mode: z.enum(SALE_MODES),
     opensAt: z.string().nullable(),
     closesAt: z.string().nullable(),
     holdMinutes: z.number(),
@@ -162,7 +194,7 @@ export type EventDetail = z.infer<typeof eventDetailSchema>;
 
 export const availabilitySchema = z.strictObject({
   at: z.string(),
-  tables: z.array(z.strictObject({ id: z.string(), free: z.number() })),
+  tables: z.array(z.strictObject({ id: z.string(), free: z.number(), freeSeats: z.array(z.number()) })),
 });
 export type Availability = z.infer<typeof availabilitySchema>;
 
@@ -191,6 +223,7 @@ export const orderResponseSchema = z.strictObject({
       ticketId: z.string(),
       tableId: z.string(),
       tableLabel: z.string(),
+      seatNo: z.number().nullable(),
       qrPayload: z.string(),
     }),
   ),
