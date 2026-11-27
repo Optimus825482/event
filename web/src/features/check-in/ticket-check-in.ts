@@ -1,5 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
+import { ticketStatusSql } from "@/db/sql-fragments";
+import { joinFullName } from "@/lib/full-name";
 import { eventTables, orders, tickets, users } from "@/db/schema";
 import type { EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
@@ -41,10 +43,7 @@ export async function readTicketCheckIn(
 ): Promise<{ status: "held" | "issued" | "expired"; response: CheckInSuccess | null }> {
   const [row] = await tx
     .select({
-      // Süresi dolmuş tutma, süpürülmemiş olsa da `expired` okunur (DB saatiyle).
-      status: sql<
-        "held" | "issued" | "expired"
-      >`case when ${tickets.status} = 'held' and ${orders.status} = 'pending' and ${orders.holdExpiresAt} <= clock_timestamp() then 'expired' else ${tickets.status} end`,
+      status: ticketStatusSql(),
       ticketId: tickets.id,
       eventId: tickets.eventId,
       tableId: tickets.tableId,
@@ -64,7 +63,7 @@ export async function readTicketCheckIn(
     .where(eq(tickets.id, ticketId));
   if (!row) throw new DomainError("not_found", CHECK_IN_MSG.ticketNotFound);
   if (!row.checkedInAt) return { status: row.status, response: null };
-  const name = [row.buyerFirstName, row.buyerLastName].filter((p) => p && p.trim() !== "").join(" ");
+  const name = joinFullName(row.buyerFirstName, row.buyerLastName);
   const response: CheckInSuccess = {
     outcome,
     kind: "ticket",

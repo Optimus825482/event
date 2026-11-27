@@ -1,5 +1,6 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
+import { buyerFullNameSql, ticketStatusSql } from "@/db/sql-fragments";
 import { eventTables, orders, tickets } from "@/db/schema";
 import { verifyQrToken } from "@/features/reservations/qr-token";
 
@@ -26,12 +27,10 @@ const columns = {
   tableId: tickets.tableId,
   tableLabel: eventTables.label,
   // Süresi dolmuş tutma, süpürülmemiş olsa da `expired` okunur (DB saatiyle).
-  status: sql<
-    TicketLookup["status"]
-  >`case when ${tickets.status} = 'held' and ${orders.status} = 'pending' and ${orders.holdExpiresAt} <= clock_timestamp() then 'expired' else ${tickets.status} end`,
+  status: ticketStatusSql(),
   buyerName: sql<
     string | null
-  >`case when ${orders.status} = 'paid' then ${orders.buyerFirstName} || ' ' || ${orders.buyerLastName} else null end`,
+  >`case when ${orders.status} = 'paid' then ${buyerFullNameSql()} else null end`,
   pnr: orders.pnr,
   checkedInAt: tickets.checkedInAt,
 };
