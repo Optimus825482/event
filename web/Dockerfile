@@ -38,6 +38,9 @@ ENV NODE_ENV=production \
 
 RUN addgroup -S -g 1001 nodejs && adduser -S -u 1001 -G nodejs nextjs
 
+# Hero videosu sıkıştırma (features/uploads/video-compress.ts): ffmpeg + ffprobe, libvpx (VP9) dahil.
+RUN apk add --no-cache ffmpeg
+
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public

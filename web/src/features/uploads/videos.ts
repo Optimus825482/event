@@ -5,7 +5,7 @@ import { UPLOAD_ROOT } from "./root";
 import { resolveUploadPath } from "./serve";
 
 /** Hero (tanıtım) videosu için en büyük dosya boyutu. */
-export const MAX_VIDEO_BYTES = 8 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 15 * 1024 * 1024;
 
 /** Kullanıcıya gösterilebilir (Türkçe, ayrıntısız) video reddi. */
 export class VideoRejectedError extends Error {
@@ -68,12 +68,14 @@ const TOO_LARGE = `Video boyutu en fazla ${MAX_VIDEO_BYTES / (1024 * 1024)} MB o
 
 /**
  * WebM videoyu doğrular (içerik imzası + DocType, ≤ `MAX_VIDEO_BYTES`) ve olduğu gibi
- * `<kök>/event/<rastgele-uuid>.webm` yoluna yazar. Yeniden kodlanmaz; yalnızca hero alanı kullanır.
+ * `<kök>/event/<rastgele-uuid>.webm` yoluna yazar. Sıkıştırma burada yapılmaz: hero akışı önce
+ * `compressHeroVideo` (video-compress.ts) ile WebM'e çevirir, sonucu buraya verir.
  * `root` yalnızca testler içindir.
  */
-export async function saveVideo(file: File, root: string = UPLOAD_ROOT): Promise<{ path: string }> {
-  if (file.size > MAX_VIDEO_BYTES) throw new VideoRejectedError(TOO_LARGE);
-  const input = new Uint8Array(await file.arrayBuffer());
+export async function saveVideo(file: File | Uint8Array, root: string = UPLOAD_ROOT): Promise<{ path: string }> {
+  const size = file instanceof Uint8Array ? file.byteLength : file.size;
+  if (size > MAX_VIDEO_BYTES) throw new VideoRejectedError(TOO_LARGE);
+  const input = file instanceof Uint8Array ? file : new Uint8Array(await file.arrayBuffer());
   if (input.length > MAX_VIDEO_BYTES) throw new VideoRejectedError(TOO_LARGE);
   if (!isWebm(input)) throw new VideoRejectedError("Yalnızca WebM videolar yüklenebilir");
 
