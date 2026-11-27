@@ -2,8 +2,8 @@ import { COLORS } from "@/lib/theme";
 
 /** Balo salonu paleti (3B sahne): arayüz belirteçleri tema'dandır, salon malzemeleri burada. Bileşen dosyalarında ham renk yoktur. */
 export const BALLROOM = {
-  background: "#0d1018",
-  wall: "#252432",
+  background: "#18130f",
+  wall: "#877762",
   travertine: "#aaa08c",
   cream: "#ebe4d8",
   panel: "#877762",
@@ -11,7 +11,7 @@ export const BALLROOM = {
   riser: "#382b22",
   gold: COLORS.gold,
   goldBright: COLORS.goldBright,
-  stage: "#161924",
+  stage: "#211d21",
   wood: "#3b271c",
   deck: "#201d28",
   dimmed: "#464b57",
@@ -20,8 +20,10 @@ export const BALLROOM = {
   chairTaken: COLORS.disabledBg,
   chairSelected: COLORS.goldBright,
   balcony: "#262330",
-  carpet: "#222534",
-  carpetLine: "rgba(212, 175, 55, 0.22)",
+  carpet: "#514941",
+  carpetLine: "#786c5e",
+  carpetFlecks: ["#6d6255", "#5e5146", "#473e36", "#716659"],
+  pilaster: "#dfcbb0",
   warmWhite: "#fff6e5",
   warmLight: "#fff0d3",
   warmPoint: "#ffe8a3",
@@ -36,6 +38,7 @@ export const BALLROOM = {
   screenGradStart: "#08142c",
   screenGradMid: "#14345e",
   screenGradEnd: "#0b1831",
+  screenGradFade: "rgba(20, 52, 94, 0)",
   white: "#ffffff",
   black: "#000000",
 } as const;

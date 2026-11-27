@@ -6,8 +6,12 @@ export type DeviceEnv = {
   reducedMotion: boolean;
 };
 
-const MIN_MEMORY_GB = 4;
-const MIN_CORES = 4;
+/**
+ * Yalnızca gerçekten zayıf cihaz elenir: Chrome `deviceMemory`'yi 2'nin kuvvetine yuvarlar (6 GB → 4, 3 GB → 2),
+ * gizlilik kipindeki tarayıcılar `hardwareConcurrency` için 2 bildirir; bunlar 3B salonu rahat çizer.
+ */
+const MIN_MEMORY_GB = 2;
+const MIN_CORES = 2;
 
 /** 3B görünüm sunulur mu? Bilinmeyen değer (ör. Safari'de deviceMemory yok) engel sayılmaz. */
 export function canOffer3d(env: DeviceEnv): boolean {

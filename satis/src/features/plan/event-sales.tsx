@@ -27,6 +27,7 @@ import { PlanLegend } from "./plan-legend";
 import { usePlanView } from "./plan-view";
 import { PlanViewer } from "./plan-viewer";
 import { picksTotal } from "./price";
+import { SalonBrowser } from "./salon-browser";
 import { SelectionSummary } from "./selection-summary";
 import { SightlinePanel } from "./sightline-panel";
 import { TableFinder } from "./table-finder";
@@ -73,25 +74,24 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   );
   const artworkUrl = useMemo(() => imageUrl(event.site.heroImage ?? event.artistImage), [event.site.heroImage, event.artistImage]);
 
+  // Satış kapalıyken de salon 3B gezilir ve masadan sahne görüşü gösterilir; yalnızca seçim/tutma yoktur.
   if (event.sale.state !== "open") {
-    return (
-      <div className="flex flex-col gap-4">
-        <PlanViewer model={model} view={view} artworkUrl={artworkUrl} title={event.name} />
-        <PlanLegend prices={event.prices} currency={event.currency} />
-      </div>
-    );
+    return <SalonBrowser event={event} model={model} view={view} artworkUrl={artworkUrl} />;
   }
 
   if (!partyConfirmed) {
     return (
-      <PartyStep
-        max={limit}
-        initial={Math.min(DEFAULT_PARTY_SIZE, limit)}
-        onConfirm={(partySize) => {
-          setState(initialPicks(partySize));
-          setPartyConfirmed(true);
-        }}
-      />
+      <div className="flex flex-col gap-6">
+        <PartyStep
+          max={limit}
+          initial={Math.min(DEFAULT_PARTY_SIZE, limit)}
+          onConfirm={(partySize) => {
+            setState(initialPicks(partySize));
+            setPartyConfirmed(true);
+          }}
+        />
+        <SalonBrowser event={event} model={model} view={view} artworkUrl={artworkUrl} />
+      </div>
     );
   }
 
@@ -172,7 +172,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
       <div className="flex flex-col gap-3">
         <PlanViewer
           model={model}
@@ -212,6 +212,16 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
           onKind={setKind}
           onFocus={(tableId) => runAction({ type: "focus", tableId })}
         />
+        <SightlinePanel
+          set={event.site.sightlineSet}
+          table={activeTable ? { label: activeTable.label, isLoca: activeTable.isLoca } : null}
+          canLookIn3d={view.can3d && !view.failed}
+          onLookIn3d={() => {
+            if (!activeTable) return;
+            view.setMode("3d");
+            setSeatView((sv) => ({ tableId: activeTable.id, nonce: (sv?.nonce ?? 0) + 1 }));
+          }}
+        />
         <ActiveTableCard
           table={activeTable}
           pick={activePick}
@@ -235,16 +245,6 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
           {error ? <Notice tone="error">{error}</Notice> : null}
           {notice ? <Notice>{notice}</Notice> : null}
         </SelectionSummary>
-        <SightlinePanel
-          set={event.site.sightlineSet}
-          table={activeTable ? { label: activeTable.label, isLoca: activeTable.isLoca } : null}
-          canLookIn3d={view.can3d && !view.failed}
-          onLookIn3d={() => {
-            if (!activeTable) return;
-            view.setMode("3d");
-            setSeatView((sv) => ({ tableId: activeTable.id, nonce: (sv?.nonce ?? 0) + 1 }));
-          }}
-        />
       </aside>
     </div>
   );

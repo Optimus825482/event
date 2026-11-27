@@ -49,7 +49,7 @@ function BallroomWall({ spec }: { spec: WallSpec }) {
       {pilasters.map((x, idx) => (
         <mesh key={idx} position={[x, 3.85, 0.04]}>
           <boxGeometry args={[0.43, 7.3, 0.16]} />
-          <meshStandardMaterial color={BALLROOM.travertine} roughness={0.75} metalness={0.08} />
+          <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.75} metalness={0.08} />
         </mesh>
       ))}
 
@@ -100,7 +100,7 @@ export function SceneWalls({
       {pov ? (
         <mesh position={[0, WALL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <planeGeometry args={[room.width + 1.2, room.depth + 1.2]} />
-          <meshStandardMaterial color={BALLROOM.stage} roughness={0.85} />
+          <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.85} />
         </mesh>
       ) : null}
     </group>

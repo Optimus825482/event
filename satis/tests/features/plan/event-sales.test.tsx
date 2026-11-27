@@ -196,6 +196,62 @@ describe("EventSales", () => {
     expect(screen.queryByRole("button", { name: "Devam et" })).toBeNull();
   });
 
+  it("satış kapalıyken de masaya dokununca sahne görüşü o masayı gösterir; sandalye seçimi yoktur", () => {
+    render(
+      <EventSales
+        event={makeEvent({
+          sale: {
+            state: "closed",
+            mode: "seat",
+            opensAt: null,
+            closesAt: null,
+            holdMinutes: 10,
+            maxSeatsPerOrder: 12,
+            blockSingleLeftover: true,
+            demo: false,
+          },
+        })}
+        initialAvailability={mockAvailability}
+      />,
+    );
+    expect(screen.getByRole("region", { name: "Sahne görüşü" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "PlanSeat-A1-4" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    expect(screen.getByText("Masa A1 · Sahne görüşü")).toBeTruthy();
+    expect(screen.queryByRole("group", { name: /Sandalye/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Devam et" })).toBeNull();
+  });
+
+  it("satış kapalıyken masa listeden de seçilebilir (klavye erişimi)", () => {
+    render(
+      <EventSales
+        event={makeEvent({
+          sale: {
+            state: "not_started",
+            mode: "seat",
+            opensAt: null,
+            closesAt: null,
+            holdMinutes: 10,
+            maxSeatsPerOrder: 12,
+            blockSingleLeftover: true,
+            demo: false,
+          },
+        })}
+        initialAvailability={mockAvailability}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Masa veya loca"), { target: { value: "a1" } });
+    expect(screen.getByText("Masa A1 · Sahne görüşü")).toBeTruthy();
+  });
+
+  it("kişi sayısı sorulurken salon planı ve sahne görüşü yine gösterilir", () => {
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} />);
+    expect(screen.getByLabelText("Kaç kişisiniz?")).toBeTruthy();
+    expect(screen.getByTestId("mock-plan-viewer")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Sahne görüşü" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "PlanSeat-A1-4" })).toBeNull();
+  });
+
   it("iki masadan seçilen sandalyeler tek tutma çağrısında numaralarıyla gider", async () => {
     holdActionMock.mockResolvedValueOnce({ ok: true, data: { orderToken: "tok" } });
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={4} />);

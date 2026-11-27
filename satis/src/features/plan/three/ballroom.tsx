@@ -27,21 +27,21 @@ function useCarpetTexture(width: number, depth: number): CanvasTexture | null {
     if (!ctx) return null;
     ctx.fillStyle = BALLROOM.carpet;
     ctx.fillRect(0, 0, 256, 256);
+    // Sıcak tonlu, benekli dokuma; deterministik (her çizimde aynı desen).
+    for (let i = 0; i < 320; i++) {
+      ctx.fillStyle = BALLROOM.carpetFlecks[i % BALLROOM.carpetFlecks.length]!;
+      ctx.fillRect((i * 7919) % 256, (i * i * 167 + i * 3) % 256, 6 + (i % 17), 2 + (i % 8));
+    }
+    // Dört karo içinde iç içe eşkenar dörtgen motif.
     ctx.strokeStyle = BALLROOM.carpetLine;
     ctx.lineWidth = 1.5;
-    for (let i = 0; i <= 256; i += 64) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, 256);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(256, i);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i + 64, 64);
-      ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      ctx.save();
+      ctx.translate((i % 2) * 128 + 64, Math.floor(i / 2) * 128 + 64);
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeRect(-34, -34, 68, 68);
+      ctx.strokeRect(-26, -26, 52, 52);
+      ctx.restore();
     }
     const tex = new CanvasTexture(c);
     tex.wrapS = RepeatWrapping;
@@ -52,7 +52,7 @@ function useCarpetTexture(width: number, depth: number): CanvasTexture | null {
 
   useEffect(() => {
     if (!texture) return;
-    texture.repeat.set(Math.max(1, width / 4), Math.max(1, depth / 4));
+    texture.repeat.set(Math.max(1, width / 4.6), Math.max(1, depth / 4.6));
     invalidate();
   }, [texture, width, depth, invalidate]);
 
@@ -67,10 +67,14 @@ export function BallroomFloor({ width, depth }: { width: number; depth: number }
 
   return (
     <group>
-      {/* Taban levhası */}
+      {/* Kaide ve traverten taban levhası */}
+      <mesh position={[0, -0.32, 0]}>
+        <boxGeometry args={[width + 1.4, 0.55, depth + 1.4]} />
+        <meshStandardMaterial color={BALLROOM.riser} roughness={0.85} metalness={0.05} />
+      </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
         <planeGeometry args={[width + 1.2, depth + 1.2]} />
-        <meshStandardMaterial color={BALLROOM.riser} roughness={0.85} metalness={0.05} />
+        <meshStandardMaterial color={BALLROOM.travertine} roughness={0.81} metalness={0.05} />
       </mesh>
       {/* Halı */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
