@@ -3,12 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { seatLabel } from "@/domain/seating";
 import { realtimeKeys } from "@/features/realtime/keys";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 import { findOrderAtDoorAction } from "../actions";
 import { displayPnr, looksLikePnr } from "../door-code";
 import { useOnline } from "../offline/use-offline-queue";
-import { orderSummary, selectableTicketIds } from "./order-view";
+import { orderSummary, selectableTicketIds, ticketName } from "./order-view";
 import { unwrap } from "./use-check-in";
 
 const timeFormat = new Intl.DateTimeFormat("tr-TR", {
@@ -110,7 +111,8 @@ export function OrderLookup({
       <ul className="space-y-2">
         {data.tickets.map((t, index) => {
           const rejected = failedTicketIds.includes(t.ticketId);
-          const name = `Bilet ${index + 1} · Masa ${t.tableLabel}`;
+          const name = ticketName(index, t);
+          const label = seatLabel(t.tableLabel, t.seatNo);
           const boxId = `order-ticket-${t.ticketId}`;
           return (
             <li
@@ -133,12 +135,12 @@ export function OrderLookup({
                       aria-hidden="true"
                       className="text-sm text-white"
                     >
-                      Masa {t.tableLabel}
+                      {label}
                     </label>
                   </>
                 ) : (
                   <span className="text-sm text-white">
-                    Masa {t.tableLabel}
+                    {label}
                   </span>
                 )}
               </div>

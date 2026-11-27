@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
-import { seatSlotCount, tableAllocation } from "./support/db";
+import { seatSlotCount, tableAllocation, withDb } from "./support/db";
 import { createManager, openSession, type Dept } from "./support/departments";
 import { expect, test } from "./support/fixtures";
 import { addTablesAndSave, createEvent, fillReservation, publishEvent } from "./support/ui";
@@ -221,5 +221,28 @@ test.describe("Masa sınıflandırma ve tahsis", () => {
 
     await ent.goto(`/reservations/${eventId}/allocation`);
     await expect(ent.getByRole("heading", { name: denied })).toBeVisible();
+  });
+
+  test("satıştaki etkinlikte satış şekli kilitlidir", async ({ browser }) => {
+    await withDb((pool) => pool.query("update events set planning_stage = 'on_sale' where id = $1", [eventId]));
+    const ent = await sessionFor(browser, ENT);
+    await ent.goto(`/events/${eventId}/tables`);
+    await expect(ent.getByRole("radio", { name: "Masa bazlı" })).toBeDisabled();
+    await expect(ent.getByRole("radio", { name: "Sandalye bazlı" })).toBeDisabled();
+    await expect(ent.getByText("Satış başladıktan sonra satış şekli değiştirilemez")).toBeVisible();
+  });
+
+  test("sihirbazda Masa bazlı seçilen etkinliğin satış kurallarında Masa bazlı işaretlidir", async ({ page }) => {
+    await page.goto("/events/new");
+    await page.getByRole("radio", { name: "Masa bazlı" }).check();
+    await page.getByLabel("Etkinlik adı").fill("E2E Masa Bazlı Etkinlik");
+    await page.getByLabel("Başlangıç", { exact: true }).fill("2030-06-15T20:00");
+    await page.getByLabel("Etkinlik türü").fill("Gala");
+    await page.getByRole("button", { name: "Etkinlik oluştur" }).click();
+    await expect(page.getByRole("link", { name: "Etkinliğe git" })).toBeVisible();
+    const href = await page.getByRole("link", { name: "Etkinliğe git" }).getAttribute("href");
+    const createdId = href!.split("/").pop()!;
+    await page.goto(`/events/${createdId}/tables`);
+    await expect(page.getByRole("radio", { name: "Masa bazlı" })).toBeChecked();
   });
 });

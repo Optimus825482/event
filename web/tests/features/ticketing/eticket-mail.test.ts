@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import QRCode from "qrcode";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db/client";
-import { events, orders, systemSettings, tickets } from "@/db/schema";
+import { eventTables, events, orders, systemSettings, tickets } from "@/db/schema";
 import type { MailMessage, TransportFactory } from "@/features/invitations/delivery";
 import { DEMO_NOTICE } from "@/features/sales-api/contract";
 import { sendOrderEmail } from "@/features/ticketing/eticket-mail";
@@ -219,5 +219,63 @@ describe("e-bilet e-postası", () => {
       code: "not_found",
       message: "Sipariş bulunamadı",
     });
+  });
+
+  it("sandalye bazlı siparişte e-posta sandalye numaralarını taşır", async () => {
+    await configureSmtp();
+    const {
+      event,
+      tables: [a1, b1],
+    } = await saleEvent({ tables: [{ label: "A1" }, { label: "B1" }] });
+    const paid = await createPaidOrder(db, {
+      eventId: event.id,
+      items: [
+        { tableId: a1!.id, quantity: 2, seatNos: [6, 5] },
+        { tableId: b1!.id, quantity: 1, seatNos: [2] },
+      ],
+    });
+    const { sent, factory } = capture();
+    await sendOrderEmail(db, paid.orderId, factory, { siteUrl: undefined });
+    const mail = sent[0]!;
+    expect(mail.text).toContain("Masa A1: 2 kişi · Sandalye 5, 6");
+    expect(mail.text).toContain("Masa B1: 1 kişi · Sandalye 2");
+    expect(mail.html).toContain("Bilet 1 · Masa A1 · Sandalye 5");
+    expect(mail.html).toContain("Bilet 2 · Masa A1 · Sandalye 6");
+    expect(mail.html).toContain("Bilet 3 · Masa B1 · Sandalye 2");
+    expect(mail.attachments.map((a) => a.cid)).toEqual(["ticket-1", "ticket-2", "ticket-3"]);
+  });
+
+  it.each([
+    ["masa bazlı kip", { settings: { saleMode: "table" } }, 8],
+    ["loca", { tables: [{ isLoca: true, capacity: 6 }], settings: { locaOnline: true } }, 6],
+  ] as const)("%s: e-postada sandalye yazmaz", async (_n, o, seats) => {
+    await configureSmtp();
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent({ ...o } as Parameters<typeof saleEvent>[0]);
+    const paid = await createPaidOrder(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: seats }] });
+    const { sent, factory } = capture();
+    await sendOrderEmail(db, paid.orderId, factory, { siteUrl: undefined });
+    const mail = sent[0]!;
+    expect(mail.text).not.toContain("Sandalye");
+    expect(mail.html).not.toContain("Sandalye");
+    expect(mail.text).toContain(`Masa A1: ${seats} kişi`);
+  });
+
+  it("etiketteki HTML karakterleri sandalye satırında da kaçışlanır", async () => {
+    await configureSmtp();
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    await db.update(eventTables).set({ label: "A<1>" }).where(eq(eventTables.id, a1!.id));
+    const paid = await createPaidOrder(db, {
+      eventId: event.id,
+      items: [{ tableId: a1!.id, quantity: 1, seatNos: [1] }],
+    });
+    const { sent, factory } = capture();
+    await sendOrderEmail(db, paid.orderId, factory, { siteUrl: undefined });
+    expect(sent[0]!.html).toContain("Masa A&lt;1&gt; · Sandalye 1");
   });
 });

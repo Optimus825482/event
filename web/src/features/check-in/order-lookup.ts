@@ -12,7 +12,7 @@ export type DoorOrder = {
   orderId: string;
   pnr: string;
   buyerName: string;
-  tickets: { ticketId: string; tableId: string; tableLabel: string; checkedInAt: string | null }[];
+  tickets: { ticketId: string; tableId: string; tableLabel: string; seatNo: number | null; checkedInAt: string | null }[];
 };
 
 /**
@@ -39,7 +39,10 @@ export async function findOrderAtDoor(db: Executor, _actor: Actor, input: FindOr
   if (!order || order.pnr === null || order.eventId !== event.id || order.status !== "paid") return null;
   const rows = (await listOrderTickets(db, order.id)).filter((t) => t.status === "issued");
   rows.sort(
-    (a, b) => a.tableLabel.localeCompare(b.tableLabel, "tr", { numeric: true }) || a.ticketId.localeCompare(b.ticketId),
+    (a, b) =>
+      a.tableLabel.localeCompare(b.tableLabel, "tr", { numeric: true }) ||
+      (a.seatNo ?? 0) - (b.seatNo ?? 0) ||
+      a.ticketId.localeCompare(b.ticketId),
   );
   return {
     orderId: order.id,
@@ -49,6 +52,7 @@ export async function findOrderAtDoor(db: Executor, _actor: Actor, input: FindOr
       ticketId: t.ticketId,
       tableId: t.tableId,
       tableLabel: t.tableLabel,
+      seatNo: t.seatNo,
       checkedInAt: t.checkedInAt?.toISOString() ?? null,
     })),
   };

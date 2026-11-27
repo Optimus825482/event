@@ -400,4 +400,32 @@ describe("süre dolumu ve bırakma eşzamanlılığı", () => {
     expect(await sweepExpiredHolds(db, 2)).toBe(1);
     expect(await sweepExpiredHolds(db, 2)).toBe(0);
   });
+
+  it("süresi dolmuş (süpürülmemiş) tutmanın sandalyeleri seçilebilir; eski sipariş expired olur", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const old = await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [3, 4] }] });
+    await expireOrder(db, old.orderId);
+    const fresh = await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [3, 4] }] });
+    expect(fresh.orderId).not.toBe(old.orderId);
+    expect((await getOrderView(db, old.orderId))?.status).toBe("expired");
+    const active = await activeTickets(a1!.id);
+    expect(active).toHaveLength(2);
+    expect(active.every((t) => t.orderId === fresh.orderId)).toBe(true);
+  });
+
+  it("süresi dolmamış tutmanın sandalyesi seçilemez", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    await createPendingHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [3, 4] }] });
+    const err = await caughtSales(
+      createHold(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [3, 4] }], clientKey: randomUUID() }),
+    );
+    expect(err.salesCode).toBe("seats_unavailable");
+    expect(err.details).toEqual({ tableId: a1!.id, free: 6 });
+  });
 });

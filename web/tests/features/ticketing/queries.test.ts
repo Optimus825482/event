@@ -109,4 +109,47 @@ describe("iç sipariş okuma", () => {
     const viewer = await persistActor(db, memberActor("entertainment", { ticketing: "v---" }));
     expect((await getOrdersOverview(db, viewer, event.id)).orders).toHaveLength(1);
   });
+
+  it("sipariş ayrıntısı bilet sandalye numarasını taşır ve masa → sandalye sırasındadır", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const actor = await persistActor(db, managerActor("entertainment"));
+    const paid = await createPaidOrder(db, {
+      eventId: event.id,
+      items: [{ tableId: a1!.id, quantity: 2, seatNos: [6, 5] }],
+    });
+    const detail = await getOrderDetail(db, actor, { eventId: event.id, orderId: paid.orderId });
+    expect(detail.tickets.map((t) => t.seatNo)).toEqual([5, 6]);
+  });
+
+  it("masa bazlı kipte, locada ve süresi dolmuş bilette seatNo null", async () => {
+    const actor = await persistActor(db, managerActor("entertainment"));
+
+    const tableMode = await saleEvent({ settings: { saleMode: "table" } });
+    const tableOrder = await createPaidOrder(db, {
+      eventId: tableMode.event.id,
+      items: [{ tableId: tableMode.tables[0]!.id, quantity: 8 }],
+    });
+    const tableDetail = await getOrderDetail(db, actor, { eventId: tableMode.event.id, orderId: tableOrder.orderId });
+    expect(tableDetail.tickets.every((t) => t.seatNo === null)).toBe(true);
+
+    const locaMode = await saleEvent({ tables: [{ isLoca: true, capacity: 6 }], settings: { locaOnline: true } });
+    const locaOrder = await createPaidOrder(db, {
+      eventId: locaMode.event.id,
+      items: [{ tableId: locaMode.tables[0]!.id, quantity: 6 }],
+    });
+    const locaDetail = await getOrderDetail(db, actor, { eventId: locaMode.event.id, orderId: locaOrder.orderId });
+    expect(locaDetail.tickets.every((t) => t.seatNo === null)).toBe(true);
+
+    const expMode = await saleEvent();
+    const expHold = await createPendingHold(db, {
+      eventId: expMode.event.id,
+      items: [{ tableId: expMode.tables[0]!.id, quantity: 2, seatNos: [3, 4] }],
+    });
+    await expireOrder(db, expHold.orderId);
+    const expDetail = await getOrderDetail(db, actor, { eventId: expMode.event.id, orderId: expHold.orderId });
+    expect(expDetail.tickets[0]?.seatNo).toBeNull();
+  });
 });

@@ -4,9 +4,9 @@ import { publishNotifications } from "@/features/notifications/publish";
 import type { ActionOptions } from "@/lib/action";
 import { allocateToCasino, releaseFromCasino, setSaleAllocation } from "./allocation-service";
 import { classifyTables } from "./classification-service";
-import { allocationInputSchema, classifyTablesSchema, saleAllocationSchema, saleSettingsSchema } from "./schemas";
+import { allocationInputSchema, classifyTablesSchema, saleAllocationSchema, saleModeInputSchema, saleSettingsSchema } from "./schemas";
 import { getSeatingOverview } from "./queries";
-import { saveSaleSettings } from "./settings-service";
+import { saveSaleSettings, setSaleMode } from "./settings-service";
 
 const overviewInput = z.object({ eventId: z.uuid("Geçersiz etkinlik") });
 
@@ -21,6 +21,12 @@ export const seatingActionDefs = {
     verb: "edit",
     input: saleSettingsSchema,
     handler: async ({ actor, input }) => saveSaleSettings(db, actor, input),
+  }),
+  setSaleMode: def({
+    module: "ticketing",
+    verb: "edit",
+    input: saleModeInputSchema,
+    handler: async ({ actor, input }) => setSaleMode(db, actor, input),
   }),
   classify: def({
     module: "ticketing",

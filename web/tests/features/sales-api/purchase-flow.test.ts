@@ -173,4 +173,34 @@ describe("satın alma uçtan uca", () => {
   });
 
   it("hazır bayrağı açık", () => expect(TICKETING_READY).toBe(true));
+
+  it("sandalye seçerek satın alma: tutma → ödeme → sipariş okuma aynı numaraları taşır", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const api = makeApi();
+    const hold = orderResponseSchema.parse(
+      await bodyOf(
+        await api.createOrder(
+          req("POST", O, {
+            ip: IP,
+            body: { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [2, 7] }], clientKey: randomUUID() },
+          }),
+        ),
+      ),
+    );
+    const paid = orderResponseSchema.parse(
+      await bodyOf(await api.payOrder(req("POST", `${O}/${hold.orderToken}/pay`, { ip: IP, body: payBody }), hold.orderToken)),
+    );
+    expect(paid.tickets.map((t) => t.seatNo)).toEqual([2, 7]);
+    const read = orderResponseSchema.parse(
+      await bodyOf(await api.getOrder(req("GET", `${O}/${paid.orderToken}`), paid.orderToken)),
+    );
+    expect(read.tickets.map((t) => t.seatNo)).toEqual([2, 7]);
+    const avail = availabilitySchema.parse(
+      await bodyOf(await makeApi().getAvailability(req("GET", `/api/sales/v1/events/${event.id}/availability`), event.id)),
+    );
+    expect(avail.tables).toEqual([{ id: a1!.id, free: 6, freeSeats: [1, 3, 4, 5, 6, 8] }]);
+  });
 });

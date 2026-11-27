@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SALE_CATEGORIES } from "@/domain/seating";
+import { SALE_CATEGORIES, SALE_MODES } from "@/domain/seating";
 import { MAX_TABLE_CAPACITY, MAX_TABLES } from "@/features/venue/schemas";
 import { zonedWallClockToDate } from "@/lib/time-zone";
 
@@ -32,7 +32,7 @@ const optionalDate = z
 export const saleSettingsSchema = z
   .object({
     eventId: z.uuid("Geçersiz etkinlik"),
-    sharedTables: z.boolean(),
+    saleMode: z.enum(SALE_MODES, "Geçersiz satış şekli"),
     blockSingleLeftover: z.boolean(),
     locaOnline: z.boolean(),
     holdMinutes: z.number(HOLD_MESSAGE).int(HOLD_MESSAGE).min(5, HOLD_MESSAGE).max(30, HOLD_MESSAGE),
@@ -50,6 +50,13 @@ export const saleSettingsSchema = z
   });
 
 export type SaleSettingsInput = z.infer<typeof saleSettingsSchema>;
+
+export const saleModeInputSchema = z.object({
+  eventId: z.uuid("Geçersiz etkinlik"),
+  saleMode: z.enum(SALE_MODES, "Geçersiz satış şekli"),
+});
+
+export type SaleModeInput = z.infer<typeof saleModeInputSchema>;
 
 const classifyItemSchema = z
   .object({

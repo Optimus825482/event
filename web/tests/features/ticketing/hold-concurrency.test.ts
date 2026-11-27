@@ -1,12 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { orders } from "@/db/schema";
+import { orders, tableSeatSlots, tickets } from "@/db/schema";
 import { createHold, SalesError } from "@/features/ticketing/orders-service";
 import { pgCodeOf } from "@/lib/pg-error";
 import { truncateAll } from "../../helpers/db";
-import { activeTickets, saleEvent, salesCodes, settle } from "./fixtures";
+import { activeTickets, caughtSales, saleEvent, salesCodes, settle } from "./fixtures";
+
+async function heldSeatNos(tableId: string): Promise<number[]> {
+  const rows = await db
+    .select({ seatNo: tableSeatSlots.seatNo })
+    .from(tickets)
+    .innerJoin(tableSeatSlots, eq(tickets.seatSlotId, tableSeatSlots.id))
+    .where(and(eq(tickets.tableId, tableId), inArray(tickets.status, ["held", "issued"])))
+    .orderBy(asc(tableSeatSlots.seatNo));
+  return rows.map((r) => r.seatNo);
+}
 
 // Her çağrı `db` alır: `db.transaction` havuzdan kendi bağlantısını çeker. Havuz önceden ısıtılır: soğuk
 // havuzda bağlantılar sırayla açıldığından işlemler örtüşmez ve test kilitsiz kodu da yeşil gösterebilir.
@@ -104,5 +114,121 @@ describe("tutma eşzamanlılığı", () => {
     expect(failed).toEqual([]);
     expect(new Set(ok.map((r) => r.value.orderId)).size).toBe(1);
     expect(await activeTickets(t!.id)).toHaveLength(2);
+  });
+
+  it("aynı iki sandalyeyi isteyen 10 eşzamanlı tutma: tam 1 başarı, 9 seats_unavailable", async () => {
+    const {
+      event,
+      tables: [t],
+    } = await saleEvent();
+    const call = () =>
+      createHold(db, { eventId: event.id, items: [{ tableId: t!.id, quantity: 2, seatNos: [3, 4] }], clientKey: randomUUID() });
+    const { ok, failed } = await settle(Array.from({ length: 10 }, () => call));
+    expect(ok).toHaveLength(1);
+    expect(salesCodes(failed)).toEqual(Array(9).fill("seats_unavailable"));
+    expect(failed.every((f) => (f.reason as SalesError).message === "Seçtiğiniz sandalyelerden biri az önce alındı")).toBe(true);
+    expect(await heldSeatNos(t!.id)).toEqual([3, 4]);
+    expect(await db.select().from(orders)).toHaveLength(1);
+  });
+
+  it("kesişen seçimler ([1,2] ile [2,3]) eşzamanlı: tam biri kazanır, kısmi bilet kalmaz", async () => {
+    for (let i = 0; i < 20; i += 1) {
+      const {
+        event,
+        tables: [t],
+      } = await saleEvent({ settings: { blockSingleLeftover: false } });
+      const { ok, failed } = await settle([
+        () => createHold(db, { eventId: event.id, items: [{ tableId: t!.id, quantity: 2, seatNos: [1, 2] }], clientKey: randomUUID() }),
+        () => createHold(db, { eventId: event.id, items: [{ tableId: t!.id, quantity: 2, seatNos: [2, 3] }], clientKey: randomUUID() }),
+      ]);
+      expect(ok).toHaveLength(1);
+      expect(salesCodes(failed)).toEqual(["seats_unavailable"]);
+      expect([
+        [1, 2],
+        [2, 3],
+      ]).toContainEqual(await heldSeatNos(t!.id));
+    }
+  });
+
+  it("ayrık seçimler eşzamanlı: ikisi de başarılı", async () => {
+    const {
+      event,
+      tables: [t],
+    } = await saleEvent({ settings: { blockSingleLeftover: false } });
+    const { ok, failed } = await settle([
+      () => createHold(db, { eventId: event.id, items: [{ tableId: t!.id, quantity: 2, seatNos: [1, 2] }], clientKey: randomUUID() }),
+      () => createHold(db, { eventId: event.id, items: [{ tableId: t!.id, quantity: 2, seatNos: [3, 4] }], clientKey: randomUUID() }),
+    ]);
+    expect(ok).toHaveLength(2);
+    expect(failed).toEqual([]);
+    expect(await heldSeatNos(t!.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("seçimli ve seçimsiz tutmalar yarışınca yuva iki kez satılmaz", async () => {
+    const {
+      event,
+      tables: [t],
+    } = await saleEvent({ tables: [{ capacity: 4 }], settings: { blockSingleLeftover: false } });
+    const { ok, failed } = await settle([
+      () => createHold(db, { eventId: event.id, items: [{ tableId: t!.id, quantity: 2, seatNos: [1, 2] }], clientKey: randomUUID() }),
+      ...Array.from(
+        { length: 3 },
+        () => () => createHold(db, { eventId: event.id, items: [{ tableId: t!.id, quantity: 2 }], clientKey: randomUUID() }),
+      ),
+    ]);
+    expect(ok).toHaveLength(2);
+    expect(salesCodes(failed)).toEqual(["seats_unavailable", "seats_unavailable"]);
+    const held = await activeTickets(t!.id);
+    expect(held).toHaveLength(4);
+    expect(new Set(held.map((x) => x.seatSlotId)).size).toBe(4);
+  });
+
+  it("benzersiz dizin çakışması (tickets_active_seat_uq): seatNos ile seats_unavailable'a çevrilir ve işlem geri alınır", async () => {
+    const {
+      event,
+      tables: [t],
+    } = await saleEvent({ settings: { blockSingleLeftover: false } });
+    const fakeDb = {
+      ...db,
+      select: db.select.bind(db),
+      transaction: ((fn: Parameters<typeof db.transaction>[0]) =>
+        db.transaction((tx) => {
+          const origInsert = tx.insert.bind(tx);
+          const wrappedTx = new Proxy(tx, {
+            get(target, prop, receiver) {
+              if (prop === "insert") {
+                return (table: unknown) => {
+                  if (table === tickets) {
+                    return {
+                      values: async () => {
+                        throw Object.assign(new Error("duplicate key value violates unique constraint"), {
+                          code: "23505",
+                          constraint: "tickets_active_seat_uq",
+                        });
+                      },
+                    };
+                  }
+                  return origInsert(table as Parameters<typeof origInsert>[0]);
+                };
+              }
+              return Reflect.get(target, prop, receiver);
+            },
+          });
+          return fn(wrappedTx);
+        })) as typeof db.transaction,
+    } as typeof db;
+
+    const err = await caughtSales(
+      createHold(fakeDb, {
+        eventId: event.id,
+        items: [{ tableId: t!.id, quantity: 2, seatNos: [3, 4] }],
+        clientKey: randomUUID(),
+      }),
+    );
+    expect(err.salesCode).toBe("seats_unavailable");
+    expect(err.message).toBe("Seçtiğiniz sandalyelerden biri az önce alındı");
+    expect(err.details).toEqual({ tableId: t!.id });
+    expect(await activeTickets(t!.id)).toHaveLength(0);
+    expect(await db.select().from(orders)).toHaveLength(0);
   });
 });

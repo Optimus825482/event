@@ -14,7 +14,8 @@ import { createAction } from "@/lib/action";
 import { memberActor } from "../../helpers/actors";
 import { setupTestDb, truncateAll } from "../../helpers/db";
 import { doorActor, ticketedEvent, ticketIdsOf, ticketLog, ticketRow } from "../../helpers/door";
-import { createPendingHold, expireOrder } from "../../helpers/ticketing";
+import { createPaidOrder, createPendingHold, expireOrder } from "../../helpers/ticketing";
+import { saleEvent } from "../ticketing/fixtures";
 import { waitFor } from "../realtime/helpers";
 import { actorOf, bookedGuest, expectDomain, key, setEventStatus } from "./fixtures";
 
@@ -284,5 +285,44 @@ describe("bilet bazında giriş", () => {
     });
     expect(res).toMatchObject({ ok: false, code: "forbidden" });
     expect((await ticketRow(t.ticketId)).checkedInAt).toBeNull();
+  });
+
+  it("bilet girişi yanıtı sandalye numarasını taşır", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const paid = await createPaidOrder(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 1, seatNos: [5] }] });
+    const qr = paid.tickets[0]!.qrPayload;
+    const first = await checkIn(db, door, { eventId: event.id, idempotencyKey: key(), token: qr });
+    expect(first.seatNo).toBe(5);
+    const second = await checkIn(db, door, { eventId: event.id, idempotencyKey: key(), token: qr });
+    expect(second.seatNo).toBe(5);
+  });
+
+  it("masa bazlı kipte ve locada bilet girişi yanıtında seatNo null", async () => {
+    const tableMode = await saleEvent({ settings: { saleMode: "table" } });
+    const tableOrder = await createPaidOrder(db, {
+      eventId: tableMode.event.id,
+      items: [{ tableId: tableMode.tables[0]!.id, quantity: 8 }],
+    });
+    const tableRes = await checkIn(db, door, {
+      eventId: tableMode.event.id,
+      idempotencyKey: key(),
+      token: tableOrder.tickets[0]!.qrPayload,
+    });
+    expect(tableRes.seatNo).toBeNull();
+
+    const locaMode = await saleEvent({ tables: [{ isLoca: true, capacity: 6 }], settings: { locaOnline: true } });
+    const locaOrder = await createPaidOrder(db, {
+      eventId: locaMode.event.id,
+      items: [{ tableId: locaMode.tables[0]!.id, quantity: 6 }],
+    });
+    const locaRes = await checkIn(db, door, {
+      eventId: locaMode.event.id,
+      idempotencyKey: key(),
+      token: locaOrder.tickets[0]!.qrPayload,
+    });
+    expect(locaRes.seatNo).toBeNull();
   });
 });

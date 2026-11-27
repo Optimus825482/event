@@ -18,6 +18,7 @@ import { expireOrder } from "../../helpers/ticketing";
 import { activeTickets, saleEvent } from "../ticketing/fixtures";
 import { bodyOf, makeApi, req } from "./fixtures";
 import { setStage } from "../../helpers/planning";
+import { setSaleSettings } from "../../helpers/seating";
 
 type ErrorBody = z.infer<typeof errorBodySchema>;
 
@@ -319,7 +320,7 @@ describe("satış API sipariş uçları", () => {
     }
   });
 
-  it("seatNos biçimi kabul edilir ama P2'ye kadar yok sayılır: en küçük numaralı yuvalar verilir", async () => {
+  it("seatNos onurlandırılır: ödenen biletler seçilen sandalyeleri taşır", async () => {
     const {
       event,
       tables: [a1],
@@ -335,7 +336,50 @@ describe("satış API sipariş uçları", () => {
     const paidRes = await pay(a, created.orderToken);
     expect(paidRes.status).toBe(200);
     const paid = orderResponseSchema.parse(await paidRes.json());
-    expect(paid.tickets.map((t) => t.seatNo)).toEqual([1, 2]);
+    expect(paid.tickets.map((t) => t.seatNo)).toEqual([5, 6]);
+  });
+
+  it("alınmış sandalye 409 seats_unavailable: mesaj ve ayrıntı", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent({ tables: [{ capacity: 8 }] });
+    const a = makeApi();
+    await a.createOrder(
+      req("POST", ORDERS, {
+        body: { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [5, 6] }], clientKey: randomUUID() },
+      }),
+    );
+    const res = await a.createOrder(
+      req("POST", ORDERS, {
+        body: { eventId: event.id, items: [{ tableId: a1!.id, quantity: 2, seatNos: [6, 7] }], clientKey: randomUUID() },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(errorBodySchema.parse(await res.json()).error).toMatchObject({
+      code: "seats_unavailable",
+      message: "Seçtiğiniz sandalyelerden biri az önce alındı",
+      details: { tableId: a1!.id, free: 6 },
+    });
+  });
+
+  it("masa bazlı kipte seatNos 400 invalid", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent({ tables: [{ capacity: 8 }] });
+    await setSaleSettings(db, event.id, { saleMode: "table" });
+    const res = await makeApi().createOrder(
+      req("POST", ORDERS, {
+        body: {
+          eventId: event.id,
+          items: [{ tableId: a1!.id, quantity: 8, seatNos: [1, 2, 3, 4, 5, 6, 7, 8] }],
+          clientKey: randomUUID(),
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await errorCode(res)).toBe("invalid");
   });
 
   it("biçimi bozuk seatNos 400 invalid", async () => {

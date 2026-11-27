@@ -47,6 +47,7 @@ export function success(reservationId = "r1", outcome: CheckInSuccess["outcome"]
     guestCount: 2,
     tableId: "t1",
     tableLabel: "A1",
+    seatNo: null,
     checkedInAt: new Date(1_000).toISOString(),
     checkedInBy: null,
   };
