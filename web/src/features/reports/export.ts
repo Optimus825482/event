@@ -47,6 +47,7 @@ export function periodSheets(report: PeriodReport): SheetSpec[] {
         r.rates.noShow,
       ]),
       moneyColumns: [9, 10, 11, 12, 13, 14, 15, 16],
+      percentColumns: [24, 25, 26],
     },
     {
       name: "Toplamlar",
@@ -73,6 +74,7 @@ export function periodSheets(report: PeriodReport): SheetSpec[] {
         t.rates.noShow,
       ]),
       moneyColumns: [5, 6, 7, 8, 9, 10, 11, 12],
+      percentColumns: [13, 14, 15],
     },
   ];
 }

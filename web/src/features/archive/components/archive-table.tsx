@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
-import type { ArchiveSummary } from "../read";
+import type { ArchiveListRow } from "../read";
 import { formatMoney, formatRate } from "../format";
 import { DemoBadge } from "./demo-badge";
 import { NetAmount } from "./net-amount";
 
 /** Arşiv satırları (liste, dönem raporu ve sanatçı geçmişi ortak tablosu). Sunucu bileşeni. */
-export function ArchiveTable({ items, caption, showArtist = true }: { items: ArchiveSummary[]; caption: string; showArtist?: boolean }) {
+export function ArchiveTable({ items, caption, showArtist = true }: { items: ArchiveListRow[]; caption: string; showArtist?: boolean }) {
   return (
     <Table>
       <caption className="sr-only">{caption}</caption>

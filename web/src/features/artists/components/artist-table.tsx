@@ -32,7 +32,7 @@ export function ArtistTable({ rows }: { rows: ArtistComparisonRow[] }) {
                 >
                   {row.artist.name}
                 </Link>
-                {!row.artist.isActive && i === 0 ? <span className="ml-2 text-xs text-muted-foreground">(pasif)</span> : null}
+                {!row.artist.isActive && i === 0 ? <span className="ml-2 text-xs text-muted-foreground">(<span className="sr-only">sanatçı </span>pasif)</span> : null}
               </TableCell>
               <TableCell className="text-foreground">{row.artist.genre ?? "—"}</TableCell>
               <TableCell className="text-right tabular-nums text-foreground">{t ? t.eventCount : row.eventCount}</TableCell>

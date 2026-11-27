@@ -42,7 +42,7 @@ function emptyTotals(currency: string): CurrencyTotals {
   };
 }
 
-export function totalsByCurrency(rows: readonly ArchiveSummary[]): CurrencyTotals[] {
+export function totalsByCurrency(rows: readonly Omit<ArchiveSummary, "details">[]): CurrencyTotals[] {
   const byCurrency = new Map<string, CurrencyTotals>();
   for (const row of rows) {
     const t = byCurrency.get(row.currency) ?? emptyTotals(row.currency);

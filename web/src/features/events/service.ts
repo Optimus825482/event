@@ -3,6 +3,7 @@ import type { Db, Tx } from "@/db/client";
 import { eventStaffAssignments, eventTables, events, orders, reservations } from "@/db/schema";
 import { canTransitionEvent } from "@/domain/event-status";
 import { resolveArtist } from "@/features/artists/resolve";
+import { mapArchiveWriteError } from "@/features/archive/errors";
 import { archiveEvent } from "@/features/archive/snapshot";
 import type { Actor } from "@/features/auth/session";
 import { DomainError } from "@/lib/action";
@@ -123,6 +124,14 @@ export async function changeEventStatus(
   actor: Actor,
   input: ChangeEventStatusInput,
 ): Promise<EventRow> {
+  try {
+    return await changeEventStatusTx(db, actor, input);
+  } catch (error) {
+    return mapArchiveWriteError(error);
+  }
+}
+
+async function changeEventStatusTx(db: Db, actor: Actor, input: ChangeEventStatusInput): Promise<EventRow> {
   // Arşiv anlık görüntüsü tek tutarlı zamanda okunsun diye repeatable read.
   return db.transaction(async (tx) => {
     // Eşzamanlı iki geçişin aynı eski durumu görmemesi için satır kilitlenir.
