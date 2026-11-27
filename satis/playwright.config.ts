@@ -40,7 +40,9 @@ export default defineConfig({
       SALES_API_SECRET: process.env.SATIS_E2E_SECRET,
       SITE_URL: `http://localhost:${port}`,
       TRUSTED_IP_HEADER: "x-real-ip",
-      NEXT_DIST_DIR: ".next-e2e",
+      // Geliştirme sunucusu yalnızca `.next` altını izlemez; ayrı kök dizin kendi günlük yazımını değişiklik sayıp
+      // sayfayı sürekli yeniler. Bu yüzden E2E çıktısı `.next` altında ayrı bir klasöre yazılır.
+      NEXT_DIST_DIR: ".next/e2e",
     },
   },
 });

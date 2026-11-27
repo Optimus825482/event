@@ -75,7 +75,8 @@ export default defineConfig({
         SALES_API_SECRET: CROSS_SECRET,
         SITE_URL: `http://localhost:${satisPort}`,
         TRUSTED_IP_HEADER: "x-real-ip",
-        NEXT_DIST_DIR: ".next-cross",
+        // `.next` altında: ayrı kök dizin geliştirme sunucusunu sürekli yeniden yükletir (playwright.config.ts).
+        NEXT_DIST_DIR: ".next/cross",
       },
     },
   ],
