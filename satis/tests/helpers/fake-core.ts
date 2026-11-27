@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { z } from "zod";
 import {
   DEMO_NOTICE,
+  HERO_VIDEO_PATH_PATTERN,
   IMAGE_PATH_PATTERN,
   MAX_ORDER_TABLES,
   SALES_CATEGORIES,
@@ -30,7 +31,13 @@ export const FAKE_IMAGES = {
   cover: "event/00000000-0000-4000-8000-0000000000c1.webp",
   hero: "event/00000000-0000-4000-8000-0000000000c2.webp",
   artist: "artist/00000000-0000-4000-8000-0000000000a1.webp",
+  heroVideo: "event/00000000-0000-4000-8000-0000000000c3.webm",
 } as const;
+
+/** En küçük EBML başlığı (DocType `webm`) ve birkaç dolgu baytı. */
+export const FAKE_WEBM_BYTES = Uint8Array.from([
+  0x1a, 0x45, 0xdf, 0xa3, 0x87, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d, 0x18, 0x53, 0x80, 0x67, 0x11, 0x11,
+]);
 
 const FAKE_WEBP_BYTES = Uint8Array.from(
   Buffer.from("UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=", "base64"),
@@ -651,11 +658,12 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       .filter(Boolean);
     if (request.method === "GET" && segments[0] === "images" && segments.length === 3) {
       const imagePath = `${segments[1]}/${segments[2]}`;
-      if (IMAGE_PATH_PATTERN.test(imagePath) && hasSeededImage(imagePath)) {
-        return new Response(FAKE_WEBP_BYTES, {
+      const video = HERO_VIDEO_PATH_PATTERN.test(imagePath);
+      if ((video || IMAGE_PATH_PATTERN.test(imagePath)) && hasSeededImage(imagePath)) {
+        return new Response(video ? FAKE_WEBM_BYTES : FAKE_WEBP_BYTES, {
           status: 200,
           headers: {
-            "content-type": "image/webp",
+            "content-type": video ? "video/webm" : "image/webp",
             "cache-control": "private, max-age=300",
             "x-content-type-options": "nosniff",
           },

@@ -23,7 +23,8 @@ export class ImageRejectedError extends Error {
   }
 }
 
-const REJECTED = "Yalnızca JPG, PNG veya WebP görüntüleri yüklenebilir";
+export const IMAGE_REJECTED_MESSAGE = "Yalnızca JPG, PNG veya WebP görüntüleri yüklenebilir";
+const REJECTED = IMAGE_REJECTED_MESSAGE;
 
 /** Dosya imzasına (ilk baytlar) bakar; ad ve bildirilen tür dikkate alınmaz. */
 function hasImageSignature(b: Buffer): boolean {

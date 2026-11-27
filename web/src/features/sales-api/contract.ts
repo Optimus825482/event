@@ -76,6 +76,9 @@ export const SIGHTLINE_SETS = ["diamond"] as const;
 export type SightlineSet = (typeof SIGHTLINE_SETS)[number];
 export const IMAGE_PATH_PATTERN =
   /^(event|artist)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
+/** Yalnızca hero (tanıtım) alanı: WebM video yolu. Diğer görsel alanları `IMAGE_PATH_PATTERN` ile sınırlıdır. */
+export const HERO_VIDEO_PATH_PATTERN =
+  /^event\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webm$/;
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 // UUID'ler küçük harfe indirilir: büyük harfli yineleme (`clientKey`) aynı siparişi bulur.

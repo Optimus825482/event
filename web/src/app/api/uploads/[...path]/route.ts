@@ -20,5 +20,5 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   const access = checkUploadAccess(actor, segments);
   if (access === "forbidden") return denied(403, "Bu dosyaya erişim yetkiniz yok");
   if (access === "not_found") return denied(404, "Bulunamadı");
-  return serveUpload(UPLOAD_ROOT, segments);
+  return serveUpload(UPLOAD_ROOT, segments, request.headers);
 }

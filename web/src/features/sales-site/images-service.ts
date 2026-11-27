@@ -4,10 +4,17 @@ import { artists, eventSiteContent, events } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow } from "@/features/events/service";
-import { deleteImage, ImageRejectedError, saveImage, type ImageKind } from "@/features/uploads/images";
+import {
+  deleteImage,
+  IMAGE_REJECTED_MESSAGE,
+  ImageRejectedError,
+  saveImage,
+  type ImageKind,
+} from "@/features/uploads/images";
 import { UPLOAD_ROOT } from "@/features/uploads/root";
+import { isWebm, saveVideo, VideoRejectedError } from "@/features/uploads/videos";
 import { DomainError } from "@/lib/action";
-import { validImagePath, type ImageSlot } from "./image-status";
+import { validHeroPath, type ImageSlot } from "./image-status";
 import type { SiteImageInput } from "./schemas";
 
 async function isImageStillUsed(db: Db, imagePath: string): Promise<boolean> {
@@ -33,8 +40,27 @@ async function isImageStillUsed(db: Db, imagePath: string): Promise<boolean> {
   return art !== undefined;
 }
 
+/** Yalnızca hero alanı WebM video kabul eder; diğer alanlarda video görüntü reddiyle geri çevrilir. */
+const HERO_REJECTED = "Yalnızca JPG, PNG, WebP görüntüsü veya WebM video yüklenebilir";
+
+async function saveSlotFile(file: File, slot: ImageSlot, root: string): Promise<{ path: string }> {
+  if (slot !== "hero") return saveImage(file, slot === "artist" ? "artist" : "event", root);
+  // Karar istemcinin bildirdiği türe değil içeriğe göre verilir.
+  const head = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
+  if (isWebm(head)) return saveVideo(file, root);
+  try {
+    return await saveImage(file, "event" satisfies ImageKind, root);
+  } catch (error) {
+    if (error instanceof ImageRejectedError && error.message === IMAGE_REJECTED_MESSAGE) {
+      throw new ImageRejectedError(HERO_REJECTED);
+    }
+    throw error;
+  }
+}
+
 async function cleanupOldImage(db: Db, oldPath: string | null, root: string): Promise<void> {
-  const safe = validImagePath(oldPath);
+  // Hero dışı sütunlar yalnızca görsel tutar; `validHeroPath` iki biçimi de kapsar.
+  const safe = validHeroPath(oldPath);
   if (!safe) return;
   if (await isImageStillUsed(db, safe)) return;
   await deleteImage(safe, root).catch(() => undefined);
@@ -65,7 +91,7 @@ async function readCurrentImage(
   return { oldPath: artist?.image ?? null, artistId };
 }
 
-/** Kapak, hero veya sanatçı görselini yükler; DB hatasında yeni dosyayı geri alır, paylaşılmayan eskiyi siler. */
+/** Kapak, hero (görsel ya da WebM video) veya sanatçı görselini yükler; DB hatasında yeni dosyayı geri alır, paylaşılmayan eskiyi siler. */
 export async function replaceSiteImage(
   db: Db,
   actor: Actor,
@@ -77,13 +103,12 @@ export async function replaceSiteImage(
   const event = await getEventOrThrow(db, input.eventId);
   const { oldPath, artistId } = await readCurrentImage(db, event.id, event.coverImage, event.artistId, input.slot);
 
-  const kind: ImageKind = input.slot === "artist" ? "artist" : "event";
   let savedPath: string;
   try {
-    const saved = await saveImage(file, kind, root);
+    const saved = await saveSlotFile(file, input.slot, root);
     savedPath = saved.path;
   } catch (error) {
-    if (error instanceof ImageRejectedError) {
+    if (error instanceof ImageRejectedError || error instanceof VideoRejectedError) {
       throw new DomainError("invalid", error.message);
     }
     throw error;

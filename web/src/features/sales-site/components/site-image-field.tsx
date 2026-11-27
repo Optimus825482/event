@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { removeSiteImageAction, uploadSiteImageAction } from "../actions";
-import { IMAGE_SLOT_LABELS, type ImageSlot } from "../image-status";
+import { IMAGE_SLOT_LABELS, isHeroVideoPath, type ImageSlot } from "../image-status";
+
+const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
+/** Yalnızca hero alanı WebM video kabul eder (sunucu içeriği ayrıca koklar). */
+const HERO_ACCEPT = `${IMAGE_ACCEPT},video/webm`;
+const IMAGE_HELP = "JPG, PNG veya WebP, en fazla 5 MB";
+const HERO_HELP = "JPG, PNG, WebP veya WebM video, en fazla 5 MB görsel / 8 MB video";
 
 export function SiteImageField({
   eventId,
@@ -27,6 +33,9 @@ export function SiteImageField({
 
   const label = `${IMAGE_SLOT_LABELS[slot]} görseli`;
   const inputId = `site-image-${slot}`;
+  const helpId = `${inputId}-help`;
+  const acceptsVideo = slot === "hero";
+  const previewIsVideo = acceptsVideo && isHeroVideoPath(path);
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
@@ -68,7 +77,18 @@ export function SiteImageField({
   return (
     <div className="space-y-2 rounded-lg border bg-card p-4">
       <p className="text-sm font-medium">{label}</p>
-      {path ? (
+      {path && previewIsVideo ? (
+        <video
+          src={`/api/uploads/${path}`}
+          aria-label={label}
+          className="h-32 w-full rounded border object-cover"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+        />
+      ) : path ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={`/api/uploads/${path}`} alt={label} className="h-32 w-full rounded border object-cover" />
       ) : (
@@ -82,8 +102,9 @@ export function SiteImageField({
           <Input
             id={inputId}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={acceptsVideo ? HERO_ACCEPT : IMAGE_ACCEPT}
             aria-label={`${label} yükle`}
+            aria-describedby={helpId}
             onChange={onFileChange}
             disabled={pending}
           />
@@ -92,6 +113,9 @@ export function SiteImageField({
               Kaldır
             </Button>
           ) : null}
+          <p id={helpId} className="w-full text-xs text-muted-foreground">
+            {acceptsVideo ? HERO_HELP : IMAGE_HELP}
+          </p>
         </div>
       ) : null}
       {error ? (

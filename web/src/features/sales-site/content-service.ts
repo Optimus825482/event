@@ -9,7 +9,7 @@ import { SIGHTLINE_SETS, type SaleState, type SightlineSet } from "@/features/sa
 import { getSaleSettings } from "@/features/seating/settings-service";
 import { saleStateOf } from "@/features/ticketing/sale-state";
 import { DomainError } from "@/lib/action";
-import { imageStatusOf, validImagePath, type ImageStatus } from "./image-status";
+import { imageStatusOf, validHeroPath, validImagePath, type ImageStatus } from "./image-status";
 import type { SaveSiteContentInput } from "./schemas";
 
 export type SiteContentView = {
@@ -66,7 +66,7 @@ export async function getSiteContentView(
   });
 
   const coverImage = validImagePath(event.coverImage);
-  const heroImage = validImagePath(siteRow?.heroImage ?? null);
+  const heroImage = validHeroPath(siteRow?.heroImage ?? null);
   const artist = artistRow
     ? { id: artistRow.id, name: artistRow.name, image: validImagePath(artistRow.image) }
     : null;

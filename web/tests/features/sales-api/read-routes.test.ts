@@ -288,6 +288,18 @@ describe("satış API okuma uçları", () => {
     expect(d2.site.sightlineSet).toBeNull();
   });
 
+  it("ayrıntı: hero WebM video yolu iletilir; kapak sütunundaki WebM iletilmez", async () => {
+    const video = "event/3f2b0c1e-0000-4000-8000-000000000004.webm";
+    const { event } = await saleEvent();
+    await db.update(events).set({ coverImage: video }).where(eq(events.id, event.id));
+    await db.insert(eventSiteContent).values({ eventId: event.id, heroImage: video });
+    const detail = eventDetailSchema.parse(
+      await (await makeApi().getEvent(req("GET", `/x/${event.id}`), event.id)).json(),
+    );
+    expect(detail.site.heroImage).toBe(video);
+    expect(detail.coverImage).toBeNull();
+  });
+
   it("ayrıntı: masa kapasitesi ve yuva numaraları; satılamaz masada boş", async () => {
     const { event } = await detailEvent();
     const res = await makeApi().getEvent(req("GET", `/x/${event.id}`), event.id);
