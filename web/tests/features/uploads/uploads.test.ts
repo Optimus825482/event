@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { deleteImage, ImageRejectedError, MAX_IMAGE_BYTES, saveImage } from "@/features/uploads/images";
+import { deleteImage, ImageRejectedError, MAX_ANIMATION_FRAMES, MAX_IMAGE_BYTES, saveImage } from "@/features/uploads/images";
 import { resolveUploadPath, serveUpload } from "@/features/uploads/serve";
 
 let root: string;
@@ -74,6 +74,37 @@ describe("saveImage", () => {
 
     const webp = await sharp(await png()).webp().toBuffer();
     await expect(saveImage(asFile(webp, "x.webp", "image/webp"), "logo", root)).resolves.toBeTruthy();
+  });
+
+  async function animatedWebp(frames: number, width = 40, height = 30): Promise<Buffer> {
+    const colors = ["#f00", "#0f0", "#00f"];
+    const inputs = await Promise.all(
+      Array.from({ length: frames }, (_, i) =>
+        sharp({ create: { width, height, channels: 3, background: colors[i % colors.length]! } })
+          .png()
+          .toBuffer(),
+      ),
+    );
+    return sharp(inputs, { join: { animated: true } }).webp({ delay: 100 }).toBuffer();
+  }
+
+  it("hareketli WebP animasyonu korunur; büyük kareler küçültülür", async () => {
+    const small = await saveImage(asFile(await animatedWebp(3), "klip.webp", "image/webp"), "event", root);
+    const meta = await sharp(path.join(root, small.path), { animated: true }).metadata();
+    expect(meta.pages).toBe(3);
+    expect(meta.pageHeight).toBe(30);
+
+    const wide = await saveImage(asFile(await animatedWebp(2, 3000, 100), "genis.webp", "image/webp"), "event", root);
+    const wideMeta = await sharp(path.join(root, wide.path), { animated: true }).metadata();
+    expect(wideMeta.pages).toBe(2);
+    expect(wideMeta.width).toBeLessThanOrEqual(2048);
+  });
+
+  it("kare sayısı sınırını aşan hareketli görüntü reddedilir", async () => {
+    const tooMany = await animatedWebp(MAX_ANIMATION_FRAMES + 1, 4, 4);
+    await expect(saveImage(asFile(tooMany, "uzun.webp", "image/webp"), "event", root)).rejects.toBeInstanceOf(
+      ImageRejectedError,
+    );
   });
 
   it("artist türü kabul edilir ve artist/ altına yazılır", async () => {
