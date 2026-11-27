@@ -62,6 +62,33 @@ test("vazgeç: etkinliğe döner ve sandalyeler serbest kalır", async ({ page }
   await expect(page.getByRole("button", { name: "Masa V1, VIP, boş sandalye 6/6" })).toBeVisible({ timeout: 12_000 });
 });
 
+test("geçersiz alanlarla gönderimde odak ilk geçersiz alana taşınır", async ({ page }) => {
+  await startCheckout(page, "P1");
+  await page.getByRole("button", { name: "Öde" }).click();
+  await expect(page.getByLabel("Ad", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("Ad", { exact: true })).toHaveAttribute("aria-invalid", "true");
+  // Ad ile soyad dolu, e-posta boş: odak e-postaya gider.
+  await page.getByLabel("Ad", { exact: true }).fill("Ayşe");
+  await page.getByLabel("Soyad").fill("Kaya");
+  await page.getByRole("button", { name: "Öde" }).click();
+  await expect(page.getByLabel("E-posta")).toBeFocused();
+  // Yalnızca onay eksikse odak onay kutusuna gider.
+  await fillBuyer(page);
+  await page.getByRole("button", { name: "Öde" }).click();
+  await expect(page.getByRole("checkbox")).toBeFocused();
+});
+
+test("geri sayım: sr-only durum öğesi var, eşikte duyuru yapar", async ({ page }) => {
+  await startCheckout(page, "V2");
+  const status = page.locator('p[role="status"].sr-only');
+  await expect(status).toHaveCount(1);
+  await expect(status).toHaveText("");
+  // 29 sn kalacak biçimde tohumla; yeniden yüklemede 30 sn eşiği hemen geçilmiş olur.
+  await expireOrder(page.url().split("/odeme/")[1]!, 29_000);
+  await page.reload();
+  await expect(page.locator('p[role="status"].sr-only')).toHaveText("Kalan süre 30 saniye");
+});
+
 test("bozuk belirteç 404 verir ve çekirdeğe gitmez", async ({ page }) => {
   const before = (await fakeRequests()).length;
   expect((await page.goto("/odeme/bozuk"))!.status()).toBe(404);

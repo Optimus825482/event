@@ -38,6 +38,24 @@ test("3B görünüm açılır, seçim 2B'ye dönünce korunur", async ({ page })
   await expect(page.getByText("3B görünüm açılamadı")).toHaveCount(0);
 });
 
+test("WebGL bağlamı kaybolursa 2B'ye bildirimle düşer", async ({ page }) => {
+  await page.goto(`/etkinlik/${gala.id}`);
+  await page.getByRole("button", { name: /Masa A1,/ }).click();
+  await page.getByRole("button", { name: "3B görünüm" }).click();
+  const canvas = page.getByRole("img", { name: /3B/ });
+  await expect(canvas).toBeVisible({ timeout: 30_000 });
+  const lost = await page.evaluate(() => {
+    const gl = document.querySelector("canvas")?.getContext("webgl2") ?? document.querySelector("canvas")?.getContext("webgl");
+    const ext = gl?.getExtension("WEBGL_lose_context");
+    ext?.loseContext();
+    return Boolean(ext);
+  });
+  expect(lost).toBe(true);
+  await expect(page.getByText("3B görünüm açılamadı; 2B plan gösteriliyor.")).toBeVisible();
+  await expect(page.getByRole("img", { name: /3B/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Masa A1,/ })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("WebGL yoksa 3B düğmesi görünmez", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, "WebGLRenderingContext", { value: undefined });
