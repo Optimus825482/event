@@ -5,6 +5,7 @@ import {
   ownedBy,
   recoverInterrupted,
   selectDue,
+  staleKeys,
   type BatchOutcome,
   type QueueItem,
   type SettledEvent,
@@ -63,6 +64,13 @@ export function createMemoryStore(): QueueStore {
       for (const k of keys) map.delete(k);
     },
   };
+}
+
+/** Süresi geçmiş öğeleri (ham QR belirteci taşırlar) depodan siler; silinen anahtarları döndürür. */
+export async function purgeStaleItems(store: QueueStore, now: number): Promise<string[]> {
+  const keys = staleKeys(await store.getAll(), now);
+  if (keys.length > 0) await store.remove(keys);
+  return keys;
 }
 
 const MAX_ROUNDS = 200;

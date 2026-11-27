@@ -1,4 +1,4 @@
-import { createFlusher, createMemoryStore, type FlushOptions, type Flusher, type QueueStore } from "./flusher";
+import { createFlusher, createMemoryStore, purgeStaleItems, type FlushOptions, type Flusher, type QueueStore } from "./flusher";
 import { createIdbStore, idbAvailable } from "./idb-store";
 import { createItem, retryFailed, type QueueItem, type QueueTarget, type SettledEvent } from "./queue-core";
 import { sendBatch } from "./transport";
@@ -40,6 +40,8 @@ export function getQueueRuntime(): QueueRuntime {
   if (instance) return instance;
   const durable = idbAvailable();
   const store: QueueStore = durable ? createIdbStore() : createMemoryStore();
+  // Açılışta süresi geçmiş öğeleri (ham QR belirteci) sil; başarısızlık kuyruğu açmayı engellemez.
+  void purgeStaleItems(store, Date.now()).catch(() => undefined);
   const channel = openChannel();
   const changeListeners = new Set<() => void>();
   const eventListeners = new Set<Listener>();
