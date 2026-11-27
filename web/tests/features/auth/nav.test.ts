@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEPARTMENTS, LEVEL_LABELS, type Department, type DepartmentLevel } from "@/features/auth/departments";
 import { NAV_GROUPS, NAV_ITEMS, visibleNavGroups, visibleNavItems } from "@/features/auth/nav";
 import { can, type PolicyActor } from "@/features/auth/policy";
 import { adminActor, assistantActor, managerActor, memberActor, noAccessActor } from "../../helpers/actors";
+
+vi.mock("@/features/sales-site/ready", () => ({ SALES_SITE_READY: false }));
 
 const hrefs = (actor: PolicyActor) => visibleNavItems(actor).map((item) => item.href);
 const groupKeys = (actor: PolicyActor) => visibleNavGroups(actor).map((group) => group.key);
@@ -16,6 +18,7 @@ describe("NAV_ITEMS", () => {
       ["/archive", "Arşiv", "archive", "entertainment"],
       ["/artists", "Sanatçılar", "archive", "entertainment"],
       ["/reports", "Raporlar", "archive", "entertainment"],
+      ["/sales-site", "Satış Sitesi", "events", "entertainment"],
       ["/fnb", "Etkinlikler", "venues", "fnb"],
       ["/venues", "Yerleşim Şablonları", "venues", "fnb"],
       ["/staff", "Ekipler", "staff", "fnb"],
@@ -34,7 +37,14 @@ describe("NAV_ITEMS", () => {
       ["/admin/settings", "Sistem Ayarları", "settings", "admin"],
       ["/notifications", "Bildirimler", "notifications", "general"],
     ]);
-    expect(NAV_ITEMS).toHaveLength(23);
+    expect(NAV_ITEMS).toHaveLength(24);
+  });
+
+  it("Satış Sitesi öğesi bayrak kapalıyken admin dahil kimseye görünmez", () => {
+    const item = NAV_ITEMS.find((i) => i.href === "/sales-site");
+    expect(item?.ready).toBe(false);
+    expect(hrefs(adminActor())).not.toContain("/sales-site");
+    expect(hrefs(managerActor("entertainment"))).not.toContain("/sales-site");
   });
 
   it("arşiv öğeleri hazırdır; admin ve Entertainment yöneticisi görür, F&B görmez", () => {
