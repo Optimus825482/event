@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { findTableAction, type FindTableFormState } from "../actions";
+import { findTableAction, type FindTableFormState } from "../public-action";
 
 const INITIAL: FindTableFormState = { error: null };
 
