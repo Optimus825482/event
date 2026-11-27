@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createCoreClient, type CoreClient, type HoldInput } from "@/lib/core/client";
 import { CoreError } from "@/lib/core/errors";
-import { createFakeCore, type FakeCore } from "../helpers/fake-core";
+import { createFakeCore, FAKE_IMAGES, type FakeCore } from "../helpers/fake-core";
 import type { EventDetail } from "@/lib/core/contract";
 
 const ctx = { clientIp: "203.0.113.7" };
@@ -179,5 +179,48 @@ describe("çekirdek istemcisi", () => {
     const paid = await client.payOrder(o.orderToken, payInput("Yılmaz"), ctx);
     const found = await client.lookupOrder({ pnr: paid.pnr ?? "", lastName: "Yılmaz" }, ctx);
     expect(found.orderToken).toBe(o.orderToken);
+  });
+
+  it("tutma gövdesi seatNos'u yalnızca verildiğinde taşır", async () => {
+    const bodies: unknown[] = [];
+    const c = withFetch(async (input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return fake.handle(new Request(input, init));
+    });
+    await c.createHold(hold("A1", 2), ctx);
+    await c.createHold(
+      { eventId: ev.id, items: [{ tableId: id("A2"), quantity: 2, seatNos: [2, 5] }], clientKey: crypto.randomUUID() },
+      ctx,
+    );
+    const firstItem = (bodies[0] as { items: Record<string, unknown>[] }).items[0]!;
+    const secondItem = (bodies[1] as { items: Record<string, unknown>[] }).items[0]!;
+    expect(Object.keys(firstItem).sort()).toEqual(["quantity", "tableId"]);
+    expect(secondItem).toEqual({ tableId: id("A2"), quantity: 2, seatNos: [2, 5] });
+  });
+
+  it("getImage geçerli yolda baytları ve türü döner", async () => {
+    fake.addEvent({ coverImage: FAKE_IMAGES.cover });
+    const result = await client.getImage(FAKE_IMAGES.cover);
+    expect(result.contentType).toBe("image/webp");
+    expect(result.body.byteLength).toBeGreaterThan(0);
+    const req = fake.requests.at(-1);
+    expect(req?.path).toBe(`/api/sales/v1/images/${FAKE_IMAGES.cover}`);
+    expect(req?.clientIp).toBeNull();
+  });
+
+  it.each(["logo/x.webp", "event/../a.webp", "event/a.webp", ""])(
+    "getImage(%s) çekirdeğe gitmeden reddeder",
+    async (badPath) => {
+      const before = fake.requests.length;
+      await expect(client.getImage(badPath)).rejects.toMatchObject({ code: "event_not_found", status: 404 });
+      expect(fake.requests).toHaveLength(before);
+    },
+  );
+
+  it("getImage 404'te event_not_found verir", async () => {
+    await expect(client.getImage("event/00000000-0000-4000-8000-000000000099.webp")).rejects.toMatchObject({
+      code: "event_not_found",
+      status: 404,
+    });
   });
 });

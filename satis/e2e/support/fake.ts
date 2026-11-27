@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { EventDetail, OrderResponse } from "../../src/lib/core/contract";
 
-type FakeFile = { coreUrl: string; events: { gala: EventDetail; bahar: EventDetail; kapali: EventDetail } };
+type FakeFile = {
+  coreUrl: string;
+  events: { gala: EventDetail; bahar: EventDetail; kapali: EventDetail; masa: EventDetail };
+};
 
 /** Global kurulumun yazdığı sahte çekirdek durumu. */
 export function fakeState(): FakeFile {
@@ -26,8 +29,13 @@ async function control<T>(path: string, body?: unknown): Promise<T> {
 }
 
 /** Başka bir alıcı gibi masa tutar. */
-export const holdAs = (eventId: string, id: string, quantity: number) =>
-  control<OrderResponse>("hold-as", { eventId, tableId: id, quantity });
+export const holdAs = (eventId: string, id: string, quantity: number, seatNos?: number[]) =>
+  control<OrderResponse>("hold-as", {
+    eventId,
+    tableId: id,
+    quantity,
+    ...(seatNos === undefined ? {} : { seatNos }),
+  });
 
 /** remainingMs verilirse sipariş hemen bitmez; o kadar tutma süresi kalır. */
 export const expireOrder = (orderToken: string, remainingMs?: number) =>
