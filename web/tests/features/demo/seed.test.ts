@@ -76,10 +76,11 @@ describe("demo tohumlama servisi", () => {
   it("her masada 12 numaralı yuva vardır", async () => {
     const { eventIds } = await seedOnce({ concerts: oneConcert() });
     const eventId = eventIds[0]!;
-    const [{ value: slotCount }] = await db
+    const [slotCountRow] = await db
       .select({ value: count() })
       .from(tableSeatSlots)
       .where(eq(tableSeatSlots.eventId, eventId));
+    const slotCount = slotCountRow?.value ?? 0;
     expect(Number(slotCount)).toBe(2076);
 
     const [m1] = await db
@@ -140,16 +141,23 @@ describe("demo tohumlama servisi", () => {
   });
 
   it("bildirim, aşama geçmişi, salon şablonu, servis noktası ve masa tipi üretmez", async () => {
-    const [{ value: beforeTemplates }] = await db.select({ value: count() }).from(venueTemplates);
-    const [{ value: beforeTypes }] = await db.select({ value: count() }).from(tableTypes);
+    const [beforeTemplatesRow] = await db.select({ value: count() }).from(venueTemplates);
+    const beforeTemplates = beforeTemplatesRow?.value ?? 0;
+    const [beforeTypesRow] = await db.select({ value: count() }).from(tableTypes);
+    const beforeTypes = beforeTypesRow?.value ?? 0;
 
     await seedOnce({ concerts: oneConcert() });
 
-    const [{ value: notifCount }] = await db.select({ value: count() }).from(notifications);
-    const [{ value: transCount }] = await db.select({ value: count() }).from(eventStageTransitions);
-    const [{ value: spCount }] = await db.select({ value: count() }).from(servicePoints);
-    const [{ value: afterTemplates }] = await db.select({ value: count() }).from(venueTemplates);
-    const [{ value: afterTypes }] = await db.select({ value: count() }).from(tableTypes);
+    const [notifCountRow] = await db.select({ value: count() }).from(notifications);
+    const notifCount = notifCountRow?.value ?? 0;
+    const [transCountRow] = await db.select({ value: count() }).from(eventStageTransitions);
+    const transCount = transCountRow?.value ?? 0;
+    const [spCountRow] = await db.select({ value: count() }).from(servicePoints);
+    const spCount = spCountRow?.value ?? 0;
+    const [afterTemplatesRow] = await db.select({ value: count() }).from(venueTemplates);
+    const afterTemplates = afterTemplatesRow?.value ?? 0;
+    const [afterTypesRow] = await db.select({ value: count() }).from(tableTypes);
+    const afterTypes = afterTypesRow?.value ?? 0;
 
     expect(Number(notifCount)).toBe(0);
     expect(Number(transCount)).toBe(0);
@@ -230,9 +238,12 @@ describe("demo tohumlama servisi", () => {
     const second = await db.transaction((tx) => seedDemoData(tx, admin, ctx));
     expect(second).toEqual({ seeded: false, eventIds: [] });
 
-    const [{ value: evCount }] = await db.select({ value: count() }).from(events);
-    const [{ value: tblCount }] = await db.select({ value: count() }).from(eventTables);
-    const [{ value: artCount }] = await db.select({ value: count() }).from(artists);
+    const [evCountRow] = await db.select({ value: count() }).from(events);
+    const evCount = evCountRow?.value ?? 0;
+    const [tblCountRow] = await db.select({ value: count() }).from(eventTables);
+    const tblCount = tblCountRow?.value ?? 0;
+    const [artCountRow] = await db.select({ value: count() }).from(artists);
+    const artCount = artCountRow?.value ?? 0;
     expect(Number(evCount)).toBe(1);
     expect(Number(tblCount)).toBe(173);
     expect(Number(artCount)).toBe(1);
@@ -246,7 +257,8 @@ describe("demo tohumlama servisi", () => {
       .from(events)
       .where(eq(events.isDemo, true))
       .orderBy(asc(events.startsAt));
-    const [{ value: tblCount }] = await db.select({ value: count() }).from(eventTables);
+    const [tblCountRow] = await db.select({ value: count() }).from(eventTables);
+    const tblCount = tblCountRow?.value ?? 0;
 
     expect(demoEvents).toHaveLength(5);
     expect(demoEvents.map((e) => e.name)).toEqual(DEMO_CONCERTS.map((c) => c.name));
