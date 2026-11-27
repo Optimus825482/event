@@ -32,8 +32,8 @@ describe("tamamlanınca arşivleme", () => {
       revision: 1,
       archivedBy: actor.id,
       eventName: "Gala",
-      ticketsSold: 4,
-      demoTicketsSold: 2,
+      ticketsSold: 6,
+      demoTicketsSold: 0,
     });
   });
 
@@ -70,8 +70,8 @@ describe("tamamlanınca arşivleme", () => {
     expect(after).toMatchObject({
       totalCapacity: 40,
       fnbStaffCount: 4,
-      ticketsSold: 4,
-      ticketRevenue: "550.50",
+      ticketsSold: 6,
+      ticketRevenue: "1051.50",
       actualExpense: "1680.00",
       reservationCount: 2,
       eventName: "Gala",

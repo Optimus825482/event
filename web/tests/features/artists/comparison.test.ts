@@ -1,7 +1,8 @@
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { artists } from "@/db/schema";
+import { artists, events } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
 import { getArtistHistory, listArtistComparison } from "@/features/artists/comparison";
 import { managerActor } from "../../helpers/actors";
@@ -68,5 +69,18 @@ describe("sanatçı karşılaştırması", () => {
     const sezen = await makeArtist("Sezen Aksu", "SEZEN AKSU");
     await expect(getArtistHistory(db, managerActor("fnb"), sezen.id)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(listArtistComparison(db, managerActor("fnb"))).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("sanatçı karşılaştırması ve geçmişi demo arşivini saymaz", async () => {
+    const sezen = await makeArtist("Sezen Aksu", "SEZEN AKSU");
+    const real = await insertArchive(db, { artistId: sezen.id, eventName: "Gerçek", startsAt: new Date("2027-01-10T18:00:00Z") });
+    const demo = await insertArchive(db, { artistId: sezen.id, eventName: "Demo", startsAt: new Date("2027-02-10T18:00:00Z") });
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, demo.eventId));
+
+    const rows = await listArtistComparison(db, actor);
+    expect(rows[0]).toMatchObject({ eventCount: 1 });
+
+    const history = await getArtistHistory(db, actor, sezen.id);
+    expect(history.events.map((e) => e.eventId)).toEqual([real.eventId]);
   });
 });

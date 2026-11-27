@@ -44,6 +44,7 @@ export type BoardEvent = {
   reservationCount: number;
   tableCount: number;
   assignmentCount: number;
+  isDemo: boolean;
 };
 
 export const hasVenue = (e: Pick<BoardEvent, "tableCount">) => e.tableCount > 0;

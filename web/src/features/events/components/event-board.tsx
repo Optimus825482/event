@@ -14,6 +14,7 @@ import {
   type BoardTab,
 } from "../board";
 import { StageBadge } from "@/features/planning/components/stage-badge";
+import { DemoEventBadge } from "./demo-event-badge";
 import { CreateEventDialog, EventRowActions } from "./event-dialogs";
 import { APP_TIME_ZONE } from "@/lib/time-zone";
 
@@ -152,9 +153,12 @@ function BoardRow({
         </div>
       </div>
       <div className="col-span-3">
-        <Link href={`/events/${event.id}`} className="font-medium text-white transition-colors hover:text-blue-400">
-          {event.name}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/events/${event.id}`} className="font-medium text-white transition-colors hover:text-blue-400">
+            {event.name}
+          </Link>
+          {event.isDemo ? <DemoEventBadge /> : null}
+        </div>
         <p className="mt-0.5 text-xs text-slate-500">{event.reservationCount} rezervasyon</p>
         <StageBadge stage={event.planningStage} status={event.status} className="mt-1" />
       </div>

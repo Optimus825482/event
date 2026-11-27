@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { db } from "@/db/client";
 import {
   boardTabOf,
   countdownLabel,
@@ -8,6 +9,10 @@ import {
   parseBoardTab,
   type BoardEvent,
 } from "@/features/events/board";
+import { listEventBoard, listEvents } from "@/features/events/service";
+import { adminActor, persistActor } from "../../helpers/actors";
+import { truncateAll } from "../../helpers/db";
+import { createEvent } from "../../helpers/factories";
 
 const NOW = new Date("2030-06-15T09:00:00Z"); // Kıbrıs 12:00 (yaz, UTC+3)
 
@@ -26,6 +31,7 @@ function ev(over: Partial<BoardEvent> = {}): BoardEvent {
     reservationCount: 0,
     tableCount: 0,
     assignmentCount: 0,
+    isDemo: false,
     ...over,
   };
 }
@@ -111,5 +117,24 @@ describe("parseBoardTab / eventTypeBadge", () => {
     expect(eventTypeBadge("konser").color).toContain("purple");
     expect(eventTypeBadge("Gala").color).toContain("slate");
     expect(eventTypeBadge(null).label).toBe("Diğer");
+  });
+});
+
+describe("etkinlik listesi demo işareti", () => {
+  it("etkinlik panosu demo etkinliği işaretiyle listeler", async () => {
+    await truncateAll();
+    const admin = await persistActor(db, adminActor());
+    const real = await createEvent(db, { organizerId: admin.id, name: "Gerçek" });
+    const demo = await createEvent(db, { organizerId: admin.id, name: "Demo", isDemo: true });
+
+    const board = await listEventBoard(db, admin, {});
+    const byId = new Map(board.map((e) => [e.id, e]));
+    expect(byId.get(real.id)?.isDemo).toBe(false);
+    expect(byId.get(demo.id)?.isDemo).toBe(true);
+
+    const listed = await listEvents(db, admin, {});
+    const listedById = new Map(listed.items.map((e) => [e.id, e]));
+    expect(listedById.get(real.id)?.isDemo).toBe(false);
+    expect(listedById.get(demo.id)?.isDemo).toBe(true);
   });
 });

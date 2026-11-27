@@ -1,5 +1,7 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
+import { events } from "@/db/schema";
 import { ForbiddenError } from "@/features/auth/errors";
 import { assertCanViewReports, getPeriodReport } from "@/features/reports/service";
 import { managerActor } from "../../helpers/actors";
@@ -82,6 +84,32 @@ describe("dönem raporu", () => {
   it("geçersiz dönem olsa bile arşiv izni olmayan sayfa kapısında reddedilir", () => {
     expect(() => assertCanViewReports(managerActor("fnb"))).toThrow(ForbiddenError);
     expect(() => assertCanViewReports(actor)).not.toThrow();
+  });
+
+  it("dönem raporu demo etkinliği toplama katmaz", async () => {
+    const real = await insertArchive(db, {
+      eventName: "Gerçek",
+      startsAt: new Date("2027-05-10T18:00:00Z"),
+      ticketsSold: 2,
+      ticketRevenue: "1000.00",
+    });
+    const demo = await insertArchive(db, {
+      eventName: "Demo",
+      startsAt: new Date("2027-05-11T18:00:00Z"),
+      demoTicketsSold: 5,
+      demoTicketRevenue: "9000.00",
+    });
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, demo.eventId));
+
+    const report = await getPeriodReport(db, actor, { from: "2027-05-01", to: "2027-05-31" });
+    expect(report.rows.map((r) => r.eventId)).toEqual([real.eventId]);
+    expect(report.totals).toHaveLength(1);
+    expect(report.totals[0]).toMatchObject({
+      eventCount: 1,
+      ticketRevenue: "1000.00",
+      demoTicketRevenue: "0.00",
+      demoTicketsSold: 0,
+    });
   });
 });
 

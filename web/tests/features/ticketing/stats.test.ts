@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { tickets } from "@/db/schema";
+import { events, systemSettings, tickets } from "@/db/schema";
 import { payOrder } from "@/features/ticketing/orders-service";
 import type { PaymentProvider } from "@/features/ticketing/payment/provider";
 import { getSalesTotals } from "@/features/ticketing/stats";
@@ -60,15 +60,15 @@ describe("satış toplamları", () => {
     });
 
     expect(await getSalesTotals(db, event.id)).toEqual({
-      issued: 2,
-      revenue: "3000.00",
-      demoIssued: 2,
-      demoRevenue: "5500.50",
+      issued: 4,
+      revenue: "8500.50",
+      demoIssued: 0,
+      demoRevenue: "0.00",
       checkedIn: 0,
       byCategory: {
-        standard: { issued: 2, revenue: "3000.00" },
+        standard: { issued: 3, revenue: "4500.00" },
         premium: { issued: 0, revenue: "0.00" },
-        vip: { issued: 0, revenue: "0.00" },
+        vip: { issued: 1, revenue: "4000.50" },
       },
     });
   });
@@ -115,8 +115,8 @@ describe("satış toplamları", () => {
       demoRevenue: "0.00",
     });
     expect(await getSalesTotals(db, second.event.id)).toMatchObject({
-      demoIssued: 3,
-      demoRevenue: "4500.00",
+      issued: 3,
+      revenue: "4500.00",
     });
   });
 
@@ -169,5 +169,53 @@ describe("satış toplamları", () => {
       )
     ).rows as { sum: string }[];
     expect(sum?.sum).toBe(t.revenue);
+  });
+
+  it("demo etkinliğin biletleri gerçek toplama girmez", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent({ prices: { standard: "1500.00" } });
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, event.id));
+    await db.insert(systemSettings).values({ salesDemoEnabled: true });
+
+    await createPaidOrder(db, {
+      eventId: event.id,
+      items: [{ tableId: a1!.id, quantity: 3 }],
+    });
+
+    expect(await getSalesTotals(db, event.id)).toEqual({
+      issued: 0,
+      revenue: "0.00",
+      demoIssued: 3,
+      demoRevenue: "4500.00",
+      checkedIn: 0,
+      byCategory: zero,
+    });
+  });
+
+  it("gerçek etkinlikte demo sağlayıcıyla ödenen bilet gerçek toplamdadır", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent({ prices: { standard: "1500.00" } });
+
+    await createPaidOrder(db, {
+      eventId: event.id,
+      items: [{ tableId: a1!.id, quantity: 3 }],
+    });
+
+    expect(await getSalesTotals(db, event.id)).toEqual({
+      issued: 3,
+      revenue: "4500.00",
+      demoIssued: 0,
+      demoRevenue: "0.00",
+      checkedIn: 0,
+      byCategory: {
+        standard: { issued: 3, revenue: "4500.00" },
+        premium: { issued: 0, revenue: "0.00" },
+        vip: { issued: 0, revenue: "0.00" },
+      },
+    });
   });
 });

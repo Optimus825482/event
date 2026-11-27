@@ -1,7 +1,7 @@
 import { and, asc, getTableColumns, gte, lt } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventArchives } from "@/db/schema";
-import { type ArchiveListRow, toArchiveListRow } from "@/features/archive/read";
+import { type ArchiveListRow, realArchivesOnly, toArchiveListRow } from "@/features/archive/read";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { type PeriodInput, periodBounds, periodSchema } from "./period";
@@ -28,7 +28,7 @@ export async function getPeriodReport(ex: Db | Tx, actor: Actor, input: PeriodIn
     await ex
       .select(columns)
       .from(eventArchives)
-      .where(and(gte(eventArchives.startsAt, start), lt(eventArchives.startsAt, endExclusive)))
+      .where(and(gte(eventArchives.startsAt, start), lt(eventArchives.startsAt, endExclusive), realArchivesOnly()))
       .orderBy(asc(eventArchives.startsAt), asc(eventArchives.eventId))
   ).map(toArchiveListRow);
   return { from: period.from, to: period.to, rows, totals: totalsByCurrency(rows) };

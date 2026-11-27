@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { orders, tickets } from "@/db/schema";
+import { events, tickets } from "@/db/schema";
 import { SALE_CATEGORIES, type SaleCategory } from "@/domain/seating";
 
 export type SalesTotals = {
@@ -27,17 +27,17 @@ export async function getSalesTotals(
   // Tek sorgu (tek anlık görüntü): toplam ve kategori kırılımı aynı satırlardan türer, birbirinden sapmaz.
   const rows = await ex
     .select({
-      isDemo: orders.isDemo,
+      isDemo: events.isDemo,
       category: sql<SaleCategory | null>`${tickets.saleCategory}`,
       issued: sql<number>`count(*)::int`,
       revenue: sumOf(sql`sum(${tickets.unitPrice})`),
       checkedIn: sql<number>`count(${tickets.checkedInAt})::int`,
     })
     .from(tickets)
-    .innerJoin(orders, eq(orders.id, tickets.orderId))
+    .innerJoin(events, eq(events.id, tickets.eventId))
     .where(and(eq(tickets.eventId, eventId), eq(tickets.status, "issued")))
     .groupBy(
-      sql`grouping sets ((${orders.isDemo}, ${tickets.saleCategory}), (${orders.isDemo}))`,
+      sql`grouping sets ((${events.isDemo}, ${tickets.saleCategory}), (${events.isDemo}))`,
     );
 
   const byCategory = Object.fromEntries(

@@ -62,14 +62,15 @@ export async function getEventsDashboard(db: Executor, actor: Actor): Promise<Ev
       upcoming: sql<number>`count(*) filter (where ${events.startsAt} >= now() and ${events.status} in ('draft','published','active'))::int`,
       draft: sql<number>`count(*) filter (where ${events.status} = 'draft')::int`,
     })
-    .from(events);
+    .from(events)
+    .where(eq(events.isDemo, false));
 
   const hasTables = sql<boolean>`exists (select 1 from ${eventTables} where ${eventTables.eventId} = ${events.id})`;
   const hasTeam = sql<boolean>`exists (select 1 from ${eventStaffAssignments} where ${eventStaffAssignments.eventId} = ${events.id})`;
   const upcoming = await db
     .select({ id: events.id, name: events.name, startsAt: events.startsAt, hasVenueLayout: hasTables, hasTeamAssignment: hasTeam })
     .from(events)
-    .where(and(gte(events.startsAt, sql`now()`), inArray(events.status, [...OPEN_STATUSES]), hasTables, hasTeam))
+    .where(and(eq(events.isDemo, false), gte(events.startsAt, sql`now()`), inArray(events.status, [...OPEN_STATUSES]), hasTables, hasTeam))
     .orderBy(asc(events.startsAt))
     .limit(UPCOMING_LIMIT);
 
@@ -123,7 +124,8 @@ export async function getAdminDashboard(db: Executor, actor: Actor): Promise<Adm
       thisMonth: sql<number>`count(*) filter (where ${local(events.startsAt)} >= ${monthStart} and ${local(events.startsAt)} < ${monthStart} + interval '1 month')::int`,
       today: sql<number>`count(*) filter (where ${local(events.createdAt)} >= ${dayStart})::int`,
     })
-    .from(events);
+    .from(events)
+    .where(eq(events.isDemo, false));
 
   const [resRow] = await db
     .select({

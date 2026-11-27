@@ -5,6 +5,7 @@ import { can } from "@/features/auth/policy";
 import { requirePolicyActor } from "@/features/auth/permissions";
 import { eventTypeBadge } from "@/features/events/board";
 import { ArtistLine, CountdownBanner, EventSummaryCards } from "@/features/events/components/event-detail-parts";
+import { DemoEventBadge } from "@/features/events/components/demo-event-badge";
 import { EventActions } from "@/features/events/components/event-actions";
 import { EventForm } from "@/features/events/components/event-form";
 import { EventSectionNav } from "@/features/events/components/event-section-nav";
@@ -53,6 +54,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-xl font-bold text-white sm:text-2xl">{event.name}</h1>
             <div className="flex items-center gap-2">
+              {event.isDemo ? <DemoEventBadge /> : null}
               {event.eventType ? (
                 <span className={`rounded-full border px-3 py-1 text-sm ${type.color}`}>{type.label}</span>
               ) : null}

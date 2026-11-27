@@ -54,7 +54,7 @@ describe("arşiv okuma", () => {
     expect(await getArchiveView(db, actor, s.event.id)).toEqual(before);
     expect(before).toMatchObject({
       eventName: "Gala",
-      netActual: "-879.25",
+      netActual: "-378.25",
       rates: { occupancy: 42.9, attendance: 50, noShow: 50 },
     });
     expect(before.details.financeItems).toHaveLength(3);
@@ -102,5 +102,24 @@ describe("arşiv okuma", () => {
     for (const id of [randomUUID(), "abc"]) {
       await expect(getArchiveView(db, actor, id)).rejects.toMatchObject({ code: "not_found", message: "Arşiv kaydı bulunamadı" });
     }
+  });
+
+  it("arşiv listesi demo etkinliği göstermez ve saymaz", async () => {
+    const real = await insertArchive(db, { startsAt: new Date("2027-01-01T18:00:00Z"), eventName: "Gerçek Gala" });
+    const demo = await insertArchive(db, { startsAt: new Date("2027-02-01T18:00:00Z"), eventName: "Demo Gala" });
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, demo.eventId));
+
+    const list = await listArchives(db, actor);
+    expect(list.total).toBe(1);
+    expect(list.items.map((i) => i.eventId)).toEqual([real.eventId]);
+    expect((await listArchives(db, actor, { search: "Demo" })).total).toBe(0);
+  });
+
+  it("demo arşiv kimlikle açılabilir", async () => {
+    const demo = await insertArchive(db, { startsAt: new Date("2027-02-01T18:00:00Z"), eventName: "Demo Gala" });
+    await db.update(events).set({ isDemo: true }).where(eq(events.id, demo.eventId));
+
+    const view = await getArchiveView(db, actor, demo.eventId);
+    expect(view.eventId).toBe(demo.eventId);
   });
 });
