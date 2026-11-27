@@ -1,41 +1,75 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { detectCanOffer3d } from "./device";
 import type { PlanModel } from "./model";
-import { Plan3D } from "./plan-3d";
+import type { TablePick } from "./picks";
+import { Plan3D, type SeatView } from "./plan-3d";
 import { PlanSvg } from "./plan-svg";
+import type { usePlanView } from "./plan-view";
 
-const subscribeNothing = () => () => {};
+export type PlanViewerProps = {
+  model: PlanModel;
+  view: ReturnType<typeof usePlanView>;
+  picks?: readonly TablePick[];
+  activeTableId?: string | null;
+  dimmedIds?: ReadonlySet<string>;
+  artworkUrl?: string | null;
+  title?: string;
+  seatView?: SeatView | null;
+  onTable?(tableId: string): void;
+  onSeat?(tableId: string, seatNo: number): void;
+};
 
-/** 2B plan (varsayılan) ve uygun cihazlarda 3B balo salonu görünümü; seçim üst bileşendedir, görünüm değişince korunur. */
-export function PlanViewer({ model, selectedId = null, onSelect }: { model: PlanModel; selectedId?: string | null; onSelect?: (tableId: string) => void }) {
-  // Sunucuda ve ilk istemci çiziminde false; cihaz yoklaması yalnızca istemcide yapılır.
-  const can3d = useSyncExternalStore(subscribeNothing, detectCanOffer3d, () => false);
-  const [mode, setMode] = useState<"2d" | "3d">("2d");
-  const [failed, setFailed] = useState(false);
-  const fail = useCallback(() => {
-    setFailed(true);
-    setMode("2d");
-  }, []);
-  const show3d = can3d && !failed && mode === "3d";
+/** 3B balo salonu (varsayılan) ve 2B plan görünümü; seçim üst bileşendedir, görünüm değişince korunur. */
+export function PlanViewer({
+  model,
+  view,
+  picks = [],
+  activeTableId = null,
+  dimmedIds,
+  artworkUrl,
+  title,
+  seatView,
+  onTable,
+  onSeat,
+}: PlanViewerProps) {
+  const pickedIds = useMemo(() => new Set(picks.map((p) => p.tableId)), [picks]);
+  const interactive = onTable !== undefined;
 
   return (
     <div className="flex flex-col gap-3">
-      {failed ? <Notice>3B görünüm açılamadı; 2B plan gösteriliyor.</Notice> : null}
-      {can3d && !failed ? (
+      {view.failed ? <Notice>3B görünüm açılamadı; 2B plan gösteriliyor.</Notice> : null}
+      {view.can3d && !view.failed ? (
         <div>
-          <Button variant="glass" aria-pressed={show3d} onClick={() => setMode(show3d ? "2d" : "3d")}>
-            {show3d ? "2B görünüm" : "3B görünüm"}
+          <Button variant="glass" aria-pressed={view.show3d} onClick={() => view.setMode(view.show3d ? "2d" : "3d")}>
+            {view.show3d ? "2B görünüm" : "3B görünüm"}
           </Button>
         </div>
       ) : null}
-      {show3d ? (
-        <Plan3D model={model} picks={[]} activeTableId={selectedId} onTable={onSelect} onFail={fail} />
+      {view.show3d ? (
+        <Plan3D
+          model={model}
+          picks={picks}
+          activeTableId={activeTableId}
+          dimmedIds={dimmedIds}
+          artworkUrl={artworkUrl}
+          title={title}
+          seatView={seatView}
+          onTable={onTable}
+          onSeat={onSeat}
+          onFail={view.fail}
+          fallback={<PlanSvg model={model} pickedIds={pickedIds} activeId={activeTableId} dimmedIds={dimmedIds} />}
+        />
       ) : (
-        <PlanSvg model={model} selectedId={selectedId} onSelect={onSelect} />
+        <PlanSvg
+          model={model}
+          pickedIds={pickedIds}
+          activeId={activeTableId}
+          dimmedIds={dimmedIds}
+          onSelect={interactive ? onTable : undefined}
+        />
       )}
     </div>
   );
