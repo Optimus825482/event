@@ -8,10 +8,12 @@ import {
   reservations,
   tableGroupTables,
   tableTypes,
+  tickets,
 } from "@/db/schema";
 import type { Actor } from "@/features/auth/session";
 import { listEventTables, totalCapacity, type EventRow } from "@/features/events/service";
 import { DomainError } from "@/lib/action";
+import { byLabel } from "@/lib/compare";
 import { pgCodeOf } from "@/lib/pg-error";
 import { syncBarServicePoints } from "./service-points-sync";
 import { MAX_FLOOR, MAX_TABLE_CAPACITY, MAX_TABLES, MIN_FLOOR, decorSchema, normalizeLabel, type Decor, type DecorInput, type TableInput } from "./schemas";
@@ -50,6 +52,16 @@ export async function tablesInUse(tx: Db | Tx, eventId: string, tableIds: string
     for (const row of rows) used.add(row.tableId);
   }
   return used;
+}
+
+/** Bileti olmuş (süresi dolan dahil) masalar: `tickets_event_table_fk` RESTRICT silmeyi engeller. */
+async function tablesWithTickets(tx: Db | Tx, eventId: string, tableIds: string[]): Promise<Set<string>> {
+  if (tableIds.length === 0) return new Set();
+  const rows = await tx
+    .selectDistinct({ tableId: tickets.tableId })
+    .from(tickets)
+    .where(and(eq(tickets.eventId, eventId), inArray(tickets.tableId, tableIds)));
+  return new Set(rows.map((row) => row.tableId));
 }
 
 type NormalizedTable = {
@@ -254,6 +266,18 @@ export async function writeLayout(
     throw new DomainError(
       "conflict",
       `Rezervasyonu veya personel ataması olan masalar silinemez: ${quoteList(labels)}. Hiçbir değişiklik kaydedilmedi.`,
+    );
+  }
+  const ticketed = await tablesWithTickets(
+    tx,
+    eventId,
+    removed.map((row) => row.id),
+  );
+  if (ticketed.size > 0) {
+    const labels = removed.filter((row) => ticketed.has(row.id)).map((row) => row.label).sort(byLabel);
+    throw new DomainError(
+      "conflict",
+      `${labels.join(", ")} ${labels.length === 1 ? "masasının" : "masalarının"} bilet geçmişi var, silinemez`,
     );
   }
   await assertGroupedLocaFlagsUnchanged(tx, eventId, updates, existingById);

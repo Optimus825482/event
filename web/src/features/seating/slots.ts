@@ -4,9 +4,8 @@ import { eventTables, tableSeatSlots } from "@/db/schema";
 import { effectiveSellable } from "@/domain/seating";
 import { expireStaleHolds } from "@/features/ticketing/orders-service";
 import { DomainError } from "@/lib/action";
+import { byLabel } from "@/lib/compare";
 import { pgCodeOf } from "@/lib/pg-error";
-
-const byLabel = (a: string, b: string) => a.localeCompare(b, "tr", { numeric: true });
 
 function cannotShrink(labels: string[]): DomainError {
   return new DomainError(

@@ -7,6 +7,7 @@ import type { Actor } from "@/features/auth/session";
 import { getEventOrThrow } from "@/features/events/service";
 import { getSaleSettings } from "@/features/seating/settings-service";
 import { DomainError } from "@/lib/action";
+import { byLabel } from "@/lib/compare";
 import { getSeatOccupancy } from "./occupancy";
 import { getSalesTotals } from "./stats";
 
@@ -65,8 +66,6 @@ export type OrderDetail = OrderListRow & {
     at: string;
   }[];
 };
-
-const byLabel = (a: string, b: string) => a.localeCompare(b, "tr", { numeric: true });
 
 /** Listede yer alan siparişler: ödenmiş ve süresi dolmamış (DB saatiyle) tutmalar. */
 const listed = or(

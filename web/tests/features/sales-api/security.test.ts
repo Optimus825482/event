@@ -7,6 +7,7 @@ import { orders, paymentAttempts } from "@/db/schema";
 import { errorBodySchema, orderResponseSchema } from "@/features/sales-api/contract";
 import type { SalesRateScope } from "@/features/sales-api/rate-limits";
 import { formatPnr, parsePnr } from "@/features/ticketing/pnr";
+import { sha256Hex } from "@/lib/digest";
 import { createRateLimiter, type AsyncRateLimiter } from "@/lib/rate-limit";
 import { truncateAll } from "../../helpers/db";
 import { activeTickets, saleEvent } from "../ticketing/fixtures";
@@ -134,7 +135,9 @@ describe("satış API güvenliği", () => {
     const lookup = (r: Request) => api.lookupOrder(r);
     await lookup(req("POST", `${O}/lookup`, { body: { pnr: formatPnr("ABCD2345"), lastName: "Yılmaz" } }));
     expect(ip.keys).toHaveLength(1);
-    expect(pnr.keys).toEqual([parsePnr("ABCD2345")]);
+    // Anahtar ham PNR değil, onun SHA-256 özetidir (sayaç tablosunda PNR düz metin durmaz).
+    expect(pnr.keys).toEqual([sha256Hex(parsePnr("ABCD2345")!)]);
+    expect(pnr.keys[0]).not.toContain("ABCD2345");
     await lookup(req("POST", `${O}/lookup`, { body: { pnr: "123", lastName: "Yılmaz" } }));
     expect(ip.keys).toHaveLength(2);
     expect(pnr.keys).toHaveLength(1);

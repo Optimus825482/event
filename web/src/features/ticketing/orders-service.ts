@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, events, orders, paymentAttempts, tableSeatSlots, tickets, type OrderStatus } from "@/db/schema";
@@ -11,6 +11,8 @@ import { MAX_ORDER_TABLES, SALES_ERROR_MESSAGES, type SalesErrorCode } from "@/f
 import { getSeatPrices } from "@/features/seating/prices";
 import { getSaleSettings } from "@/features/seating/settings-service";
 import { DomainError, type DomainErrorCode } from "@/lib/action";
+import { byLabel } from "@/lib/compare";
+import { sha256 } from "@/lib/digest";
 import { logError } from "@/lib/log";
 import { nameKey } from "@/lib/name-key";
 import { pgCodeOf, pgConstraintOf } from "@/lib/pg-error";
@@ -62,8 +64,6 @@ export class SalesError extends DomainError {
     if (details !== undefined) this.details = details;
   }
 }
-
-const byLabel = (a: string, b: string) => a.localeCompare(b, "tr", { numeric: true });
 
 /** Aynı masanın kalemlerini birleştirir; masa kimliğine göre artan sıralar (kilit sırası). */
 function mergeItems(items: readonly HoldItem[]): HoldItem[] {
@@ -283,7 +283,23 @@ export async function createHold(db: Db, input: HoldInput, deps: OrderDeps = {})
   return (await createHoldWithOutcome(db, input, deps)).order;
 }
 
-export type SweepScope = { eventId?: string; tableIds?: readonly string[] };
+export type SweepScope = {
+  eventId?: string;
+  tableIds?: readonly string[];
+  /** Tek süpürmede kilitlenip bırakılacak en çok sipariş (en küçük kimliklerden); uzun işlemi önler. */
+  limit?: number;
+};
+
+/** Süresi dolan tutmaların fırsatçı süpürmesinde tek seferde işlenen en çok sipariş. */
+export const OPPORTUNISTIC_SWEEP_LIMIT = 100;
+
+/**
+ * Kapsamsız (tüm etkinlikler/masalar) sınırlı süpürme: `orders_pending_expiry_idx` üzerinden süresi dolan
+ * `pending` siparişleri `expired` yapar. Zamanlayıcı yoktur; okuma yollarından ucuzca çağrılır.
+ */
+export function sweepExpiredHolds(ex: Db | Tx, limit: number = OPPORTUNISTIC_SWEEP_LIMIT): Promise<number> {
+  return expireStaleHolds(ex, { limit });
+}
 
 /**
  * Verilen siparişlerin biletlerini bırakır (`expired`, yuvasız) ve etkilenen her masa için `seats.changed`
@@ -321,10 +337,12 @@ async function sweepStaleHolds(tx: Tx, scope: SweepScope = {}): Promise<number> 
     );
     conditions.push(sql`exists (select 1 from tickets t where t.order_id = o.id and t.table_id in (${ids}))`);
   }
+  const limit = scope.limit !== undefined ? sql`limit ${Math.max(1, Math.trunc(scope.limit))}` : sql``;
   const locked = await tx.execute<{ id: string }>(sql`
     select o.id from orders o
      where ${sql.join(conditions, sql` and `)}
      order by o.id
+     ${limit}
        for update of o
   `);
   const lockedIds = locked.rows.map((r) => r.id);
@@ -515,7 +533,6 @@ export async function payOrder(db: Db, orderId: string, input: PayInput, deps: O
   return viewOrThrow(db, orderId);
 }
 
-const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest();
 // PNR bulunamadığında da aynı karşılaştırma yapılır: yanıt süresi PNR'ın varlığını sızdırmaz.
 const DUMMY_KEY_DIGEST = sha256("\u0000pnr-not-found");
 
