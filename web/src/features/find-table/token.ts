@@ -1,3 +1,4 @@
+import "server-only";
 import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import { env } from "@/env";
 import { isUuid } from "@/lib/identifiers";
