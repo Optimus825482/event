@@ -7,7 +7,7 @@ import { FIND_TABLE_MISMATCH, submitFindTable } from "./submit";
 
 export type FindTableFormState = { error: string | null };
 
-/** Oturumsuz form eylemi: kod ve soyad yalnızca gövdede gider, hiçbir URL'ye yazılmaz. */
+/** Oturumsuz form eylemi (`actions.ts` değil: defineAction oturum ister, bu sayfa herkese açık): kod ve soyad yalnızca gövdede gider, hiçbir URL'ye yazılmaz. */
 export async function findTableAction(_prev: FindTableFormState, formData: FormData): Promise<FindTableFormState> {
   const outcome = await submitFindTable(
     db,
