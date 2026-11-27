@@ -8,7 +8,7 @@ const CHANNEL = "eventflow-check-in-queue";
 
 type Listener = (events: SettledEvent[]) => void;
 
-export type EnqueueMeta = { gate?: number | null };
+export type EnqueueMeta = { gate?: number | null; eventEndsAt?: string };
 
 export type QueueRuntime = {
   /** `false`: IndexedDB yok, kuyruk yalnızca bu sekmenin belleğinde. */
@@ -20,6 +20,8 @@ export type QueueRuntime = {
   /** Her hedef için ayrı anahtarla, tek yazımda kuyruğa ekler. */
   enqueueMany(eventId: string, targets: readonly QueueTarget[], meta?: EnqueueMeta): Promise<QueueItem[]>;
   flush(options?: FlushOptions): Promise<void>;
+  /** Etkinlik bitişi + 1 saat geçmiş öğeleri depodan siler (açık bir konsol sekmesi için periyodik). */
+  purgeStale(): Promise<void>;
   isPaused(): boolean;
   resume(): void;
   retry(item: QueueItem): Promise<void>;
@@ -79,6 +81,7 @@ export function getQueueRuntime(): QueueRuntime {
         clientTimestamp,
         now,
         gate: meta?.gate ?? null,
+        eventEndsAt: meta?.eventEndsAt,
       }),
     );
     if (items.length === 0) return [];
@@ -105,6 +108,14 @@ export function getQueueRuntime(): QueueRuntime {
     async flush(options) {
       await flusher.flush(options);
       notifyAll();
+    },
+    async purgeStale() {
+      try {
+        const removed = await purgeStaleItems(store, Date.now());
+        if (removed.length > 0) notifyAll();
+      } catch {
+        // depo erişilemiyor: bir sonraki turda yeniden denenir
+      }
     },
     isPaused: () => flusher.isPaused(),
     resume: () => flusher.resume(),

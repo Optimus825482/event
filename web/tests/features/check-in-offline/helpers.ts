@@ -11,7 +11,7 @@ export function uuid(): string {
   return `00000000-0000-4000-8000-${String(counter).padStart(12, "0")}`;
 }
 
-export function item(overrides: { now?: number; token?: string; key?: string; ownerId?: string } = {}): QueueItem {
+export function item(overrides: { now?: number; token?: string; key?: string; ownerId?: string; eventEndsAt?: string } = {}): QueueItem {
   return createItem({
     idempotencyKey: overrides.key ?? uuid(),
     ownerId: overrides.ownerId ?? USER_ID,
@@ -19,6 +19,7 @@ export function item(overrides: { now?: number; token?: string; key?: string; ow
     target: { token: overrides.token ?? "a.b" },
     clientTimestamp: new Date(overrides.now ?? 1_000).toISOString(),
     now: overrides.now ?? 1_000,
+    eventEndsAt: overrides.eventEndsAt,
   });
 }
 

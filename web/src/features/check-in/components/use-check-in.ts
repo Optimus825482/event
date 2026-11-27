@@ -49,7 +49,7 @@ export function useRefreshEvent(eventId: string) {
  * kuyruktan kaldırılır (hata listesinde ikinci kez görünmez). Kuyruğa alınan öğenin SONRAKİ sonucu
  * bandı ezmez; sayaç ve hata listesinde görünür.
  */
-export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | null = null) {
+export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | null = null, eventEndsAt?: string) {
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<CheckInFeedback | null>(null);
   const own = useRef(new Set<string>());
@@ -103,7 +103,7 @@ export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | 
       setPending(true);
       void (async () => {
         try {
-          const item = await queue.enqueue(eventId, target, { gate });
+          const item = await queue.enqueue(eventId, target, { gate, eventEndsAt });
           if (!navigator.onLine) {
             setFeedback({ kind: "queued", reason: "network" });
             return;
@@ -125,7 +125,7 @@ export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | 
         }
       })();
     },
-    [eventId, queue, gate],
+    [eventId, queue, gate, eventEndsAt],
   );
 
   const submitMany = useCallback(
@@ -137,7 +137,7 @@ export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | 
           const collected = { keys: new Set<string>(), events: [] as SettledEvent[] };
           batch.current = collected;
           try {
-            const items = await queue.enqueueMany(eventId, targets, { gate });
+            const items = await queue.enqueueMany(eventId, targets, { gate, eventEndsAt });
             const keys = items.map((i) => i.idempotencyKey);
             for (const k of keys) collected.keys.add(k);
             if (!navigator.onLine) {
@@ -160,7 +160,7 @@ export function useCheckIn(eventId: string, queue: OfflineQueue, gate: number | 
         }
       })();
     },
-    [eventId, queue, gate],
+    [eventId, queue, gate, eventEndsAt],
   );
 
   return { submit, submitMany, pending, feedback, setFeedback, clear: () => setFeedback(null), onEvents };

@@ -44,6 +44,8 @@ export type QueueItem = {
   gate?: number | null;
   /** Tarama anı (ISO); tekrar gönderimlerde değişmez. */
   clientTimestamp: string;
+  /** Etkinlik bitiş anı (ISO); yoksa (eski kayıt) yaş ölçütü (`STALE_ITEM_MS`) kullanılır. */
+  eventEndsAt?: string;
   /** Ekleme sırası: (enqueuedAt, seq, anahtar). */
   enqueuedAt: number;
   seq: number;
@@ -72,15 +74,25 @@ export type SettledEvent =
 
 export const DEFAULT_BATCH_SIZE = 25;
 
+/** Etkinlik bittikten sonra öğelerin cihazda tutulacağı süre. */
+export const POST_EVENT_RETENTION_MS = 60 * 60 * 1000;
+
 /**
- * Kuyrukta bekleyebilecek en uzun süre. Öğeler ham bilet QR belirteci taşır; etkinlik çoktan bitmiş bir
- * kuyruk cihazda kalmamalı. Öğede etkinlik bitiş zamanı tutulmadığından yaş (`enqueuedAt`) ölçüt alınır.
+ * `eventEndsAt` bilinmeyen (eski sürümden kalan) öğeler için en uzun bekleme süresi. Öğeler ham bilet QR
+ * belirteci taşır; bitiş zamanı olmayan öğede yaş (`enqueuedAt`) ölçüt alınır.
  */
 export const STALE_ITEM_MS = 48 * 60 * 60 * 1000;
 
+/** Öğenin artık cihazda tutulmaması gerekir mi: etkinlik bitişi + 1 saat (UTC ms), bitiş yoksa 48 saatlik yaş. */
+export function isStale(item: Pick<QueueItem, "enqueuedAt" | "eventEndsAt">, now: number): boolean {
+  const endsAt = item.eventEndsAt === undefined ? Number.NaN : Date.parse(item.eventEndsAt);
+  if (Number.isFinite(endsAt)) return now >= endsAt + POST_EVENT_RETENTION_MS;
+  return now - item.enqueuedAt > STALE_ITEM_MS;
+}
+
 /** Artık gönderilmeyecek kadar eski öğelerin anahtarları (durumdan ve sahipten bağımsız). */
 export function staleKeys(items: readonly QueueItem[], now: number): string[] {
-  return items.filter((i) => now - i.enqueuedAt > STALE_ITEM_MS).map((i) => i.idempotencyKey);
+  return items.filter((i) => isStale(i, now)).map((i) => i.idempotencyKey);
 }
 const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 60_000;
@@ -102,6 +114,7 @@ export function createItem(input: {
   clientTimestamp: string;
   now: number;
   gate?: number | null;
+  eventEndsAt?: string;
 }): QueueItem {
   sequence += 1;
   return {
@@ -110,6 +123,7 @@ export function createItem(input: {
     eventId: input.eventId,
     target: input.target,
     gate: input.gate ?? null,
+    ...(input.eventEndsAt ? { eventEndsAt: input.eventEndsAt } : {}),
     clientTimestamp: input.clientTimestamp,
     enqueuedAt: input.now,
     seq: sequence,
