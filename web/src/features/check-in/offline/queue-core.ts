@@ -71,6 +71,17 @@ export type SettledEvent =
   | { type: "deferred"; item: QueueItem; reason: "network" | "server" | "auth" };
 
 export const DEFAULT_BATCH_SIZE = 25;
+
+/**
+ * Kuyrukta bekleyebilecek en uzun süre. Öğeler ham bilet QR belirteci taşır; etkinlik çoktan bitmiş bir
+ * kuyruk cihazda kalmamalı. Öğede etkinlik bitiş zamanı tutulmadığından yaş (`enqueuedAt`) ölçüt alınır.
+ */
+export const STALE_ITEM_MS = 48 * 60 * 60 * 1000;
+
+/** Artık gönderilmeyecek kadar eski öğelerin anahtarları (durumdan ve sahipten bağımsız). */
+export function staleKeys(items: readonly QueueItem[], now: number): string[] {
+  return items.filter((i) => now - i.enqueuedAt > STALE_ITEM_MS).map((i) => i.idempotencyKey);
+}
 const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 60_000;
 

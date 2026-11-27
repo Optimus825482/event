@@ -81,6 +81,7 @@ export function CheckInFeedbackBanner({
       <div
         {...focusable}
         role="status"
+        aria-live="assertive"
         className="flex items-start justify-between gap-4 rounded-xl border-2 border-sky-500/60 bg-sky-500/10 p-4 text-sky-100"
       >
         <div className="flex items-start gap-3">
@@ -102,6 +103,7 @@ export function CheckInFeedbackBanner({
       <div
         {...focusable}
         role="status"
+        aria-live="assertive"
         className={cn(
           "flex items-start justify-between gap-4 rounded-xl border-2 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
           tone === "ok" && "border-emerald-500/60 bg-emerald-500/10 text-emerald-100",
@@ -140,6 +142,7 @@ export function CheckInFeedbackBanner({
     <div
       {...focusable}
       role="status"
+      aria-live="assertive"
       className={
         success
           ? "flex items-start justify-between gap-4 rounded-xl border-2 border-emerald-500/60 bg-emerald-500/10 p-4 text-emerald-100"

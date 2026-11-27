@@ -5,6 +5,7 @@ import { MSG, type Executor } from "@/features/reservations/internal";
 import { parsePnr } from "@/features/ticketing/pnr";
 import { listOrderTickets } from "@/features/ticketing/tickets-read";
 import { DomainError } from "@/lib/action";
+import { joinFullName } from "@/lib/full-name";
 import type { FindOrderInput } from "./schemas";
 
 export type DoorOrder = {
@@ -43,7 +44,7 @@ export async function findOrderAtDoor(db: Executor, _actor: Actor, input: FindOr
   return {
     orderId: order.id,
     pnr: order.pnr,
-    buyerName: [order.first, order.last].filter(Boolean).join(" "),
+    buyerName: joinFullName(order.first, order.last),
     tickets: rows.map((t) => ({
       ticketId: t.ticketId,
       tableId: t.tableId,

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { tickets } from "@/db/schema";
+import { orders, tickets } from "@/db/schema";
 import { signQrToken } from "@/features/reservations/qr-token";
 import {
   findTicketByQr,
@@ -43,6 +43,19 @@ describe("bilet okuma", () => {
       pnr: paid.pnr,
       checkedInAt: null,
     });
+  });
+
+  it("alıcı adı kırpılır; boş soyad çift boşluk ya da null üretmez", async () => {
+    const {
+      event,
+      tables: [a1],
+    } = await saleEvent();
+    const paid = await createPaidOrder(db, { eventId: event.id, items: [{ tableId: a1!.id, quantity: 1 }] });
+    const qr = paid.tickets[0]!.qrPayload;
+    await db.update(orders).set({ buyerFirstName: "  Ayşe ", buyerLastName: "   " }).where(eq(orders.id, paid.orderId));
+    expect((await findTicketByQr(db, qr))?.buyerName).toBe("Ayşe");
+    await db.update(orders).set({ buyerFirstName: " ", buyerLastName: "" }).where(eq(orders.id, paid.orderId));
+    expect((await findTicketByQr(db, qr))?.buyerName).toBeNull();
   });
 
   it("geçerli imzalı ama bilete ait olmayan belirteç bulunmaz", async () => {

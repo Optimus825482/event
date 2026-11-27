@@ -10,7 +10,7 @@ import {
   requestServerSignOut,
   shouldBlockPath,
 } from "@/features/auth/sign-out";
-import { purgeAuthenticatedShell } from "@/features/check-in/offline/purge-shell";
+import { purgeOnSignOut } from "@/features/check-in/offline/purge-queue";
 
 const RETRY_INTERVAL_MS = 15_000;
 const APP_ROOT_ID = "app-root";
@@ -42,7 +42,7 @@ export function PendingSignOut() {
     try {
       const outcome = await runSignOut({
         request: requestServerSignOut,
-        purge: purgeAuthenticatedShell,
+        purge: purgeOnSignOut,
         store: window.localStorage,
       });
       window.dispatchEvent(new Event(SIGN_OUT_PENDING_EVENT));

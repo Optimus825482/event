@@ -9,7 +9,8 @@ import { APP_TIME_ZONE } from "@/lib/time-zone";
 import type { SearchGuestsInput } from "./schemas";
 import { toEventStats, type EventStats } from "./stats";
 import { escapeLike } from "@/lib/identifiers";
-import { normalizeCode } from "@/lib/short-code";
+import { parseBookingCode } from "@/lib/code-format";
+import { joinFullName } from "@/lib/full-name";
 
 export type { EventStats } from "./stats";
 
@@ -97,8 +98,8 @@ function searchCondition(q: string): SQL | undefined {
       sql`regexp_replace(coalesce(${reservations.guestPhone}, ''), '\\D', '', 'g') like ${`%${digits}%`}`,
     );
   }
-  const code = normalizeCode(q);
-  if (code.length === 7 && code.startsWith("R")) conditions.push(eq(reservations.bookingCode, code));
+  const code = parseBookingCode(q);
+  if (code) conditions.push(eq(reservations.bookingCode, code));
   return or(...conditions);
 }
 
@@ -209,8 +210,7 @@ export async function recentCheckIns(
       id: t.ticketId,
       kind: "ticket" as const,
       reservationId: null,
-      guestName:
-        [t.firstName, t.lastName].filter((p) => p && p.trim() !== "").join(" ") || "Bilet",
+      guestName: joinFullName(t.firstName, t.lastName) || "Bilet",
       tableLabel: t.tableLabel,
       guestCount: 1,
       checkedInAt: t.checkedInAt?.toISOString() ?? null,

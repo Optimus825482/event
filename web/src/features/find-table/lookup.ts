@@ -1,16 +1,15 @@
+import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { customers, events, reservations } from "@/db/schema";
 import { findOrderByPnr } from "@/features/ticketing/orders-service";
 import { lastNameKeyOf, nameKey } from "@/lib/name-key";
-import { normalizeCode } from "@/lib/short-code";
+import { parseBookingCode, parsePnr } from "@/lib/code-format";
 import { createFindTableLimiters, FindTableRateLimitedError, type FindTableLimiters } from "./rate-limit";
 import { signFindTableToken } from "./token";
 import { eventWindowOpen } from "./window";
 
-const PNR_LENGTH = 8;
-const BOOKING_CODE_LENGTH = 7;
 const DUMMY_DIGEST = createHash("sha256").update("find-table:no-such-key").digest();
 
 function digest(value: string): Buffer {
@@ -60,10 +59,10 @@ async function lookup(
   input: { code: string; lastName: string },
   limiters: FindTableLimiters,
 ): Promise<{ token: string } | null> {
-  const code = normalizeCode(input.code);
-  const isPnr = code.length === PNR_LENGTH;
-  const isBooking = code.length === BOOKING_CODE_LENGTH && code.startsWith("R");
-  if (!isPnr && !isBooking) return null;
+  const pnrCode = parsePnr(input.code);
+  const code = pnrCode ?? parseBookingCode(input.code);
+  if (code === null) return null;
+  const isPnr = pnrCode !== null;
   await guard(limiters.code, code);
 
   const wanted = nameKey(input.lastName);
