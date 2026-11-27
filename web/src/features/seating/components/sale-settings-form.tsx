@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
+import type { SaleMode } from "@/domain/seating";
 import { dateToZonedWallClock } from "@/lib/time-zone";
 import { saveSaleSettingsAction } from "../actions";
 import type { SaleSettings } from "../settings-service";
 import { parseWholeNumber } from "../view-model";
+import { SaleModeField } from "./sale-mode-field";
 
 type FieldName =
   "holdMinutes" | "maxSeatsPerOrder" | "saleStartsAt" | "saleEndsAt";
@@ -32,15 +34,18 @@ export function SaleSettingsForm({
   eventId,
   settings,
   canEdit,
+  saleModeLocked,
   onSaved,
 }: {
   eventId: string;
   settings: SaleSettings;
   canEdit: boolean;
+  saleModeLocked: boolean;
   onSaved: () => void;
 }) {
   const toast = useToast();
   const [pending, startTransition] = useTransition();
+  const [saleMode, setSaleMode] = useState<SaleMode>(settings.saleMode);
   const [flags, setFlags] = useState({
     blockSingleLeftover: settings.blockSingleLeftover,
     locaOnline: settings.locaOnline,
@@ -64,7 +69,7 @@ export function SaleSettingsForm({
       try {
         result = await saveSaleSettingsAction({
           eventId,
-          saleMode: settings.saleMode,
+          saleMode,
           ...flags,
           holdMinutes: parseWholeNumber(holdMinutes),
           maxSeatsPerOrder: parseWholeNumber(maxSeatsPerOrder),
@@ -139,6 +144,13 @@ export function SaleSettingsForm({
         Satış kuralları
       </h2>
       <form onSubmit={submit} className="space-y-5" noValidate>
+        <SaleModeField
+          value={saleMode}
+          onChange={setSaleMode}
+          disabled={!canEdit}
+          locked={saleModeLocked}
+          idPrefix="sale-"
+        />
         <ul className="space-y-1">
           {SWITCHES.map(({ key, label, hint }) => {
             const id = `sale-${key}`;

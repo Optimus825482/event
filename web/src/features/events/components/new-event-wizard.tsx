@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import type { SaleMode } from "@/domain/seating";
+import { setSaleModeAction } from "@/features/seating/actions";
+import { SaleModeField } from "@/features/seating/components/sale-mode-field";
 import { applyTemplateAction } from "@/features/staffing/actions";
 import { applyVenueTemplateAction } from "@/features/venue/actions";
 import { cn } from "@/lib/utils";
@@ -70,8 +74,10 @@ function Stepper({ current }: { current: number }) {
 /** Eski "yeni etkinlik" sihirbazı: temel bilgiler -> alan şablonu -> ekip ataması -> e-davetiye. */
 export function NewEventWizard({ venueTemplates, teamTemplates, canApplyVenue, canApplyTeam, canInvite, canOrganizeTeam }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [step, setStep] = useState(1);
   const [eventId, setEventId] = useState<string | null>(null);
+  const [saleMode, setSaleMode] = useState<SaleMode>("seat");
 
   async function applyVenue(templateId: string): Promise<ApplyOutcome> {
     if (!eventId) return { ok: false, message: "Önce etkinlik oluşturulmalı" };
@@ -107,13 +113,24 @@ export function NewEventWizard({ venueTemplates, teamTemplates, canApplyVenue, c
         </div>
 
         {step === 1 ? (
-          <EventForm
-            onCancel={() => router.push("/events")}
-            onSaved={(id) => {
-              setEventId(id);
-              setStep(2);
-            }}
-          />
+          <div className="space-y-6">
+            <SaleModeField value={saleMode} onChange={setSaleMode} idPrefix="wizard-" />
+            <EventForm
+              onCancel={() => router.push("/events")}
+              onSaved={async (id) => {
+                if (saleMode !== "seat") {
+                  const res = await setSaleModeAction({ eventId: id, saleMode });
+                  if (!res.ok) {
+                    toast.error(
+                      `Satış şekli kaydedilemedi: ${res.message}. Masalar ve Satış ekranından ayarlayabilirsiniz.`,
+                    );
+                  }
+                }
+                setEventId(id);
+                setStep(2);
+              }}
+            />
+          </div>
         ) : null}
 
         {step === 2 && eventId ? (

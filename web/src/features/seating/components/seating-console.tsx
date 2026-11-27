@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useToast } from "@/components/ui/toast";
+import { isLayoutLockedStage } from "@/domain/planning-stage";
 import {
   ALLOCATION_LABELS,
   SALE_CATEGORIES,
@@ -212,7 +213,7 @@ export function SeatingConsole({
 
       <SaleSettingsForm
         key={JSON.stringify([
-          settings.sharedTables,
+          settings.saleMode,
           settings.blockSingleLeftover,
           settings.locaOnline,
           settings.holdMinutes,
@@ -223,6 +224,7 @@ export function SeatingConsole({
         eventId={eventId}
         settings={settings}
         canEdit={canEdit}
+        saleModeLocked={isLayoutLockedStage(data.stage)}
         onSaved={() => void refresh()}
       />
     </div>
