@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { saleModeNote } from "@/components/event/facts";
-import { TICKET_DIALOG_HASH } from "@/components/event/ticket-dialog";
+import { TICKET_DIALOG_HASH } from "@/components/event/ticket-dialog-shared";
 import { Notice } from "@/components/ui/notice";
 import { EventSales } from "@/features/plan/event-sales";
 import { parsePartySize } from "@/features/plan/party";

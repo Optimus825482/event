@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { DEFAULT_PARTY_SIZE, PARTY_PARAM } from "@/features/plan/party";
 import { partyOptions } from "./facts";
+import { salonPath, TICKET_DIALOG_HASH, TICKET_DIALOG_ID } from "./ticket-dialog-shared";
 
-/** Pencerenin kimliği; `#bilet-al` bağlantıları (kartlar, üst menü) bu pencereyi açar. */
-export const TICKET_DIALOG_ID = "bilet-al";
-export const TICKET_DIALOG_HASH = `#${TICKET_DIALOG_ID}`;
+export { salonPath, TICKET_DIALOG_HASH, TICKET_DIALOG_ID, ticketDialogNoscriptCss } from "./ticket-dialog-shared";
+
 const OPEN_EVENT = "bilet-al:ac";
 
 /** Sayfada "Bilet Al" penceresi varsa açar ve `true` döner (üst menü düğmesi için). */
@@ -16,20 +16,6 @@ export function openTicketDialog(): boolean {
   if (typeof document === "undefined" || !document.getElementById(TICKET_DIALOG_ID)) return false;
   window.dispatchEvent(new Event(OPEN_EVENT));
   return true;
-}
-
-/**
- * JS kapalıyken pencere `:target` ile görünür olur (`#bilet-al` bağlantısı); form GET ile salona gönderilir.
- * Yalnızca `<noscript>` içinde yüklenir; CSP için istek nonce'unu taşır.
- */
-export function ticketDialogNoscriptCss(nonce: string | null): string {
-  const attr = nonce ? ` nonce="${nonce.replace(/[^A-Za-z0-9+/=]/g, "")}"` : "";
-  return `<style${attr}>dialog#${TICKET_DIALOG_ID}:target{display:block;position:fixed;inset:0;z-index:60;height:fit-content}</style>`;
-}
-
-/** Kişi sayısı seçildikten sonra gidilen salon (3B/2B masa seçimi) sayfası. */
-export function salonPath(eventId: string): string {
-  return `/etkinlik/${eventId}/salon`;
 }
 
 export type TicketDialogProps = {
