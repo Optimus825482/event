@@ -6,7 +6,7 @@ import { UPLOAD_ROOT } from "./root";
 import { resolveUploadPath } from "./serve";
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const IMAGE_KINDS = ["avatar", "event", "invitation", "logo"] as const;
+export const IMAGE_KINDS = ["avatar", "event", "invitation", "logo", "artist"] as const;
 export type ImageKind = (typeof IMAGE_KINDS)[number];
 
 const MAX_DIMENSION = 2048;

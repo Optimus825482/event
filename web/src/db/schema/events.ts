@@ -70,6 +70,7 @@ export const events = pgTable(
     artistName: text("artist_name"),
     /** Sanatçı kaydı; boşsa sanatçı yalnızca serbest metindir. */
     artistId: uuid("artist_id").references(() => artists.id, { onDelete: "set null" }),
+    isDemo: boolean("is_demo").notNull().default(false),
     ...timestamps(),
   },
   (t) => [

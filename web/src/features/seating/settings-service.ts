@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventSaleSettings, eventTables, events } from "@/db/schema";
+import type { SaleMode } from "@/domain/seating";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
@@ -10,6 +11,7 @@ import type { SaleSettingsInput } from "./schemas";
 export type SaleSettings = {
   eventId: string;
   sharedTables: boolean;
+  saleMode: SaleMode;
   blockSingleLeftover: boolean;
   locaOnline: boolean;
   holdMinutes: number;
@@ -22,6 +24,7 @@ export type SaleSettings = {
 /** Satırı olmayan etkinliğin geçerli satış ayarları. */
 export const DEFAULT_SALE_SETTINGS: Omit<SaleSettings, "eventId"> = {
   sharedTables: true,
+  saleMode: "seat",
   blockSingleLeftover: true,
   locaOnline: false,
   holdMinutes: 10,
@@ -38,6 +41,7 @@ export async function getSaleSettings(ex: Db | Tx, eventId: string): Promise<Sal
   return {
     eventId,
     sharedTables: row.sharedTables,
+    saleMode: row.saleMode,
     blockSingleLeftover: row.blockSingleLeftover,
     locaOnline: row.locaOnline,
     holdMinutes: row.holdMinutes,

@@ -29,6 +29,8 @@ export const artists = pgTable(
     nameKey: text("name_key").notNull(),
     genre: text("genre"),
     notes: text("notes"),
+    image: text("image"),
+    isDemo: boolean("is_demo").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
     ...timestamps(),
   },

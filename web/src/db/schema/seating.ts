@@ -13,7 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 // drizzle-kit tsconfig yol takma adlarını çözmeyebilir; göreli içe aktarım.
-import type { SaleCategory } from "../../domain/seating";
+import type { SaleCategory, SaleMode } from "../../domain/seating";
 import { users } from "./auth";
 import { createdOnly, currency, pk, timestamps, tstz } from "./columns";
 import { eventTables, events } from "./events";
@@ -27,6 +27,7 @@ export const eventSaleSettings = pgTable(
       .references(() => events.id, { onDelete: "cascade" }),
     /** Bir masanın sandalyeleri farklı siparişlere satılabilir. */
     sharedTables: boolean("shared_tables").notNull().default(true),
+    saleMode: text("sale_mode").$type<SaleMode>().notNull().default("seat"),
     /** Masada tek boş sandalye bırakan sipariş engellenir. */
     blockSingleLeftover: boolean("block_single_leftover").notNull().default(true),
     /** Localar online satışa açılabilir. */
@@ -43,6 +44,7 @@ export const eventSaleSettings = pgTable(
   (t) => [
     check("event_sale_settings_hold_minutes_range", sql`${t.holdMinutes} BETWEEN 5 AND 30`),
     check("event_sale_settings_max_seats_range", sql`${t.maxSeatsPerOrder} BETWEEN 1 AND 50`),
+    check("event_sale_settings_sale_mode_valid", sql`${t.saleMode} IN ('table', 'seat')`),
     check(
       "event_sale_settings_window_valid",
       sql`${t.saleEndsAt} IS NULL OR ${t.saleStartsAt} IS NULL OR ${t.saleEndsAt} > ${t.saleStartsAt}`,

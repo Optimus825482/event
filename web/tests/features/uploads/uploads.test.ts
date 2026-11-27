@@ -75,6 +75,12 @@ describe("saveImage", () => {
     const webp = await sharp(await png()).webp().toBuffer();
     await expect(saveImage(asFile(webp, "x.webp", "image/webp"), "logo", root)).resolves.toBeTruthy();
   });
+
+  it("artist türü kabul edilir ve artist/ altına yazılır", async () => {
+    const webp = await sharp(await png()).webp().toBuffer();
+    const saved = await saveImage(asFile(webp, "sanatci.webp", "image/webp"), "artist", root);
+    expect(saved.path).toMatch(/^artist\/[0-9a-f-]{36}\.webp$/);
+  });
 });
 
 describe("deleteImage", () => {
