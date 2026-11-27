@@ -13,8 +13,8 @@ test("masa ve adet seçilir, tek sandalye bırakan adet sunulmaz, tutma ödeme s
   await page.getByRole("button", { name: /Masa A1,/ }).click();
   const panel = page.getByRole("region", { name: "Seçiminiz" });
   await expect(panel.getByText("Boş sandalye 8/8")).toBeVisible();
-  await expect(panel.getByText("1.500,00 ₺")).toBeVisible();
-  for (let i = 0; i < 5; i++) await panel.getByRole("button", { name: "Adedi artır" }).click(); // 1 → 6
+  await expect(panel.getByText("3.000,00 ₺")).toBeVisible();
+  for (let i = 0; i < 4; i++) await panel.getByRole("button", { name: "Adedi artır" }).click(); // 2 → 6
   await panel.getByRole("button", { name: "Adedi artır" }).click(); // 7 atlanır → 8
   await expect(panel.getByText("8 kişi")).toBeVisible();
   await expect(panel.getByText("12.000,00 ₺")).toBeVisible();
@@ -65,4 +65,13 @@ test("liste görünümünden de seçilir ve 375 px'te taşmaz", async ({ page })
   await page.getByRole("button", { name: /A4 · Standart · 8\/8/ }).click();
   await expect(page.getByRole("region", { name: "Seçiminiz" }).getByText("Masa A4")).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test("kisi parametresiyle açılan sayfada masa seçince ilk adet gelir", async ({ page }) => {
+  await page.goto(`/etkinlik/${gala.id}?kisi=4`);
+  const panel = page.getByRole("region", { name: "Seçiminiz" });
+  await expect(async () => {
+    await page.getByRole("button", { name: /Masa A1,/ }).click();
+    await expect(panel.getByText("4 kişi")).toBeVisible({ timeout: 1000 });
+  }).toPass();
 });

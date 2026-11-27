@@ -1,23 +1,33 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { eventSaleSettings, eventSeatPrices, eventTables, events, tableSeatSlots } from "@/db/schema";
-import { SALE_CATEGORY_LABELS, type SaleCategory } from "@/domain/seating";
+import {
+  artists,
+  eventSaleSettings,
+  eventSeatPrices,
+  eventSiteContent,
+  eventTables,
+  events,
+  tableSeatSlots,
+} from "@/db/schema";
+import { SALE_CATEGORY_LABELS, wholeOnlyOf, type SaleCategory } from "@/domain/seating";
 import { getSeatPrices } from "@/features/seating/prices";
 import { getSaleSettings } from "@/features/seating/settings-service";
 import { SALES_ACTOR } from "@/features/ticketing/internal";
 import { minMoney } from "@/features/ticketing/money";
-import { getSeatOccupancy } from "@/features/ticketing/occupancy";
 import type { PaymentProvider } from "@/features/ticketing/payment/provider";
 import { saleStateOf } from "@/features/ticketing/sale-state";
 import { DomainError } from "@/lib/action";
 import { SalesError } from "@/features/ticketing/orders-service";
 import { getFloorPlan } from "@/features/venue/plan-service";
 import {
+  IMAGE_PATH_PATTERN,
   SALES_CATEGORIES,
+  SIGHTLINE_SETS,
   type Availability,
   type EventCard,
   type EventDetail,
   type PlanTablePublic,
+  type SightlineSet,
 } from "./contract";
 
 type Ctx = { provider: PaymentProvider | null; now: Date };
@@ -26,6 +36,14 @@ const VISIBLE_STAGES = ["on_sale", "sales_closed"] as const;
 const VISIBLE_STATUSES = ["published", "active"] as const;
 
 type EventRow = typeof events.$inferSelect;
+
+function safeImagePath(value: string | null | undefined): string | null {
+  return value && IMAGE_PATH_PATTERN.test(value) ? value : null;
+}
+
+function safeSightlineSet(value: string | null | undefined): SightlineSet | null {
+  return value && (SIGHTLINE_SETS as readonly string[]).includes(value) ? (value as SightlineSet) : null;
+}
 
 function pricesOf(
   finals: Partial<Record<SaleCategory, string | null>>,
@@ -39,7 +57,13 @@ function pricesOf(
   return result;
 }
 
-function cardOf(row: EventRow, currency: string, minPrice: string | null, saleState: EventCard["saleState"]): EventCard {
+function cardOf(
+  row: EventRow,
+  currency: string,
+  minPrice: string | null,
+  saleState: EventCard["saleState"],
+  artistImage: string | null,
+): EventCard {
   return {
     id: row.id,
     name: row.name,
@@ -50,6 +74,9 @@ function cardOf(row: EventRow, currency: string, minPrice: string | null, saleSt
     currency,
     minPrice,
     saleState,
+    coverImage: safeImagePath(row.coverImage),
+    artistImage: safeImagePath(artistImage),
+    isDemo: row.isDemo,
   };
 }
 
@@ -70,14 +97,19 @@ export async function listSaleEvents(ex: Db | Tx, ctx: Ctx): Promise<EventCard[]
   const rows = await visibleEvents(ex);
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [settingsRows, priceRows, categoryRows] = await Promise.all([
+  const artistIds = [...new Set(rows.map((r) => r.artistId).filter((id): id is string => id !== null))];
+  const [settingsRows, priceRows, categoryRows, artistRows] = await Promise.all([
     ex.select().from(eventSaleSettings).where(inArray(eventSaleSettings.eventId, ids)),
     ex.select().from(eventSeatPrices).where(inArray(eventSeatPrices.eventId, ids)),
     ex
       .selectDistinct({ eventId: eventTables.eventId, category: eventTables.saleCategory })
       .from(eventTables)
       .where(and(inArray(eventTables.eventId, ids), eq(eventTables.allocation, "online"))),
+    artistIds.length > 0
+      ? ex.select({ id: artists.id, image: artists.image }).from(artists).where(inArray(artists.id, artistIds))
+      : Promise.resolve([]),
   ]);
+  const artistImageById = new Map(artistRows.map((a) => [a.id, a.image]));
   const cards: EventCard[] = [];
   for (const row of rows) {
     const settings = settingsRows.find((s) => s.eventId === row.id);
@@ -94,7 +126,8 @@ export async function listSaleEvents(ex: Db | Tx, ctx: Ctx): Promise<EventCard[]
     const finals: Partial<Record<SaleCategory, string | null>> = {};
     for (const p of priceRows) if (p.eventId === row.id) finals[p.category] = p.finalPrice;
     const minPrice = minMoney(pricesOf(finals, online).map((p) => p.price));
-    cards.push(cardOf(row, settings?.currency ?? "TRY", minPrice, state));
+    const artistImage = row.artistId ? (artistImageById.get(row.artistId) ?? null) : null;
+    cards.push(cardOf(row, settings?.currency ?? "TRY", minPrice, state, artistImage));
   }
   return cards;
 }
@@ -113,22 +146,35 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
   });
   if (state === null) return null;
 
-  const [plan, seatPrices, slotRows] = await Promise.all([
+  const [plan, seatPrices, slotRows, siteRows, artistRows] = await Promise.all([
     getFloorPlan(ex, SALES_ACTOR, eventId).catch((error: unknown) => {
       if (error instanceof DomainError && error.code === "not_found") throw new SalesError("event_not_found");
       throw error;
     }),
     getSeatPrices(ex, eventId),
-    ex.select({ tableId: tableSeatSlots.tableId }).from(tableSeatSlots).where(eq(tableSeatSlots.eventId, eventId)),
+    ex
+      .select({ tableId: tableSeatSlots.tableId, seatNo: tableSeatSlots.seatNo })
+      .from(tableSeatSlots)
+      .where(eq(tableSeatSlots.eventId, eventId))
+      .orderBy(asc(tableSeatSlots.seatNo)),
+    ex.select().from(eventSiteContent).where(eq(eventSiteContent.eventId, eventId)),
+    row.artistId
+      ? ex.select({ image: artists.image }).from(artists).where(eq(artists.id, row.artistId))
+      : Promise.resolve([]),
   ]);
-  const slots = new Map<string, number>();
-  for (const s of slotRows) slots.set(s.tableId, (slots.get(s.tableId) ?? 0) + 1);
+  const slotsByTable = new Map<string, number[]>();
+  for (const s of slotRows) {
+    const list = slotsByTable.get(s.tableId);
+    if (list) list.push(s.seatNo);
+    else slotsByTable.set(s.tableId, [s.seatNo]);
+  }
 
   const online = new Set<SaleCategory>();
   const tables: PlanTablePublic[] = plan.tables.map((t) => {
     const sellable = t.allocation === "online";
     const category = sellable ? (t.category ?? "standard") : null;
     if (category) online.add(category);
+    const seatNos = sellable ? (slotsByTable.get(t.id) ?? []) : [];
     return {
       id: t.id,
       label: t.label,
@@ -139,20 +185,35 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
       isLoca: t.isLoca,
       sellable,
       category,
-      seats: sellable ? (slots.get(t.id) ?? 0) : null,
-      wholeOnly: sellable ? !settings.sharedTables || t.isLoca : false,
+      capacity: t.capacity,
+      seats: sellable ? seatNos.length : null,
+      seatNos,
+      wholeOnly: sellable
+        ? wholeOnlyOf({ saleMode: settings.saleMode, sharedTables: settings.sharedTables, isLoca: t.isLoca })
+        : false,
     };
   });
 
   const finals: Partial<Record<SaleCategory, string | null>> = {};
   for (const c of SALES_CATEGORIES) finals[c] = seatPrices[c].finalPrice;
   const prices = pricesOf(finals, online);
-  const card = cardOf(row, settings.currency, minMoney(prices.map((p) => p.price)), state);
+  const artistImage = artistRows[0]?.image ?? null;
+  const card = cardOf(row, settings.currency, minMoney(prices.map((p) => p.price)), state, artistImage);
+  const siteRow = siteRows[0];
   return {
     ...card,
     description: row.description,
+    site: {
+      heroImage: safeImagePath(siteRow?.heroImage),
+      summary: siteRow?.summary ?? null,
+      doorsOpenAt: siteRow?.doorsOpenAt ? siteRow.doorsOpenAt.toISOString() : null,
+      ageLimit: siteRow?.ageLimit ?? null,
+      dressCode: siteRow?.dressCode ?? null,
+      sightlineSet: safeSightlineSet(siteRow?.sightlineSet),
+    },
     sale: {
       state,
+      mode: settings.saleMode,
       opensAt: settings.saleStartsAt ? settings.saleStartsAt.toISOString() : null,
       closesAt: settings.saleEndsAt ? settings.saleEndsAt.toISOString() : null,
       holdMinutes: settings.holdMinutes,
@@ -168,22 +229,36 @@ export async function getSaleEventDetail(ex: Db | Tx, eventId: string, ctx: Ctx)
 export async function computeAvailability(ex: Db | Tx, eventId: string, now: Date): Promise<Availability | null> {
   const [row] = await visibleEvents(ex, eventId);
   if (!row) return null;
-  const [slotRows, occupancy] = await Promise.all([
-    ex
-      .select({ tableId: tableSeatSlots.tableId })
-      .from(tableSeatSlots)
-      .innerJoin(eventTables, eq(eventTables.id, tableSeatSlots.tableId))
-      .where(and(eq(tableSeatSlots.eventId, eventId), eq(eventTables.allocation, "online"))),
-    getSeatOccupancy(ex, eventId),
-  ]);
-  const totals = new Map<string, number>();
-  for (const s of slotRows) totals.set(s.tableId, (totals.get(s.tableId) ?? 0) + 1);
-  const tables = [...totals.entries()]
-    .map(([id, total]) => {
-      const used = occupancy.get(id);
-      const free = total - (used ? used.held + used.issued : 0);
-      return { id, free: free < 0 ? 0 : free };
-    })
+  const result = await ex.execute<{ table_id: string; seat_no: number; occupied: boolean }>(sql`
+    select s.table_id,
+           s.seat_no,
+           exists (
+             select 1
+               from tickets t
+               join orders o on o.id = t.order_id
+              where t.seat_slot_id = s.id
+                and (
+                  t.status = 'issued'
+                  or (t.status = 'held' and o.status = 'pending' and o.hold_expires_at > clock_timestamp())
+                )
+           ) as occupied
+      from table_seat_slots s
+      join event_tables et on et.id = s.table_id
+     where s.event_id = ${eventId}
+       and et.allocation = 'online'
+     order by s.table_id, s.seat_no
+  `);
+  const freeSeatsByTable = new Map<string, number[]>();
+  for (const r of result.rows) {
+    let list = freeSeatsByTable.get(r.table_id);
+    if (!list) {
+      list = [];
+      freeSeatsByTable.set(r.table_id, list);
+    }
+    if (!r.occupied) list.push(r.seat_no);
+  }
+  const tables = [...freeSeatsByTable.entries()]
+    .map(([id, freeSeats]) => ({ id, free: freeSeats.length, freeSeats }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return { at: now.toISOString(), tables };
 }

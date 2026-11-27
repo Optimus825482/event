@@ -1,4 +1,4 @@
-import type { Availability, EventDetail, PlanTablePublic } from "@/lib/core/contract";
+import type { Availability, EventDetail, PlanTablePublic, SaleMode } from "@/lib/core/contract";
 import { parseDecor, parseLines, type PlanDecor, type PlanLine } from "./decor";
 
 /** Masalar sabit boyutla çizilir (PlanTablePublic boyut taşımaz). */
@@ -26,8 +26,11 @@ export type PlanTableModel = {
   height: number;
   category: SaleCategory | null;
   categoryLabel: string | null;
+  capacity: number;
   seats: number | null;
+  seatNos: number[];
   free: number | null;
+  freeSeats: number[];
   wholeOnly: boolean;
   status: TableStatus;
   countLabel: string | null;
@@ -36,13 +39,21 @@ export type PlanTableModel = {
 
 export type PlanModel = {
   canvas: { width: number; height: number };
+  saleMode: SaleMode;
   tables: PlanTableModel[];
   decor: PlanDecor[];
   lines: PlanLine[];
 };
 
-export function buildPlanModel(plan: EventDetail["plan"], prices: EventDetail["prices"], availability: Availability): PlanModel {
-  const freeById = new Map(availability.tables.map((row) => [row.id, row.free]));
+const sortedNums = (nums: readonly number[]) => [...nums].sort((a, b) => a - b);
+
+export function buildPlanModel(
+  plan: EventDetail["plan"],
+  prices: EventDetail["prices"],
+  availability: Availability,
+  saleMode: SaleMode,
+): PlanModel {
+  const availabilityById = new Map(availability.tables.map((row) => [row.id, row]));
   const labelByCategory = new Map(prices.map((p) => [p.category, p.label]));
 
   const tables = plan.tables.map((table): PlanTableModel => {
@@ -57,6 +68,7 @@ export function buildPlanModel(plan: EventDetail["plan"], prices: EventDetail["p
       isLoca: table.isLoca,
       width,
       height,
+      capacity: table.capacity,
       wholeOnly: table.wholeOnly,
     };
     const kind = table.isLoca ? "Loca" : "Masa";
@@ -67,7 +79,9 @@ export function buildPlanModel(plan: EventDetail["plan"], prices: EventDetail["p
         category: null,
         categoryLabel: null,
         seats: table.seats,
+        seatNos: [],
         free: null,
+        freeSeats: [],
         status: "not_sellable",
         countLabel: null,
         ariaLabel: `${kind} ${table.label}, satışta değil`,
@@ -75,12 +89,24 @@ export function buildPlanModel(plan: EventDetail["plan"], prices: EventDetail["p
     }
 
     const seats = table.seats ?? 0;
-    const free = freeById.get(table.id) ?? 0;
+    const row = availabilityById.get(table.id);
+    const free = row?.free ?? 0;
+    const freeSeats = sortedNums(row?.freeSeats ?? []);
+    const seatNos = sortedNums(table.seatNos);
     const categoryLabel = table.category ? (labelByCategory.get(table.category) ?? table.category) : null;
     const head = [`${kind} ${table.label}`, categoryLabel].filter(Boolean).join(", ");
     const soldOut = free === 0 || (table.wholeOnly && free < seats);
     const countLabel = `${free}/${seats}`;
-    const common = { ...base, category: table.category, categoryLabel, seats: table.seats, free, countLabel };
+    const common = {
+      ...base,
+      category: table.category,
+      categoryLabel,
+      seats: table.seats,
+      seatNos,
+      free,
+      freeSeats,
+      countLabel,
+    };
     if (soldOut) return { ...common, status: "sold_out", ariaLabel: `${head}, dolu` };
     return {
       ...common,
@@ -89,5 +115,5 @@ export function buildPlanModel(plan: EventDetail["plan"], prices: EventDetail["p
     };
   });
 
-  return { canvas: plan.canvas, tables, decor: parseDecor(plan.decor), lines: parseLines(plan.lines) };
+  return { canvas: plan.canvas, saleMode, tables, decor: parseDecor(plan.decor), lines: parseLines(plan.lines) };
 }

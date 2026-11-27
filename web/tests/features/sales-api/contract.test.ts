@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { SALE_CATEGORIES } from "@/domain/seating";
+import { SALE_CATEGORIES, SALE_MODES as DOMAIN_SALE_MODES } from "@/domain/seating";
 import {
+  IMAGE_PATH_PATTERN,
+  SALE_MODES,
   SALES_CATEGORIES,
   SALES_ERROR_CODES,
   SALES_ERROR_MESSAGES,
@@ -110,5 +112,41 @@ describe("satış API sözleşmesi", () => {
     expect(orderResponseSchema.safeParse(order).success).toBe(true);
     expect(orderResponseSchema.safeParse({ ...order, buyerEmail: "a@b.co" }).success).toBe(false);
     expect(orderResponseSchema.safeParse({ ...order, buyer: { email: "a@b.co" } }).success).toBe(false);
+  });
+
+  it("seatNos isteğe bağlıdır; adetle eşit uzunlukta ve tekil olmalıdır", () => {
+    const item = (o: object) =>
+      createOrderBodySchema.safeParse({ eventId: UUID, clientKey: UUID, items: [{ tableId: UUID, quantity: 2, ...o }] })
+        .success;
+    expect(item({})).toBe(true);
+    expect(item({ seatNos: [3, 4] })).toBe(true);
+    expect(item({ seatNos: [3] })).toBe(false);
+    expect(item({ seatNos: [3, 3] })).toBe(false);
+    expect(item({ seatNos: [0, 4] })).toBe(false);
+    expect(item({ seatNos: [3, 1000] })).toBe(false);
+  });
+
+  it("satış şekli sabitleri alan modeliyle aynıdır", () => {
+    expect([...SALE_MODES]).toEqual([...DOMAIN_SALE_MODES]);
+  });
+
+  it("hata kodu sayısı değişmedi", () => {
+    expect(SALES_ERROR_CODES).toHaveLength(17);
+  });
+
+  it.each([
+    "event/3f2b0c1e-0000-4000-8000-000000000001.webp",
+    "artist/3f2b0c1e-0000-4000-8000-000000000001.webp",
+  ])("%s geçerli görsel yoludur", (p) => {
+    expect(IMAGE_PATH_PATTERN.test(p)).toBe(true);
+  });
+
+  it.each([
+    "logo/3f2b0c1e-0000-4000-8000-000000000001.webp",
+    "event/../x.webp",
+    "event/a.webp",
+    "/event/3f2b0c1e-0000-4000-8000-000000000001.webp",
+  ])("%s reddedilir", (p) => {
+    expect(IMAGE_PATH_PATTERN.test(p)).toBe(false);
   });
 });

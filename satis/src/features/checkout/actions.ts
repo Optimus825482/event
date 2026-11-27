@@ -18,8 +18,7 @@ const notFound = { ok: false, code: "order_not_found", message: messageFor({ cod
 /** Tarayıcıdan çağrılan tek yazma yolu; sır ve çekirdek adresi sunucuda kalır. */
 export async function holdAction(input: {
   eventId: string;
-  tableId: string;
-  quantity: number;
+  items: { tableId: string; quantity: number; seatNos?: number[] }[];
   clientKey: string;
 }): Promise<ActionResult<{ orderToken: string }>> {
   return holdFlow(getCore(), input, await writeContext());

@@ -1,8 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { eventTables, events, orders, paymentAttempts, tableSeatSlots, tickets, type OrderStatus } from "@/db/schema";
-import type { SaleCategory } from "@/domain/seating";
+import { eventSaleSettings, eventTables, events, orders, paymentAttempts, tableSeatSlots, tickets, type OrderStatus } from "@/db/schema";
+import { seatNoShown, wholeOnlyOf, type SaleCategory } from "@/domain/seating";
 import { normalizeEmail } from "@/features/customers/normalize";
 import { publish } from "@/features/realtime/publish";
 import { lockEvent } from "@/features/reservations/internal";
@@ -23,7 +23,7 @@ import { activeProvider } from "./payment/registry";
 import { generatePnr, parsePnr } from "./pnr";
 import { saleStateOf } from "./sale-state";
 
-export type HoldItem = { tableId: string; quantity: number };
+export type HoldItem = { tableId: string; quantity: number; seatNos?: number[] };
 
 export type OrderView = {
   orderId: string;
@@ -37,7 +37,7 @@ export type OrderView = {
   isDemo: boolean;
   pnr: string | null;
   items: { tableId: string; tableLabel: string; category: SaleCategory; quantity: number; unitPrice: string }[];
-  tickets: { ticketId: string; tableId: string; tableLabel: string; qrPayload: string }[];
+  tickets: { ticketId: string; tableId: string; tableLabel: string; seatNo: number | null; qrPayload: string }[];
 };
 
 export type OrderDeps = {
@@ -66,6 +66,7 @@ export class SalesError extends DomainError {
 }
 
 /** Aynı masanın kalemlerini birleştirir; masa kimliğine göre artan sıralar (kilit sırası). */
+// SÖZLEŞME: seatNos P2'ye kadar yok sayılır; sunucu en küçük numaralı boş yuvaları seçer (spec §5.3).
 function mergeItems(items: readonly HoldItem[]): HoldItem[] {
   const merged = new Map<string, number>();
   for (const item of items) {
@@ -209,7 +210,7 @@ export async function createHoldWithOutcome(
           throw new SalesError("table_not_sellable", { tableId: item.tableId });
         }
         const { total: seats, free: slots } = slotMap.get(table.id) ?? { total: 0, free: [] };
-        const wholeOnly = !settings.sharedTables || table.isLoca;
+        const wholeOnly = wholeOnlyOf({ saleMode: settings.saleMode, sharedTables: settings.sharedTables, isLoca: table.isLoca });
         if (wholeOnly && item.quantity !== seats) {
           throw new SalesError("whole_table_required", { tableId: table.id, seats });
         }
@@ -573,9 +574,11 @@ export async function getOrderView(ex: Db | Tx, orderId: string): Promise<OrderV
       total: orders.totalAmount,
       isDemo: orders.isDemo,
       pnr: orders.pnr,
+      saleMode: eventSaleSettings.saleMode,
     })
     .from(orders)
     .innerJoin(events, eq(events.id, orders.eventId))
+    .leftJoin(eventSaleSettings, eq(eventSaleSettings.eventId, orders.eventId))
     .where(eq(orders.id, orderId));
   if (!row) return null;
 
@@ -584,6 +587,7 @@ export async function getOrderView(ex: Db | Tx, orderId: string): Promise<OrderV
       id: tickets.id,
       tableId: tickets.tableId,
       tableLabel: eventTables.label,
+      isLoca: eventTables.isLoca,
       category: tickets.saleCategory,
       unitPrice: tickets.unitPrice,
       status: tickets.status,
@@ -611,12 +615,19 @@ export async function getOrderView(ex: Db | Tx, orderId: string): Promise<OrderV
     }
   }
 
+  const saleMode = row.saleMode ?? "seat";
   const issued =
     row.rawStatus === "paid"
       ? ticketRows
           .filter((t): t is typeof t & { qrToken: string } => t.status === "issued" && t.qrToken !== null)
           .sort((a, b) => byLabel(a.tableLabel, b.tableLabel) || (a.seatNo ?? 0) - (b.seatNo ?? 0))
-          .map((t) => ({ ticketId: t.id, tableId: t.tableId, tableLabel: t.tableLabel, qrPayload: t.qrToken }))
+          .map((t) => ({
+            ticketId: t.id,
+            tableId: t.tableId,
+            tableLabel: t.tableLabel,
+            seatNo: seatNoShown({ saleMode, isLoca: t.isLoca }) ? t.seatNo : null,
+            qrPayload: t.qrToken,
+          }))
       : [];
 
   return {

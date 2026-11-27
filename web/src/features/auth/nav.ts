@@ -1,4 +1,5 @@
 import { ARCHIVE_READY } from "@/features/archive/ready";
+import { SALES_SITE_READY } from "@/features/sales-site/ready";
 import type { Department } from "./departments";
 import { can, type Module, type PolicyActor } from "./policy";
 import { inDepartment, isAdmin, ownTeamOnly } from "./scope";
@@ -73,6 +74,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/archive", label: "Arşiv", module: "archive", group: "entertainment", icon: "archive", ready: ARCHIVE_READY },
   { href: "/artists", label: "Sanatçılar", module: "archive", group: "entertainment", icon: "music", ready: ARCHIVE_READY },
   { href: "/reports", label: "Raporlar", module: "archive", group: "entertainment", icon: "bar-chart", ready: ARCHIVE_READY },
+  { href: "/sales-site", label: "Satış Sitesi", module: "events", group: "entertainment", icon: "ticket", ready: SALES_SITE_READY },
   { href: "/fnb", label: "Etkinlikler", module: "venues", alsoRequires: "events", group: "fnb", icon: "calendar" },
   { href: "/venues", label: "Yerleşim Şablonları", module: "venues", group: "fnb", icon: "layout-template" },
   { href: "/staff", label: "Ekipler", module: "staff", group: "fnb", icon: "users" },

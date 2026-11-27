@@ -3,7 +3,7 @@ import { CoreError, messageFor } from "@/lib/core/errors";
 import { failure, type ActionResult } from "./result";
 import { buyerSchema, holdInputSchema } from "./schemas";
 
-/** Masa tutma: girdi doğrulanır (geçersizse çekirdeğe gidilmez), tek kalemli sipariş açılır. */
+/** Masa tutma: girdi doğrulanır (geçersizse çekirdeğe gidilmez), kalemler çekirdeğe iletilir. */
 export async function holdFlow(
   core: Pick<CoreClient, "createHold">,
   raw: unknown,
@@ -11,9 +11,9 @@ export async function holdFlow(
 ): Promise<ActionResult<{ orderToken: string }>> {
   const parsed = holdInputSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, code: "invalid", message: messageFor({ code: "invalid" }) };
-  const { eventId, tableId, quantity, clientKey } = parsed.data;
+  const { eventId, items, clientKey } = parsed.data;
   try {
-    const order = await core.createHold({ eventId, items: [{ tableId, quantity }], clientKey }, ctx);
+    const order = await core.createHold({ eventId, items, clientKey }, ctx);
     return { ok: true, data: { orderToken: order.orderToken } };
   } catch (error) {
     return failure(error);

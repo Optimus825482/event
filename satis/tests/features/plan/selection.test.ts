@@ -4,14 +4,32 @@ import { reconcileSelection } from "@/features/plan/selection";
 import type { EventDetail } from "@/lib/core/contract";
 
 const rules = { maxSeatsPerOrder: 12, blockSingleLeftover: true };
+const seq = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 const plan: EventDetail["plan"] = {
   canvas: { width: 1200, height: 800 },
-  tables: [{ id: "a1", label: "A1", x: 100, y: 100, rotation: 0, shape: "round", isLoca: false, sellable: true, category: "standard", seats: 8, wholeOnly: false }],
+  tables: [
+    {
+      id: "a1",
+      label: "A1",
+      x: 100,
+      y: 100,
+      rotation: 0,
+      shape: "round",
+      isLoca: false,
+      sellable: true,
+      category: "standard",
+      capacity: 8,
+      seats: 8,
+      seatNos: seq(8),
+      wholeOnly: false,
+    },
+  ],
   decor: [],
   lines: [],
 };
 const prices: EventDetail["prices"] = [{ category: "standard", label: "Standart", price: "1500.00" }];
-const modelWith = (free: number) => buildPlanModel(plan, prices, { at: "x", tables: [{ id: "a1", free }] });
+const modelWith = (free: number) =>
+  buildPlanModel(plan, prices, { at: "x", tables: [{ id: "a1", free, freeSeats: seq(free) }] }, "seat");
 
 describe("reconcileSelection", () => {
   it("seçim geçerliyse aynı nesne döner", () => {

@@ -8,6 +8,8 @@ import { holdAction } from "@/features/checkout/actions";
 import type { Availability, EventDetail } from "@/lib/core/contract";
 import { ERROR_MESSAGES } from "@/lib/core/errors";
 import { buildPlanModel } from "./model";
+import { DEFAULT_PARTY_SIZE } from "./party";
+import { PlanLegend } from "./plan-legend";
 import { PlanViewer } from "./plan-viewer";
 import { optionsFor, reconcileSelection, type Selection } from "./selection";
 import { SelectionPanel } from "./selection-panel";
@@ -16,8 +18,15 @@ import { useAvailability } from "./use-availability";
 
 type View = "plan" | "list";
 
+export type EventSalesProps = {
+  event: EventDetail;
+  initialAvailability: Availability;
+  /** "Bilet Al" adımında seçilen kişi sayısı (1..event.sale.maxSeatsPerOrder). Verilmezse DEFAULT_PARTY_SIZE. */
+  initialPartySize?: number;
+};
+
 /** Plan + liste görünümü, canlı durum ve masa/adet seçimi; "Devam et" masayı tutar. */
-export function EventSales({ event, initialAvailability }: { event: EventDetail; initialAvailability: Availability }) {
+export function EventSales({ event, initialAvailability, initialPartySize }: EventSalesProps) {
   const router = useRouter();
   const { availability, stale, refresh, patch } = useAvailability(event.id, initialAvailability);
   const [view, setView] = useState<View>("plan");
@@ -30,7 +39,10 @@ export function EventSales({ event, initialAvailability }: { event: EventDetail;
 
   const { maxSeatsPerOrder, blockSingleLeftover } = event.sale;
   const rules = useMemo(() => ({ maxSeatsPerOrder, blockSingleLeftover }), [maxSeatsPerOrder, blockSingleLeftover]);
-  const model = useMemo(() => buildPlanModel(event.plan, event.prices, availability), [event.plan, event.prices, availability]);
+  const model = useMemo(
+    () => buildPlanModel(event.plan, event.prices, availability, event.sale.mode),
+    [event.plan, event.prices, availability, event.sale.mode],
+  );
 
   // Canlı durum seçimi geçersiz kıldıysa render sırasında düzeltilir.
   const reconciled = reconcileSelection(selection, model, rules);
@@ -45,11 +57,12 @@ export function EventSales({ event, initialAvailability }: { event: EventDetail;
 
   const choose = (tableId: string) => {
     const list = optionsFor(model, tableId, rules);
-    const first = list[0];
-    if (first === undefined) return;
+    const target = initialPartySize ?? DEFAULT_PARTY_SIZE;
+    const preferred = list.filter((q) => q <= target).at(-1) ?? list[0];
+    if (preferred === undefined) return;
     setError(null);
     setNotice(null);
-    setSelection({ tableId, quantity: first });
+    setSelection({ tableId, quantity: preferred });
   };
 
   const changeQuantity = (quantity: number) => {
@@ -67,7 +80,11 @@ export function EventSales({ event, initialAvailability }: { event: EventDetail;
     setError(null);
     setNotice(null);
     try {
-      const result = await holdAction({ eventId: event.id, tableId: selection.tableId, quantity: selection.quantity, clientKey: keyRef.current.key });
+      const result = await holdAction({
+        eventId: event.id,
+        items: [{ tableId: selection.tableId, quantity: selection.quantity }],
+        clientKey: keyRef.current.key,
+      });
       if (result.ok) {
         router.push(`/odeme/${result.data.orderToken}`);
         return;
@@ -82,8 +99,18 @@ export function EventSales({ event, initialAvailability }: { event: EventDetail;
     setPending(false);
   };
 
+  if (event.sale.state !== "open") {
+    return (
+      <div className="flex flex-col gap-4">
+        <PlanLegend prices={event.prices} currency={event.currency} />
+        <PlanViewer model={model} selectedId={null} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <PlanLegend prices={event.prices} currency={event.currency} />
       <div role="group" aria-label="Görünüm" className="flex gap-2">
         {(["plan", "list"] as const).map((v) => (
           <Button

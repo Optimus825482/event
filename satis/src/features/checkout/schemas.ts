@@ -2,9 +2,7 @@ import { z } from "zod";
 import { createOrderBodySchema } from "@/lib/core/contract";
 
 // Sözleşme şemasından türetilir: küçük harfe indirgeme (UUID) ve sınırlar tek yerde kalır.
-export const holdInputSchema = createOrderBodySchema
-  .pick({ eventId: true, clientKey: true })
-  .extend(createOrderBodySchema.shape.items.element.shape);
+export const holdInputSchema = createOrderBodySchema;
 
 const required = (message: string) => z.string({ error: message }).trim().min(1, message);
 

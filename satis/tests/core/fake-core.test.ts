@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Availability, EventDetail, OrderResponse } from "@/lib/core/contract";
-import { createFakeCore, type FakeCore } from "../helpers/fake-core";
+import { availabilitySchema, eventDetailSchema, eventsResponseSchema } from "@/lib/core/contract";
+import { FAKE_IMAGES, createFakeCore, type FakeCore } from "../helpers/fake-core";
 
 const API = "/api/sales/v1";
 const BUYER = { firstName: "Ayşe", lastName: "ılgaz", email: "ayse@example.test" };
@@ -57,7 +58,7 @@ describe("sahte çekirdek", () => {
 
   it("doluluk yalnızca satılabilir masaları verir", async () => {
     const av = (await (await call("GET", `${API}/events/${event.id}/availability`)).json()) as Availability;
-    expect(av.tables).toHaveLength(12);
+    expect(av.tables).toHaveLength(13);
     expect(av.tables.map((t) => t.id)).not.toContain(tableId("C1"));
     expect(av.tables.find((t) => t.id === tableId("A1"))?.free).toBe(8);
   });
@@ -312,5 +313,172 @@ describe("sahte çekirdek", () => {
     } finally {
       await server.close();
     }
+  });
+
+  it("ayrıntı ve doluluk yanıtları sözleşme şemasından geçer", async () => {
+    const list = await (await call("GET", `${API}/events`)).json();
+    const detail = await (await call("GET", `${API}/events/${event.id}`)).json();
+    const av = await (await call("GET", `${API}/events/${event.id}/availability`)).json();
+    expect(() => eventsResponseSchema.parse(list)).not.toThrow();
+    expect(() => eventDetailSchema.parse(detail)).not.toThrow();
+    expect(() => availabilitySchema.parse(av)).not.toThrow();
+  });
+
+  it("doluluk boş sandalye numaralarını verir; numara boşlukları korunur", async () => {
+    const av = (await (await call("GET", `${API}/events/${event.id}/availability`)).json()) as Availability;
+    const g1 = av.tables.find((t) => t.id === tableId("G1"));
+    expect(g1).toEqual({ id: tableId("G1"), free: 6, freeSeats: [1, 2, 3, 5, 6, 8] });
+  });
+
+  it("seatNos verilen tutma tam o sandalyeleri alır", async () => {
+    const res = await call("POST", `${API}/orders`, {
+      eventId: event.id,
+      items: [{ tableId: tableId("A1"), quantity: 2, seatNos: [4, 7] }],
+      clientKey: randomUUID(),
+    });
+    expect(res.status).toBe(201);
+    expect(fake.freeSeats(event.id, tableId("A1"))).toEqual([1, 2, 3, 5, 6, 8]);
+  });
+
+  it("seatNos verilmeyen tutma en küçük numaraları alır", async () => {
+    const res = await hold("A2", 2);
+    expect(res.status).toBe(201);
+    expect(fake.freeSeats(event.id, tableId("A2"))).toEqual([3, 4, 5, 6, 7, 8]);
+  });
+
+  it("alınmış sandalye istenirse seats_unavailable", async () => {
+    fake.holdAs(event.id, tableId("A3"), 2, [1, 2]);
+    const res = await call("POST", `${API}/orders`, {
+      eventId: event.id,
+      items: [{ tableId: tableId("A3"), quantity: 2, seatNos: [2, 3] }],
+      clientKey: randomUUID(),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("seats_unavailable");
+    expect(body.error.message).toBe("Seçtiğiniz sandalyelerden biri az önce alındı");
+    expect(body.error.details).toEqual({ tableId: tableId("A3"), free: 6 });
+  });
+
+  it("masa bazlı kipte ve locada seatNos 400 invalid", async () => {
+    const tableModeEv = fake.addEvent({ saleMode: "table" });
+    const a1 = tableModeEv.plan.tables.find((t) => t.label === "A1")!;
+    const r1 = await call("POST", `${API}/orders`, {
+      eventId: tableModeEv.id,
+      items: [{ tableId: a1.id, quantity: 8, seatNos: [1, 2, 3, 4, 5, 6, 7, 8] }],
+      clientKey: randomUUID(),
+    });
+    expect(r1.status).toBe(400);
+    expect((await r1.json()).error.code).toBe("invalid");
+
+    const r2 = await call("POST", `${API}/orders`, {
+      eventId: event.id,
+      items: [{ tableId: tableId("L1"), quantity: 6, seatNos: [1, 2, 3, 4, 5, 6] }],
+      clientKey: randomUUID(),
+    });
+    expect(r2.status).toBe(400);
+    expect((await r2.json()).error.code).toBe("invalid");
+  });
+
+  it("masa bazlı kipte tüm satılabilir masalar wholeOnly ve bilet seatNo null", async () => {
+    const tableModeEv = fake.addEvent({ saleMode: "table" });
+    const a1 = tableModeEv.plan.tables.find((t) => t.label === "A1")!;
+    expect(a1.wholeOnly).toBe(true);
+
+    const partial = await call("POST", `${API}/orders`, {
+      eventId: tableModeEv.id,
+      items: [{ tableId: a1.id, quantity: 3 }],
+      clientKey: randomUUID(),
+    });
+    expect(partial.status).toBe(409);
+    expect((await partial.json()).error.code).toBe("whole_table_required");
+
+    const full = (await (
+      await call("POST", `${API}/orders`, {
+        eventId: tableModeEv.id,
+        items: [{ tableId: a1.id, quantity: 8 }],
+        clientKey: randomUUID(),
+      })
+    ).json()) as OrderResponse;
+    const paid = (await (await call("POST", `${API}/orders/${full.orderToken}/pay`, payBody("approve"))).json()) as OrderResponse;
+    expect(paid.tickets).toHaveLength(8);
+    expect(paid.tickets.every((t) => t.seatNo === null)).toBe(true);
+  });
+
+  it("sandalye bazlı kipte bilet sandalye numarası taşır; locada null", async () => {
+    const o1 = (await (
+      await call("POST", `${API}/orders`, {
+        eventId: event.id,
+        items: [{ tableId: tableId("A1"), quantity: 2, seatNos: [4, 7] }],
+        clientKey: randomUUID(),
+      })
+    ).json()) as OrderResponse;
+    const p1 = (await (await call("POST", `${API}/orders/${o1.orderToken}/pay`, payBody("approve"))).json()) as OrderResponse;
+    expect(p1.tickets.map((t) => t.seatNo)).toEqual([4, 7]);
+
+    const o2 = (await (await hold("L1", 6)).json()) as OrderResponse;
+    const p2 = (await (await call("POST", `${API}/orders/${o2.orderToken}/pay`, payBody("approve"))).json()) as OrderResponse;
+    expect(p2.tickets).toHaveLength(6);
+    expect(p2.tickets.every((t) => t.seatNo === null)).toBe(true);
+  });
+
+  it("kart ve ayrıntı görsel, demo ve site alanlarını taşır; varsayılanlar null/false/seat", async () => {
+    const list1 = await (await call("GET", `${API}/events`)).json();
+    expect(list1.events[0]).toMatchObject({ coverImage: null, artistImage: null, isDemo: false });
+    expect(event.sale.mode).toBe("seat");
+    expect(event.site).toEqual({
+      heroImage: null,
+      summary: null,
+      doorsOpenAt: null,
+      ageLimit: null,
+      dressCode: null,
+      sightlineSet: null,
+    });
+
+    const rich = fake.addEvent({
+      saleMode: "table",
+      isDemo: true,
+      coverImage: FAKE_IMAGES.cover,
+      artistImage: FAKE_IMAGES.artist,
+      artistName: "Demo Sanatçı",
+      site: { heroImage: FAKE_IMAGES.hero, summary: "Özet", sightlineSet: "diamond" },
+    });
+    const list2 = await (await call("GET", `${API}/events`)).json();
+    const card = list2.events.find((c: { id: string }) => c.id === rich.id);
+    expect(card).toMatchObject({
+      coverImage: FAKE_IMAGES.cover,
+      artistImage: FAKE_IMAGES.artist,
+      artistName: "Demo Sanatçı",
+      isDemo: true,
+    });
+    expect(rich.sale.mode).toBe("table");
+    expect(rich.site).toEqual({
+      heroImage: FAKE_IMAGES.hero,
+      summary: "Özet",
+      doorsOpenAt: null,
+      ageLimit: null,
+      dressCode: null,
+      sightlineSet: "diamond",
+    });
+  });
+
+  it("görsel ucu: tohumlanmış yol 200 image/webp, bilinmeyen yol 404 event_not_found, sırsız 401", async () => {
+    fake.addEvent({
+      coverImage: FAKE_IMAGES.cover,
+      artistImage: FAKE_IMAGES.artist,
+      site: { heroImage: FAKE_IMAGES.hero },
+    });
+    const ok = await call("GET", `${API}/images/${FAKE_IMAGES.cover}`);
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toBe("image/webp");
+    expect((await ok.arrayBuffer()).byteLength).toBeGreaterThan(0);
+
+    const missing = await call("GET", `${API}/images/event/00000000-0000-4000-8000-000000000099.webp`);
+    expect(missing.status).toBe(404);
+    expect((await missing.json()).error.code).toBe("event_not_found");
+
+    const unauth = await call("GET", `${API}/images/${FAKE_IMAGES.cover}`, undefined, {});
+    expect(unauth.status).toBe(401);
+    expect((await unauth.json()).error.code).toBe("unauthorized");
   });
 });

@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { z } from "zod";
 import {
   DEMO_NOTICE,
+  IMAGE_PATH_PATTERN,
   MAX_ORDER_TABLES,
   SALES_CATEGORIES,
   SALES_ERROR_MESSAGES,
@@ -16,6 +17,7 @@ import {
   type EventDetail,
   type OrderResponse,
   type PlanTablePublic,
+  type SaleMode,
   type SaleState,
   type SalesErrorCode,
 } from "@/lib/core/contract";
@@ -24,12 +26,28 @@ import {
 export type SaleCategory = (typeof SALES_CATEGORIES)[number];
 export type FakeTable = PlanTablePublic;
 
+export const FAKE_IMAGES = {
+  cover: "event/00000000-0000-4000-8000-0000000000c1.webp",
+  hero: "event/00000000-0000-4000-8000-0000000000c2.webp",
+  artist: "artist/00000000-0000-4000-8000-0000000000a1.webp",
+} as const;
+
+const FAKE_WEBP_BYTES = Uint8Array.from(
+  Buffer.from("UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=", "base64"),
+);
+
 export type FakeEventSeed = {
   id?: string;
   name?: string;
   startsAt?: string;
   saleState?: SaleState;
+  saleMode?: SaleMode;
   demo?: boolean;
+  isDemo?: boolean;
+  coverImage?: string | null;
+  artistImage?: string | null;
+  artistName?: string | null;
+  site?: Partial<EventDetail["site"]>;
   holdMinutes?: number;
   maxSeatsPerOrder?: number;
   blockSingleLeftover?: boolean;
@@ -52,7 +70,8 @@ export type FakeCore = {
   readonly requests: FakeRequest[];
   addEvent(seed?: FakeEventSeed): EventDetail;
   free(eventId: string, tableId: string): number;
-  holdAs(eventId: string, tableId: string, quantity: number): OrderResponse;
+  freeSeats(eventId: string, tableId: string): number[];
+  holdAs(eventId: string, tableId: string, quantity: number, seatNos?: number[]): OrderResponse;
   /** Bekleyen siparişin tutma süresini bitirir; remainingMs verilirse o kadar süre bırakır. */
   expireOrder(orderToken: string, remainingMs?: number): void;
   advance(ms: number): void;
@@ -70,11 +89,13 @@ const HUNDRED = BigInt(100);
 
 const tableId = (index: number) => `00000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}`;
 
-/** Varsayılan yerleşim: 1200×800 tuvalde çakışmasız 14 masa (12 satılabilir). */
+/** Varsayılan yerleşim: 1200×800 tuvalde çakışmasız 15 masa (13 satılabilir). */
 export function defaultTables(): FakeTable[] {
   const tables: FakeTable[] = [];
   let index = 1;
   const add = (partial: Partial<FakeTable> & Pick<FakeTable, "label" | "x" | "y">) => {
+    const seats = partial.seats === undefined ? 8 : partial.seats;
+    const seatNos = partial.seatNos ?? (seats === null ? [] : Array.from({ length: seats }, (_, i) => i + 1));
     tables.push({
       id: tableId(index++),
       rotation: 0,
@@ -82,7 +103,9 @@ export function defaultTables(): FakeTable[] {
       isLoca: false,
       sellable: true,
       category: "standard",
-      seats: 8,
+      capacity: partial.capacity ?? seats ?? 8,
+      seats,
+      seatNos,
       wholeOnly: false,
       ...partial,
     });
@@ -91,8 +114,19 @@ export function defaultTables(): FakeTable[] {
   for (let i = 0; i < 3; i++) add({ label: `P${i + 1}`, x: 150 + i * 180, y: 330, category: "premium" });
   for (let i = 0; i < 2; i++) add({ label: `V${i + 1}`, x: 150 + i * 180, y: 510, category: "vip", seats: 6 });
   add({ label: "L1", x: 900, y: 330, shape: "rectangle", isLoca: true, category: "vip", seats: 6, wholeOnly: true });
+  add({ label: "G1", x: 1050, y: 510, category: "standard", capacity: 8, seats: 6, seatNos: [1, 2, 3, 5, 6, 8] });
   for (let i = 0; i < 2; i++) {
-    add({ label: `C${i + 1}`, x: 150 + i * 180, y: 690, shape: "square", sellable: false, category: null, seats: null });
+    add({
+      label: `C${i + 1}`,
+      x: 150 + i * 180,
+      y: 690,
+      shape: "square",
+      sellable: false,
+      category: null,
+      capacity: 8,
+      seats: null,
+      seatNos: [],
+    });
   }
   return tables;
 }
@@ -103,7 +137,14 @@ const priceToCents = (price: string): bigint => {
 };
 const centsToPrice = (cents: bigint): string => `${cents / HUNDRED}.${(cents % HUNDRED).toString().padStart(2, "0")}`;
 
-type OrderLine = { tableId: string; tableLabel: string; category: SaleCategory; quantity: number; unitPrice: string };
+type OrderLine = {
+  tableId: string;
+  tableLabel: string;
+  category: SaleCategory;
+  quantity: number;
+  unitPrice: string;
+  seatNos: number[];
+};
 type Order = {
   id: string;
   token: string;
@@ -116,7 +157,7 @@ type Order = {
   tickets: OrderResponse["tickets"];
   lastNameKey: string | null;
 };
-type EventState = { detail: EventDetail; free: Map<string, number>; prices: Map<SaleCategory, string> };
+type EventState = { detail: EventDetail; freeSeats: Map<string, number[]>; prices: Map<SaleCategory, string> };
 type Result = { status: number; body: unknown };
 
 const trUpper = (value: string) => value.trim().toLocaleUpperCase("tr-TR");
@@ -153,7 +194,11 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
   function release(order: Order) {
     const state = events.get(order.eventId);
     if (!state) return;
-    for (const line of order.lines) state.free.set(line.tableId, (state.free.get(line.tableId) ?? 0) + line.quantity);
+    for (const line of order.lines) {
+      const current = state.freeSeats.get(line.tableId) ?? [];
+      const restored = Array.from(new Set([...current, ...line.seatNos])).sort((a, b) => a - b);
+      state.freeSeats.set(line.tableId, restored);
+    }
   }
 
   function refresh() {
@@ -179,7 +224,13 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       total: centsToPrice(total),
       isDemo: order.status === "paid" && (state?.detail.sale.demo ?? true),
       pnr: order.pnr,
-      items: order.lines.map((l) => ({ ...l })),
+      items: order.lines.map((l) => ({
+        tableId: l.tableId,
+        tableLabel: l.tableLabel,
+        category: l.category,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+      })),
       tickets: order.tickets.map((t) => ({ ...t })),
       orderToken: order.token,
       demoNotice: order.status === "paid" && (state?.detail.sale.demo ?? true) ? DEMO_NOTICE : null,
@@ -187,7 +238,12 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
   }
 
   function addEvent(seed: FakeEventSeed = {}): EventDetail {
-    const tables = seed.tables ?? defaultTables();
+    const saleMode = seed.saleMode ?? "seat";
+    const tables = (seed.tables ?? defaultTables()).map((t) => ({
+      ...t,
+      seatNos: [...t.seatNos],
+      wholeOnly: saleMode === "table" && t.sellable ? true : t.wholeOnly,
+    }));
     const priceMap: Record<SaleCategory, string | undefined> = {
       standard: "1500.00",
       premium: "2500.00",
@@ -208,14 +264,26 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       name: seed.name ?? "Sahte Gala Gecesi",
       startsAt: seed.startsAt ?? "2027-01-15T18:00:00.000Z",
       endsAt: null,
-      artistName: null,
+      artistName: seed.artistName ?? null,
       eventType: null,
       currency: seed.currency ?? "TRY",
       minPrice: minPrice === null ? null : centsToPrice(minPrice),
       saleState,
+      coverImage: seed.coverImage ?? null,
+      artistImage: seed.artistImage ?? null,
+      isDemo: seed.isDemo ?? false,
       description: null,
+      site: {
+        heroImage: seed.site?.heroImage ?? null,
+        summary: seed.site?.summary ?? null,
+        doorsOpenAt: seed.site?.doorsOpenAt ?? null,
+        ageLimit: seed.site?.ageLimit ?? null,
+        dressCode: seed.site?.dressCode ?? null,
+        sightlineSet: seed.site?.sightlineSet ?? null,
+      },
       sale: {
         state: saleState,
+        mode: saleMode,
         opensAt: null,
         closesAt: null,
         holdMinutes: seed.holdMinutes ?? 10,
@@ -226,9 +294,11 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       prices,
       plan: { canvas: { width: 1200, height: 800 }, tables, decor: seed.decor ?? [], lines: seed.lines ?? [] },
     };
-    const free = new Map<string, number>();
-    for (const t of tables) if (t.sellable) free.set(t.id, t.seats ?? 0);
-    events.set(detail.id, { detail, free, prices: new Map(prices.map((p) => [p.category, p.price])) });
+    const freeSeats = new Map<string, number[]>();
+    for (const t of tables) {
+      if (t.sellable) freeSeats.set(t.id, [...t.seatNos].sort((a, b) => a - b));
+    }
+    events.set(detail.id, { detail, freeSeats, prices: new Map(prices.map((p) => [p.category, p.price])) });
     return detail;
   }
 
@@ -248,40 +318,83 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
     if (sale.state !== "open") return errorResult("sales_closed");
 
     // Yinelenen masa kalemleri birleştirilir.
-    const merged = new Map<string, number>();
-    for (const item of items) merged.set(item.tableId, (merged.get(item.tableId) ?? 0) + item.quantity);
-    const lineItems = [...merged].map(([id, quantity]) => ({ tableId: id, quantity }));
+    const merged = new Map<string, { quantity: number; seatNos?: number[] }>();
+    for (const item of items) {
+      const prev = merged.get(item.tableId);
+      if (!prev) {
+        merged.set(item.tableId, { quantity: item.quantity, ...(item.seatNos ? { seatNos: [...item.seatNos] } : {}) });
+      } else {
+        if ((prev.seatNos === undefined) !== (item.seatNos === undefined)) return errorResult("invalid");
+        const combinedSeats = prev.seatNos && item.seatNos ? [...prev.seatNos, ...item.seatNos] : undefined;
+        if (combinedSeats && new Set(combinedSeats).size !== combinedSeats.length) return errorResult("invalid");
+        merged.set(item.tableId, {
+          quantity: prev.quantity + item.quantity,
+          ...(combinedSeats ? { seatNos: combinedSeats } : {}),
+        });
+      }
+    }
+    const lineItems = [...merged].map(([id, v]) => ({ tableId: id, quantity: v.quantity, seatNos: v.seatNos }));
 
     const total = lineItems.reduce((sum, i) => sum + i.quantity, 0);
     if (lineItems.length > MAX_ORDER_TABLES || total > sale.maxSeatsPerOrder) return errorResult("limit_exceeded");
 
-    const working = new Map(state.free);
+    const working = new Map<string, number[]>();
+    for (const [k, v] of state.freeSeats) working.set(k, [...v]);
     const lines: OrderLine[] = [];
     for (const item of lineItems) {
       const table = state.detail.plan.tables.find((t) => t.id === item.tableId);
       if (!table || !table.sellable || table.category === null || table.seats === null) {
         return errorResult("table_not_sellable");
       }
-      const free = working.get(table.id) ?? 0;
-      if (table.wholeOnly && (free < table.seats || item.quantity !== table.seats)) {
+      const freeList = working.get(table.id) ?? [];
+      if (item.seatNos !== undefined) {
+        if (sale.mode === "table" || table.isLoca) return errorResult("invalid");
+        const freeSet = new Set(freeList);
+        if (item.seatNos.some((s) => !freeSet.has(s))) {
+          return {
+            status: SALES_ERROR_STATUS.seats_unavailable,
+            body: {
+              error: {
+                code: "seats_unavailable",
+                message: "Seçtiğiniz sandalyelerden biri az önce alındı",
+                details: { tableId: table.id, free: freeList.length },
+              },
+            },
+          };
+        }
+      }
+      if (table.wholeOnly && (freeList.length < table.seats || item.quantity !== table.seats)) {
         return errorResult("whole_table_required", { tableId: table.id, seats: table.seats });
       }
-      if (item.quantity > free) return errorResult("seats_unavailable", { tableId: table.id, free });
-      if (sale.blockSingleLeftover && free - item.quantity === 1) {
+      if (item.quantity > freeList.length) return errorResult("seats_unavailable", { tableId: table.id, free: freeList.length });
+      if (sale.blockSingleLeftover && freeList.length - item.quantity === 1) {
         return errorResult("leaves_single_seat", { tableId: table.id });
       }
       const unitPrice = state.prices.get(table.category);
       if (unitPrice === undefined) return errorResult("price_missing", { tableId: table.id });
-      working.set(table.id, free - item.quantity);
+
+      let taken: number[];
+      if (item.seatNos !== undefined) {
+        const takenSet = new Set(item.seatNos);
+        taken = [...item.seatNos];
+        working.set(
+          table.id,
+          freeList.filter((s) => !takenSet.has(s)),
+        );
+      } else {
+        taken = freeList.slice(0, item.quantity);
+        working.set(table.id, freeList.slice(item.quantity));
+      }
       lines.push({
         tableId: table.id,
         tableLabel: table.label,
         category: table.category,
         quantity: item.quantity,
         unitPrice,
+        seatNos: taken,
       });
     }
-    state.free = working;
+    state.freeSeats = working;
     const id = randomUUID();
     const order: Order = {
       id,
@@ -317,15 +430,28 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
     order.status = "paid";
     order.pnr = newPnr();
     order.lastNameKey = trUpper(parsed.data.buyer.lastName);
-    order.tickets = order.lines.flatMap((line) =>
-      Array.from({ length: line.quantity }, () => ({
+    const state = events.get(order.eventId);
+    order.tickets = order.lines.flatMap((line) => {
+      const table = state?.detail.plan.tables.find((t) => t.id === line.tableId);
+      const showSeatNo = state?.detail.sale.mode === "seat" && !table?.isLoca;
+      return line.seatNos.map((seatNo) => ({
         ticketId: randomUUID(),
         tableId: line.tableId,
         tableLabel: line.tableLabel,
+        seatNo: showSeatNo ? seatNo : null,
         qrPayload: randomBytes(16).toString("base64url"),
-      })),
-    );
+      }));
+    });
     return { status: 200, body: toResponse(order) };
+  }
+
+  function hasSeededImage(path: string): boolean {
+    for (const { detail } of events.values()) {
+      if (detail.coverImage === path || detail.artistImage === path || detail.site.heroImage === path) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function route(method: string, segments: string[], body: unknown): Result {
@@ -343,6 +469,9 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
           currency: detail.currency,
           minPrice: detail.minPrice,
           saleState: detail.saleState,
+          coverImage: detail.coverImage,
+          artistImage: detail.artistImage,
+          isDemo: detail.isDemo,
         }));
         return { status: 200, body: { events: list } };
       }
@@ -354,7 +483,10 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
           at: new Date(now()).toISOString(),
           tables: state.detail.plan.tables
             .filter((t) => t.sellable)
-            .map((t) => ({ id: t.id, free: state.free.get(t.id) ?? 0 })),
+            .map((t) => {
+              const freeSeats = state.freeSeats.get(t.id) ?? [];
+              return { id: t.id, free: freeSeats.length, freeSeats: [...freeSeats] };
+            }),
         };
         return { status: 200, body: availability };
       }
@@ -424,6 +556,20 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       .slice(API_PREFIX.length + 1)
       .split("/")
       .filter(Boolean);
+    if (request.method === "GET" && segments[0] === "images" && segments.length === 3) {
+      const imagePath = `${segments[1]}/${segments[2]}`;
+      if (IMAGE_PATH_PATTERN.test(imagePath) && hasSeededImage(imagePath)) {
+        return new Response(FAKE_WEBP_BYTES, {
+          status: 200,
+          headers: {
+            "content-type": "image/webp",
+            "cache-control": "private, max-age=300",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
+      return json(errorResult("event_not_found"));
+    }
     return json(route(request.method, segments, body));
   }
 
@@ -433,11 +579,19 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
     addEvent,
     free(eventId, id) {
       refresh();
-      return events.get(eventId)?.free.get(id) ?? 0;
+      return events.get(eventId)?.freeSeats.get(id)?.length ?? 0;
     },
-    holdAs(eventId, id, quantity) {
+    freeSeats(eventId, id) {
       refresh();
-      const result = createHold({ eventId, items: [{ tableId: id, quantity }], clientKey: randomUUID() });
+      return [...(events.get(eventId)?.freeSeats.get(id) ?? [])];
+    },
+    holdAs(eventId, id, quantity, seatNos) {
+      refresh();
+      const result = createHold({
+        eventId,
+        items: [{ tableId: id, quantity, ...(seatNos === undefined ? {} : { seatNos }) }],
+        clientKey: randomUUID(),
+      });
       if (result.status >= 300) throw new Error(`holdAs başarısız: ${JSON.stringify(result.body)}`);
       return result.body as OrderResponse;
     },
@@ -457,7 +611,9 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       orders.clear();
       clientKeys.clear();
       for (const state of events.values()) {
-        for (const t of state.detail.plan.tables) if (t.sellable) state.free.set(t.id, t.seats ?? 0);
+        for (const t of state.detail.plan.tables) {
+          if (t.sellable) state.freeSeats.set(t.id, [...t.seatNos].sort((a, b) => a - b));
+        }
       }
     },
     handle,
@@ -472,8 +628,10 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
           switch (pathname) {
             case "/__fake/events":
               return reply(addEvent(input as FakeEventSeed));
-            case "/__fake/hold-as":
-              return reply(core.holdAs(String(input.eventId), String(input.tableId), Number(input.quantity)));
+            case "/__fake/hold-as": {
+              const seatNos = Array.isArray(input.seatNos) ? input.seatNos.map(Number) : undefined;
+              return reply(core.holdAs(String(input.eventId), String(input.tableId), Number(input.quantity), seatNos));
+            }
             case "/__fake/expire-order":
               core.expireOrder(String(input.orderToken), input.remainingMs === undefined ? 0 : Number(input.remainingMs));
               return reply({ ok: true });

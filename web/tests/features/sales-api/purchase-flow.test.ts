@@ -66,7 +66,7 @@ describe("satın alma uçtan uca", () => {
     const avail = availabilitySchema.parse(
       await bodyOf(await makeApi().getAvailability(req("GET", `/api/sales/v1/events/${event.id}/availability`), event.id)),
     );
-    expect(avail.tables).toEqual([{ id: a1!.id, free: 5 }]);
+    expect(avail.tables).toEqual([{ id: a1!.id, free: 5, freeSeats: [4, 5, 6, 7, 8] }]);
     // 4) Ödeme (demo onay).
     const paid = orderResponseSchema.parse(
       await bodyOf(await api.payOrder(req("POST", `${O}/${hold.orderToken}/pay`, { ip: IP, body: payBody }), hold.orderToken)),

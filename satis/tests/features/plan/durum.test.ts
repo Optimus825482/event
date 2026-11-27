@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { availabilityEtag, durumResponse, unavailableResponse } from "@/features/plan/durum";
 
-const a = { at: "2026-12-01T10:00:00.000Z", tables: [{ id: "t1", free: 5 }] };
+const a = { at: "2026-12-01T10:00:00.000Z", tables: [{ id: "t1", free: 5, freeSeats: [1, 2, 3, 4, 5] }] };
 
 describe("canlı durum yanıtı", () => {
   it("200: gövde, ETag ve önbellek başlığı", async () => {
@@ -15,7 +15,7 @@ describe("canlı durum yanıtı", () => {
   it("ETag çift tırnaklıdır ve yalnızca masa durumuna bağlıdır", () => {
     expect(availabilityEtag(a)).toMatch(/^"[^"]+"$/);
     expect(availabilityEtag({ ...a, at: "2026-12-01T10:00:05.000Z" })).toBe(availabilityEtag(a));
-    expect(availabilityEtag({ ...a, tables: [{ id: "t1", free: 4 }] })).not.toBe(availabilityEtag(a));
+    expect(availabilityEtag({ ...a, tables: [{ id: "t1", free: 4, freeSeats: [1, 2, 3, 4] }] })).not.toBe(availabilityEtag(a));
   });
 
   it("eşleşen If-None-Match 304 döner", async () => {

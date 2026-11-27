@@ -1,5 +1,12 @@
 import { env } from "@/lib/env";
-import { SALES_ERROR_CODES, type Availability, type EventCard, type EventDetail, type OrderResponse } from "./contract";
+import {
+  IMAGE_PATH_PATTERN,
+  SALES_ERROR_CODES,
+  type Availability,
+  type EventCard,
+  type EventDetail,
+  type OrderResponse,
+} from "./contract";
 import { CoreError, type SiteErrorCode } from "./errors";
 
 /**
@@ -10,7 +17,7 @@ export type WriteContext = { clientIp: string | null };
 
 export type HoldInput = {
   eventId: string;
-  items: { tableId: string; quantity: number }[];
+  items: { tableId: string; quantity: number; seatNos?: number[] }[];
   clientKey: string;
 };
 
@@ -24,6 +31,7 @@ export type CoreClient = {
   listEvents(): Promise<EventCard[]>;
   getEvent(eventId: string): Promise<EventDetail>;
   getAvailability(eventId: string): Promise<Availability>;
+  getImage(path: string): Promise<{ body: ArrayBuffer; contentType: "image/webp" }>;
   createHold(input: HoldInput, ctx: WriteContext): Promise<OrderResponse>;
   getOrder(orderToken: string): Promise<OrderResponse>;
   payOrder(orderToken: string, input: PayInput, ctx: WriteContext): Promise<OrderResponse>;
@@ -69,18 +77,13 @@ export function createCoreClient(config: CoreConfig): CoreClient {
   const baseUrl = config.baseUrl.replace(/\/+$/, "");
 
   /** Zaman aşımı başlıktan gövdenin tamamen okunmasına kadar sürer. `none`: gövde okunmaz (204). */
-  async function request(
+  async function requestRaw<T>(
     method: "GET" | "POST" | "DELETE",
     path: string,
-    options: { body?: unknown; ctx?: WriteContext; read?: "json" | "none" } = {},
-  ): Promise<unknown> {
-    const headers: Record<string, string> = {
-      authorization: `Bearer ${config.secret}`,
-      accept: "application/json",
-    };
-    if (options.body !== undefined) headers["content-type"] = "application/json";
-    if (options.ctx?.clientIp) headers["x-sales-client-ip"] = options.ctx.clientIp;
-
+    headers: Record<string, string>,
+    body: unknown,
+    readResponse: (response: Response) => Promise<T>,
+  ): Promise<T> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
@@ -93,18 +96,13 @@ export function createCoreClient(config: CoreConfig): CoreClient {
       const response = await doFetch(`${baseUrl}${API_PREFIX}${path}`, {
         method,
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body: body === undefined ? undefined : JSON.stringify(body),
         cache: "no-store",
         redirect: "error",
         signal: controller.signal,
       });
       if (!response.ok) throw await toError(response);
-      if (options.read === "none") return undefined;
-      try {
-        return await response.json();
-      } catch {
-        throw new CoreError("core_unreachable", response.status);
-      }
+      return await readResponse(response);
     })();
     work.catch(() => undefined);
     try {
@@ -115,6 +113,27 @@ export function createCoreClient(config: CoreConfig): CoreClient {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async function request(
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    options: { body?: unknown; ctx?: WriteContext; read?: "json" | "none" } = {},
+  ): Promise<unknown> {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${config.secret}`,
+      accept: "application/json",
+    };
+    if (options.body !== undefined) headers["content-type"] = "application/json";
+    if (options.ctx?.clientIp) headers["x-sales-client-ip"] = options.ctx.clientIp;
+    return requestRaw(method, path, headers, options.body, async (response) => {
+      if (options.read === "none") return undefined;
+      try {
+        return await response.json();
+      } catch {
+        throw new CoreError("core_unreachable", response.status);
+      }
+    });
   }
 
   const orderPath = (orderToken: string) => `/orders/${encodeURIComponent(orderToken)}`;
@@ -130,10 +149,32 @@ export function createCoreClient(config: CoreConfig): CoreClient {
     async getAvailability(eventId) {
       return (await request("GET", `/events/${encodeURIComponent(eventId)}/availability`)) as Availability;
     },
+    async getImage(path) {
+      if (!IMAGE_PATH_PATTERN.test(path)) {
+        throw new CoreError("event_not_found", 404);
+      }
+      return requestRaw(
+        "GET",
+        `/images/${path}`,
+        { authorization: `Bearer ${config.secret}` },
+        undefined,
+        async (response) => {
+          try {
+            return { body: await response.arrayBuffer(), contentType: "image/webp" as const };
+          } catch {
+            throw new CoreError("core_unreachable", response.status);
+          }
+        },
+      );
+    },
     async createHold(input, ctx) {
       const body = {
         eventId: input.eventId,
-        items: input.items.map((i) => ({ tableId: i.tableId, quantity: i.quantity })),
+        items: input.items.map((i) => ({
+          tableId: i.tableId,
+          quantity: i.quantity,
+          ...(i.seatNos === undefined ? {} : { seatNos: i.seatNos }),
+        })),
         clientKey: input.clientKey,
       };
       return (await request("POST", "/orders", { body, ctx })) as OrderResponse;

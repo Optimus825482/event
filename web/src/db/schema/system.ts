@@ -32,6 +32,7 @@ export const systemSettings = pgTable("system_settings", {
   smtpFromEmail: text("smtp_from_email"),
   smtpFromName: text("smtp_from_name"),
   smtpSecure: boolean("smtp_secure").notNull().default(false),
+  salesDemoEnabled: boolean("sales_demo_enabled").notNull().default(false),
   ...timestamps(),
 });
 
