@@ -15,7 +15,8 @@ async function visit(page: Page, path: string): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
       const response = await page.goto(path);
-      expect(response?.status()).toBeLessThan(500);
+      // Yönlendirme ya da yeniden yükleme sırasında `goto` yanıtsız (null) dönebilir; o zaman yalnızca yüklenmeyi bekle.
+      if (response) expect(response.status()).toBeLessThan(500);
       await page.waitForLoadState("networkidle");
       return;
     } catch (error) {
