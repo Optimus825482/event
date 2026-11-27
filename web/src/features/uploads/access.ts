@@ -10,7 +10,8 @@ export type UploadAccess = "allowed" | "forbidden" | "not_found";
  *
  * - `logo`: ayarlar ya da davetiye görüntüleyebilen roller (logo davetiye önizlemesinde de görünür).
  * - `invitation`: `invitations:view`.
- * - `avatar`, `event` (şu an hiçbir özellik kullanmıyor) ve bilinmeyen kategoriler: yalnızca yönetici.
+ * - `event`, `artist`: `events:view`.
+ * - `avatar` ve bilinmeyen kategoriler: yalnızca yönetici.
  */
 export function checkUploadAccess(actor: PolicyActor, segments: readonly string[]): UploadAccess {
   if (segments.length !== 2) return "not_found";
@@ -21,6 +22,9 @@ export function checkUploadAccess(actor: PolicyActor, segments: readonly string[
   }
   if (category === "invitation") {
     return can(actor, "invitations", "view") ? "allowed" : "forbidden";
+  }
+  if (category === "event" || category === "artist") {
+    return can(actor, "events", "view") ? "allowed" : "forbidden";
   }
   return isAdmin(actor) ? "allowed" : "not_found";
 }

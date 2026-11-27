@@ -13,7 +13,7 @@ import { createEvent } from "../../helpers/factories";
 import { loginAs } from "../realtime/helpers";
 
 const ctx = (...segments: string[]) => ({ params: Promise.resolve({ path: segments }) });
-const CATEGORIES = ["logo", "invitation", "avatar", "event"] as const;
+const CATEGORIES = ["logo", "invitation", "avatar", "event", "artist"] as const;
 const ids = {
   mineBg: "11111111-1111-4111-8111-111111111111",
   orphan: "44444444-4444-4444-8444-444444444444",
@@ -90,7 +90,28 @@ describe("GET /api/uploads: kategoriye göre yetki (M4)", () => {
     expect(await fetchAs(admin.cookie, "invitation", `${ids.orphan}.webp`)).toBe(200);
     expect(await fetchAs(admin.cookie, "avatar", `${ids.orphan}.webp`)).toBe(200);
     expect(await fetchAs(manager.cookie, "avatar", `${ids.orphan}.webp`)).toBe(404);
-    expect(await fetchAs(manager.cookie, "event", `${ids.orphan}.webp`)).toBe(404);
+  });
+
+  it("event ve artist: events:view olan her rol okur", async () => {
+    for (const who of [
+      managerActor("entertainment"),
+      managerActor("fnb"),
+      memberActor("entertainment", { events: "v---" }),
+    ]) {
+      const a = await login(who);
+      expect(await fetchAs(a.cookie, "event", `${ids.orphan}.webp`)).toBe(200);
+      expect(await fetchAs(a.cookie, "artist", `${ids.orphan}.webp`)).toBe(200);
+    }
+  });
+
+  it("event ve artist: events:view olmayan rol 403 alır", async () => {
+    const a = await login(memberActor("casino", { check_in: "vc--" }));
+    expect(await fetchAs(a.cookie, "event", `${ids.orphan}.webp`)).toBe(403);
+    expect(await fetchAs(a.cookie, "artist", `${ids.orphan}.webp`)).toBe(403);
+  });
+
+  it("avatar hâlâ yalnızca yöneticiye açıktır", async () => {
+    expect(await fetchAs((await login(managerActor("entertainment"))).cookie, "avatar", `${ids.orphan}.webp`)).toBe(404);
   });
 
   it("tanınmayan kategori ve eski düz yol 404 olur", async () => {

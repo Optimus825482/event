@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import {
   artists,
@@ -91,6 +91,24 @@ async function visibleEvents(ex: Db | Tx, eventId?: string): Promise<EventRow[]>
     .from(events)
     .where(and(...conditions))
     .orderBy(asc(events.startsAt), asc(events.id));
+}
+
+/** Sitede listelenebilen en az bir etkinliğin kapak, hero veya bağlı sanatçı görseli ise `true`. */
+export async function isListedImagePath(ex: Db | Tx, imagePath: string): Promise<boolean> {
+  const [row] = await ex
+    .select({ id: events.id })
+    .from(events)
+    .leftJoin(eventSiteContent, eq(eventSiteContent.eventId, events.id))
+    .leftJoin(artists, eq(artists.id, events.artistId))
+    .where(
+      and(
+        inArray(events.planningStage, [...VISIBLE_STAGES]),
+        inArray(events.status, [...VISIBLE_STATUSES]),
+        or(eq(events.coverImage, imagePath), eq(eventSiteContent.heroImage, imagePath), eq(artists.image, imagePath)),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
 }
 
 export async function listSaleEvents(ex: Db | Tx, ctx: Ctx): Promise<EventCard[]> {
