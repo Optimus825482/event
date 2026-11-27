@@ -122,7 +122,7 @@ function ConsoleBody({ eventId, userId, initialStats, canWrite, readOnlyNote }: 
         <GateSelect gate={gate} onChange={setGate} />
       </div>
       <StatsPanel stats={stats.data} stale={stats.isFetching} />
-      <div aria-live="assertive">
+      <div>
         <CheckInFeedbackBanner feedback={feedback} onClose={clear} />
       </div>
       <QueuePanel eventId={eventId} queue={queue} />
