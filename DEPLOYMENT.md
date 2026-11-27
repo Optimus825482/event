@@ -207,7 +207,7 @@ sorunsuz dağıtılır; satış API'si çekirdekte 503 ile kapalı kalır.
 
 1. `SALES_API_SECRET` (en az 32 karakter; `web` ve `satis` için aynı değer), `SALES_SITE_URL` (`https://...`) ve `COMPOSE_PROFILES=satis`.
 2. `satis` servisine satış alan adını `https://<satış-alan-adı>:3000` biçiminde atayın (ayrı bir Coolify uygulaması açmayın).
-3. Yeniden dağıtın. Deploy sırası: veritabanı -> `migrate` -> `web` -> `satis`. Bu fazda çekirdekte şema/migration değişikliği yoktur.
+3. Yeniden dağıtın. Deploy sırası: veritabanı -> `migrate` -> `web` -> `satis`. Satış sitesi yönetimi, numaralı sandalye ve demo özellikleri `0023_satis_sitesi` migration'ını getirir; `migrate` adımı kendiliğinden uygular, yeni ortam değişkeni yoktur, demo anahtarı Sistem Ayarları'ndadır (varsayılan kapalı).
 
 **Doğrulanmalı:** Coolify'ın `COMPOSE_PROFILES` değerini bu yığında dikkate aldığı ilk açılışta bir kez teyit edilmelidir. Dikkate
 alınmazsa alternatif, compose dosyasından `satis` servisindeki `profiles: ["satis"]` satırını kaldırmaktır (o zaman `satis` her zaman
@@ -240,7 +240,7 @@ Ortak `coolify` ağındaki diğer kapsayıcılar `satis:3000` ve `web:3000` adre
 `/mesafeli-satis` şu anda **yer tutucudur** ve bunu sayfada açıkça yazar. Gerçek ödeme sağlayıcısı yoktur; demo dışında
 satış alınamaz.
 
-**Bilinen sınırlar:** canlı masa durumu en çok ~11 sn gecikir; plan varsayılan olarak 2B'dir; 3B görünüm WebGL gerektiren isteğe bağlı bir görünümdür (kamera ön ayarları yok); CAPTCHA yok
+**Bilinen sınırlar:** canlı masa durumu en çok ~11 sn gecikir; uygun cihazda 3B görünüm varsayılan olarak açılır, aksi halde 2B sunulur (kamera ön ayarları yok); `satis/public/sightline/diamond/` sahne görüşü WebP fotoğrafları (174 dosya, ~12,7 MB) imaja girer, yalnızca istenen dosya indirilir; CAPTCHA yok
 (sözleşme risk 27).
 
 **Doğrulama durumu (satış sitesi):**
@@ -248,6 +248,7 @@ satış alınamaz.
 - Yapıldı: `satis/` tür denetimi, lint, 304 birim testi, üretim derlemesi, paket sızıntı denetimi (`check:bundle`), Playwright
   uçtan uca (sahte çekirdekle) ve gerçek çekirdekle çapraz akış; yük koşusu (üretim derlemeleri, 40 masa x 10 sandalye,
   5000 istemci, 300 tutma, 30 sn): ihlal yok, 378 sandalye tutuldu, 0 yoklama hatası, çekirdeğe ~0,33 uygunluk isteği/sn.
+- Çapraz E2E kapsamı (6 senaryo): site içeriği ve kapak görseli vekili, numaralı sandalye seçimi ve çakışma, masa bazlı satış, demo anahtarı ve rapor ayrımı, satış şekli kilidi, 2B/3B yolu.
 - Yapılmadı: Docker yok; `satis/Dockerfile` ve compose etiketleri (Traefik engeli dahil) kapsayıcıda denenmedi; ilk dağıtım
   hazırlık ortamında denenmeli. Elle denetim gerçek telefonda yapılmadı (yalnızca 375 px tarayıcı kipinde); QR'ın başka bir
   telefon kamerasıyla okunması denenmedi.

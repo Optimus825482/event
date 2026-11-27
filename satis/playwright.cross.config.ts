@@ -4,10 +4,18 @@ import { defineConfig, devices } from "@playwright/test";
 // Sırlar her koşuda rastgele üretilir; yalnızca süreç ortamında yaşar, hiçbir dosyaya yazılmaz.
 const CROSS_SECRET = (process.env.CROSS_SECRET ??= randomBytes(32).toString("hex"));
 const CROSS_AUTH_SECRET = (process.env.CROSS_AUTH_SECRET ??= randomBytes(32).toString("hex"));
+const CROSS_USER_PASSWORD = (process.env.CROSS_USER_PASSWORD ??= `Cross1${randomBytes(12).toString("hex")}A`);
 
 const corePort = Number(process.env.E2E_PORT ?? 3460);
 const satisPort = Number(process.env.SATIS_E2E_PORT ?? 3380);
 const dbName = process.env.E2E_DB_NAME ?? "eventflow_e2e_f7";
+
+const mobileUse = {
+  ...devices["Desktop Chrome"],
+  browserName: "chromium" as const,
+  viewport: { width: 375, height: 812 },
+  hasTouch: true,
+};
 
 export default defineConfig({
   testDir: "./e2e-cross",
@@ -28,7 +36,14 @@ export default defineConfig({
   projects: [
     {
       name: "mobil",
-      use: { ...devices["Desktop Chrome"], browserName: "chromium", viewport: { width: 375, height: 812 }, hasTouch: true },
+      testIgnore: "**/demo.spec.ts",
+      use: mobileUse,
+    },
+    {
+      name: "demo",
+      testMatch: "**/demo.spec.ts",
+      dependencies: ["mobil"],
+      use: mobileUse,
     },
   ],
   webServer: [
@@ -41,6 +56,7 @@ export default defineConfig({
         DATABASE_URL: `postgres://postgres@localhost:54329/${dbName}`,
         BETTER_AUTH_SECRET: CROSS_AUTH_SECRET,
         BETTER_AUTH_URL: `http://localhost:${corePort}`,
+        CROSS_USER_PASSWORD,
         NEXT_DIST_DIR: ".next-e2e",
         UPLOAD_DIR: "./.next-e2e/uploads",
         SALES_API_SECRET: CROSS_SECRET,
