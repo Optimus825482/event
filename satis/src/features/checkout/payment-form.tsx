@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { BUSY_CLASS, inputClass } from "@/components/ui/form-field";
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
 import { ERROR_MESSAGES } from "@/lib/core/errors";
@@ -29,10 +30,7 @@ const FIELDS: { name: Field; label: string; type: string; autoComplete: string; 
   { name: "phone", label: "Telefon (isteğe bağlı)", type: "tel", autoComplete: "tel", inputMode: "tel" },
 ];
 
-// Odak düğmede kalsın diye `disabled` yerine aria-disabled + ref koruması kullanılır.
-const BUSY = "aria-disabled:cursor-not-allowed aria-disabled:border-transparent aria-disabled:bg-disabled-bg aria-disabled:text-disabled-text";
 
-const INPUT = "min-h-11 w-full rounded-lg border bg-surface px-3 py-2 text-ivory";
 
 /** Geri sayım + alıcı formu; ödeme ve bırakma tek istekle ilerler (çift tıklama korumalı). */
 export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, demo, children }: Props) {
@@ -139,7 +137,7 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
                 aria-invalid={message ? true : undefined}
                 aria-describedby={message ? `${id}-error` : undefined}
                 onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.value }))}
-                className={cn(INPUT, message ? "border-danger" : "border-muted")}
+                className={inputClass(Boolean(message))}
               />
               {message ? (
                 <p id={`${id}-error`} className="m-0 text-danger">
@@ -182,15 +180,15 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
         </div>
         {error ? <Notice tone="error">{error}</Notice> : null}
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="submit" variant="gold" size="lg" aria-disabled={pending} className={cn("sm:flex-1", BUSY)}>
+          <Button type="submit" variant="gold" size="lg" aria-disabled={pending} className={cn("sm:flex-1", BUSY_CLASS)}>
             Öde
           </Button>
           {demo ? (
-            <Button variant="glass" size="lg" aria-disabled={pending} onClick={() => void submit("decline")} className={cn("sm:flex-1", BUSY)}>
+            <Button variant="glass" size="lg" aria-disabled={pending} onClick={() => void submit("decline")} className={cn("sm:flex-1", BUSY_CLASS)}>
               Reddet (deneme)
             </Button>
           ) : null}
-          <Button variant="ghost" size="lg" aria-disabled={pending} onClick={() => void giveUp()} className={BUSY}>
+          <Button variant="ghost" size="lg" aria-disabled={pending} onClick={() => void giveUp()} className={BUSY_CLASS}>
             Vazgeç
           </Button>
         </div>

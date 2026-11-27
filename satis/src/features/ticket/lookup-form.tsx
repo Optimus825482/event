@@ -3,13 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { BUSY_CLASS, inputClass } from "@/components/ui/form-field";
 import { Notice } from "@/components/ui/notice";
-import { cn } from "@/lib/cn";
 import { ERROR_MESSAGES } from "@/lib/core/errors";
 import { lookupAction } from "./actions";
 
-const INPUT = "min-h-11 w-full rounded-lg border bg-surface px-3 py-2 text-ivory";
-const BUSY = "aria-disabled:cursor-not-allowed aria-disabled:border-transparent aria-disabled:bg-disabled-bg aria-disabled:text-disabled-text";
 
 /** PNR + soyad; form sunucu eylemiyle gönderilir (GET değil), PNR adrese yazılmaz. */
 export function LookupForm() {
@@ -83,7 +81,7 @@ export function LookupForm() {
               aria-invalid={message ? true : undefined}
               aria-describedby={message ? `${id}-error` : undefined}
               onChange={(event) => field.set(event.target.value)}
-              className={cn(INPUT, message ? "border-danger" : "border-muted")}
+              className={inputClass(Boolean(message))}
             />
             {message ? (
               <p id={`${id}-error`} className="m-0 text-danger">
@@ -94,7 +92,7 @@ export function LookupForm() {
         );
       })}
       {error ? <Notice tone="error">{error}</Notice> : null}
-      <Button type="submit" variant="gold" size="lg" aria-disabled={pending} className={BUSY}>
+      <Button type="submit" variant="gold" size="lg" aria-disabled={pending} className={BUSY_CLASS}>
         Biletimi bul
       </Button>
     </form>
