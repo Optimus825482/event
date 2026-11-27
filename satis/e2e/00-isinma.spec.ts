@@ -26,7 +26,7 @@ async function visit(page: Page, path: string): Promise<void> {
 
 test("ısınma: ana rotalar ve ödeme akışı bir kez derlenir", async ({ page }) => {
   test.setTimeout(300_000);
-  for (const path of ["/", "/hakkimizda", "/etkinlikler", "/biletimi-bul", `/etkinlik/${gala.id}`, `/etkinlik/${gala.id}?kisi=2`]) {
+  for (const path of ["/", "/hakkimizda", "/etkinlikler", "/biletimi-bul", `/etkinlik/${gala.id}`, `/etkinlik/${gala.id}?kisi=2`, `/etkinlik/${gala.id}/salon?kisi=2`]) {
     await visit(page, path);
   }
 

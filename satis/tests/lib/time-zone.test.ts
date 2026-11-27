@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dateKeyOf,
   formatEventDate,
+  formatEventDay,
   formatEventTime,
   formatEventWhen,
   formatMonthTitle,
@@ -22,6 +23,10 @@ describe("formatEventWhen", () => {
   it("tarih ve saat ayrı biçimlenir", () => {
     expect(formatEventDate("2027-01-15T18:00:00.000Z")).toBe("15 Ocak 2027 Cuma");
     expect(formatEventTime("2027-01-15T18:00:00.000Z")).toBe("20:00");
+  });
+  it("gün haftanın günü olmadan Kıbrıs saatine göre biçimlenir", () => {
+    expect(formatEventDay("2027-01-15T18:00:00.000Z")).toBe("15 Ocak 2027");
+    expect(formatEventDay("2026-12-11T22:30:00.000Z")).toBe("12 Aralık 2026");
   });
   it("ay başlığı", () => expect(formatMonthTitle(2027, 1)).toBe("Ocak 2027"));
   it("bugünün anahtarı verilen ana göre hesaplanır", () =>

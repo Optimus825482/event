@@ -157,3 +157,9 @@ h3 {
     display: none !important;
   }
 }
+
+/* Kipli pencere (yerel <dialog>) arka planı. */
+dialog.modal::backdrop {
+  background-color: rgb(0 0 0 / 0.72);
+  backdrop-filter: blur(2px);
+}

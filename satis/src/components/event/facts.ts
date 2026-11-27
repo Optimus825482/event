@@ -13,9 +13,6 @@ export function eventFacts(event: EventDetail): EventFact[] {
   if (event.site.ageLimit) {
     facts.push({ label: "Yaş Sınırı", value: event.site.ageLimit });
   }
-  if (event.site.dressCode) {
-    facts.push({ label: "Kıyafet", value: event.site.dressCode });
-  }
   if (event.minPrice !== null) {
     facts.push({ label: "Başlangıç Fiyatı", value: `${formatMoney(event.minPrice, event.currency)} / kişi` });
   }

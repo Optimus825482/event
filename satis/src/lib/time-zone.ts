@@ -56,3 +56,15 @@ export function formatMonthTitle(year: number, month: number): string {
 export function todayKey(now: Date = new Date()): string {
   return dateKeyFormat.format(now);
 }
+
+const dayFormat = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: APP_TIME_ZONE,
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+/** `"15 Ocak 2027"` biçiminde (haftanın günü olmadan) etkinlik günü. */
+export function formatEventDay(iso: string): string {
+  return dayFormat.format(new Date(iso));
+}
