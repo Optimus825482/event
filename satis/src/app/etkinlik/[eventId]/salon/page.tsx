@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { saleModeNote } from "@/components/event/facts";
 import { TICKET_DIALOG_HASH } from "@/components/event/ticket-dialog-shared";
+import { ButtonLink } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { EventSales } from "@/features/plan/event-sales";
 import { parsePartySize } from "@/features/plan/party";
@@ -33,7 +33,7 @@ export default async function SalonPage({ params, searchParams }: PageProps) {
   const loaded = await loadEvent(eventId);
   if (!loaded.ok) {
     return (
-      <main className="page-gutter mx-auto max-w-[1320px] py-10">
+      <main className="page-gutter mx-auto max-w-[1400px] py-10">
         <Notice tone="error">{loaded.message}</Notice>
       </main>
     );
@@ -47,19 +47,26 @@ export default async function SalonPage({ params, searchParams }: PageProps) {
   const availability = await loadAvailability(eventId);
 
   return (
-    <main className="page-gutter mx-auto max-w-[1320px] space-y-6 py-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
-          <p className="eyebrow">{`${formatEventDate(event.startsAt)} · ${formatEventTime(event.startsAt)}`}</p>
-          <h1 className="text-[clamp(28px,4vw,44px)] text-ivory">{event.name}</h1>
-          <p className="text-sm text-muted">{saleModeNote(event.sale.mode)}</p>
+    <main className="page-gutter mx-auto max-w-[1400px] space-y-5 py-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-full border border-line bg-surface px-4 py-1.5 text-sm">
+          <h1 className="font-sans text-sm font-semibold text-ivory">{event.name}</h1>
+          <span aria-hidden="true" className="text-muted">
+            ·
+          </span>
+          <span className="text-gold">{`${formatEventDate(event.startsAt)} · ${formatEventTime(event.startsAt)}`}</span>
+          <span aria-hidden="true" className="text-muted">
+            ·
+          </span>
+          <span className="text-xs text-muted">{saleModeNote(event.sale.mode)}</span>
         </div>
-        <Link
+        <ButtonLink
           href={`/etkinlik/${event.id}`}
-          className="inline-flex min-h-11 items-center text-sm font-semibold text-gold no-underline hover:text-gold-bright"
+          variant="ghost"
+          className="min-h-9 border border-line px-4 py-1.5 text-sm font-semibold"
         >
           ← Etkinlik detayı
-        </Link>
+        </ButtonLink>
       </header>
 
       <section id="masa-secimi" aria-labelledby="masa-secimi-baslik" className="space-y-4">

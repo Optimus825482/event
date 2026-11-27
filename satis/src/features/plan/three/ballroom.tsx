@@ -13,7 +13,8 @@ import {
 } from "three";
 import { chandelierPositions } from "./layout";
 import { BALLROOM } from "./palette";
-import type { SceneChair } from "./scene-data";
+import type { SceneChair, SceneTable } from "./scene-data";
+import type { StageInfo } from "./stage";
 
 /** Altın/antrasit geometrik desenli halı (yerelde üretilir; dış kaynak indirilmez). */
 function useCarpetTexture(width: number, depth: number): CanvasTexture | null {
@@ -113,28 +114,109 @@ export function BallroomLights() {
   );
 }
 
-/** Çok katmanlı kristal avizeler (tel kafes + ışıklı çekirdek). */
-export function Chandeliers({ width, height }: { width: number; height: number }) {
-  const scale = Math.min(0.6, Math.max(0.3, width / 80));
+/** Sıcak parlayan silindirik avizeler (yalnızca masadan bakışta / POV modunda görünür). */
+export function Chandeliers({
+  width,
+  height,
+  visible = true,
+}: {
+  width: number;
+  height: number;
+  visible?: boolean;
+}) {
+  if (!visible) return null;
   return (
     <>
       {chandelierPositions(width).map((x) => (
-        <group key={x} position={[x, height, 0]} scale={scale}>
-          <mesh>
-            <cylinderGeometry args={[2.1, 1.5, 1.3, 24, 1, true]} />
-            <meshStandardMaterial color={BALLROOM.crystal} emissive={BALLROOM.gold} emissiveIntensity={0.8} wireframe />
-          </mesh>
-          <mesh position={[0, -1.1, 0]}>
-            <cylinderGeometry args={[1.4, 0.7, 1, 20, 1, true]} />
-            <meshStandardMaterial color={BALLROOM.crystal} emissive={BALLROOM.goldBright} emissiveIntensity={0.9} wireframe />
+        <group key={x} position={[x, height, 0]}>
+          <mesh position={[0, 0.46, 0]}>
+            <boxGeometry args={[0.04, 0.62, 0.04]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
           </mesh>
           <mesh>
-            <sphereGeometry args={[0.65, 14, 14]} />
-            <meshBasicMaterial color={BALLROOM.crystalCore} toneMapped={false} />
+            <cylinderGeometry args={[0.85, 0.44, 0.38, 14]} />
+            <meshBasicMaterial color={BALLROOM.goldLight} />
+          </mesh>
+          <mesh position={[0, 0.14, 0]}>
+            <boxGeometry args={[1.42, 0.07, 0.2]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
           </mesh>
         </group>
       ))}
     </>
+  );
+}
+
+const TRUSS_FIXTURES = [-8, -6, -4, -2, 0, 2, 4, 6, 8] as const;
+const SPEAKER_SLATS = [4.15, 4.75, 5.35] as const;
+
+/** Sahne üstü ışık köprüsü ve çift hatlı hoparlör kuleleri. */
+export function StageRig({ stage }: { stage: StageInfo }) {
+  const screenZ = stage.screen.position[2];
+  const screenW = stage.screen.width;
+  const scale = screenW / 13.9;
+  const speakerOffset = screenW / 2 + 1.11;
+
+  return (
+    <group>
+      {/* Üst ışık köprüsü ve 9 armatür */}
+      <mesh position={[0, 6.65, screenZ + 0.46]}>
+        <boxGeometry args={[screenW + 2.8, 0.26, 0.42]} />
+        <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
+      </mesh>
+      {TRUSS_FIXTURES.map((fx) => (
+        <mesh key={fx} position={[fx * scale, 6.43, screenZ + 0.72]}>
+          <boxGeometry args={[0.27, 0.14, 0.25]} />
+          <meshBasicMaterial color={BALLROOM.goldLight} />
+        </mesh>
+      ))}
+      {/* Çift hoparlör kulesi */}
+      {[-speakerOffset, speakerOffset].map((sx) => (
+        <group key={sx}>
+          <mesh position={[sx, 4.9, screenZ + 0.96]}>
+            <boxGeometry args={[0.55, 2.4, 0.63]} />
+            <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
+          </mesh>
+          {SPEAKER_SLATS.map((sy) => (
+            <mesh key={sy} position={[sx, sy, screenZ + 1.0]}>
+              <boxGeometry args={[0.44, 0.05, 0.65]} />
+              <meshStandardMaterial color={BALLROOM.panel} roughness={0.78} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Loca korkulukları, altın küpeşte, yan bölme ve traverten arka konsol. */
+export function LocaArchitecture({ tables }: { tables: readonly SceneTable[] }) {
+  const locas = useMemo(() => tables.filter((t) => t.isLoca), [tables]);
+  if (locas.length === 0) return null;
+
+  return (
+    <group>
+      {locas.map((t) => (
+        <group key={t.key} position={[t.x, t.floorY, t.z]} rotation={[0, t.rotationY, 0]}>
+          <mesh position={[0, 0.54, -t.depth / 2 - 0.25]}>
+            <boxGeometry args={[t.width + 0.14, 0.56, 0.24]} />
+            <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.81} metalness={0.05} />
+          </mesh>
+          <mesh position={[0, 0.84, -t.depth / 2 - 0.25]}>
+            <boxGeometry args={[t.width + 0.22, 0.07, 0.28]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+          </mesh>
+          <mesh position={[-t.width / 2 - 0.1, 0.66, -0.08]}>
+            <boxGeometry args={[0.12, 0.83, t.depth + 0.1]} />
+            <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.81} metalness={0.05} />
+          </mesh>
+          <mesh position={[0, 0.54, t.depth / 2 + 0.35]}>
+            <boxGeometry args={[1.15, 0.49, 0.52]} />
+            <meshStandardMaterial color={BALLROOM.travertine} roughness={0.81} metalness={0.05} />
+          </mesh>
+        </group>
+      ))}
+    </group>
   );
 }
 

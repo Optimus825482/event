@@ -62,7 +62,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
               aria-label={`${i + 1} / ${slides.length}`}
               hidden={!isCurrent}
               className={cn(
-                "grid grid-cols-1 items-center gap-8 min-[960px]:grid-cols-[1.1fr_0.9fr]",
+                "grid grid-cols-1 items-center gap-[clamp(28px,5vw,60px)] min-[960px]:grid-cols-[1.05fr_0.95fr]",
                 !isCurrent && "hidden",
               )}
             >
@@ -81,19 +81,19 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
                   </span>
                 ) : null}
 
-                <dl className="grid grid-cols-1 gap-3 rounded-[14px] border border-line bg-surface p-4 sm:grid-cols-3">
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wider text-muted">Tarih</dt>
-                    <dd className="mt-0.5 text-sm font-semibold text-ivory">{slide.dateLabel}</dd>
+                <dl className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-[14px] border border-line bg-surface px-5 py-3.5 text-sm">
+                  <div className="flex items-baseline gap-1.5">
+                    <dt className="text-muted">Tarih:</dt>
+                    <dd className="font-semibold text-ivory">{slide.dateLabel}</dd>
                   </div>
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wider text-muted">Saat</dt>
-                    <dd className="mt-0.5 text-sm font-semibold text-ivory">{slide.timeLabel}</dd>
+                  <div className="flex items-baseline gap-1.5">
+                    <dt className="text-muted">Saat:</dt>
+                    <dd className="font-semibold text-ivory">{slide.timeLabel}</dd>
                   </div>
                   {slide.priceLabel ? (
-                    <div>
-                      <dt className="text-xs font-semibold uppercase tracking-wider text-muted">Başlangıç</dt>
-                      <dd className="mt-0.5 text-sm font-semibold text-gold-bright">{slide.priceLabel}</dd>
+                    <div className="flex items-baseline gap-1.5">
+                      <dt className="text-muted">Başlangıç:</dt>
+                      <dd className="font-semibold text-gold-bright">{slide.priceLabel}</dd>
                     </div>
                   ) : null}
                 </dl>
@@ -115,14 +115,69 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
                     Etkinlik Takvimi →
                   </ButtonLink>
                 </div>
+
+                {isCurrent && slides.length > 1 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-1">
+                      {slides.map((s, dotIndex) => {
+                        const isDotCurrent = dotIndex === safeIndex;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            aria-label={`${dotIndex + 1}. etkinlik: ${s.name}`}
+                            aria-current={isDotCurrent ? "true" : undefined}
+                            onClick={() => setActive(dotIndex)}
+                            className="inline-flex min-h-11 min-w-9 items-center justify-center bg-transparent"
+                          >
+                            <span
+                              className={cn(
+                                "block h-1 rounded-full transition-all",
+                                isDotCurrent ? "w-12 bg-gold" : "w-7 bg-line",
+                              )}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="glass"
+                        aria-label="Önceki etkinlik"
+                        className="min-h-9 min-w-9 px-3 py-1.5 text-sm"
+                        onClick={() => setActive((prev) => nextIndex(prev, slides.length, -1))}
+                      >
+                        ←
+                      </Button>
+                      <Button
+                        variant="glass"
+                        aria-label="Sonraki etkinlik"
+                        className="min-h-9 min-w-9 px-3 py-1.5 text-sm"
+                        onClick={() => setActive((prev) => nextIndex(prev, slides.length, 1))}
+                      >
+                        →
+                      </Button>
+                      {!reducedMotion ? (
+                        <Button
+                          variant="ghost"
+                          className="min-h-9 px-3 py-1.5 text-xs"
+                          onClick={() => setPaused((p) => !p)}
+                        >
+                          {paused ? "Oynat" : "Duraklat"}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
-              <div className="mx-auto aspect-[9/11] max-h-[540px] w-full max-w-[440px] overflow-hidden rounded-[22px] border border-line-gold bg-surface">
+              <div className="relative mx-auto aspect-[9/11] max-h-[540px] w-full max-w-[440px] overflow-hidden rounded-[22px] border border-line-gold bg-surface shadow-2xl">
                 <EventImage
                   src={slide.image}
                   alt={slide.artistName ?? slide.name}
                   priority={i === 0}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover object-[center_15%]"
                   fallback={
                     <PosterFallback
                       title={slide.artistName ?? slide.name}
@@ -131,59 +186,22 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
                     />
                   }
                 />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-linear-to-t from-bg via-bg/80 to-transparent px-5 pb-5 pt-14">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold tracking-[0.08em] text-gold-bright uppercase">
+                      {slide.artistName ?? slide.name}
+                    </p>
+                    {slide.priceLabel ? (
+                      <p className="text-sm text-muted">
+                        Başlangıç: <strong className="font-semibold text-ivory">{slide.priceLabel}</strong> / kişi
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
           );
         })}
-
-        {slides.length > 1 ? (
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="glass"
-                aria-label="Önceki etkinlik"
-                onClick={() => setActive((prev) => nextIndex(prev, slides.length, -1))}
-              >
-                ←
-              </Button>
-              <Button
-                variant="glass"
-                aria-label="Sonraki etkinlik"
-                onClick={() => setActive((prev) => nextIndex(prev, slides.length, 1))}
-              >
-                →
-              </Button>
-              {!reducedMotion ? (
-                <Button variant="ghost" onClick={() => setPaused((p) => !p)}>
-                  {paused ? "Oynat" : "Duraklat"}
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="flex items-center gap-1">
-              {slides.map((s, i) => {
-                const isCurrent = i === safeIndex;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    aria-label={`${i + 1}. etkinlik: ${s.name}`}
-                    aria-current={isCurrent ? "true" : undefined}
-                    onClick={() => setActive(i)}
-                    className="inline-flex min-h-11 min-w-11 items-center justify-center bg-transparent"
-                  >
-                    <span
-                      className={cn(
-                        "block h-1 rounded-full transition-all",
-                        isCurrent ? "w-12 bg-gold" : "w-7 bg-line",
-                      )}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
       </div>
     </section>
   );

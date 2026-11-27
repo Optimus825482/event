@@ -42,15 +42,24 @@ export function PlanViewer({
   const interactive = onTable !== undefined;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       {view.failed ? <Notice>3B görünüm açılamadı; 2B plan gösteriliyor.</Notice> : null}
-      {view.can3d && !view.failed ? (
-        <div>
-          <Button variant="glass" aria-pressed={view.show3d} onClick={() => view.setMode(view.show3d ? "2d" : "3d")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-2 text-xs font-medium tracking-wider text-muted uppercase">
+          <span aria-hidden="true" className="size-1.5 rounded-full bg-gold" />
+          {view.show3d ? "3B Salon Planı" : "2B Kroki"}
+        </span>
+        {view.can3d && !view.failed ? (
+          <Button
+            variant="glass"
+            aria-pressed={view.show3d}
+            onClick={() => view.setMode(view.show3d ? "2d" : "3d")}
+            className="min-h-9 px-3.5 py-1.5 text-xs font-semibold"
+          >
             {view.show3d ? "2B görünüm" : "3B görünüm"}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
       {view.show3d ? (
         <Plan3D
           model={model}

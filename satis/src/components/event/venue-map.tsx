@@ -22,11 +22,11 @@ export function venueLinks(venue: Venue): { embed: string; search: string; direc
 export function VenueMap({ venue }: { venue: Venue }): React.JSX.Element {
   const links = venueLinks(venue);
   return (
-    <section aria-labelledby="konum-baslik" className="space-y-4">
+    <section aria-labelledby="konum-baslik" className="space-y-4 rounded-[20px] border border-line-gold bg-surface p-6">
       <h2 id="konum-baslik" className="text-[clamp(30px,4vw,44px)] text-ivory">
         Konum
       </h2>
-      <div className="overflow-hidden rounded-[20px] border border-line-gold bg-surface">
+      <div className="overflow-hidden rounded-[14px] border border-line bg-bg">
         <iframe
           src={links.embed}
           title={`${venue.name} haritası`}

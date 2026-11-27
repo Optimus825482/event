@@ -1,0 +1,60 @@
+import { EventImage } from "@/components/event-image";
+import { PosterFallback } from "@/components/poster-fallback";
+import { ButtonLink } from "@/components/ui/button";
+import { saleStateLabel } from "@/features/plan/sale-state";
+import type { EventCard as EventCardData } from "@/lib/core/contract";
+import { formatMoney } from "@/lib/format";
+import { imageUrl } from "@/lib/image-url";
+import { formatEventDate, formatEventTime } from "@/lib/time-zone";
+
+export function ReelCard({ event }: { event: EventCardData }): React.JSX.Element {
+  const open = event.saleState === "open";
+  const src = imageUrl(event.artistImage ?? event.coverImage);
+  const dateLabel = formatEventDate(event.startsAt);
+  const timeLabel = formatEventTime(event.startsAt);
+
+  return (
+    <article className="group relative aspect-[9/14] overflow-hidden rounded-[16px] border border-line bg-surface transition-all hover:-translate-y-1 hover:border-gold">
+      <EventImage
+        src={src}
+        alt={event.artistName ?? event.name}
+        className="h-full w-full object-cover object-[center_20%] transition-transform duration-300 group-hover:scale-[1.03]"
+        fallback={
+          <PosterFallback
+            title={event.artistName ?? event.name}
+            subtitle={dateLabel}
+            className="h-full w-full"
+          />
+        }
+      />
+
+      {event.isDemo ? (
+        <span className="pointer-events-none absolute top-3 left-3 rounded-full border border-gold bg-bg/80 px-2.5 py-0.5 text-[11px] font-semibold text-gold backdrop-blur-md">
+          DEMO
+        </span>
+      ) : null}
+
+      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-linear-to-t from-bg via-bg/85 to-transparent p-4 pt-16">
+        <p className="text-[11.5px] font-semibold text-gold-bright">{`${dateLabel} · ${timeLabel}`}</p>
+        <h3 className="font-serif text-[22px] leading-[1.1] text-ivory">{event.name}</h3>
+        {event.artistName ? <p className="text-xs text-muted">{event.artistName}</p> : null}
+        {event.minPrice !== null ? (
+          <p className="text-xs text-ivory">{`Başlangıç: ${formatMoney(event.minPrice, event.currency)}`}</p>
+        ) : null}
+        {!open ? (
+          <p className="text-xs font-medium text-danger">{saleStateLabel(event.saleState)}</p>
+        ) : null}
+        <div className="flex flex-wrap gap-2 pt-1">
+          {open ? (
+            <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-9 px-3.5 py-1.5 text-xs">
+              Bilet Al
+            </ButtonLink>
+          ) : null}
+          <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-9 px-3.5 py-1.5 text-xs">
+            Detaylar
+          </ButtonLink>
+        </div>
+      </div>
+    </article>
+  );
+}

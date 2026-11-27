@@ -1,4 +1,4 @@
-import { COLORS } from "@/lib/theme";
+import { BALLROOM } from "./palette";
 import { decorCenter, type PlanDecor } from "../decor";
 import type { PlanModel, PlanTableModel } from "../model";
 import type { TablePick } from "../picks";
@@ -27,6 +27,9 @@ export type SceneTable = {
   dimmed: boolean;
   selectable: boolean;
   color: string;
+  categoryLabel: string | null;
+  free: number | null;
+  seats: number | null;
 };
 
 export type SceneChair = {
@@ -82,18 +85,15 @@ function tableSceneState(table: PlanTableModel): SceneState {
 }
 
 function tableColor(table: PlanTableModel, state: SceneState, picked: boolean, active: boolean): string {
-  if (active) return COLORS.goldBright;
-  if (picked) return COLORS.gold;
-  if (state === "closed") return COLORS.surface;
-  if (state === "full") return COLORS.disabledBg;
-  if (state === "partial") return COLORS.muted;
-  return table.category === "premium" || table.category === "vip" ? COLORS.gold : COLORS.ivory;
+  if (active || picked) return BALLROOM.tablePick;
+  if (state === "closed" || state === "full") return BALLROOM.tableFull;
+  return table.category === "premium" || table.category === "vip" ? BALLROOM.tableStage : BALLROOM.tableOpen;
 }
 
-function chairColor(state: ChairState): string {
-  if (state === "selected") return COLORS.goldBright;
-  if (state === "free") return COLORS.ivory;
-  return COLORS.disabledBg;
+function chairColor(state: ChairState, isActiveTable: boolean): string {
+  if (state === "selected") return BALLROOM.chairChosen;
+  if (state === "free") return isActiveTable ? BALLROOM.chairFree : BALLROOM.chairSeat;
+  return BALLROOM.chairFull;
 }
 
 export function buildScene({ model, picks, activeTableId, dimmedIds }: SceneInput): SceneData {
@@ -132,6 +132,9 @@ export function buildScene({ model, picks, activeTableId, dimmedIds }: SceneInpu
       dimmed,
       selectable,
       color: tableColor(table, state, picked, active),
+      categoryLabel: table.categoryLabel,
+      free: table.free,
+      seats: table.seats,
     });
 
     const selectedSeats = pick && !pick.whole ? pick.seatNos : [];
@@ -168,7 +171,7 @@ export function buildScene({ model, picks, activeTableId, dimmedIds }: SceneInpu
         z: spot.z,
         rotationY: spot.rotationY,
         state: cState,
-        color: chairColor(cState),
+        color: chairColor(cState, active),
       });
     }
   }

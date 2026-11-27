@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { UpcomingList } from "@/components/events/upcoming-list";
 import { Notice } from "@/components/ui/notice";
 import { SITE_NAME } from "@/content/site";
-import { EventCard } from "@/features/plan/event-card";
 import { loadEvents } from "../_lib/load-events";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +25,7 @@ export default async function UpcomingEventsPage() {
       ) : result.events.length === 0 ? (
         <Notice>Şu anda satışta etkinlik yok.</Notice>
       ) : (
-        <div className="card-grid">
-          {result.events.map((event) => (
-            <EventCard key={event.id} event={event} headingLevel={2} />
-          ))}
-        </div>
+        <UpcomingList events={result.events} />
       )}
     </main>
   );

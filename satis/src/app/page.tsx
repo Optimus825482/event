@@ -1,9 +1,9 @@
 import { HeroCarousel } from "@/components/home/hero-carousel";
+import { ReelCard } from "@/components/home/reel-card";
 import { HOME_CARD_COUNT, toHeroSlides } from "@/components/home/slides";
 import { ButtonLink } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { SITE_NAME } from "@/content/site";
-import { EventCard } from "@/features/plan/event-card";
 import { loadEvents } from "./_lib/load-events";
 
 // Her istekte çekirdek önbelleğinden okunur; derlemede çekirdeğe gidilmez.
@@ -44,9 +44,9 @@ export default async function HomePage() {
         {cards.length === 0 ? (
           <Notice>Şu anda satışta etkinlik yok.</Notice>
         ) : (
-          <div className="card-grid">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[18px]">
             {cards.map((event) => (
-              <EventCard key={event.id} event={event} headingLevel={3} />
+              <ReelCard key={event.id} event={event} />
             ))}
           </div>
         )}

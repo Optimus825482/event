@@ -45,8 +45,20 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
-      <div className="flex flex-col gap-3">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="flex flex-col gap-3 rounded-[16px] border border-line-gold bg-surface p-3 sm:p-4">
+        {table ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+            <button
+              type="button"
+              onClick={() => openTable(table.id)}
+              className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line-gold bg-glass px-3.5 py-1 text-xs font-semibold text-gold-bright transition-colors hover:border-gold hover:bg-surface-raised"
+            >
+              <span aria-hidden="true" className="size-2 rounded-full bg-gold" />
+              {`Seçili: ${table.isLoca ? "Loca" : "Masa"} ${table.label}`}
+            </button>
+          </div>
+        ) : null}
         <PlanViewer
           model={model}
           view={view}
@@ -56,10 +68,12 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
           seatView={seatView}
           onTable={openTable}
         />
-        <PlanLegend prices={event.prices} currency={event.currency} />
+        <div className="border-t border-line pt-3">
+          <PlanLegend prices={event.prices} currency={event.currency} />
+        </div>
       </div>
       <aside aria-label="Salon ve sahne görüşü" className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-4 py-3">
+        <div className="flex flex-col gap-2 rounded-[16px] border border-line-gold bg-surface px-4 py-3.5">
           <label htmlFor={selectId} className="text-sm font-medium text-ivory">
             Masa veya loca
           </label>

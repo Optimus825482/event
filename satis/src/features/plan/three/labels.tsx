@@ -2,14 +2,14 @@
 
 import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
-import { BufferAttribute, BufferGeometry, CanvasTexture, SRGBColorSpace } from "three";
+import { BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, SRGBColorSpace } from "three";
 import { BALLROOM } from "./palette";
 import type { SceneChair, SceneTable } from "./scene-data";
 
 const CELL = 48;
 const COLS = 16;
 
-function buildAtlas(labels: readonly string[], fg: string): CanvasTexture | null {
+function buildAtlas(labels: readonly string[], fg: string, outline?: string): CanvasTexture | null {
   if (typeof document === "undefined" || labels.length === 0) return null;
   const rows = Math.ceil(labels.length / COLS);
   const c = document.createElement("canvas");
@@ -18,15 +18,23 @@ function buildAtlas(labels: readonly string[], fg: string): CanvasTexture | null
   const ctx = c.getContext("2d");
   if (!ctx) return null;
 
-  ctx.font = "700 18px sans-serif";
+  ctx.font = "bold 28px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = fg;
+  if (outline) {
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = "round";
+  }
 
   labels.forEach((text, idx) => {
     const col = idx % COLS;
     const row = Math.floor(idx / COLS);
-    ctx.fillText(text, (col + 0.5) * CELL, (row + 0.5) * CELL, CELL - 6);
+    const x = (col + 0.5) * CELL;
+    const y = (row + 0.51) * CELL;
+    if (outline) ctx.strokeText(text, x, y, CELL - 5);
+    ctx.fillText(text, x, y, CELL - 5);
   });
 
   const tex = new CanvasTexture(c);
@@ -93,7 +101,7 @@ export function TableLabels({ tables }: { tables: readonly SceneTable[] }) {
     const labels = tables.map((t) => t.label);
     const rows = Math.max(1, Math.ceil(labels.length / COLS));
     return {
-      texture: buildAtlas(labels, BALLROOM.background),
+      texture: buildAtlas(labels, BALLROOM.labelText, BALLROOM.labelOutline),
       geometry: buildQuads(
         tables.map((t) => ({ x: t.x, y: t.floorY + 0.72, z: t.z, size: 1.15 })),
         rows,
@@ -111,8 +119,8 @@ export function TableLabels({ tables }: { tables: readonly SceneTable[] }) {
 
   if (!texture || !geometry) return null;
   return (
-    <mesh geometry={geometry}>
-      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} />
+    <mesh geometry={geometry} renderOrder={1}>
+      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} side={DoubleSide} />
     </mesh>
   );
 }
@@ -131,7 +139,7 @@ export function SeatLabels({
     const labels = numbered.map((c) => String(c.seatNo));
     const rows = Math.max(1, Math.ceil(labels.length / COLS));
     return {
-      texture: buildAtlas(labels, BALLROOM.cream),
+      texture: buildAtlas(labels, BALLROOM.warmWhite),
       geometry: buildQuads(
         numbered.map((c) => ({ x: c.x, y: c.y + 0.62, z: c.z, size: 0.42 })),
         rows,
@@ -149,8 +157,8 @@ export function SeatLabels({
 
   if (!texture || !geometry) return null;
   return (
-    <mesh geometry={geometry}>
-      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} />
+    <mesh geometry={geometry} renderOrder={1}>
+      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} side={DoubleSide} />
     </mesh>
   );
 }

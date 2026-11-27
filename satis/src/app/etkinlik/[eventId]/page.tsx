@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { EventCountdown } from "@/components/event/event-countdown";
 import { EventFacts } from "@/components/event/event-facts";
 import { eventFacts } from "@/components/event/facts";
 import { eventHeroMedia } from "@/components/event/hero-media";
+import { PriceTiers } from "@/components/event/price-tiers";
 import { TicketDialog } from "@/components/event/ticket-dialog";
 import { salonPath, ticketDialogNoscriptCss } from "@/components/event/ticket-dialog-shared";
 import { eventVenue, VenueMap } from "@/components/event/venue-map";
@@ -87,6 +89,8 @@ export default async function EventPage({ params, searchParams }: PageProps) {
             </span>
           ) : null}
 
+          <EventCountdown startsAt={event.startsAt} />
+
           <EventFacts
             facts={eventFacts(event)}
             action={
@@ -102,6 +106,8 @@ export default async function EventPage({ params, searchParams }: PageProps) {
             }
           />
           {saleOpen ? <noscript dangerouslySetInnerHTML={{ __html: ticketDialogNoscriptCss(nonce) }} /> : null}
+
+          <PriceTiers prices={event.prices} currency={event.currency} />
 
           {summary ? <p className="text-base leading-relaxed text-ivory">{summary}</p> : null}
 

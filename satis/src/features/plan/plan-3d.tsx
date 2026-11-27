@@ -5,7 +5,7 @@ import { Component, useCallback, useId, useMemo, useState, type ReactNode } from
 import type { PlanModel } from "./model";
 import type { TablePick } from "./picks";
 import { Button } from "@/components/ui/button";
-import type { CameraCommand, SeatView } from "./three/scene";
+import type { CameraCommand, HoverInfo, SeatView } from "./three/scene";
 import { buildScene } from "./three/scene-data";
 
 const Scene3D = dynamic(() => import("./three/scene"), {
@@ -85,6 +85,7 @@ export function Plan3D({
   const [ready, setReady] = useState(false);
   const [cameraTag, setCameraTag] = useState("overview");
   const [command, setCommand] = useState<CameraCommand | null>(null);
+  const [hovered, setHovered] = useState<HoverInfo | null>(null);
   const helpId = useId();
 
   const handleReady = useCallback(() => {
@@ -94,25 +95,46 @@ export function Plan3D({
 
   return (
     <div className="flex flex-col gap-2">
-      <div role="group" aria-label="Kamera" className="flex flex-wrap gap-1.5">
-        {CAMERA_BUTTONS.map((b) => (
-          <Button
-            key={b.type}
-            variant="glass"
-            aria-label={b.text === b.label ? undefined : b.label}
-            className="px-3 py-1 text-sm"
-            onClick={() => setCommand((c) => ({ type: b.type, nonce: (c?.nonce ?? 0) + 1 }))}
-          >
-            {b.text}
-          </Button>
-        ))}
-      </div>
       <div
         data-testid="plan-3d-scene"
         data-ready={ready ? "true" : "false"}
         data-camera={cameraTag}
-        className="relative h-[clamp(360px,58vw,600px)] w-full overflow-hidden rounded-xl border border-line bg-bg"
+        className="relative h-[clamp(440px,68dvh,680px)] w-full overflow-hidden rounded-[20px] border border-line-gold bg-bg"
       >
+        <div
+          role="group"
+          aria-label="Kamera"
+          className="absolute top-3 left-3 z-10 flex flex-wrap gap-1 rounded-full border border-line-gold bg-surface/75 px-2 py-1 backdrop-blur-md"
+        >
+          {CAMERA_BUTTONS.map((b) => (
+            <Button
+              key={b.type}
+              variant="glass"
+              aria-label={b.text === b.label ? undefined : b.label}
+              className="px-3 py-1 text-sm"
+              onClick={() => setCommand((c) => ({ type: b.type, nonce: (c?.nonce ?? 0) + 1 }))}
+            >
+              {b.text}
+            </Button>
+          ))}
+        </div>
+        {hovered ? (
+          <div
+            role="status"
+            className="pointer-events-none absolute z-20 rounded-xl border border-line-gold bg-surface/90 px-3 py-2 text-xs text-ivory shadow-lg backdrop-blur-md"
+            style={{ left: Math.max(12, hovered.x + 14), top: Math.max(12, hovered.y - 12) }}
+          >
+            <div className="font-semibold text-gold-bright">{hovered.table.label}</div>
+            {hovered.table.categoryLabel ? <div className="text-muted">{hovered.table.categoryLabel}</div> : null}
+            {hovered.table.seats !== null && hovered.table.free !== null ? (
+              <div className="mt-0.5 text-ivory">
+                {hovered.table.free} / {hovered.table.seats} boş koltuk
+              </div>
+            ) : (
+              <div className="mt-0.5 text-muted">Satışa kapalı</div>
+            )}
+          </div>
+        ) : null}
         {!ready && fallback ? <div className="absolute inset-0 z-10 overflow-auto">{fallback}</div> : null}
         <SceneBoundary onFail={onFail}>
           <Scene3D
@@ -124,6 +146,7 @@ export function Plan3D({
             seatView={seatView}
             onTable={onTable}
             onSeat={onSeat}
+            onHoverTable={setHovered}
             onContextLost={onFail}
             onReady={handleReady}
             onCameraChange={setCameraTag}

@@ -18,8 +18,9 @@ function BallroomWall({ spec }: { spec: WallSpec }) {
     () =>
       Array.from({ length: bayCount }, (_, i) => {
         const x = -length / 2 + (i + 0.5) * baySize;
-        const isDoor = hasDoors && i % 4 === 2;
-        return { x, isDoor };
+        const isDoor = hasDoors && i % 4 === 0;
+        const hasSconce = i % 2 === 0;
+        return { x, isDoor, hasSconce };
       }),
     [bayCount, baySize, hasDoors, length],
   );
@@ -34,50 +35,67 @@ function BallroomWall({ spec }: { spec: WallSpec }) {
       {/* Ana duvar gövdesi */}
       <mesh position={[0, height / 2, -WALL_THICKNESS / 2]}>
         <boxGeometry args={[length, height, WALL_THICKNESS]} />
-        <meshStandardMaterial color={BALLROOM.wall} roughness={0.78} metalness={0.1} />
+        <meshStandardMaterial color={BALLROOM.panel} roughness={0.81} metalness={0.05} />
       </mesh>
 
-      {/* Üç yatay korniş */}
+      {/* Üç yatay krem korniş */}
       {CORNICE_LEVELS.map((y) => (
-        <mesh key={y} position={[0, y, 0.04]}>
-          <boxGeometry args={[length, 0.14, 0.12]} />
-          <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.5} />
+        <mesh key={y} position={[0, y, 0.3]}>
+          <boxGeometry args={[length, 0.27, 0.76]} />
+          <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.81} metalness={0.05} />
         </mesh>
       ))}
 
-      {/* Pilaster kolonları (~5 m'de bir) */}
+      {/* Pilaster kolonları, altın şerit ve başlık tacı */}
       {pilasters.map((x, idx) => (
-        <mesh key={idx} position={[x, 3.85, 0.04]}>
-          <boxGeometry args={[0.43, 7.3, 0.16]} />
-          <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.75} metalness={0.08} />
-        </mesh>
+        <group key={idx} position={[x, 0, 0]}>
+          <mesh position={[0, 3.75, 0.37]}>
+            <boxGeometry args={[0.43, 7.3, 0.55]} />
+            <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.81} metalness={0.05} />
+          </mesh>
+          <mesh position={[0, 4.4, 0.675]}>
+            <boxGeometry args={[0.12, 4.7, 0.06]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+          </mesh>
+          <mesh position={[0, 7.32, 0.44]}>
+            <boxGeometry args={[0.66, 0.23, 0.75]} />
+            <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.81} metalness={0.05} />
+          </mesh>
+        </group>
       ))}
 
-      {/* Bölme panoları ve kapılar */}
+      {/* Bölme panoları, kapılar, üst camlar, altın kayıt ve aplikler */}
       {bays.map((bay, idx) => (
-        <group key={idx} position={[bay.x, 0, 0.02]}>
-          {bay.isDoor ? (
-            <mesh position={[0, 1.45, 0.02]}>
-              <boxGeometry args={[Math.min(2.1, baySize * 0.55), 2.9, 0.08]} />
-              <meshStandardMaterial color={BALLROOM.riser} roughness={0.7} metalness={0.12} />
-            </mesh>
-          ) : (
-            <mesh position={[0, 1.35, 0.01]}>
-              <boxGeometry args={[Math.max(0.5, baySize - 0.55), 2.35, 0.05]} />
-              <meshStandardMaterial color={BALLROOM.panel} roughness={0.76} metalness={0.08} />
-            </mesh>
-          )}
-          <mesh position={[0, 5.4, 0.01]}>
-            <boxGeometry args={[Math.max(0.5, baySize - 0.55), 3.4, 0.04]} />
+        <group key={idx} position={[bay.x, 0, 0]}>
+          <mesh position={[0, 1.58, 0.25]}>
+            <boxGeometry args={[baySize * 0.74, 2.35, 0.1]} />
+            <meshStandardMaterial
+              color={bay.isDoor ? BALLROOM.stage : BALLROOM.travertine}
+              roughness={0.81}
+              metalness={0.05}
+            />
+          </mesh>
+          <mesh position={[0, 5.31, 0.26]}>
+            <boxGeometry args={[baySize * 0.56, 2.4, 0.09]} />
             <meshStandardMaterial color={BALLROOM.glassPanel} roughness={0.32} metalness={0.32} />
           </mesh>
+          <mesh position={[0, 4.07, 0.31]}>
+            <boxGeometry args={[baySize * 0.62, 0.11, 0.15]} />
+            <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+          </mesh>
+          {bay.hasSconce ? (
+            <mesh position={[0, 3.3, 0.56]}>
+              <boxGeometry args={[0.18, 0.47, 0.16]} />
+              <meshBasicMaterial color={BALLROOM.goldLight} />
+            </mesh>
+          ) : null}
         </group>
       ))}
     </group>
   );
 }
 
-/** Salon duvarları (kesit görünümü: kamera duvarın dışındaysa o duvar gizlenir) ve masadan bakış tavanı. */
+/** Salon duvarları (kesit görünümü: kamera duvarın dışındaysa o duvar gizlenir) ve masadan bakış kasetli tavanı. */
 export function SceneWalls({
   canvasWidth,
   canvasHeight,
@@ -93,15 +111,37 @@ export function SceneWalls({
 }) {
   const walls = useMemo(() => wallLayout(canvasWidth, canvasHeight), [canvasWidth, canvasHeight]);
   const vis = wallVisibility(room, cameraPosition, pov);
+  const beamX = useMemo(
+    () => [-0.35 * room.width, -0.125 * room.width, 0.125 * room.width, 0.35 * room.width],
+    [room.width],
+  );
+  const beamZ = useMemo(
+    () => [-0.35 * room.depth, -0.12 * room.depth, 0.12 * room.depth, 0.35 * room.depth],
+    [room.depth],
+  );
 
   return (
     <group name="venue-walls" userData={{ height: WALL_HEIGHT }}>
       {walls.map((spec) => (vis[spec.side] ? <BallroomWall key={spec.side} spec={spec} /> : null))}
       {pov ? (
-        <mesh position={[0, WALL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[room.width + 1.2, room.depth + 1.2]} />
-          <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.85} />
-        </mesh>
+        <group>
+          <mesh position={[0, WALL_HEIGHT + 0.1, 0]}>
+            <boxGeometry args={[room.width + 1.2, 0.3, room.depth + 1.2]} />
+            <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.85} />
+          </mesh>
+          {beamX.map((x) => (
+            <mesh key={`bx-${x}`} position={[x, WALL_HEIGHT - 0.14, 0]}>
+              <boxGeometry args={[0.13, 0.16, room.depth]} />
+              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+            </mesh>
+          ))}
+          {beamZ.map((z) => (
+            <mesh key={`bz-${z}`} position={[0, WALL_HEIGHT - 0.14, z]}>
+              <boxGeometry args={[room.width, 0.16, 0.13]} />
+              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+            </mesh>
+          ))}
+        </group>
       ) : null}
     </group>
   );

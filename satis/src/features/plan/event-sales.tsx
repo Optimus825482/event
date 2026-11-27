@@ -200,21 +200,37 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="flex flex-col gap-3">
-        <PlanViewer
-          model={model}
-          view={view}
-          picks={state.picks}
-          activeTableId={state.activeTableId}
-          dimmedIds={dimmedIds}
-          artworkUrl={artworkUrl}
-          title={event.name}
-          seatView={seatView}
-          onTable={openTable}
-          onSeat={handleSeat}
-        />
-        <PlanLegend prices={event.prices} currency={event.currency} />
+        <div className="flex flex-col gap-3 rounded-[16px] border border-line-gold bg-surface p-3 sm:p-4">
+          {activeTable ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+              <button
+                type="button"
+                onClick={() => openTable(activeTable.id)}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line-gold bg-glass px-3.5 py-1 text-xs font-semibold text-gold-bright transition-colors hover:border-gold hover:bg-surface-raised"
+              >
+                <span aria-hidden="true" className="size-2 rounded-full bg-gold" />
+                {`Seçili: ${activeTable.isLoca ? "Loca" : "Masa"} ${activeTable.label}`}
+              </button>
+            </div>
+          ) : null}
+          <PlanViewer
+            model={model}
+            view={view}
+            picks={state.picks}
+            activeTableId={state.activeTableId}
+            dimmedIds={dimmedIds}
+            artworkUrl={artworkUrl}
+            title={event.name}
+            seatView={seatView}
+            onTable={openTable}
+            onSeat={handleSeat}
+          />
+          <div className="border-t border-line pt-3">
+            <PlanLegend prices={event.prices} currency={event.currency} />
+          </div>
+        </div>
         {stale ? (
           <Notice>Canlı doluluk güncellenemedi; bilgiler birkaç saniye gecikmeli olabilir.</Notice>
         ) : null}

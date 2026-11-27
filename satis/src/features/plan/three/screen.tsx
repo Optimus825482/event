@@ -9,10 +9,28 @@ import { WALL_MARGIN } from "./walls-geometry";
 
 const SCREEN_W = 1152;
 const SCREEN_H = 440;
-const PHOTO_X = 640;
+const PHOTO_X = 680;
+const CREST_SRC = "/brand/merit-royal-diamond.webp";
 
-/** Sahne ekranı: lacivert degrade, altın çerçeve, solda etkinlik adı; görsel varsa sağda (kırpılarak) yer alır. */
-function drawScreen(ctx: CanvasRenderingContext2D, title: string, image: HTMLImageElement | null) {
+function loadImg(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.src = src;
+    img
+      .decode()
+      .then(() => resolve(img))
+      .catch(() => resolve(null));
+  });
+}
+
+/** Sahne ekranı: lacivert degrade, Merit arması, altın çerçeve, solda etkinlik adı; görsel varsa sağda yumuşak geçişle yer alır. */
+function drawScreen(
+  ctx: CanvasRenderingContext2D,
+  title: string,
+  crest: HTMLImageElement | null,
+  portrait: HTMLImageElement | null,
+) {
   const grad = ctx.createLinearGradient(0, 0, SCREEN_W, SCREEN_H);
   grad.addColorStop(0, BALLROOM.screenGradStart);
   grad.addColorStop(0.64, BALLROOM.screenGradMid);
@@ -20,34 +38,49 @@ function drawScreen(ctx: CanvasRenderingContext2D, title: string, image: HTMLIma
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
 
-  if (image && image.naturalWidth > 0 && image.naturalHeight > 0) {
+  if (portrait && portrait.naturalWidth > 0 && portrait.naturalHeight > 0) {
     const boxW = SCREEN_W - PHOTO_X;
-    const scale = Math.max(boxW / image.naturalWidth, SCREEN_H / image.naturalHeight);
+    const scale = Math.max(boxW / portrait.naturalWidth, SCREEN_H / portrait.naturalHeight);
     const sw = boxW / scale;
     const sh = SCREEN_H / scale;
-    const sx = (image.naturalWidth - sw) / 2;
-    const sy = Math.max(0, (image.naturalHeight - sh) / 3);
-    ctx.drawImage(image, sx, sy, sw, sh, PHOTO_X, 0, boxW, SCREEN_H);
-    const blend = ctx.createLinearGradient(PHOTO_X, 0, PHOTO_X + 140, 0);
-    blend.addColorStop(0, BALLROOM.screenGradMid);
-    blend.addColorStop(1, BALLROOM.screenGradFade);
+    const sx = (portrait.naturalWidth - sw) / 2;
+    const sy = Math.max(0, (portrait.naturalHeight - sh) / 3);
+    ctx.drawImage(portrait, sx, sy, sw, sh, PHOTO_X, 0, boxW, SCREEN_H);
+
+    const blend = ctx.createLinearGradient(PHOTO_X, 0, PHOTO_X + 132, 0);
+    blend.addColorStop(0, BALLROOM.screenBlend);
+    blend.addColorStop(1, BALLROOM.screenBlendFade);
     ctx.fillStyle = blend;
-    ctx.fillRect(PHOTO_X, 0, 140, SCREEN_H);
+    ctx.fillRect(PHOTO_X, 0, 132, SCREEN_H);
+
+    const vignette = ctx.createLinearGradient(0, 0, 0, SCREEN_H);
+    vignette.addColorStop(0, BALLROOM.screenVignetteTop);
+    vignette.addColorStop(0.63, BALLROOM.screenBlendFade);
+    vignette.addColorStop(1, BALLROOM.screenVignetteBot);
+    ctx.fillStyle = vignette;
+    ctx.fillRect(PHOTO_X, 0, boxW, SCREEN_H);
   }
 
-  ctx.strokeStyle = BALLROOM.trim;
+  ctx.strokeStyle = BALLROOM.screenBorder;
   ctx.lineWidth = 2;
   ctx.strokeRect(19, 19, SCREEN_W - 38, SCREEN_H - 38);
 
-  const maxWidth = image ? PHOTO_X - 90 : SCREEN_W - 126;
-  ctx.textAlign = image ? "left" : "center";
+  ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
+  if (crest && crest.naturalWidth > 0) {
+    ctx.drawImage(crest, 63, 61, 126, (126 * crest.naturalHeight) / crest.naturalWidth);
+  }
+  const inset = crest && crest.naturalWidth > 0 ? 213 : 63;
+  ctx.fillStyle = BALLROOM.screenLabel;
+  ctx.font = "bold 33px sans-serif";
+  ctx.fillText("MERIT ENTERTAINMENT", inset, 116, 440);
+
   ctx.fillStyle = BALLROOM.warmWhite;
-  ctx.font = "bold 84px Georgia, serif";
-  const x = image ? 63 : SCREEN_W / 2;
-  ctx.fillText(title.slice(0, 40), x, 250, maxWidth);
-  ctx.fillStyle = BALLROOM.trim;
-  ctx.fillRect(image ? 64 : SCREEN_W / 2 - 78, 280, 156, 3);
+  ctx.font = "bold 92px Georgia, serif";
+  ctx.fillText(title.slice(0, 40), 63, 295, portrait ? 602 : 1010);
+
+  ctx.fillStyle = BALLROOM.screenBorder;
+  ctx.fillRect(64, 323, 156, 3);
 }
 
 function useScreenTexture(title: string, artworkUrl: string | null | undefined): CanvasTexture | null {
@@ -59,7 +92,7 @@ function useScreenTexture(title: string, artworkUrl: string | null | undefined):
     c.height = SCREEN_H;
     const ctx = c.getContext("2d");
     if (!ctx) return null;
-    drawScreen(ctx, title, null);
+    drawScreen(ctx, title, null, null);
     const tex = new CanvasTexture(c);
     tex.colorSpace = SRGBColorSpace;
     return tex;
@@ -68,21 +101,18 @@ function useScreenTexture(title: string, artworkUrl: string | null | undefined):
   useEffect(() => () => texture?.dispose(), [texture]);
 
   useEffect(() => {
-    if (!texture || !artworkUrl) return;
+    if (!texture) return;
     let active = true;
-    const image = new Image();
-    image.decoding = "async";
-    image.src = artworkUrl;
-    image
-      .decode()
-      .then(() => {
+    Promise.all([loadImg(CREST_SRC), artworkUrl ? loadImg(artworkUrl) : Promise.resolve(null)]).then(
+      ([crest, portrait]) => {
+        if (!active || (!crest && !portrait)) return;
         const ctx = (texture.image as HTMLCanvasElement).getContext("2d");
-        if (!active || !ctx) return;
-        drawScreen(ctx, title, image);
+        if (!ctx) return;
+        drawScreen(ctx, title, crest, portrait);
         texture.needsUpdate = true;
         invalidate();
-      })
-      .catch(() => {});
+      },
+    );
     return () => {
       active = false;
     };
@@ -121,17 +151,37 @@ export function StageScreen({
         </mesh>
       </group>
 
-      {/* Yan duvar ekranları */}
+      {/* Yan duvar ekranları (koyu pano + altın çerçeve) */}
       {showSideScreens ? (
         <>
-          <mesh position={[-sideX, 4.1, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <planeGeometry args={[12.6, 4.64]} />
-            <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
-          </mesh>
-          <mesh position={[sideX, 4.1, 0]} rotation={[0, -Math.PI / 2, 0]}>
-            <planeGeometry args={[12.6, 4.64]} />
-            <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
-          </mesh>
+          <group position={[-sideX, 4.18, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <mesh position={[0, 0, -0.22]}>
+              <boxGeometry args={[13.1, 5.1, 0.4]} />
+              <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
+            </mesh>
+            <mesh position={[0, 0, -0.02]}>
+              <boxGeometry args={[12.85, 4.86, 0.09]} />
+              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+            </mesh>
+            <mesh position={[0, 0, 0.04]}>
+              <planeGeometry args={[12.6, 4.64]} />
+              <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
+            </mesh>
+          </group>
+          <group position={[sideX, 4.18, 0]} rotation={[0, -Math.PI / 2, 0]}>
+            <mesh position={[0, 0, -0.22]}>
+              <boxGeometry args={[13.1, 5.1, 0.4]} />
+              <meshStandardMaterial color={BALLROOM.stage} roughness={0.8} />
+            </mesh>
+            <mesh position={[0, 0, -0.02]}>
+              <boxGeometry args={[12.85, 4.86, 0.09]} />
+              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
+            </mesh>
+            <mesh position={[0, 0, 0.04]}>
+              <planeGeometry args={[12.6, 4.64]} />
+              <meshBasicMaterial map={map} color={map ? BALLROOM.white : BALLROOM.stage} toneMapped={false} />
+            </mesh>
+          </group>
         </>
       ) : null}
     </group>

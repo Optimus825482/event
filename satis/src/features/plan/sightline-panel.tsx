@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { SightlineSet } from "@/lib/core/contract";
-import { SIGHTLINE_CAPTION, sightlineSrc } from "./sightline";
+import { resolveTableSightlineSrc, SIGHTLINE_CAPTION } from "./sightline";
 
 export type SightlinePanelProps = {
   set: SightlineSet | null;
@@ -15,7 +15,7 @@ export type SightlinePanelProps = {
 
 /** Seçili masadan sahnenin temsili fotoğrafı (panel genişliğinde) ve 3B göz hizası düğmesi. */
 export function SightlinePanel({ set, table, canLookIn3d, onLookIn3d }: SightlinePanelProps) {
-  const src = sightlineSrc(set, table ? table.label : null);
+  const src = resolveTableSightlineSrc(set, table);
   const name = table ? `${table.isLoca ? "Loca" : "Masa"} ${table.label}` : null;
   const title = name ? `${name} · Sahne görüşü` : "Salon ortasından sahne görüşü";
   const alt = name ? `${name} konumundan sahnenin temsili görünümü` : "Salonun temsili genel görünümü";
@@ -56,21 +56,31 @@ export function SightlineImage({
   children?: ReactNode;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const showImage = src !== null && failedSrc !== src;
+  const isLoading = showImage && loadedSrc !== src;
   return (
-    <div className="relative">
+    <div className="relative aspect-video w-full overflow-hidden bg-bg">
       {showImage ? (
-        // eslint-disable-next-line @next/next/no-img-element -- statik public/sightline/ WebP varlıkları doğrudan sunulur
-        <img
-          key={src}
-          src={src}
-          alt={alt}
-          width={960}
-          height={540}
-          decoding="async"
-          onError={() => setFailedSrc(src)}
-          className="aspect-video w-full bg-bg object-cover"
-        />
+        <>
+          {isLoading ? (
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted">
+              Sahne görseli yükleniyor…
+            </span>
+          ) : null}
+          {/* eslint-disable-next-line @next/next/no-img-element -- statik public/sightline/ WebP varlıkları doğrudan sunulur */}
+          <img
+            key={src}
+            src={src}
+            alt={alt}
+            width={960}
+            height={540}
+            decoding="async"
+            onLoad={() => setLoadedSrc(src)}
+            onError={() => setFailedSrc(src)}
+            className="relative z-[1] aspect-video w-full object-cover"
+          />
+        </>
       ) : (
         <div className="flex aspect-video w-full items-center justify-center bg-bg px-4 text-center">
           <p className="text-sm text-muted">{fallback}</p>

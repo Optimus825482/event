@@ -4,7 +4,7 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Color, type InstancedMesh, Object3D, PerspectiveCamera } from "three";
-import { BallroomFloor, BallroomLights, Chairs, Chandeliers, StageBeams } from "./ballroom";
+import { BallroomFloor, BallroomLights, Chairs, Chandeliers, LocaArchitecture, StageBeams, StageRig } from "./ballroom";
 import {
   type CameraPose,
   CHAIR_PICK_DISTANCE,
@@ -31,6 +31,7 @@ import { WALL_HEIGHT } from "./walls-geometry";
 export type SeatView = { tableId: string; nonce: number };
 /** Kamera düğmeleri (tuvalin dışında, `Plan3D` içinde) bu komutu üretir; nonce değişince uygulanır. */
 export type CameraCommand = { type: "overview" | "top" | OrbitMove; nonce: number };
+export type HoverInfo = { table: SceneTable; x: number; y: number };
 
 export type SceneProps = {
   scene: SceneData;
@@ -41,6 +42,7 @@ export type SceneProps = {
   seatView?: SeatView | null;
   onTable?(tableId: string): void;
   onSeat?(tableId: string, seatNo: number): void;
+  onHoverTable?: (info: HoverInfo | null) => void;
   onContextLost?: () => void;
   onReady?: () => void;
   onCameraChange?: (tag: string) => void;
@@ -124,9 +126,11 @@ function DecorMesh({ element }: { element: SceneDecor }) {
 function InstancedTables({
   tables,
   onTable,
+  onHoverTable,
 }: {
   tables: readonly SceneTable[];
   onTable?: (tableId: string) => void;
+  onHoverTable?: (info: HoverInfo | null) => void;
 }) {
   const roundTables = useMemo(() => tables.filter((t) => t.shape === "round" && !t.isLoca), [tables]);
   const boxTables = useMemo(() => tables.filter((t) => t.shape !== "round" || t.isLoca), [tables]);
@@ -183,13 +187,16 @@ function InstancedTables({
       const t = list[e.instanceId];
       if (t?.selectable) onTable?.(t.key);
     },
-    onPointerOver: (e: { instanceId?: number }) => {
+    onPointerMove: (e: { instanceId?: number; nativeEvent: PointerEvent }) => {
       if (e.instanceId === undefined) return;
       const t = list[e.instanceId];
-      document.body.style.cursor = t?.selectable ? "pointer" : "not-allowed";
+      if (!t) return;
+      document.body.style.cursor = t.selectable ? "pointer" : "not-allowed";
+      onHoverTable?.({ table: t, x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY });
     },
     onPointerOut: () => {
       document.body.style.cursor = "";
+      onHoverTable?.(null);
     },
   });
 
@@ -198,23 +205,30 @@ function InstancedTables({
       {roundTables.length > 0 ? (
         <instancedMesh ref={roundRef} frustumCulled={false} key={`r-${roundTables.length}`} args={[undefined, undefined, roundTables.length]} {...handle(roundTables)}>
           <cylinderGeometry args={[0.5, 0.45, 1, 24]} />
-          <meshStandardMaterial roughness={0.38} metalness={0.25} />
+          <meshStandardMaterial attach="material-0" color={BALLROOM.tableWhite} roughness={0.81} />
+          <meshBasicMaterial attach="material-1" toneMapped={false} />
+          <meshStandardMaterial attach="material-2" color={BALLROOM.tableWhite} roughness={0.81} />
         </instancedMesh>
       ) : null}
       {boxTables.length > 0 ? (
         <instancedMesh ref={boxRef} frustumCulled={false} key={`b-${boxTables.length}`} args={[undefined, undefined, boxTables.length]} {...handle(boxTables)}>
           <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial roughness={0.38} metalness={0.25} />
+          <meshBasicMaterial toneMapped={false} />
         </instancedMesh>
       ) : null}
       {tables
         .filter((t) => t.picked || t.active)
         .map((t) => {
-          const inner = (1.36 * Math.max(t.width, t.depth)) / 1.86;
+          const isBox = t.isLoca || t.shape !== "round";
           return (
-            <mesh key={t.key} position={[t.x, t.floorY + 0.03, t.z]} rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[inner, inner + 0.16, 40]} />
-              <meshBasicMaterial color={t.active ? BALLROOM.goldBright : BALLROOM.gold} toneMapped={false} />
+            <mesh
+              key={t.key}
+              position={[t.x, t.floorY + 0.035, t.z]}
+              rotation={[-Math.PI / 2, 0, 0]}
+              scale={isBox ? [1.88, 1.4, 1] : [1, 1, 1]}
+            >
+              <ringGeometry args={[1.36, 1.52, 48]} />
+              <meshBasicMaterial color={BALLROOM.ring} toneMapped={false} />
             </mesh>
           );
         })}
@@ -257,7 +271,7 @@ function CameraController({
   const maxDist = maxDistance(scene.room);
 
   const startFlight = useCallback(
-    (to: CameraPose, tag: string) => {
+    (to: CameraPose, tag: string, duration = 580) => {
       const cam = get().camera;
       const ctrl = orbitRef.current;
       const curTarget: Vec3 = ctrl ? [ctrl.target.x, ctrl.target.y, ctrl.target.z] : [0, 1, 1];
@@ -269,7 +283,7 @@ function CameraController({
         to,
         tag,
         startedAt: performance.now(),
-        duration: 580,
+        duration,
       };
       onPovChange(tag.startsWith("seat:"));
       invalidate();
@@ -315,19 +329,14 @@ function CameraController({
     const cam = get().camera;
     const ctrl = orbitRef.current;
     const curTarget: Vec3 = ctrl ? [ctrl.target.x, ctrl.target.y, ctrl.target.z] : [0, 1, 1];
+    const fov = cam instanceof PerspectiveCamera ? cam.fov : FOV_HALL;
     const next = orbitMove(
       { position: [cam.position.x, cam.position.y, cam.position.z], target: curTarget },
       command.type,
       maxDist,
     );
-    flightRef.current = null;
-    cam.position.set(...next.position);
-    ctrl?.target.set(...next.target);
-    ctrl?.update();
-    onCamPos(next.position);
-    onPoseDone("free");
-    invalidate();
-  }, [command, scene.room, narrow, maxDist, get, orbitRef, startFlight, onCamPos, onPoseDone, invalidate]);
+    startFlight({ ...next, fov }, "free", 330);
+  }, [command, scene.room, narrow, maxDist, get, orbitRef, startFlight]);
 
   // Kullanıcı tutunca uçuş iptal
   useEffect(() => {
@@ -388,6 +397,7 @@ export default function Scene3D({
   seatView,
   onTable,
   onSeat,
+  onHoverTable,
   onContextLost,
   onReady,
   onCameraChange,
@@ -455,13 +465,15 @@ export default function Scene3D({
           <color attach="background" args={[BALLROOM.background]} />
           <BallroomLights />
           <BallroomFloor width={scene.room.width} depth={scene.room.depth} />
-          <Chandeliers width={scene.room.width} height={WALL_HEIGHT - 0.7} />
+          <Chandeliers width={scene.room.width} height={WALL_HEIGHT - 0.7} visible={pov} />
           {scene.decor.map((e) => (
             <DecorMesh key={e.id} element={e} />
           ))}
+          <StageRig stage={scene.stage} />
           <StageScreen stage={scene.stage} room={scene.room} artworkUrl={artworkUrl} title={title} />
+          <LocaArchitecture tables={scene.tables} />
           <SceneLines lines={scene.lines} />
-          <InstancedTables tables={scene.tables} onTable={onTable} />
+          <InstancedTables tables={scene.tables} onTable={onTable} onHoverTable={onHoverTable} />
           <Chairs
             chairs={scene.chairs}
             onClick={handleChairClick}
