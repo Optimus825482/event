@@ -103,4 +103,13 @@ describe("sistem ayarları", () => {
     expect(parsed).not.toHaveProperty("logo");
     expect(parsed).not.toHaveProperty("smtpPasswordEncrypted");
   });
+
+  it("genel ayar güncellemesi demo anahtarını değiştiremez", async () => {
+    const parsed = updateSettingsSchema.parse({ companyName: "X", salesDemoEnabled: true });
+    expect(parsed).not.toHaveProperty("salesDemoEnabled");
+
+    const admin = await actorOf(adminActor());
+    const updated = await updateSettings(db, admin, { companyName: "X" });
+    expect(updated.salesDemoEnabled).toBe(false);
+  });
 });

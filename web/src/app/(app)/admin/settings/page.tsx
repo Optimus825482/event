@@ -10,6 +10,7 @@ import { getSecurityOverview } from "@/features/settings/security-queries";
 import { getSettings } from "@/features/settings/service";
 import { currentSessionId } from "@/features/users/current-session";
 import { isAdmin } from "@/features/auth/scope";
+import { getDemoStatus } from "@/features/demo/service";
 
 export const metadata: Metadata = { title: "Ayarlar | EventFlow" };
 
@@ -18,6 +19,7 @@ export default async function SettingsPage() {
   if (!can(actor, "settings", "view")) notFound();
   const settings = await getSettings(db, actor);
   const security = isAdmin(actor) ? await getSecurityOverview(db, actor, await currentSessionId()) : null;
+  const demo = isAdmin(actor) ? await getDemoStatus(db, actor) : null;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -31,7 +33,7 @@ export default async function SettingsPage() {
         }
       />
       {can(actor, "settings", "edit") ? (
-        <SettingsForm settings={settings} security={security} />
+        <SettingsForm settings={settings} security={security} demo={demo} />
       ) : (
         <p className="text-sm text-slate-400">Ayarları düzenleme yetkiniz yok.</p>
       )}
