@@ -53,7 +53,8 @@ export type FakeCore = {
   addEvent(seed?: FakeEventSeed): EventDetail;
   free(eventId: string, tableId: string): number;
   holdAs(eventId: string, tableId: string, quantity: number): OrderResponse;
-  expireOrder(orderToken: string): void;
+  /** Bekleyen siparişin tutma süresini bitirir; remainingMs verilirse o kadar süre bırakır. */
+  expireOrder(orderToken: string, remainingMs?: number): void;
   advance(ms: number): void;
   failNext(pathPattern: RegExp, status: number): void;
   resetOrders(): void;
@@ -440,9 +441,9 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
       if (result.status >= 300) throw new Error(`holdAs başarısız: ${JSON.stringify(result.body)}`);
       return result.body as OrderResponse;
     },
-    expireOrder(orderToken) {
+    expireOrder(orderToken, remainingMs = 0) {
       const order = orders.get(orderToken);
-      if (order && order.status === "pending") order.holdExpiresMs = now();
+      if (order && order.status === "pending") order.holdExpiresMs = now() + remainingMs;
       refresh();
     },
     advance(ms) {
@@ -474,7 +475,7 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
             case "/__fake/hold-as":
               return reply(core.holdAs(String(input.eventId), String(input.tableId), Number(input.quantity)));
             case "/__fake/expire-order":
-              core.expireOrder(String(input.orderToken));
+              core.expireOrder(String(input.orderToken), input.remainingMs === undefined ? 0 : Number(input.remainingMs));
               return reply({ ok: true });
             case "/__fake/fail-next":
               core.failNext(new RegExp(String(input.pattern)), Number(input.status));

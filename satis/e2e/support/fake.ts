@@ -29,7 +29,9 @@ async function control<T>(path: string, body?: unknown): Promise<T> {
 export const holdAs = (eventId: string, id: string, quantity: number) =>
   control<OrderResponse>("hold-as", { eventId, tableId: id, quantity });
 
-export const expireOrder = (orderToken: string) => control<{ ok: true }>("expire-order", { orderToken });
+/** remainingMs verilirse sipariş hemen bitmez; o kadar tutma süresi kalır. */
+export const expireOrder = (orderToken: string, remainingMs?: number) =>
+  control<{ ok: true }>("expire-order", { orderToken, remainingMs });
 
 export const resetOrders = () => control<{ ok: true }>("reset-orders", {});
 
