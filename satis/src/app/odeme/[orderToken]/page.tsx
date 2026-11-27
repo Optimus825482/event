@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { CheckoutSteps } from "@/components/checkout-steps";
 import { Notice } from "@/components/ui/notice";
 import { demoNoticeFor, saleIsDemo } from "@/features/checkout/demo";
 import { ExpiredView } from "@/features/checkout/expired-view";
@@ -37,7 +38,7 @@ export default async function CheckoutPage({ params }: PageProps) {
     if (!(error instanceof CoreError)) throw error;
     if (error.code === "order_not_found") notFound();
     return (
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="page-gutter mx-auto max-w-[1180px] py-10">
         <Notice tone="error">{messageFor(error)}</Notice>
       </main>
     );
@@ -48,7 +49,7 @@ export default async function CheckoutPage({ params }: PageProps) {
 
   if (order.status === "expired") {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="page-gutter mx-auto max-w-3xl py-10">
         <ExpiredView eventId={order.eventId} />
       </main>
     );
@@ -59,18 +60,21 @@ export default async function CheckoutPage({ params }: PageProps) {
   const categoryLabels = Object.fromEntries((event?.prices ?? []).map((p) => [p.category, p.label]));
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
-      <h1 className="m-0 text-3xl font-semibold text-gold">Ödeme</h1>
-      <OrderSummary order={order} categoryLabels={categoryLabels} />
-      <PaymentForm
-        orderToken={orderToken}
-        eventId={order.eventId}
-        holdExpiresAt={order.holdExpiresAt}
-        serverNow={serverNow}
-        demo={demoNotice !== null}
-      >
-        {demoNotice ? <Notice tone="demo">{demoNotice}</Notice> : null}
-      </PaymentForm>
+    <main className="page-gutter mx-auto max-w-[1180px] space-y-6 py-10">
+      <CheckoutSteps current="odeme" />
+      <h1 className="m-0 text-[clamp(34px,5vw,56px)] text-ivory">Ödeme</h1>
+      <div className="grid grid-cols-1 items-start gap-8 min-[860px]:grid-cols-[0.9fr_1.1fr]">
+        <OrderSummary order={order} categoryLabels={categoryLabels} />
+        <PaymentForm
+          orderToken={orderToken}
+          eventId={order.eventId}
+          holdExpiresAt={order.holdExpiresAt}
+          serverNow={serverNow}
+          demo={demoNotice !== null}
+        >
+          {demoNotice ? <Notice tone="demo">{demoNotice}</Notice> : null}
+        </PaymentForm>
+      </div>
     </main>
   );
 }

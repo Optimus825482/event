@@ -59,7 +59,7 @@ export function Countdown({ holdExpiresAt, serverNow, onExpire }: CountdownProps
 
   return (
     <>
-      <p role="timer" aria-live="off" className="m-0 rounded-lg border border-gold bg-surface px-4 py-3 text-lg font-semibold text-ivory">
+      <p role="timer" aria-live="off" className="m-0 rounded-[14px] border border-gold bg-surface px-4 py-3 text-lg font-semibold text-ivory">
         {`Kalan süre ${formatCountdown(remaining)}`}
       </p>
       <p role="status" className="sr-only">

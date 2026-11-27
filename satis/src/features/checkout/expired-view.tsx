@@ -5,7 +5,7 @@ import { Notice } from "@/components/ui/notice";
 export function ExpiredView({ eventId }: { eventId: string }) {
   return (
     <div className="flex flex-col items-start gap-4">
-      <h2 className="m-0 text-3xl font-semibold text-gold">Süreniz doldu</h2>
+      <h2 className="m-0 text-3xl text-ivory">Süreniz doldu</h2>
       <Notice>Seçtiğiniz masa serbest bırakıldı. Dilerseniz masayı yeniden seçebilirsiniz.</Notice>
       <ButtonLink href={`/etkinlik/${eventId}`} variant="gold">
         Masayı yeniden seç

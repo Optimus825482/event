@@ -5,8 +5,8 @@ import type { OrderResponse } from "@/lib/core/contract";
 /** Sipariş özeti: etkinlik, tarih, satırlar ve toplam. */
 export function OrderSummary({ order, categoryLabels }: { order: OrderResponse; categoryLabels: Record<string, string> }) {
   return (
-    <section aria-label="Sipariş özeti" className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
-      <h2 className="m-0 text-xl font-semibold text-gold">{order.eventName}</h2>
+    <section aria-label="Sipariş özeti" className="flex flex-col gap-3 rounded-[16px] border border-line bg-surface-raised p-5">
+      <h2 className="m-0 text-2xl text-ivory">{order.eventName}</h2>
       <p className="m-0 text-ivory">{formatEventWhen(order.startsAt)}</p>
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {order.items.map((item) => (
