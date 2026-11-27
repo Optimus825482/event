@@ -20,11 +20,6 @@ const wallClock = (date: Date | null) =>
 
 const SWITCHES = [
   {
-    key: "sharedTables",
-    label: "Paylaşımlı masa",
-    hint: "Kapalıyken masa yalnızca bütün olarak satılır",
-  },
-  {
     key: "blockSingleLeftover",
     label: "Tek sandalye bırakan alımı engelle",
     hint: null,
@@ -47,7 +42,6 @@ export function SaleSettingsForm({
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [flags, setFlags] = useState({
-    sharedTables: settings.sharedTables,
     blockSingleLeftover: settings.blockSingleLeftover,
     locaOnline: settings.locaOnline,
   });
@@ -70,6 +64,7 @@ export function SaleSettingsForm({
       try {
         result = await saveSaleSettingsAction({
           eventId,
+          saleMode: settings.saleMode,
           ...flags,
           holdMinutes: parseWholeNumber(holdMinutes),
           maxSeatsPerOrder: parseWholeNumber(maxSeatsPerOrder),

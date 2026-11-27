@@ -1,12 +1,15 @@
 import { and, eq } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventSaleSettings, eventTables, events } from "@/db/schema";
+import { isLayoutLockedStage } from "@/domain/planning-stage";
 import type { SaleMode } from "@/domain/seating";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
 import { publish } from "@/features/realtime/publish";
 import { DomainError } from "@/lib/action";
-import type { SaleSettingsInput } from "./schemas";
+import type { SaleModeInput, SaleSettingsInput } from "./schemas";
+
+export const SALE_MODE_LOCKED_MESSAGE = "Satış başladıktan sonra satış şekli değiştirilemez";
 
 export type SaleSettings = {
   eventId: string;
@@ -52,20 +55,28 @@ export async function getSaleSettings(ex: Db | Tx, eventId: string): Promise<Sal
   };
 }
 
+async function lockAndCheckSaleMode(tx: Tx, eventId: string, saleMode: SaleMode): Promise<void> {
+  const [event] = await tx
+    .select({ status: events.status, planningStage: events.planningStage })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .for("update");
+  if (!event) throw new DomainError("not_found", "Etkinlik bulunamadı");
+  if (event.status === "completed" || event.status === "cancelled") {
+    throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinliğin satış kuralları değiştirilemez");
+  }
+  const current = await getSaleSettings(tx, eventId);
+  if (isLayoutLockedStage(event.planningStage) && saleMode !== current.saleMode) {
+    throw new DomainError("conflict", SALE_MODE_LOCKED_MESSAGE);
+  }
+}
+
 /** Satış kurallarını kaydeder (Entertainment: `ticketing` düzenleme izni). */
 export async function saveSaleSettings(db: Db, actor: Actor, input: SaleSettingsInput): Promise<SaleSettings> {
   authorize(actor, "ticketing", "edit");
 
   return db.transaction(async (tx) => {
-    const [event] = await tx
-      .select({ status: events.status })
-      .from(events)
-      .where(eq(events.id, input.eventId))
-      .for("update");
-    if (!event) throw new DomainError("not_found", "Etkinlik bulunamadı");
-    if (event.status === "completed" || event.status === "cancelled") {
-      throw new DomainError("conflict", "Tamamlanmış veya iptal edilmiş etkinliğin satış kuralları değiştirilemez");
-    }
+    await lockAndCheckSaleMode(tx, input.eventId, input.saleMode);
 
     if (!input.locaOnline) {
       const online = await tx
@@ -84,13 +95,35 @@ export async function saveSaleSettings(db: Db, actor: Actor, input: SaleSettings
     }
 
     const values = {
-      sharedTables: input.sharedTables,
+      saleMode: input.saleMode,
+      sharedTables: input.saleMode === "seat",
       blockSingleLeftover: input.blockSingleLeftover,
       locaOnline: input.locaOnline,
       holdMinutes: input.holdMinutes,
       maxSeatsPerOrder: input.maxSeatsPerOrder,
       saleStartsAt: input.saleStartsAt,
       saleEndsAt: input.saleEndsAt,
+      updatedBy: actor.id,
+    };
+    await tx
+      .insert(eventSaleSettings)
+      .values({ eventId: input.eventId, ...values })
+      .onConflictDoUpdate({ target: eventSaleSettings.eventId, set: { ...values, updatedAt: new Date() } });
+
+    await publish(tx, { type: "sales.changed", eventId: input.eventId });
+    return getSaleSettings(tx, input.eventId);
+  });
+}
+
+/** Yalnızca satış şeklini günceller; satır yoksa diğer kurallar varsayılanla doğar. */
+export async function setSaleMode(db: Db, actor: Actor, input: SaleModeInput): Promise<SaleSettings> {
+  authorize(actor, "ticketing", "edit");
+
+  return db.transaction(async (tx) => {
+    await lockAndCheckSaleMode(tx, input.eventId, input.saleMode);
+    const values = {
+      saleMode: input.saleMode,
+      sharedTables: input.saleMode === "seat",
       updatedBy: actor.id,
     };
     await tx
