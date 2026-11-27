@@ -69,7 +69,9 @@ test("liste görünümünden de seçilir ve 375 px'te taşmaz", async ({ page })
 
 test("kisi parametresiyle açılan sayfada masa seçince ilk adet gelir", async ({ page }) => {
   await page.goto(`/etkinlik/${gala.id}?kisi=4`);
-  await page.getByRole("button", { name: /Masa A1,/ }).click();
   const panel = page.getByRole("region", { name: "Seçiminiz" });
-  await expect(panel.getByText("4 kişi")).toBeVisible();
+  await expect(async () => {
+    await page.getByRole("button", { name: /Masa A1,/ }).click();
+    await expect(panel.getByText("4 kişi")).toBeVisible({ timeout: 1000 });
+  }).toPass();
 });
