@@ -56,7 +56,7 @@ export function PlanViewer({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-2 text-xs font-medium tracking-wider text-muted uppercase">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-gold" />
-          {view.show3d ? "3B Salon Planı" : "2B Kroki"}
+          {view.detecting || view.show3d ? "3B Salon Planı" : "2B Kroki"}
         </span>
         {view.can3d && !view.failed ? (
           <Button
@@ -69,7 +69,14 @@ export function PlanViewer({
           </Button>
         ) : null}
       </div>
-      {view.show3d ? (
+      {view.detecting ? (
+        <div
+          role="status"
+          className="flex h-[min(64dvh,480px)] min-h-[360px] w-full items-center justify-center rounded-[20px] border border-line-gold bg-bg text-sm text-muted sm:h-[clamp(480px,72dvh,720px)]"
+        >
+          3B salon yükleniyor…
+        </div>
+      ) : view.show3d ? (
         <Plan3D
           model={model}
           picks={picks}
@@ -82,7 +89,6 @@ export function PlanViewer({
           onSeat={onSeat}
           hint={onSeat ? undefined : BROWSE_3D_HINT}
           onFail={view.fail}
-          fallback={<PlanSvg model={model} pickedIds={pickedIds} activeId={activeTableId} dimmedIds={dimmedIds} />}
         />
       ) : (
         <PlanSvg

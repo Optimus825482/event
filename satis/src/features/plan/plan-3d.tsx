@@ -146,7 +146,18 @@ export function Plan3D({
             )}
           </div>
         ) : null}
-        {!ready && fallback ? <div className="absolute inset-0 z-10 overflow-auto">{fallback}</div> : null}
+        {!ready ? (
+          fallback ? (
+            <div className="absolute inset-0 z-10 overflow-auto">{fallback}</div>
+          ) : (
+            <div
+              role="status"
+              className="absolute inset-0 z-10 flex items-center justify-center bg-bg text-sm text-muted"
+            >
+              3B salon yükleniyor…
+            </div>
+          )
+        ) : null}
         <SceneBoundary onFail={onFail}>
           <Scene3D
             scene={scene}
