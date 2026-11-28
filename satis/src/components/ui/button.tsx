@@ -12,7 +12,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   glass: "border border-line-gold bg-transparent text-ivory hover:border-gold hover:bg-glass",
   ghost: "border border-line text-muted hover:border-gold hover:bg-glass hover:text-ivory",
 };
-const SIZES: Record<ButtonSize, string> = { md: "py-2 text-base", lg: "min-h-12 py-3 text-lg" };
+const SIZES: Record<ButtonSize, string> = { md: "py-2 text-sm", lg: "min-h-12 px-6 py-3 text-[14.5px]" };
 const DISABLED =
   "disabled:cursor-not-allowed disabled:border-transparent disabled:bg-disabled-bg disabled:text-disabled-text";
 

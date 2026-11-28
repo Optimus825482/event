@@ -1,9 +1,9 @@
+import Link from "next/link";
 import { EventImage } from "@/components/event-image";
 import { PosterFallback } from "@/components/poster-fallback";
 import { ButtonLink } from "@/components/ui/button";
 import { saleStateLabel } from "@/features/plan/sale-state";
 import type { EventCard as EventCardData } from "@/lib/core/contract";
-import { formatMoney } from "@/lib/format";
 import { imageUrl } from "@/lib/image-url";
 import { formatEventDate, formatEventTime } from "@/lib/time-zone";
 
@@ -14,7 +14,7 @@ export function ReelCard({ event }: { event: EventCardData }): React.JSX.Element
   const timeLabel = formatEventTime(event.startsAt);
 
   return (
-    <article className="group relative aspect-[9/14] overflow-hidden rounded-[16px] border border-line bg-surface transition-all hover:-translate-y-1 hover:border-gold">
+    <article className="group relative aspect-[9/14] overflow-hidden rounded-[16px] border border-line bg-bg transition-all hover:-translate-y-[3px] hover:border-gold">
       <EventImage
         src={src}
         alt={event.artistName ?? event.name}
@@ -34,25 +34,26 @@ export function ReelCard({ event }: { event: EventCardData }): React.JSX.Element
         </span>
       ) : null}
 
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-linear-to-t from-bg via-bg/85 to-transparent p-4 pt-16">
-        <p className="text-[11.5px] font-semibold text-gold-bright">{`${dateLabel} · ${timeLabel}`}</p>
-        <h3 className="font-serif text-[22px] leading-[1.1] text-ivory">{event.name}</h3>
-        {event.artistName ? <p className="text-xs text-muted">{event.artistName}</p> : null}
-        {event.minPrice !== null ? (
-          <p className="text-xs text-ivory">{`Başlangıç: ${formatMoney(event.minPrice, event.currency)}`}</p>
-        ) : null}
+      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-linear-to-t from-bg via-bg/90 to-transparent p-4 pt-16">
+        <p className="text-[11.5px] font-medium text-gold-bright">{`${dateLabel} · ${timeLabel}`}</p>
+        <h3 className="font-serif text-[22px] leading-[1.1] font-bold text-ivory">
+          <Link href={`/etkinlik/${event.id}`} className="no-underline hover:text-gold-bright">
+            {event.artistName ?? event.name}
+          </Link>
+        </h3>
         {!open ? (
           <p className="text-xs font-medium text-danger">{saleStateLabel(event.saleState)}</p>
         ) : null}
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="pt-2">
           {open ? (
-            <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-9 px-3.5 py-1.5 text-xs">
+            <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-8 w-full px-3.5 py-1.5 text-xs">
               Bilet Al
             </ButtonLink>
-          ) : null}
-          <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-9 px-3.5 py-1.5 text-xs">
-            Detaylar
-          </ButtonLink>
+          ) : (
+            <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-8 w-full px-3.5 py-1.5 text-xs">
+              Detaylar
+            </ButtonLink>
+          )}
         </div>
       </div>
     </article>

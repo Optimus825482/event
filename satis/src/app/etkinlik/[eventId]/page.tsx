@@ -5,6 +5,7 @@ import { EventCountdown } from "@/components/event/event-countdown";
 import { EventFacts } from "@/components/event/event-facts";
 import { eventFacts } from "@/components/event/facts";
 import { eventHeroMedia } from "@/components/event/hero-media";
+import { InlineGuestPicker } from "@/components/event/inline-guest-picker";
 import { PriceTiers } from "@/components/event/price-tiers";
 import { TicketDialog } from "@/components/event/ticket-dialog";
 import { salonPath, ticketDialogNoscriptCss } from "@/components/event/ticket-dialog-shared";
@@ -15,6 +16,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { PARTY_PARAM, parsePartySize } from "@/features/plan/party";
 import { saleStateLabel } from "@/features/plan/sale-state";
+import { formatMoney } from "@/lib/format";
 import { formatEventDate, formatEventDay, formatEventTime } from "@/lib/time-zone";
 import { eventMetadataTitle, loadEvent } from "./event-data";
 
@@ -93,21 +95,27 @@ export default async function EventPage({ params, searchParams }: PageProps) {
 
           <EventFacts
             facts={eventFacts(event)}
-            action={
-              saleOpen ? (
-                <TicketDialog
-                  eventId={event.id}
-                  eyebrow={`${event.artistName ?? event.name} · ${formatEventDay(event.startsAt)}`.toLocaleUpperCase("tr-TR")}
-                  maxSeatsPerOrder={event.sale.maxSeatsPerOrder}
-                />
-              ) : (
-                <Notice className="flex w-full items-center">{saleStateLabel(event.sale.state)}</Notice>
-              )
-            }
+            action={saleOpen ? undefined : <Notice className="flex w-full items-center">{saleStateLabel(event.sale.state)}</Notice>}
           />
-          {saleOpen ? <noscript dangerouslySetInnerHTML={{ __html: ticketDialogNoscriptCss(nonce) }} /> : null}
 
           <PriceTiers prices={event.prices} currency={event.currency} />
+
+          {saleOpen ? (
+            <>
+              <InlineGuestPicker
+                eventId={event.id}
+                maxSeatsPerOrder={event.sale.maxSeatsPerOrder}
+                minPriceLabel={event.minPrice !== null ? formatMoney(event.minPrice, event.currency) : null}
+              />
+              <TicketDialog
+                eventId={event.id}
+                eyebrow={`${event.artistName ?? event.name} · ${formatEventDay(event.startsAt)}`.toLocaleUpperCase("tr-TR")}
+                maxSeatsPerOrder={event.sale.maxSeatsPerOrder}
+                hideTrigger
+              />
+              <noscript dangerouslySetInnerHTML={{ __html: ticketDialogNoscriptCss(nonce) }} />
+            </>
+          ) : null}
 
           {summary ? <p className="text-base leading-relaxed text-ivory">{summary}</p> : null}
 

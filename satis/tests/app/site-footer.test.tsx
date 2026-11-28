@@ -52,7 +52,7 @@ describe("SiteFooter", () => {
       "mailto:entertainment@merithotels.com",
     );
     const explore = within(screen.getByRole("navigation", { name: "Keşfet" }));
-    expect(explore.getByRole("link", { name: "Takvim" })).toHaveAttribute("href", "/takvim");
+    expect(explore.getByRole("link", { name: "Etkinlik Takvimi" })).toHaveAttribute("href", "/takvim");
     expect(explore.getByRole("link", { name: "İade Koşulları" })).toHaveAttribute("href", "/iade");
     const legal = within(screen.getByRole("navigation", { name: "Hukuki" }));
     expect(legal.getByRole("link", { name: "KVKK" })).toHaveAttribute("href", "/kvkk");

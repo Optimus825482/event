@@ -3,18 +3,20 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Color, type InstancedMesh, Object3D, PerspectiveCamera } from "three";
+import { ACESFilmicToneMapping, Color, DoubleSide, type InstancedMesh, Object3D, PerspectiveCamera } from "three";
 import { BallroomFloor, BallroomLights, Chairs, Chandeliers, LocaArchitecture, StageBeams, StageRig } from "./ballroom";
 import {
   type CameraPose,
   CHAIR_PICK_DISTANCE,
   FOV_HALL,
+  locaPose,
   maxDistance,
   MIN_DISTANCE,
   orbitMove,
   type OrbitMove,
   overviewPose,
   seatPose,
+  stagePose,
   topPose,
 } from "./camera";
 import { SeatLabels, TableLabels } from "./labels";
@@ -28,7 +30,7 @@ import { WALL_HEIGHT, wallVisibility } from "./walls-geometry";
 
 export type SeatView = { tableId: string; nonce: number };
 /** Kamera düğmeleri (tuvalin dışında, `Plan3D` içinde) bu komutu üretir; nonce değişince uygulanır. */
-export type CameraCommand = { type: "overview" | "top" | OrbitMove; nonce: number };
+export type CameraCommand = { type: "overview" | "stage" | "loca" | "top" | OrbitMove; nonce: number };
 export type HoverInfo = { table: SceneTable; x: number; y: number };
 
 export type SceneProps = {
@@ -219,15 +221,20 @@ function InstancedTables({
         .map((t) => {
           const isBox = t.isLoca || t.shape !== "round";
           return (
-            <mesh
-              key={t.key}
-              position={[t.x, t.floorY + 0.035, t.z]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              scale={isBox ? [1.88, 1.4, 1] : [1, 1, 1]}
-            >
-              <ringGeometry args={[1.36, 1.52, 48]} />
-              <meshBasicMaterial color={BALLROOM.ring} toneMapped={false} />
-            </mesh>
+            <group key={t.key} position={[t.x, t.floorY, t.z]}>
+              <mesh
+                position={[0, 0.035, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                scale={isBox ? [1.88, 1.4, 1] : [1, 1, 1]}
+              >
+                <ringGeometry args={[1.36, 1.52, 48]} />
+                <meshBasicMaterial color={BALLROOM.ring} transparent opacity={0.92} side={DoubleSide} toneMapped={false} />
+              </mesh>
+              <mesh position={[0, 0.4, 0]} scale={[t.width * 0.56, 0.8, t.depth * 0.56]}>
+                <cylinderGeometry args={[1, 1.02, 1, 24, 1, true]} />
+                <meshBasicMaterial color={BALLROOM.bodyGlow} transparent opacity={0.45} side={DoubleSide} depthWrite={false} />
+              </mesh>
+            </group>
           );
         })}
     </group>
@@ -322,6 +329,14 @@ function CameraController({
       startFlight(overviewPose(scene.room, narrow), "overview");
       return;
     }
+    if (command.type === "stage") {
+      startFlight(stagePose(scene.room, scene.stage), "stage");
+      return;
+    }
+    if (command.type === "loca") {
+      startFlight(locaPose(scene.room, scene.stage), "loca");
+      return;
+    }
     if (command.type === "top") {
       startFlight(topPose(scene.room, narrow), "top");
       return;
@@ -336,7 +351,7 @@ function CameraController({
       maxDist,
     );
     startFlight({ ...next, fov }, "free", 330);
-  }, [command, scene.room, narrow, maxDist, get, orbitRef, startFlight]);
+  }, [command, scene.room, scene.stage, narrow, maxDist, get, orbitRef, startFlight]);
 
   // Kullanıcı tutunca uçuş iptal
   useEffect(() => {
@@ -374,11 +389,12 @@ function CameraController({
       cam.updateProjectionMatrix();
     }
     orbitRef.current?.update();
-    onCamPos([px, py, pz]);
 
     if (raw >= 1) {
       const doneTag = f.tag;
+      const finalPos = f.to.position;
       flightRef.current = null;
+      onCamPos(finalPos);
       onPoseDone(doneTag);
     } else {
       invalidate();
@@ -456,7 +472,7 @@ export default function Scene3D({
           frameloop="demand"
           dpr={[1, 1.65]}
           camera={{ position: initialPose.position, fov: initialPose.fov }}
-          gl={{ antialias: true, powerPreference: "low-power", toneMappingExposure: 1.15 }}
+          gl={{ antialias: true, powerPreference: "low-power", toneMapping: ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
           style={{ touchAction: "pan-y" }}
           onCreated={() => {
             onReady?.();
@@ -465,9 +481,10 @@ export default function Scene3D({
         >
           <ContextLossGuard onLost={onContextLost} />
           <color attach="background" args={[BALLROOM.background]} />
+          <fogExp2 attach="fog" args={[BALLROOM.background, 0.0055]} />
           <BallroomLights />
           <BallroomFloor width={scene.room.width} depth={scene.room.depth} />
-          <Chandeliers width={scene.room.width} height={WALL_HEIGHT - 0.7} visible={pov} />
+          <Chandeliers width={scene.room.width} height={WALL_HEIGHT + 2.5} visible />
           {scene.decor.map((e) => (
             <DecorMesh key={e.id} element={e} />
           ))}
@@ -496,6 +513,8 @@ export default function Scene3D({
           <OrbitControls
             ref={orbitRef as never}
             makeDefault
+            enableDamping
+            dampingFactor={0.05}
             enablePan
             screenSpacePanning={false}
             panSpeed={0.9}
@@ -503,6 +522,10 @@ export default function Scene3D({
             minDistance={MIN_DISTANCE}
             maxDistance={maxDistance(scene.room)}
             maxPolarAngle={Math.PI / 2 - 0.012}
+            onEnd={(e) => {
+              const cam = (e?.target as { object?: PerspectiveCamera } | undefined)?.object;
+              if (cam) setCamPos([cam.position.x, cam.position.y, cam.position.z]);
+            }}
           />
           <CameraController
             scene={scene}

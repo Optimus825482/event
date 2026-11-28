@@ -20,7 +20,7 @@ describe("SiteNav", () => {
     expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["Ana Sayfa", "/"],
       ["Yaklaşan Etkinlikler", "/etkinlikler"],
-      ["Takvim", "/takvim"],
+      ["Etkinlik Takvimi", "/takvim"],
       ["Biletim (PNR)", "/biletimi-bul"],
       ["Hakkımızda", "/hakkimizda"],
       ["Bilet Al", "/etkinlikler"],
@@ -31,7 +31,7 @@ describe("SiteNav", () => {
     path = "/takvim";
     render(<SiteNav />);
     const desktop = within(document.querySelector('[data-nav="desktop"]') as HTMLElement);
-    expect(desktop.getByRole("link", { name: "Takvim" })).toHaveAttribute("aria-current", "page");
+    expect(desktop.getByRole("link", { name: "Etkinlik Takvimi" })).toHaveAttribute("aria-current", "page");
     expect(desktop.getByRole("link", { name: "Ana Sayfa" })).not.toHaveAttribute("aria-current");
   });
 

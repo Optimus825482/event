@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { EventImage } from "@/components/event-image";
 import { PosterFallback } from "@/components/poster-fallback";
-import { Button, ButtonLink } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
+import { CONTACT, SITE_NAME } from "@/content/site";
 import { cn } from "@/lib/cn";
 import { AUTO_ADVANCE_MS, nextIndex, shouldAutoAdvance, type HeroSlide } from "./slides";
 
 export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Element | null {
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [hoverOrFocus, setHoverOrFocus] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 
@@ -24,7 +24,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
   const canAutoAdvance = shouldAutoAdvance({
     slideCount: slides.length,
     reducedMotion,
-    paused: paused || hoverOrFocus,
+    paused: hoverOrFocus,
   });
 
   useEffect(() => {
@@ -68,12 +68,15 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
             >
               <div className="space-y-5">
                 <p className="eyebrow">{`${slide.dateLabel} · Saat ${slide.timeLabel}`}</p>
-                <div className="space-y-2">
-                  <h2 className="text-[clamp(32px,6.2vw,76px)] text-ivory">{slide.name}</h2>
+                <h2 className="text-[clamp(32px,6.2vw,76px)] leading-[1.04] font-semibold text-ivory">
+                  {slide.artistName ?? slide.name}
                   {slide.artistName ? (
-                    <p className="font-serif text-2xl italic text-gold-bright">{slide.artistName}</p>
+                    <>
+                      <br />
+                      <em className="font-medium italic text-gold-bright">{slide.name}</em>
+                    </>
                   ) : null}
-                </div>
+                </h2>
 
                 {slide.isDemo ? (
                   <span className="inline-block rounded-full border border-gold px-3 py-0.5 text-xs font-semibold text-gold">
@@ -90,12 +93,10 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
                     <dt className="text-muted">Saat:</dt>
                     <dd className="font-semibold text-ivory">{slide.timeLabel}</dd>
                   </div>
-                  {slide.priceLabel ? (
-                    <div className="flex items-baseline gap-1.5">
-                      <dt className="text-muted">Başlangıç:</dt>
-                      <dd className="font-semibold text-gold-bright">{slide.priceLabel}</dd>
-                    </div>
-                  ) : null}
+                  <div className="flex items-baseline gap-1.5">
+                    <dt className="text-muted">Mekan:</dt>
+                    <dd className="font-semibold text-ivory">{CONTACT.venue}</dd>
+                  </div>
                 </dl>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -111,68 +112,38 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
                   <ButtonLink href={`/etkinlik/${slide.id}`} variant="glass">
                     Detaylar
                   </ButtonLink>
-                  <ButtonLink href="/takvim" variant="ghost">
+                  <ButtonLink href="/takvim" variant="glass">
                     Etkinlik Takvimi →
                   </ButtonLink>
                 </div>
 
                 {isCurrent && slides.length > 1 ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                    <div className="flex items-center gap-1">
-                      {slides.map((s, dotIndex) => {
-                        const isDotCurrent = dotIndex === safeIndex;
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            aria-label={`${dotIndex + 1}. etkinlik: ${s.name}`}
-                            aria-current={isDotCurrent ? "true" : undefined}
-                            onClick={() => setActive(dotIndex)}
-                            className="inline-flex min-h-11 min-w-9 items-center justify-center bg-transparent"
-                          >
-                            <span
-                              className={cn(
-                                "block h-1 rounded-full transition-all",
-                                isDotCurrent ? "w-12 bg-gold" : "w-7 bg-line",
-                              )}
-                            />
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="glass"
-                        aria-label="Önceki etkinlik"
-                        className="min-h-9 min-w-9 px-3 py-1.5 text-sm"
-                        onClick={() => setActive((prev) => nextIndex(prev, slides.length, -1))}
-                      >
-                        ←
-                      </Button>
-                      <Button
-                        variant="glass"
-                        aria-label="Sonraki etkinlik"
-                        className="min-h-9 min-w-9 px-3 py-1.5 text-sm"
-                        onClick={() => setActive((prev) => nextIndex(prev, slides.length, 1))}
-                      >
-                        →
-                      </Button>
-                      {!reducedMotion ? (
-                        <Button
-                          variant="ghost"
-                          className="min-h-9 px-3 py-1.5 text-xs"
-                          onClick={() => setPaused((p) => !p)}
+                  <div className="flex items-center gap-2 pt-1" role="tablist" aria-label="Öne çıkan konserler">
+                    {slides.map((s, dotIndex) => {
+                      const isDotCurrent = dotIndex === safeIndex;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          aria-label={`${dotIndex + 1}. etkinlik: ${s.name}`}
+                          aria-current={isDotCurrent ? "true" : undefined}
+                          onClick={() => setActive(dotIndex)}
+                          className="inline-flex min-h-9 items-center justify-center bg-transparent p-0"
                         >
-                          {paused ? "Oynat" : "Duraklat"}
-                        </Button>
-                      ) : null}
-                    </div>
+                          <span
+                            className={cn(
+                              "block h-1 rounded-full transition-all duration-200",
+                              isDotCurrent ? "w-12 bg-gold" : "w-7 bg-line",
+                            )}
+                          />
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
 
-              <div className="relative mx-auto aspect-[9/11] max-h-[540px] w-full max-w-[440px] overflow-hidden rounded-[22px] border border-line-gold bg-surface shadow-2xl">
+              <div className="relative mx-auto aspect-[9/11] max-h-[540px] w-full max-w-[440px] overflow-hidden rounded-[22px] border border-line-gold bg-surface-raised shadow-2xl">
                 <EventImage
                   src={slide.image}
                   alt={slide.artistName ?? slide.name}
@@ -186,13 +157,13 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
                     />
                   }
                 />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-linear-to-t from-bg via-bg/80 to-transparent px-5 pb-5 pt-14">
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-linear-to-t from-bg via-bg/85 to-transparent px-5 pb-5 pt-14">
                   <div className="space-y-0.5">
                     <p className="text-xs font-bold tracking-[0.08em] text-gold-bright uppercase">
-                      {slide.artistName ?? slide.name}
+                      {SITE_NAME}
                     </p>
                     {slide.priceLabel ? (
-                      <p className="text-sm text-muted">
+                      <p className="text-[13.5px] text-muted">
                         Başlangıç: <strong className="font-semibold text-ivory">{slide.priceLabel}</strong> / kişi
                       </p>
                     ) : null}

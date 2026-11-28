@@ -49,7 +49,7 @@ export function EventCountdown({ startsAt }: { startsAt: string }): React.JSX.El
   ];
 
   return (
-    <div className="rounded-[16px] border border-line-gold bg-surface p-4">
+    <div className="countdown-surface rounded-[16px] border border-line-gold p-4">
       <p className="mb-2.5 text-[11px] font-bold tracking-[0.2em] text-gold-bright uppercase">
         Sahneye Kalan Süre
       </p>

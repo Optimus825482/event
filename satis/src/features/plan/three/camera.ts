@@ -35,6 +35,24 @@ export function topPose(room: { width: number; depth: number }, narrow: boolean)
   };
 }
 
+/** Sahne Önü preset açısı (meritevent/salon.html uyumlu). */
+export function stagePose(room: { width: number; depth: number }, stage: StageInfo): CameraPose {
+  return {
+    position: [0, 8, Math.min(room.depth * 0.25, stage.center.z + 28)],
+    target: [...stage.target],
+    fov: FOV_HALL,
+  };
+}
+
+/** Loca Balkonu preset açısı (meritevent/salon.html uyumlu). */
+export function locaPose(room: { width: number; depth: number }, stage: StageInfo): CameraPose {
+  return {
+    position: [0, 8.5, room.depth * 0.46],
+    target: [...stage.target],
+    fov: FOV_HALL,
+  };
+}
+
 export function detailPose(table: Vec2, floorY: number, toStage: Vec2): CameraPose {
   const side: Vec2 = { x: -toStage.z, z: toStage.x };
   return {

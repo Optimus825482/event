@@ -281,13 +281,34 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
             </button>
           ) : null}
 
-          <span
-            role="status"
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs font-semibold text-ivory tabular-nums"
+          <div
+            aria-label="Kişi sayısı"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-gold bg-surface px-3 py-1 text-xs font-semibold text-ivory tabular-nums"
           >
-            <span className="text-muted">{`${state.partySize} Kişi ·`}</span>
-            <span className="text-gold-bright">{`${selectedCount}/${state.partySize} kişi seçildi`}</span>
-          </span>
+            <span className="text-muted">Kişi Sayısı:</span>
+            <button
+              type="button"
+              aria-label="Kişi sayısını azalt"
+              disabled={state.partySize <= 1}
+              onClick={() => runAction({ type: "setPartySize", partySize: state.partySize - 1 })}
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              −
+            </button>
+            <span role="status" className="inline-flex items-center gap-1.5">
+              <b className="min-w-4 text-center">{`${state.partySize} Kişi`}</b>
+              <span className="text-gold-bright">{`· ${selectedCount}/${state.partySize} kişi seçildi`}</span>
+            </span>
+            <button
+              type="button"
+              aria-label="Kişi sayısını artır"
+              disabled={state.partySize >= limit}
+              onClick={() => runAction({ type: "setPartySize", partySize: state.partySize + 1 })}
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              +
+            </button>
+          </div>
 
           {state.picks.length > 0 ? (
             <Button variant="gold" disabled={!readyInfo.ready || pending || total === null} onClick={proceed} className="min-h-10 px-4 py-1.5 text-xs">

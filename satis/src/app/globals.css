@@ -158,8 +158,26 @@ h3 {
   }
 }
 
-/* Kipli pencere (yerel <dialog>) arka planı. */
+/* Kipli pencere (yerel <dialog>) arka planı ve kaydırma kilidi. */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
 dialog.modal::backdrop {
-  background-color: rgb(0 0 0 / 0.72);
-  backdrop-filter: blur(2px);
+  background-color: rgb(4 5 9 / 0.8);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.countdown-surface {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-gold) 9%, transparent),
+    color-mix(in srgb, var(--color-surface) 92%, transparent)
+  );
+}
+
+.map-dark-filter {
+  filter: grayscale(25%) invert(92%) contrast(94%) hue-rotate(180deg);
 }

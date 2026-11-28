@@ -32,7 +32,7 @@ export function SiteNav(): React.JSX.Element {
 
   return (
     <nav aria-label="Ana menü" className="flex items-center">
-      <div data-nav="desktop" className="hidden items-center gap-5 min-[860px]:flex">
+      <div data-nav="desktop" className="hidden items-center gap-[22px] min-[860px]:flex">
         {NAV_ITEMS.map((item) => {
           const active = isCurrentPath(pathname, item.href);
           return (
@@ -41,7 +41,7 @@ export function SiteNav(): React.JSX.Element {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "inline-flex min-h-11 items-center text-[13.5px] font-medium no-underline transition-colors hover:text-ivory",
+                "inline-flex min-h-9 items-center text-[13.5px] font-medium no-underline transition-colors hover:text-ivory",
                 active ? "text-ivory" : "text-muted",
               )}
             >
@@ -49,7 +49,7 @@ export function SiteNav(): React.JSX.Element {
             </Link>
           );
         })}
-        <Link href={NAV_CTA.href} onClick={handleCta} className={buttonClass("gold")}>
+        <Link href={NAV_CTA.href} onClick={handleCta} className={cn(buttonClass("gold"), "min-h-9 px-[18px] py-2 text-[13px]")}>
           {NAV_CTA.label}
         </Link>
       </div>

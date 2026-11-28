@@ -47,54 +47,57 @@ export function LookupForm() {
   };
 
   const fields = [
-    { name: "pnr", label: "PNR", value: pnr, set: setPnr, autoComplete: "off", autoCapitalize: "characters" },
-    { name: "lastName", label: "Soyad", value: lastName, set: setLastName, autoComplete: "family-name", autoCapitalize: "words" },
+    { name: "pnr", label: "PNR Kodu", placeholder: "Örn. ME7K2Q", value: pnr, set: setPnr, autoComplete: "off", autoCapitalize: "characters" },
+    { name: "lastName", label: "Misafir Soyadı", placeholder: "Örn. Yılmaz", value: lastName, set: setLastName, autoComplete: "family-name", autoCapitalize: "words" },
   ] as const;
 
   return (
     <form
       noValidate
       method="post"
-      className="flex flex-col gap-4"
+      className="mt-3 flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
-      {fields.map((field) => {
-        const message = fieldErrors[field.name];
-        const id = `lookup-${field.name}`;
-        return (
-          <div key={field.name} className="flex flex-col gap-1">
-            <label htmlFor={id} className="text-ivory">
-              {field.label}
-            </label>
-            <input
-              id={id}
-              name={field.name}
-              type="text"
-              autoComplete={field.autoComplete}
-              autoCapitalize={field.autoCapitalize}
-              spellCheck={false}
-              value={field.value}
-              readOnly={pending}
-              aria-invalid={message ? true : undefined}
-              aria-describedby={message ? `${id}-error` : undefined}
-              onChange={(event) => field.set(event.target.value)}
-              className={inputClass(Boolean(message))}
-            />
-            {message ? (
-              <p id={`${id}-error`} className="m-0 text-danger">
-                {message}
-              </p>
-            ) : null}
-          </div>
-        );
-      })}
+      <div className="grid grid-cols-1 items-end gap-3 rounded-[18px] border border-line-gold bg-surface p-6 min-[680px]:grid-cols-[1fr_1fr_auto]">
+        {fields.map((field) => {
+          const message = fieldErrors[field.name];
+          const id = `lookup-${field.name}`;
+          return (
+            <div key={field.name} className="flex flex-col gap-1.5">
+              <label htmlFor={id} className="text-xs font-semibold text-muted">
+                {field.label}
+              </label>
+              <input
+                id={id}
+                name={field.name}
+                type="text"
+                placeholder={field.placeholder}
+                autoComplete={field.autoComplete}
+                autoCapitalize={field.autoCapitalize}
+                spellCheck={false}
+                value={field.value}
+                readOnly={pending}
+                aria-invalid={message ? true : undefined}
+                aria-describedby={message ? `${id}-error` : undefined}
+                onChange={(event) => field.set(event.target.value)}
+                className={inputClass(Boolean(message))}
+              />
+              {message ? (
+                <p id={`${id}-error`} className="m-0 text-xs text-danger">
+                  {message}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+        <Button type="submit" variant="gold" size="lg" aria-disabled={pending} className={BUSY_CLASS}>
+          Bileti Sorgula
+        </Button>
+      </div>
       {error ? <Notice tone="error">{error}</Notice> : null}
-      <Button type="submit" variant="gold" size="lg" aria-disabled={pending} className={BUSY_CLASS}>
-        Biletimi bul
-      </Button>
     </form>
   );
 }

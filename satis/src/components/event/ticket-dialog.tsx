@@ -24,10 +24,11 @@ export type TicketDialogProps = {
   eyebrow: string;
   maxSeatsPerOrder: number;
   selected?: number;
+  hideTrigger?: boolean;
 };
 
 /** Etkinlik sayfasındaki "Bilet Al" düğmesi ve kişi sayısı penceresi. */
-export function TicketDialog({ eventId, eyebrow, maxSeatsPerOrder, selected }: TicketDialogProps) {
+export function TicketDialog({ eventId, eyebrow, maxSeatsPerOrder, selected, hideTrigger = false }: TicketDialogProps) {
   const [open, setOpen] = useState(false);
   const titleId = useId();
   const selectId = useId();
@@ -59,17 +60,19 @@ export function TicketDialog({ eventId, eyebrow, maxSeatsPerOrder, selected }: T
 
   return (
     <>
-      <a
-        href={TICKET_DIALOG_HASH}
-        aria-haspopup="dialog"
-        onClick={(e) => {
-          e.preventDefault();
-          show();
-        }}
-        className="inline-flex min-h-12 w-full min-w-11 items-center justify-center rounded-full bg-gold px-8 py-3 text-lg font-bold text-on-gold no-underline transition-colors hover:bg-gold-bright"
-      >
-        Bilet Al
-      </a>
+      {hideTrigger ? null : (
+        <a
+          href={TICKET_DIALOG_HASH}
+          aria-haspopup="dialog"
+          onClick={(e) => {
+            e.preventDefault();
+            show();
+          }}
+          className="inline-flex min-h-12 w-full min-w-11 items-center justify-center rounded-full bg-gold px-8 py-3 text-lg font-bold text-on-gold no-underline transition-colors hover:bg-gold-bright"
+        >
+          Bilet Al
+        </a>
+      )}
       <Modal
         id={TICKET_DIALOG_ID}
         open={open}

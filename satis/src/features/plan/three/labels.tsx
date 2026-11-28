@@ -9,7 +9,7 @@ import type { SceneChair, SceneTable } from "./scene-data";
 const CELL = 48;
 const COLS = 16;
 
-function buildAtlas(labels: readonly string[], fg: string, outline?: string): CanvasTexture | null {
+function buildAtlas(labels: readonly string[], fg: string, maxAnisotropy: number, outline?: string): CanvasTexture | null {
   if (typeof document === "undefined" || labels.length === 0) return null;
   const rows = Math.ceil(labels.length / COLS);
   const c = document.createElement("canvas");
@@ -39,6 +39,7 @@ function buildAtlas(labels: readonly string[], fg: string, outline?: string): Ca
 
   const tex = new CanvasTexture(c);
   tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = maxAnisotropy;
   return tex;
 }
 
@@ -97,17 +98,23 @@ function buildQuads(
 
 export function TableLabels({ tables }: { tables: readonly SceneTable[] }) {
   const invalidate = useThree((s) => s.invalidate);
+  const gl = useThree((s) => s.gl);
+  const maxAniso = Math.min(4, gl?.capabilities?.getMaxAnisotropy?.() ?? 1);
+  const layoutKey = tables.map((t) => `${t.key}:${t.label}:${t.x}:${t.floorY}:${t.z}`).join("|");
+
   const { texture, geometry } = useMemo(() => {
     const labels = tables.map((t) => t.label);
     const rows = Math.max(1, Math.ceil(labels.length / COLS));
     return {
-      texture: buildAtlas(labels, BALLROOM.labelText, BALLROOM.labelOutline),
+      texture: buildAtlas(labels, BALLROOM.labelText, maxAniso, BALLROOM.labelOutline),
       geometry: buildQuads(
-        tables.map((t) => ({ x: t.x, y: t.floorY + 0.72, z: t.z, size: 1.15 })),
+        tables.map((t) => ({ x: t.x, y: t.floorY + 0.665, z: t.z, size: 1.15 })),
         rows,
       ),
     };
-  }, [tables]);
+    // layoutKey seçili/hover masa değişimlerinde atlasın gereksiz yere yeniden çizilmesini önler.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey, maxAniso]);
 
   useEffect(() => {
     invalidate();
@@ -120,7 +127,15 @@ export function TableLabels({ tables }: { tables: readonly SceneTable[] }) {
   if (!texture || !geometry) return null;
   return (
     <mesh geometry={geometry} renderOrder={1}>
-      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} side={DoubleSide} />
+      <meshBasicMaterial
+        map={texture}
+        transparent
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        toneMapped={false}
+        side={DoubleSide}
+      />
     </mesh>
   );
 }
@@ -133,19 +148,21 @@ export function SeatLabels({
   visible: boolean;
 }) {
   const invalidate = useThree((s) => s.invalidate);
+  const gl = useThree((s) => s.gl);
+  const maxAniso = Math.min(4, gl?.capabilities?.getMaxAnisotropy?.() ?? 1);
   const numbered = useMemo(() => chairs.filter((c) => c.seatNo !== null), [chairs]);
   const { texture, geometry } = useMemo(() => {
     if (!visible || numbered.length === 0) return { texture: null, geometry: null };
     const labels = numbered.map((c) => String(c.seatNo));
     const rows = Math.max(1, Math.ceil(labels.length / COLS));
     return {
-      texture: buildAtlas(labels, BALLROOM.warmWhite),
+      texture: buildAtlas(labels, BALLROOM.warmWhite, maxAniso),
       geometry: buildQuads(
         numbered.map((c) => ({ x: c.x, y: c.y + 0.62, z: c.z, size: 0.42 })),
         rows,
       ),
     };
-  }, [numbered, visible]);
+  }, [numbered, visible, maxAniso]);
 
   useEffect(() => {
     invalidate();

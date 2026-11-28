@@ -12,7 +12,7 @@ export const BRAND_LOGO = {
 export const NAV_ITEMS = [
   { href: "/", label: "Ana Sayfa" },
   { href: "/etkinlikler", label: "Yaklaşan Etkinlikler" },
-  { href: "/takvim", label: "Takvim" },
+  { href: "/takvim", label: "Etkinlik Takvimi" },
   { href: "/biletimi-bul", label: "Biletim (PNR)" },
   { href: "/hakkimizda", label: "Hakkımızda" },
 ] as const;

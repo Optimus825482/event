@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { Component, useCallback, useId, useMemo, useState, type ReactNode } from "react";
 import type { PlanModel } from "./model";
 import type { TablePick } from "./picks";
-import { Button } from "@/components/ui/button";
 import type { CameraCommand, HoverInfo, SeatView } from "./three/scene";
 import { buildScene } from "./three/scene-data";
 
@@ -50,13 +49,11 @@ export type Plan3DProps = {
   hint?: string;
 };
 
-const CAMERA_BUTTONS: { type: CameraCommand["type"]; label: string; text: string }[] = [
-  { type: "left", label: "Sola döndür", text: "↶" },
-  { type: "right", label: "Sağa döndür", text: "↷" },
-  { type: "in", label: "Yakınlaştır", text: "+" },
-  { type: "out", label: "Uzaklaştır", text: "−" },
-  { type: "top", label: "Üstten", text: "Üstten" },
-  { type: "overview", label: "Genel", text: "Genel" },
+const CAMERA_BUTTONS: { type: "overview" | "stage" | "loca" | "top"; label: string }[] = [
+  { type: "overview", label: "Genel Bakış" },
+  { type: "stage", label: "Sahne Önü" },
+  { type: "loca", label: "Loca Balkonu" },
+  { type: "top", label: "Kuş Bakışı" },
 ];
 
 export const DEFAULT_3D_HINT =
@@ -85,6 +82,7 @@ export function Plan3D({
   const [ready, setReady] = useState(false);
   const [cameraTag, setCameraTag] = useState("overview");
   const [command, setCommand] = useState<CameraCommand | null>(null);
+  const [localSeatView, setLocalSeatView] = useState<SeatView | null>(null);
   const [hovered, setHovered] = useState<HoverInfo | null>(null);
   const helpId = useId();
 
@@ -92,6 +90,21 @@ export function Plan3D({
     setReady(true);
     onReady?.();
   }, [onReady]);
+
+  const effectiveSeatView =
+    localSeatView && (!seatView || localSeatView.nonce >= seatView.nonce) ? localSeatView : seatView;
+
+  const triggerSeatPov = () => {
+    const targetId =
+      activeTableId ??
+      picks[0]?.tableId ??
+      scene.tables.find((t) => t.selectable)?.key ??
+      scene.tables[0]?.key ??
+      null;
+    if (!targetId) return;
+    const nextNonce = Math.max(seatView?.nonce ?? 0, localSeatView?.nonce ?? 0) + 1;
+    setLocalSeatView({ tableId: targetId, nonce: nextNonce });
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -103,20 +116,35 @@ export function Plan3D({
       >
         <div
           role="group"
-          aria-label="Kamera"
-          className="absolute top-2.5 right-2.5 left-2.5 z-10 flex flex-wrap gap-1 rounded-2xl border border-line-gold bg-surface/80 p-1.5 backdrop-blur-md sm:top-3 sm:right-auto sm:left-3 sm:rounded-full sm:px-2 sm:py-1"
+          aria-label="Kamera açıları"
+          className="absolute top-2.5 right-2.5 left-2.5 z-10 flex flex-wrap gap-1.5 sm:top-3.5 sm:right-auto sm:left-3.5"
         >
-          {CAMERA_BUTTONS.map((b) => (
-            <Button
-              key={b.type}
-              variant="glass"
-              aria-label={b.text === b.label ? undefined : b.label}
-              className="min-h-9 px-2.5 py-1 text-xs sm:min-h-10 sm:px-3 sm:text-sm"
-              onClick={() => setCommand((c) => ({ type: b.type, nonce: (c?.nonce ?? 0) + 1 }))}
-            >
-              {b.text}
-            </Button>
-          ))}
+          {CAMERA_BUTTONS.map((b) => {
+            const pressed = cameraTag === b.type;
+            return (
+              <button
+                key={b.type}
+                type="button"
+                aria-pressed={pressed}
+                onClick={() => setCommand((c) => ({ type: b.type, nonce: (c?.nonce ?? 0) + 1 }))}
+                className={
+                  pressed
+                    ? "cursor-pointer rounded-[10px] border border-gold bg-surface/90 px-3 py-1.5 text-xs font-semibold text-gold-bright backdrop-blur-md transition-colors"
+                    : "cursor-pointer rounded-[10px] border border-line bg-surface/85 px-3 py-1.5 text-xs font-semibold text-ivory backdrop-blur-md transition-colors hover:border-gold hover:text-gold-bright"
+                }
+              >
+                {b.label}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            aria-pressed={cameraTag.startsWith("seat:")}
+            onClick={triggerSeatPov}
+            className="cursor-pointer rounded-[10px] border border-gold bg-surface/90 px-3 py-1.5 text-xs font-semibold text-gold-bright backdrop-blur-md transition-colors hover:bg-gold hover:text-on-gold"
+          >
+            Masadan Sahneye Bak
+          </button>
         </div>
         {hovered ? (
           <div
@@ -143,7 +171,7 @@ export function Plan3D({
             activeTableId={activeTableId}
             artworkUrl={artworkUrl}
             title={title}
-            seatView={seatView}
+            seatView={effectiveSeatView}
             onTable={onTable}
             onSeat={onSeat}
             onHoverTable={setHovered}
@@ -154,6 +182,27 @@ export function Plan3D({
             command={command}
           />
         </SceneBoundary>
+        <div className="pointer-events-none absolute right-2.5 bottom-2.5 left-2.5 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface/85 px-3.5 py-2 text-xs text-muted backdrop-blur-md sm:right-3.5 sm:bottom-3 sm:left-3.5">
+          <div className="flex flex-wrap items-center gap-3.5">
+            <span className="inline-flex items-center gap-1.5">
+              <i aria-hidden="true" className="size-2 rounded-full bg-ivory" />
+              Masa
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <i aria-hidden="true" className="size-2 rounded-full bg-gold" />
+              Loca
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <i aria-hidden="true" className="size-2 rounded-full bg-disabled-bg" />
+              Dolu
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <i aria-hidden="true" className="size-2 rounded-full bg-gold-bright" />
+              Seçili
+            </span>
+          </div>
+          <span>Sürükle: Döndür · Tekerlek: Yakınlaştır</span>
+        </div>
       </div>
       <p id={helpId} className="text-sm text-muted">
         {hint}

@@ -22,26 +22,22 @@ describe("VenueMap", () => {
     });
   });
 
-  it("Konum başlığı, tembel yüklenen harita, adres; yol tarifi ve haritada aç yeni sekmede", () => {
+  it("Etkinlik Konumu & Ulaşım başlığı, tembel yüklenen harita, adres ve yol tarifi", () => {
     const venue = eventVenue();
     const links = venueLinks(venue);
     render(<VenueMap venue={venue} />);
-    expect(screen.getByRole("heading", { level: 2, name: "Konum" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Etkinlik Konumu & Ulaşım" })).toBeInTheDocument();
     const frame = screen.getByTitle(`${venue.name} haritası`);
     expect(frame.tagName).toBe("IFRAME");
     expect(frame).toHaveAttribute("src", links.embed);
     expect(frame).toHaveAttribute("loading", "lazy");
     expect(frame).toHaveAttribute("referrerpolicy", "no-referrer-when-downgrade");
     expect(screen.getByText(venue.name)).toBeInTheDocument();
-    expect(screen.getByText(venue.address)).toBeInTheDocument();
-    const directions = screen.getByRole("link", { name: "Yol tarifi al" });
-    const open = screen.getByRole("link", { name: "Google Haritalar'da aç" });
+    expect(screen.getByText(new RegExp(venue.address))).toBeInTheDocument();
+    const directions = screen.getByRole("link", { name: "Google Haritalar'da Yol Tarifi ↗" });
     expect(directions).toHaveAttribute("href", links.directions);
-    expect(open).toHaveAttribute("href", links.search);
-    for (const link of [directions, open]) {
-      expect(link).toHaveAttribute("target", "_blank");
-      expect(link).toHaveAttribute("rel", "noopener noreferrer");
-    }
+    expect(directions).toHaveAttribute("target", "_blank");
+    expect(directions).toHaveAttribute("rel", "noopener noreferrer");
   });
 });
 

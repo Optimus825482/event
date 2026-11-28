@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Notice } from "@/components/ui/notice";
 import { EventCard } from "@/features/plan/event-card";
-import { cn } from "@/lib/cn";
 import type { EventCard as EventCardData } from "@/lib/core/contract";
 
 export function UpcomingList({ events }: { events: EventCardData[] }): React.JSX.Element {
@@ -21,28 +20,24 @@ export function UpcomingList({ events }: { events: EventCardData[] }): React.JSX
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap gap-2.5">
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Sanatçı veya etkinlik ara…"
+          placeholder="Sanatçı ara..."
           aria-label="Sanatçı veya etkinlik ara"
-          className="min-w-[min(100%,240px)] flex-1 rounded-[12px] border border-line bg-surface px-4 py-2.5 text-sm text-ivory placeholder:text-muted focus:border-gold focus:outline-none"
+          className="min-w-[min(100%,220px)] flex-1 rounded-[12px] border border-line bg-surface px-3.5 py-2.5 text-[13.5px] text-ivory placeholder:text-muted focus:border-gold focus:outline-none"
         />
-        <button
-          type="button"
-          aria-pressed={onlyOpen}
-          onClick={() => setOnlyOpen((prev) => !prev)}
-          className={cn(
-            "inline-flex min-h-11 items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
-            onlyOpen
-              ? "border-gold bg-gold text-on-gold"
-              : "border-line bg-surface text-muted hover:border-gold hover:text-ivory",
-          )}
+        <select
+          aria-label="Satış durumu filtresi"
+          value={onlyOpen ? "open" : "all"}
+          onChange={(e) => setOnlyOpen(e.target.value === "open")}
+          className="min-w-[140px] flex-1 rounded-[12px] border border-line bg-surface px-3.5 py-2.5 text-[13.5px] text-ivory focus:border-gold focus:outline-none sm:flex-none"
         >
-          Yalnızca satışta
-        </button>
+          <option value="all">Tüm Etkinlikler</option>
+          <option value="open">Yalnızca Satışta</option>
+        </select>
       </div>
 
       {filtered.length === 0 ? (
