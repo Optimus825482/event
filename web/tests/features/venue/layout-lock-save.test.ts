@@ -67,7 +67,7 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
     await truncateAll();
   });
 
-  it("satıştayken rezerve masayı taşıma reddedilir; hiçbir değişiklik yazılmaz", async () => {
+  it("satıştayken alan düzenlemesi tamamen reddedilir; hiçbir değişiklik yazılmaz", async () => {
     const { actor, event, a1, b1 } = await setup();
     await setStage(db, event.id, "on_sale");
 
@@ -80,17 +80,32 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
     );
 
     expect(err.code).toBe("conflict");
-    expect(err.message).toBe(
-      "Satış başladı; rezervasyonlu ya da Casino'ya ayrılmış masalar değiştirilemez: A1. Hiçbir değişiklik kaydedilmedi.",
-    );
+    expect(err.message).toBe("Satış başladı; alan düzenlemesi kilitli. Düzenleme için satışı kapatın.");
     const after = await listEventTables(db, event.id);
     expect(after.find((t) => t.id === a1.id)?.x).toBe(a1.x);
     expect(after.find((t) => t.id === b1.id)?.x).toBe(b1.x);
   });
 
-  it("satıştayken taahhütsüz masa taşınır ve silinir", async () => {
+  it("satıştayken decor da dahil her kayıt reddedilir", async () => {
     const { actor, event, a1, b1 } = await setup();
     await setStage(db, event.id, "on_sale");
+
+    const err = await caught(
+      saveLayout(db, actor, {
+        eventId: event.id,
+        tables: [toInput(a1), toInput(b1)],
+        decor: { width: 1400, height: 800, elements: [] },
+      }),
+    );
+
+    expect(err.code).toBe("conflict");
+    expect(err.message).toBe("Satış başladı; alan düzenlemesi kilitli. Düzenleme için satışı kapatın.");
+    expect((await getVenueLayout(db, actor, event.id)).decor.width).toBe(1600);
+  });
+
+  it("satış kapalıyken taahhütsüz masa taşınır ve silinir", async () => {
+    const { actor, event, a1, b1 } = await setup();
+    await setStage(db, event.id, "sales_closed");
 
     const moved = await saveLayout(db, actor, {
       eventId: event.id,
@@ -101,6 +116,22 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
 
     const removed = await saveLayout(db, actor, { eventId: event.id, tables: [toInput(a1)], decor });
     expect(removed.tables.map((t) => t.label)).toEqual(["A1"]);
+  });
+
+  it("satış kapalıyken decor serbest düzenlenir; taahhütlü masalar aynı kalır", async () => {
+    const { actor, event, a1, b1 } = await setup();
+    await setStage(db, event.id, "sales_closed");
+
+    await saveLayout(db, actor, {
+      eventId: event.id,
+      tables: [toInput(a1), toInput(b1)],
+      decor: { width: 1400, height: 800, elements: [] },
+    });
+
+    const after = await getVenueLayout(db, actor, event.id);
+    expect(after.decor.width).toBe(1400);
+    expect(after.tables.find((t) => t.id === a1.id)?.x).toBe(a1.x);
+    expect(after.tables.find((t) => t.id === b1.id)?.x).toBe(b1.x);
   });
 
   it("fiyatlandı aşamasında rezerve masa taşınabilir", async () => {
@@ -115,9 +146,9 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
     expect(res.tables.find((t) => t.id === a1.id)?.x).toBe(a1.x + 40);
   });
 
-  it("satıştayken rezerve masanın sabitlemesi değiştirilebilir", async () => {
+  it("satış kapalıyken rezerve masanın sabitlemesi değiştirilebilir", async () => {
     const { actor, event, a1, b1 } = await setup();
-    await setStage(db, event.id, "on_sale");
+    await setStage(db, event.id, "sales_closed");
 
     const res = await saveLayout(db, actor, {
       eventId: event.id,
@@ -168,18 +199,25 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
     await setStage(db, event.id, "on_sale");
     const locked = await getVenueLayout(db, actor, event.id);
     expect(locked.layoutLocked).toBe(true);
+    expect(locked.layoutReadOnly).toBe(true);
     expect(locked.frozenTableIds).toEqual([a1.id]);
+
+    await setStage(db, event.id, "sales_closed");
+    const closed = await getVenueLayout(db, actor, event.id);
+    expect(closed.layoutLocked).toBe(true);
+    expect(closed.layoutReadOnly).toBe(false);
 
     await setStage(db, event.id, "priced");
     const open = await getVenueLayout(db, actor, event.id);
     expect(open.layoutLocked).toBe(false);
+    expect(open.layoutReadOnly).toBe(false);
     expect(open.frozenTableIds).toEqual([]);
   });
 
-  it("satıştayken Casino'ya ayrılmış rezervasyonsuz masa taşınamaz ve silinemez", async () => {
+  it("satış kapalıyken Casino'ya ayrılmış rezervasyonsuz masa taşınamaz ve silinemez", async () => {
     const { actor, event, a1, b1 } = await setup();
     await setAllocation(db, [b1.id], "casino");
-    await setStage(db, event.id, "on_sale");
+    await setStage(db, event.id, "sales_closed");
     const message =
       "Satış başladı; rezervasyonlu ya da Casino'ya ayrılmış masalar değiştirilemez: B1. Hiçbir değişiklik kaydedilmedi.";
 
@@ -198,11 +236,11 @@ describe("yerleşim kilidi (saveLayout / applyVenueTemplate / getVenueLayout)", 
     expect((await listEventTables(db, event.id)).find((t) => t.id === b1.id)?.x).toBe(b1.x);
   });
 
-  it("satıştayken serbest bırakılmış ve online masalar taşınır", async () => {
+  it("satış kapalıyken serbest bırakılmış ve online masalar taşınır", async () => {
     const { actor, event, a1, b1 } = await setup();
     const online = await f.createTable(db, event.id, { label: "C1", capacity: 8, x: 300, y: 100 });
     await db.transaction((tx) => openOnline(tx, event.id, [online.id]));
-    await setStage(db, event.id, "on_sale");
+    await setStage(db, event.id, "sales_closed");
 
     const res = await saveLayout(db, actor, {
       eventId: event.id,

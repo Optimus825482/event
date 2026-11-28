@@ -1,6 +1,6 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { isLayoutLockedStage } from "@/domain/planning-stage";
+import { isLayoutLockedStage, isSaleOpenStage } from "@/domain/planning-stage";
 import { eventTables, events, tableTypes, venueTemplates } from "@/db/schema";
 import { authorize } from "@/features/auth/policy";
 import type { Actor } from "@/features/auth/session";
@@ -9,6 +9,7 @@ import { syncSeatSlots } from "@/features/seating/slots";
 import { publish } from "@/features/realtime/publish";
 import {
   assertLayoutChangeAllowed,
+  assertSaveLayoutAllowed,
   assertTemplateApplyAllowed,
   frozenTableIds,
 } from "@/features/planning/layout-lock";
@@ -44,13 +45,14 @@ export type SaveLayoutServiceInput = { eventId: string; tables: TableInput[]; de
  * girdide olmayanlar silinir. Kullanımdaki (rezervasyon/atama/grup) bir masa silinmek istenirse
  * hiçbir değişiklik yazılmaz ve `conflict` mesajı masa etiketlerini listeler.
  * `events.total_capacity` aynı transaction'da masalardan yeniden hesaplanır.
- * Satış başladıktan sonra taahhütlü masalarda yasak değişiklik varsa da hiçbir şey yazılmaz
- * (`assertLayoutChangeAllowed`).
+ * Satışa açık (`on_sale`) aşamada tüm kayıt reddedilir (`assertSaveLayoutAllowed`); satış kapalıyken
+ * taahhütlü masalarda yasak değişiklik varsa da hiçbir şey yazılmaz (`assertLayoutChangeAllowed`).
  */
 export async function saveLayout(db: Db, actor: Actor, input: SaveLayoutServiceInput): Promise<WriteLayoutResult> {
   try {
     return await db.transaction(async (tx) => {
       const event = await lockEditableEvent(tx, actor, input.eventId);
+      assertSaveLayoutAllowed(event);
       await assertLayoutChangeAllowed(tx, event, input.tables);
       const result = await writeLayout(tx, input.eventId, input.tables, input.decor);
       await syncSeatSlots(tx, input.eventId);
@@ -75,6 +77,8 @@ export type VenueLayout = {
   lockedTableIds: string[];
   /** Satış başladığı için yerleşim kilidi etkin (`on_sale`/`sales_closed`). */
   layoutLocked: boolean;
+  /** Satışa açık (`on_sale`): alan düzenlemesi tamamen kilitlidir; `sales_closed`ta `false` ve düzenleme taahhüt kurallarıyla serbesttir. */
+  layoutReadOnly: boolean;
   /** Kilit altında değiştirilemeyen (taahhütlü) masalar; kilit yoksa boş. */
   frozenTableIds: string[];
   editable: boolean;
@@ -97,6 +101,7 @@ export async function getVenueLayout(db: Db, actor: Actor, eventId: string): Pro
     decor: parseDecor(event.layoutDecor),
     lockedTableIds: tables.filter((t) => used.has(t.id)).map((t) => t.id),
     layoutLocked: isLayoutLockedStage(event.planningStage),
+    layoutReadOnly: isSaleOpenStage(event.planningStage),
     frozenTableIds: await frozenTableIds(db, event),
     editable: isLayoutEditable(event),
     totalCapacity: await totalCapacity(db, eventId),

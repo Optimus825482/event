@@ -44,9 +44,10 @@ export type VenueEditorProps = {
   canSaveTemplate: boolean;
   /**
    * Satış kilidi görünümü; yetkili olan sunucudur, editör yalnızca kullanıcıyı önceden bilgilendirir.
+   * `readOnly` satışa açık (`on_sale`) aşamadaki tam kilittir: alan düzenlemesi kapalıdır.
    * Sunucu sayfasından geçtiği için serileştirilebilir (dizi); `Set` istemcide kurulur.
    */
-  lock: { locked: boolean; frozenTableIds: string[] };
+  lock: { locked: boolean; readOnly: boolean; frozenTableIds: string[] };
   /** Ekip masa grupları (planda halka); verilmezse gösterilmez. */
   tableGroups?: readonly TableGroupInfo[];
   /** Izgara boyutu / yapışma / görünürlük varsayılanları (sistem ayarları). */
@@ -97,7 +98,7 @@ export function VenueEditor(props: VenueEditorProps) {
   return (
     <EditorStoreContext.Provider value={store}>
       <EditorLockContext.Provider value={lock}>
-        <EditorShell {...props} lock={lock} />
+        <EditorShell {...props} lock={lock} saleReadOnly={props.lock.readOnly} />
       </EditorLockContext.Provider>
     </EditorStoreContext.Provider>
   );
@@ -112,7 +113,8 @@ function EditorShell({
   canSaveTemplate,
   tableGroups,
   lock,
-}: Omit<VenueEditorProps, "lock"> & { lock: EditorLock }) {
+  saleReadOnly,
+}: Omit<VenueEditorProps, "lock"> & { lock: EditorLock; saleReadOnly: boolean }) {
   const store = useEditorStore();
   const dirty = useEditor((s) => s.dirty);
   const layoutEmpty = useEditor(isLayoutEmpty);
@@ -138,7 +140,7 @@ function EditorShell({
 
   const save = useCallback(async () => {
     const state = store.getState();
-    if (!canEdit || saving || !state.dirty) return;
+    if (!canEdit || saleReadOnly || saving || !state.dirty) return;
     setSaving(true);
     setMessage(null);
     setErrors({});
@@ -158,7 +160,7 @@ function EditorShell({
     } finally {
       setSaving(false);
     }
-  }, [store, canEdit, saving, eventId, clearDraft]);
+  }, [store, canEdit, saleReadOnly, saving, eventId, clearDraft]);
 
   const dialogOpen = templatesOpen || addRequest !== null || spacingOpen || draft.recovery !== null;
   useEditorShortcuts({ store, enabled: !dialogOpen, onSave: () => void save(), notify, lock });
@@ -179,7 +181,7 @@ function EditorShell({
       }
     >
       <EditorToolbar
-        readOnly={!canEdit}
+        readOnly={!canEdit || saleReadOnly}
         saving={saving}
         show3d={show3d}
         fullscreen={fullscreen}
@@ -191,7 +193,11 @@ function EditorShell({
         onOpenAdd={(kind) => openAdd(kind)}
         onOpenSpacing={() => setSpacingOpen(true)}
       />
-      {lock.locked ? (
+      {saleReadOnly ? (
+        <p role="status" className="border-b border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+          Satış başladı: alan düzenlemesi kilitli. Düzenleme için satışı kapatın.
+        </p>
+      ) : lock.locked ? (
         <p role="status" className="border-b border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           Satış başladı: taahhütlü (rezervasyonlu) masalar kilitli.
         </p>
@@ -215,7 +221,7 @@ function EditorShell({
             <Venue3DPreview tableTypes={tableTypes} />
           ) : (
             <VenueCanvas
-              readOnly={!canEdit}
+              readOnly={!canEdit || saleReadOnly}
               tableTypes={tableTypes}
               notify={notify}
               onOpenAdd={openAdd}
@@ -229,14 +235,14 @@ function EditorShell({
             </span>
           ) : null}
         </div>
-        <PropertiesPanel readOnly={!canEdit} tableTypes={tableTypes} errors={errors} />
+        <PropertiesPanel readOnly={!canEdit || saleReadOnly} tableTypes={tableTypes} errors={errors} />
       </div>
       <TemplateDialog
         open={templatesOpen}
         onOpenChange={setTemplatesOpen}
         eventId={eventId}
         templates={templates}
-        canApply={canEdit}
+        canApply={canEdit && !saleReadOnly}
         layoutLocked={lock.locked}
         canSave={canSaveTemplate}
         dirty={dirty}

@@ -7,6 +7,7 @@ import { saveLayout, type EventTableRow } from "@/features/venue/service";
 import { DomainError } from "@/lib/action";
 import { managerActor, persistActor } from "../../helpers/actors";
 import { truncateAll } from "../../helpers/db";
+import { setStage } from "../../helpers/planning";
 import { createPendingHold } from "../../helpers/ticketing";
 import { saleEvent } from "../ticketing/fixtures";
 
@@ -29,6 +30,8 @@ const toInput = (t: EventTableRow): TableInput => ({
 });
 
 async function twoTables() {
+  // Biletleme yalnız satışta çalışır; yerleşim düzenlemesi ise yalnızca satış kapandıktan
+  // (`sales_closed`) sonra taahhüt kurallarıyla serbesttir. Kurulum satışta başlar.
   const sale = await saleEvent({ tables: [{ label: "A1" }, { label: "B1" }] });
   const actor = await persistActor(db, managerActor("fnb"));
   const [a1, b1] = (await listEventTables(db, sale.event.id)).sort((x, y) => x.label.localeCompare(y.label));
@@ -45,6 +48,7 @@ describe("bilet geçmişi olan masayı silme", () => {
     const { sale, actor, a1, b1 } = await twoTables();
     const hold = await createPendingHold(db, { eventId: sale.event.id, items: [{ tableId: a1.id, quantity: 2 }] });
     await releaseHold(db, hold.orderId);
+    await setStage(db, sale.event.id, "sales_closed");
 
     const err = await saveLayout(db, actor, { eventId: sale.event.id, tables: [toInput(b1)], decor }).then(
       () => null,
@@ -58,6 +62,7 @@ describe("bilet geçmişi olan masayı silme", () => {
 
   it("biletsiz masa silinebilir", async () => {
     const { sale, actor, a1 } = await twoTables();
+    await setStage(db, sale.event.id, "sales_closed");
     const saved = await saveLayout(db, actor, { eventId: sale.event.id, tables: [toInput(a1)], decor });
     expect(saved.tables.map((t) => t.label)).toEqual(["A1"]);
   });

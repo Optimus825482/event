@@ -58,7 +58,7 @@ export default async function EventVenuePage({ params }: { params: Promise<{ id:
         }}
         tableTypes={data.tableTypes}
         templates={data.templates}
-        lock={{ locked: layout.layoutLocked, frozenTableIds: layout.frozenTableIds }}
+        lock={{ locked: layout.layoutLocked, readOnly: layout.layoutReadOnly, frozenTableIds: layout.frozenTableIds }}
         canEdit={data.canEdit}
         canSaveTemplate={data.canSaveTemplate}
       />

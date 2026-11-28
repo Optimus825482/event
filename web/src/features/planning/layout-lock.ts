@@ -6,7 +6,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { eventTables, reservations } from "@/db/schema";
-import { isLayoutLockedStage, type PlanningStage } from "@/domain/planning-stage";
+import { isLayoutLockedStage, isSaleOpenStage, type PlanningStage } from "@/domain/planning-stage";
 import { ACTIVE_RESERVATION_STATUSES } from "@/domain/reservation-status";
 import { getSeatOccupancy } from "@/features/ticketing/occupancy";
 import { DomainError } from "@/lib/action";
@@ -204,6 +204,17 @@ export async function assertLayoutChangeAllowed(
 export function assertTemplateApplyAllowed(event: { planningStage: PlanningStage }): void {
   if (isLayoutLockedStage(event.planningStage)) {
     throw new DomainError("conflict", "Satış başladıktan sonra şablon uygulanamaz");
+  }
+}
+
+/**
+ * Satışa açık (`on_sale`) aşamada alan düzenlemesi tamamen kilitlidir: masalar ve decor dahil
+ * `saveLayout` hiç yazılmadan reddedilir. `sales_closed`ta düzenleme taahhüt kurallarıyla
+ * (`assertLayoutChangeAllowed`) serbesttir.
+ */
+export function assertSaveLayoutAllowed(event: { planningStage: PlanningStage }): void {
+  if (isSaleOpenStage(event.planningStage)) {
+    throw new DomainError("conflict", "Satış başladı; alan düzenlemesi kilitli. Düzenleme için satışı kapatın.");
   }
 }
 

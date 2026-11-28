@@ -100,3 +100,8 @@ export function planTransition(from: PlanningStage, kind: StageTransitionKind): 
 export function isLayoutLockedStage(stage: PlanningStage): boolean {
   return stage === "on_sale" || stage === "sales_closed";
 }
+
+/** Satışa açık aşama: alan düzenlemesi (masalar + decor) tamamen kilitlidir. */
+export function isSaleOpenStage(stage: PlanningStage): boolean {
+  return stage === "on_sale";
+}
