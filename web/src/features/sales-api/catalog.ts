@@ -136,7 +136,7 @@ export async function listSaleEvents(ex: Db | Tx, ctx: Ctx): Promise<EventCard[]
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const artistIds = [...new Set(rows.map((r) => r.artistId).filter((id): id is string => id !== null))];
-  const [settingsRows, priceRows, categoryRows, artistRows] = await Promise.all([
+  const [settingsRows, priceRows, categoryRows, artistRows, heroRows] = await Promise.all([
     ex.select().from(eventSaleSettings).where(inArray(eventSaleSettings.eventId, ids)),
     ex.select().from(eventSeatPrices).where(inArray(eventSeatPrices.eventId, ids)),
     ex
@@ -146,8 +146,11 @@ export async function listSaleEvents(ex: Db | Tx, ctx: Ctx): Promise<EventCard[]
     artistIds.length > 0
       ? ex.select({ id: artists.id, image: artists.image }).from(artists).where(inArray(artists.id, artistIds))
       : Promise.resolve([]),
+    ex.select({ eventId: eventSiteContent.eventId, image: eventSiteContent.heroImage })
+      .from(eventSiteContent).where(inArray(eventSiteContent.eventId, ids)),
   ]);
   const artistImageById = new Map(artistRows.map((a) => [a.id, a.image]));
+  const heroByEvent = new Map(heroRows.map((hero) => [hero.eventId, safeHeroPath(hero.image)]));
   const cards: EventCard[] = [];
   for (const row of rows) {
     const settings = settingsRows.find((s) => s.eventId === row.id);
@@ -165,7 +168,7 @@ export async function listSaleEvents(ex: Db | Tx, ctx: Ctx): Promise<EventCard[]
     for (const p of priceRows) if (p.eventId === row.id) finals[p.category] = p.finalPrice;
     const minPrice = minMoney(pricesOf(finals, online).map((p) => p.price));
     const artistImage = row.artistId ? (artistImageById.get(row.artistId) ?? null) : null;
-    cards.push(cardOf(row, settings?.currency ?? "TRY", minPrice, state, artistImage));
+    cards.push({ ...cardOf(row, settings?.currency ?? "TRY", minPrice, state, artistImage), heroImage: heroByEvent.get(row.id) ?? null });
   }
   return cards;
 }

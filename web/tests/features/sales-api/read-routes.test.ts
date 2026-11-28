@@ -296,6 +296,8 @@ describe("satış API okuma uçları", () => {
     const detail = eventDetailSchema.parse(
       await (await makeApi().getEvent(req("GET", `/x/${event.id}`), event.id)).json(),
     );
+    const list = eventsResponseSchema.parse(await (await makeApi().listEvents(req("GET", "/api/sales/v1/events"))).json());
+    expect(list.events.find((card) => card.id === event.id)).toMatchObject({ heroImage: video, coverImage: null });
     expect(detail.site.heroImage).toBe(video);
     expect(detail.coverImage).toBeNull();
   });

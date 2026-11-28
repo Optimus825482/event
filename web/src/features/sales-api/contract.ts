@@ -142,6 +142,7 @@ export const eventCardSchema = z.strictObject({
   saleState: saleStateSchema,
   coverImage: z.string().nullable(),
   artistImage: z.string().nullable(),
+  heroImage: z.string().nullable().optional(),
   isDemo: z.boolean(),
 });
 export type EventCard = z.infer<typeof eventCardSchema>;
