@@ -2,7 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { FAKE_IMAGES, createFakeCore } from "../tests/helpers/fake-core";
 
-const STATE_DIR = resolve(import.meta.dirname, ".state");
+// Paralel koşular birbirinin tohumunu ezmesin: SATIS_STATE_DIR ile ayrılabilir (varsayılan e2e/.state).
+const STATE_DIR = resolve(import.meta.dirname, process.env.SATIS_STATE_DIR ?? ".state");
 
 /** Sahte çekirdeği başlatır ve etkinlikleri koşu başında bir kez tohumlar (satis etkinlikleri 30 sn önbelleğe alır). */
 export default async function globalSetup(): Promise<() => Promise<void>> {

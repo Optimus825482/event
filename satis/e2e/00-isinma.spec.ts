@@ -20,16 +20,31 @@ async function visit(page: Page, path: string): Promise<void> {
       await page.waitForLoadState("networkidle");
       return;
     } catch (error) {
-      if (attempt >= 4) throw error;
+      if (attempt >= 6) throw error;
     }
   }
 }
 
 test("ısınma: ana rotalar ve ödeme akışı bir kez derlenir", async ({ page }) => {
-  test.setTimeout(300_000);
-  for (const path of ["/", "/hakkimizda", "/etkinlikler", "/biletimi-bul", `/etkinlik/${gala.id}`, `/etkinlik/${gala.id}?kisi=2`, `/etkinlik/${gala.id}/salon?kisi=2`]) {
+  // SATIS_E2E_SECRET her koşuda rastgele üretildiğinden Turbopack sunucu paketini yeniden derler;
+  // soğuk derleme + checkout akışı yavaş makinelerde 5 dk'yı aşabildiği için bütçe 10 dk.
+  // Salon sayfası önce ısıtılır: `?kisi=2` ile gelen istek salona yönlendirilir ve yönlendirme,
+  // salon rotası derlenmemişken kesintiye uğrar.
+  test.setTimeout(600_000);
+  for (const path of ["/", "/hakkimizda", "/etkinlikler", "/biletimi-bul", `/etkinlik/${gala.id}`, `/etkinlik/${gala.id}/salon?kisi=2`, `/etkinlik/${gala.id}?kisi=2`]) {
     await visit(page, path);
   }
+
+  // Salon akışı: EventSales "Ödeme Yap" eylemi (holdAction) ilk çağrıda derlenir; seçim akışıyla ısıtılır.
+  // Tutma başarılıysa salonda "Adım 2 · Ödeme" penceresi açılır (ayrı /odeme adresine gitmez).
+  await resetOrders();
+  await visit(page, `/etkinlik/${gala.id}/salon?kisi=1`);
+  await page.getByRole("searchbox", { name: "Masa numarası ara" }).fill("a1");
+  await page.getByRole("region", { name: "Masa arama sonuçları" }).getByRole("button", { name: /^Masa A1/ }).click();
+  const a1Dialog = page.getByRole("dialog", { name: "Masa A1" });
+  await expect(a1Dialog).toBeVisible({ timeout: 30_000 });
+  await a1Dialog.getByRole("button", { name: "Ödeme Yap" }).click();
+  await expect(page.getByRole("dialog", { name: "Ödeme" })).toBeVisible({ timeout: 120_000 });
 
   await resetOrders();
   await openCheckout(page, "V2", { quantity: 2 });

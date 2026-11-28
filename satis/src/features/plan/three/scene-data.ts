@@ -107,7 +107,10 @@ export function buildScene({ model, picks, activeTableId, dimmedIds }: SceneInpu
 
   for (const table of model.tables) {
     const pos = toMeters(model.canvas, table.x, table.y);
-    const body = tableBody(table);
+    // Loca kutusu prototipte tam boyut çizilir (boxMesh, hall.js:278); BODY_RATIO yalnız yuvarlak masa gövdesini küçültür.
+    const body = table.isLoca
+      ? { width: table.width / PX_PER_METER, depth: table.height / PX_PER_METER }
+      : tableBody(table);
     const floorY = table.isLoca ? LOCA_FLOOR_Y : 0;
     const state = tableSceneState(table);
     const selectable = table.status === "available";

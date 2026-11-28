@@ -4,12 +4,6 @@ import { fakeState } from "./support/fake";
 import { expectNoHorizontalOverflow } from "./support/layout";
 
 const { gala, bahar } = fakeState().events;
-const monthOf = (iso: string) =>
-  new Intl.DateTimeFormat("tr-TR", { timeZone: "Asia/Famagusta", month: "long", year: "numeric" }).format(new Date(iso));
-const ayOf = (iso: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Famagusta", year: "numeric", month: "2-digit" }).format(
-    new Date(iso),
-  );
 
 test("ana sayfa: karusel, Gelecek Organizasyonlar ve vekil rotadan gelen görsel", async ({ page }) => {
   const images: { status: number; type: string | undefined; cache: string | undefined }[] = [];
@@ -21,9 +15,20 @@ test("ana sayfa: karusel, Gelecek Organizasyonlar ve vekil rotadan gelen görsel
   await page.goto("/");
   await expect(page.getByRole("region", { name: "En yakın etkinlikler" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Gelecek Organizasyonlar" })).toBeVisible();
-  const img = page.getByRole("article").filter({ hasText: gala.name }).getByRole("img");
-  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
-  expect(await img.getAttribute("src")).toMatch(/^\/api\/gorsel\/(event|artist)\/[0-9a-f-]{36}\.webp$/);
+  // Kartta hero alanı görsel ya da video olabilir; ikisinde de vekil rotadan gelir.
+  const card = page.getByRole("article").filter({ hasText: gala.artistName ?? gala.name });
+  const media = card.locator("img, video").first();
+  await expect(media).toBeVisible();
+  const isVideo = await media.evaluate((el) => el instanceof HTMLVideoElement);
+  if (isVideo) {
+    await expect
+      .poll(() => media.evaluate((el: HTMLVideoElement) => el.readyState))
+      .toBeGreaterThanOrEqual(2);
+    expect(await media.getAttribute("poster")).toMatch(/^\/api\/gorsel\/(event|artist)\/[0-9a-f-]{36}\.webp$/);
+  } else {
+    await expect.poll(() => media.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+    expect(await media.getAttribute("src")).toMatch(/^\/api\/gorsel\/(event|artist)\/[0-9a-f-]{36}\.webp$/);
+  }
   expect(images.length).toBeGreaterThan(0);
   expect(images.every((i) => i.status === 200 && i.type === "image/webp" && i.cache === "public, max-age=300")).toBe(
     true,
@@ -51,18 +56,22 @@ test("görsel rotası geçersiz yolda 404 verir", async ({ request }) => {
   }
 });
 
-test("karusel: Sonraki slaytı değiştirir; hareket azaltmada Duraklat yoktur", async ({ page }) => {
+test("karusel: nokta düğmesi slaytı değiştirir; hareket azaltmada Duraklat yoktur ve sabit görsel çizilir", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const carousel = page.getByRole("region", { name: "En yakın etkinlikler" });
   await expect(carousel.getByRole("group", { name: "1 / 4" })).toBeVisible();
-  await carousel.getByRole("button", { name: "Sonraki etkinlik" }).click();
+  // Hareket azaltmada karusel video çizmez; slayt sabit görsel veya metin kartıdır.
+  await expect(carousel.locator("video")).toHaveCount(0);
+  const heroImg = carousel.getByRole("img", { name: gala.artistName ?? gala.name });
+  await expect(heroImg).toBeVisible();
+  await expect.poll(() => heroImg.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+  await expect(carousel.getByRole("button", { name: /Duraklat|Oynat/ })).toHaveCount(0);
+
+  // Nokta düğmesi ikinci slayta geçirir.
+  await carousel.getByRole("button", { name: `2. etkinlik: ${bahar.name}` }).click();
   await expect(carousel.getByRole("group", { name: "2 / 4" })).toBeVisible();
-  await expect(carousel.getByRole("button", { name: "Duraklat" })).toBeVisible();
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.reload();
-  await expect(
-    page.getByRole("region", { name: "En yakın etkinlikler" }).getByRole("button", { name: /Duraklat|Oynat/ }),
-  ).toHaveCount(0);
+  await expect(carousel.getByRole("group", { name: "1 / 4" })).toBeHidden();
 });
 
 test("/etkinlikler dört etkinliği tarih sırasıyla listeler", async ({ page }) => {
@@ -73,16 +82,29 @@ test("/etkinlikler dört etkinliği tarih sırasıyla listeler", async ({ page }
   await expectNoHorizontalOverflow(page);
 });
 
-test("/takvim: etkinliğin ayı, ajanda bağlantısı, ay değiştirme ve bozuk parametre", async ({ page }) => {
+test("/takvim: arama, ay filtresi ve satış durumu filtresi kartları daraltır", async ({ page }) => {
   await page.goto("/takvim");
-  await expect(page.getByRole("heading", { level: 2, name: monthOf(gala.startsAt), exact: true })).toBeVisible();
-  const agenda = page.getByRole("list", { name: "Ayın etkinlikleri" });
-  await expect(agenda.getByRole("link", { name: new RegExp(gala.name) })).toHaveAttribute("href", `/etkinlik/${gala.id}`);
-  await page.getByRole("link", { name: /→$/ }).click();
-  await expect(page).toHaveURL(/\/takvim\?ay=\d{4}-\d{2}$/);
-  expect(page.url()).not.toContain(ayOf(gala.startsAt));
-  expect((await page.goto("/takvim?ay=abc"))!.status()).toBe(200);
-  await expect(page.getByRole("heading", { level: 2, name: monthOf(gala.startsAt), exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "2026 Konser & Gala Takvimi" })).toBeVisible();
+  await expect(page.getByRole("article")).toHaveCount(4);
+
+  const search = page.getByRole("searchbox", { name: "Sanatçı ara" });
+  const month = page.getByRole("combobox", { name: "Ay filtresi" });
+  const status = page.getByRole("combobox", { name: "Satış durumu filtresi" });
+
+  await search.fill("Yılbaşı");
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await search.fill("");
+
+  // Sahte etkinliklerin hepsi Ocak'tır; başka ay seçilince boş durum yazılır.
+  await month.selectOption({ label: "Şubat" });
+  await expect(page.getByText("Seçili filtrelere uygun etkinlik bulunamadı.")).toBeVisible();
+  await month.selectOption({ label: "Ocak" });
+  await expect(page.getByRole("article").filter({ hasText: gala.artistName ?? gala.name })).toHaveCount(1);
+
+  // Satışta filtre: satışı kapalı ve bekleyen etkinlikler listeden düşer.
+  await status.selectOption({ label: "Satışta" });
+  await expect(page.getByRole("article")).toHaveCount(2);
+  await expect(page.getByRole("article").filter({ hasText: bahar.name })).toHaveCount(0);
   await expectHeadingOrder(page);
   await expectNoHorizontalOverflow(page);
 });

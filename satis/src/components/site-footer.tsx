@@ -5,7 +5,7 @@ import { CONTACT, COPYRIGHT, FOOTER_DESCRIPTION, FOOTER_EXPLORE, FOOTER_LEGAL } 
 import { activeSocialLinks } from "@/content/social";
 
 const HEADING = "font-sans text-xs font-bold uppercase tracking-[0.18em] text-gold-bright";
-const LINK = "inline-flex items-center py-1 text-[13.5px] text-muted no-underline transition-colors hover:text-ivory";
+const LINK = "inline-flex min-h-10 items-center py-1 text-[13.5px] text-muted no-underline transition-colors hover:text-ivory";
 
 export function SiteFooter() {
   const socials = activeSocialLinks();
@@ -78,7 +78,7 @@ export function SiteFooter() {
             <ul className="flex flex-wrap gap-x-5">
               {FOOTER_LEGAL.map((item) => (
                 <li key={item.href}>
-                  <Link href={item.href} className={`${LINK} text-xs`}>
+                  <Link href={item.href} className={`${LINK} min-w-10 justify-center text-xs`}>
                     {item.label}
                   </Link>
                 </li>

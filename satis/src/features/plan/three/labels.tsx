@@ -44,7 +44,7 @@ function buildAtlas(labels: readonly string[], fg: string, maxAnisotropy: number
 }
 
 function buildQuads(
-  items: readonly { x: number; y: number; z: number; size: number }[],
+  items: readonly { x: number; y: number; z: number; width: number; depth: number }[],
   totalRows: number,
 ): BufferGeometry | null {
   if (items.length === 0) return null;
@@ -53,20 +53,21 @@ function buildQuads(
   const indices: number[] = [];
 
   items.forEach((item, idx) => {
-    const half = item.size / 2;
+    const hw = item.width / 2;
+    const hd = item.depth / 2;
     const pBase = idx * 12;
-    positions[pBase + 0] = item.x - half;
+    positions[pBase + 0] = item.x - hw;
     positions[pBase + 1] = item.y;
-    positions[pBase + 2] = item.z + half;
-    positions[pBase + 3] = item.x + half;
+    positions[pBase + 2] = item.z + hd;
+    positions[pBase + 3] = item.x + hw;
     positions[pBase + 4] = item.y;
-    positions[pBase + 5] = item.z + half;
-    positions[pBase + 6] = item.x + half;
+    positions[pBase + 5] = item.z + hd;
+    positions[pBase + 6] = item.x + hw;
     positions[pBase + 7] = item.y;
-    positions[pBase + 8] = item.z - half;
-    positions[pBase + 9] = item.x - half;
+    positions[pBase + 8] = item.z - hd;
+    positions[pBase + 9] = item.x - hw;
     positions[pBase + 10] = item.y;
-    positions[pBase + 11] = item.z - half;
+    positions[pBase + 11] = item.z - hd;
 
     const col = idx % COLS;
     const row = Math.floor(idx / COLS);
@@ -108,7 +109,8 @@ export function TableLabels({ tables }: { tables: readonly SceneTable[] }) {
     return {
       texture: buildAtlas(labels, BALLROOM.labelText, maxAniso, BALLROOM.labelOutline),
       geometry: buildQuads(
-        tables.map((t) => ({ x: t.x, y: t.floorY + (t.isLoca ? 0.175 : 0.665), z: t.z, size: 1.15 })),
+        // Masa etiketi quad'ı prototipte 1.34×1.00 m, y+0.716 (hall.js:299); loca kutusunda y+0.15.
+        tables.map((t) => ({ x: t.x, y: t.floorY + (t.isLoca ? 0.15 : 0.716), z: t.z, width: 1.34, depth: 1.0 })),
         rows,
       ),
     };
@@ -158,7 +160,7 @@ export function SeatLabels({
     return {
       texture: buildAtlas(labels, BALLROOM.warmWhite, maxAniso),
       geometry: buildQuads(
-        numbered.map((c) => ({ x: c.x, y: c.y + 0.62, z: c.z, size: 0.42 })),
+        numbered.map((c) => ({ x: c.x, y: c.y + 0.62, z: c.z, width: 0.42, depth: 0.42 })),
         rows,
       ),
     };

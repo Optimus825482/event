@@ -1,21 +1,28 @@
 import { expect, test } from "@playwright/test";
 import { expectHeadingOrder } from "./sayfa-yardimcilari";
 import { fakeRequests, fakeState } from "./support/fake";
-import { expectNoHorizontalOverflow } from "./support/layout";
+import { disableWebgl, expectNoHorizontalOverflow } from "./support/layout";
 import { CONTACT } from "../src/content/site";
 import { formatEventDay } from "../src/lib/time-zone";
 
 const { gala, kapali, masa } = fakeState().events;
 
-test("etkinlik sayfası: görsel, tarih, kapı ve konser saati, yaş sınırı, tanıtım; Kıyafet yerine Bilet Al", async ({ page }) => {
+test("etkinlik sayfası: görsel, tarih, kapı ve konser saati, yaş sınırı, tanıtım; kişi sayısı sayfada seçilir", async ({ page }) => {
   await page.goto(`/etkinlik/${gala.id}`);
   await expect(page.getByRole("heading", { level: 1, name: gala.name })).toBeVisible();
   for (const text of ["Kapı Açılış", "Konser Saati", "18+", "Yılbaşı gecesine özel gala.", "Demo Sanatçı"]) {
     await expect(page.getByText(text, { exact: true }).first()).toBeVisible();
   }
   await expect(page.getByText("Kıyafet", { exact: true })).toHaveCount(0);
-  await expect(page.locator("main dl").getByRole("link", { name: "Bilet Al" })).toBeVisible();
-  // Masa seçimi artık ayrı sayfadadır.
+  // Satış açıkken kişi sayısı doğrudan sayfada seçilir (kişi sayısı penceresi üst menüyle açılır).
+  await expect(page.getByText("Kaç Kişilik Bilet Alacaksınız?")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Kişi sayısı" }).getByRole("button")).toHaveCount(8);
+  await expect(page.getByRole("link", { name: "Masa Seçimine Geç →" })).toHaveAttribute(
+    "href",
+    `/etkinlik/${gala.id}/salon?kisi=2`,
+  );
+  await expect(page.getByText("Başlangıç: 1.500,00 ₺", { exact: true })).toBeVisible();
+  // Masa seçimi ayrı salon sayfasındadır; detay sayfasında 3B sahne bulunmaz.
   await expect(page.locator("section#masa-secimi")).toHaveCount(0);
   await expect(page.getByTestId("plan-3d-scene")).toHaveCount(0);
   const img = page.locator('main img[src^="/api/gorsel/"]').first();
@@ -27,6 +34,7 @@ test("etkinlik sayfası: görsel, tarih, kapı ve konser saati, yaş sınırı, 
 const eyebrow = (e: typeof gala) => `${e.artistName ?? e.name} · ${formatEventDay(e.startsAt)}`.toLocaleUpperCase("tr-TR");
 
 test("Bilet Al penceresi kişi sayısını sorar ve masa seçimine götürür", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/etkinlik/${gala.id}#bilet-al`);
   const dialog = page.getByRole("dialog", { name: "Kişi sayısı" });
   await expect(dialog).toBeVisible();
@@ -47,12 +55,14 @@ test("Bilet Al penceresi kişi sayısını sorar ve masa seçimine götürür", 
   await dialog.getByRole("button", { name: "Masa seçimine geç →" }).click();
   await expect(page).toHaveURL(`/etkinlik/${gala.id}/salon?kisi=4`);
   await expect(page.getByRole("heading", { level: 1, name: gala.name })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Bilet seçimi" }).getByLabel("Kişi sayısı")).toHaveValue("4");
+  // Salon sayfası seçilen kişi sayısıyla açılır; ayrı bir "Bilet seçimi" paneli yoktur.
+  await expect(page.getByLabel("Kişi sayısı", { exact: true })).toContainText("4 Kişi");
+  await expect(page.getByRole("complementary")).toHaveCount(0);
 
-  // Salondan detaya dönülür; bilgi ızgarasındaki Bilet Al aynı pencereyi açar; Esc kapatır ve odak düğmeye döner.
+  // Salondan detaya dönülür; üst menüdeki Bilet Al aynı pencereyi açar; Esc kapatır ve odak düğmeye döner.
   await page.getByRole("link", { name: "← Etkinlik detayı" }).click();
   await expect(page).toHaveURL(`/etkinlik/${gala.id}`);
-  const trigger = page.getByRole("main").getByRole("link", { name: "Bilet Al" });
+  const trigger = page.locator('[data-nav="desktop"]').getByRole("link", { name: "Bilet Al" });
   await trigger.click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Kişi sayısı" })).toHaveValue("2");
@@ -62,8 +72,9 @@ test("Bilet Al penceresi kişi sayısını sorar ve masa seçimine götürür", 
 });
 
 test("pencere kipli: odak pencerede kalır, kapat düğmesi kapatır", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/etkinlik/${gala.id}`);
-  await page.getByRole("main").getByRole("link", { name: "Bilet Al" }).click();
+  await page.locator('[data-nav="desktop"]').getByRole("link", { name: "Bilet Al" }).click();
   const dialog = page.getByRole("dialog", { name: "Kişi sayısı" });
   await expect(dialog).toBeVisible();
   // showModal: üst katmanda, sayfanın geri kalanı etkisiz (odak dışarı çıkamaz).
@@ -89,14 +100,15 @@ test("üst menüdeki Bilet Al etkinlik sayfasında pencereyi açar, başka sayfa
 test("kişi sayısı penceresi JavaScript kapalıyken de çalışır", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 375, height: 812 } });
   const page = await context.newPage();
+  // Pencere JS'sizde :target kuralıyla açılabilir (CSS noscript içinde sunucudan gelir).
+  const html = await (await page.request.get(`/etkinlik/${gala.id}`)).text();
+  expect(html).toContain("dialog#bilet-al:target");
   await page.goto(`/etkinlik/${gala.id}`);
   const dialog = page.locator("dialog#bilet-al");
   await expect(dialog).toBeHidden();
-  await page.getByRole("main").getByRole("link", { name: "Bilet Al" }).click();
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("combobox", { name: "Kişi sayısı" }).selectOption("3");
-  await dialog.getByRole("button", { name: "Masa seçimine geç →" }).click();
-  await expect(page).toHaveURL(`/etkinlik/${gala.id}/salon?kisi=3`);
+  // JS kapalıyken masa seçimi InlineGuestPicker bağlantısıyla yapılır (normal GET bağlantısı).
+  await page.getByRole("main").getByRole("link", { name: "Masa Seçimine Geç →" }).click();
+  await expect(page).toHaveURL(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expect(page.getByRole("heading", { level: 1, name: gala.name })).toBeVisible();
   await context.close();
 });
@@ -118,19 +130,22 @@ test.describe("kisi parametresi", () => {
   test("eski bağlantı (?kisi=n#masa-secimi) salon sayfasına yönlenir", async ({ page }) => {
     await page.goto(`/etkinlik/${gala.id}?kisi=3#masa-secimi`);
     await expect(page).toHaveURL(new RegExp(`/etkinlik/${gala.id}/salon\\?kisi=3`));
-    await expect(page.getByRole("complementary", { name: "Bilet seçimi" }).getByLabel("Kişi sayısı")).toHaveValue("3");
+    await expect(page.getByLabel("Kişi sayısı", { exact: true })).toContainText("3 Kişi");
   });
 });
 
-test("salon sayfası: başlık, detaya dönüş, planı çizer ve satış şeklini yazar", async ({ page }) => {
+test("salon sayfası: başlık hapı, detaya dönüş, planı çizer ve satış şeklini yazar", async ({ page }) => {
+  await disableWebgl(page);
   await page.goto(`/etkinlik/${gala.id}/salon?kisi=2`);
   await expect(page.getByRole("heading", { level: 1, name: gala.name })).toBeVisible();
   await expect(page.getByRole("link", { name: "← Etkinlik detayı" })).toHaveAttribute("href", `/etkinlik/${gala.id}`);
-  await expect(page.locator("section#masa-secimi").getByText(/A1/).first()).toBeVisible();
   await expect(
     page.getByText("Sandalye bazlı satış: salondan masanızı ve numaralı sandalyelerinizi seçersiniz."),
   ).toBeVisible();
-  await expect(page.getByRole("region", { name: "Seçiminiz" }).getByText("0/2 kişi seçildi")).toBeVisible();
+  // 2B kroki masaları etiketleriyle çizer; masa araması da plan bölgesinde açılır.
+  await expect(page.locator("section#masa-secimi").getByText("A1").first()).toBeVisible();
+  await expect(page.locator("section#masa-secimi").getByRole("group", { name: "Salon planı" })).toBeVisible();
+  await expect(page.getByRole("status").getByText("0/2 kişi seçildi")).toBeVisible();
   await expectHeadingOrder(page);
 });
 
@@ -140,6 +155,7 @@ test("masa bazlı etkinlikte açıklama masa bazlıdır", async ({ page }) => {
 });
 
 test("satışı kapalı etkinlikte durum yazılır, kişi sayısı penceresi yoktur; salon gezilebilir", async ({ page }) => {
+  await disableWebgl(page);
   await page.goto(`/etkinlik/${kapali.id}#bilet-al`);
   await expect(page.getByText("Satış kapalı")).toBeVisible();
   await expect(page.locator("dialog#bilet-al")).toHaveCount(0);
@@ -148,27 +164,34 @@ test("satışı kapalı etkinlikte durum yazılır, kişi sayısı penceresi yok
   await page.getByRole("link", { name: "Salonu ve sahne görüşünü incele →" }).click();
   await expect(page).toHaveURL(`/etkinlik/${kapali.id}/salon`);
   await expect(page.locator("section#masa-secimi")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Sahne görüşü" })).toBeVisible();
+  // Masayı listeden seçince masa penceresi açılır: satış kapalıdır, kayıtlı sahne görseli de yoktur.
+  await page.getByLabel("Masa veya loca").selectOption({ label: "Masa A1" });
+  const dialog = page.getByRole("dialog", { name: "Masa A1" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Satış kapalı")).toBeVisible();
+  await expect(dialog.getByText("Bu konum için kayıtlı sahne görseli yok.")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Ödeme Yap" })).toBeDisabled();
+  // Salonda seçim çubuğu yoktur.
+  await expect(page.getByText("Kişi Sayısı:")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Seçiminiz" })).toHaveCount(0);
 });
 
-test("Konum: Google Haritalar gömülü harita, mekân adresi, yol tarifi ve haritada aç", async ({ page }) => {
+test("Konum: Google Haritalar gömülü haritası, mekân adresi ve yol tarifi bağlantısı", async ({ page }) => {
   await page.goto(`/etkinlik/${gala.id}`);
-  const section = page.locator("section", { has: page.getByRole("heading", { level: 2, name: "Konum" }) });
+  const section = page.locator("section", { has: page.getByRole("heading", { level: 2, name: "Etkinlik Konumu & Ulaşım" }) });
   const query = encodeURIComponent(`${CONTACT.venue}, ${CONTACT.address}`);
   const frame = section.locator("iframe");
   await expect(frame).toHaveAttribute("src", `https://www.google.com/maps?q=${query}&output=embed`);
   await expect(frame).toHaveAttribute("title", `${CONTACT.venue} haritası`);
   await expect(frame).toHaveAttribute("loading", "lazy");
-  await expect(section.getByText(CONTACT.venue, { exact: true })).toBeVisible();
-  await expect(section.getByText(CONTACT.address, { exact: true })).toBeVisible();
-  const directions = section.getByRole("link", { name: "Yol tarifi al" });
+  await expect(section.locator("address")).toContainText(CONTACT.venue);
+  await expect(section.locator("address")).toContainText(CONTACT.address);
+  const directions = section.getByRole("link", { name: /Yol Tarifi/ });
   await expect(directions).toHaveAttribute("href", `https://www.google.com/maps/dir/?api=1&destination=${query}`);
   await expect(directions).toHaveAttribute("target", "_blank");
   await expect(directions).toHaveAttribute("rel", "noopener noreferrer");
-  const open = section.getByRole("link", { name: "Google Haritalar'da aç" });
-  await expect(open).toHaveAttribute("href", `https://www.google.com/maps/search/?api=1&query=${query}`);
-  await expect(open).toHaveAttribute("rel", "noopener noreferrer");
+  // Arayüzde haritada aç bağlantısı yoktur; yalnızca gömülü harita ve yol tarifi sunulur.
+  await expect(section.getByRole("link", { name: /Haritalar'da aç/ })).toHaveCount(0);
   const csp = (await page.request.get(`/etkinlik/${gala.id}`)).headers()["content-security-policy"] ?? "";
   expect(csp).toContain("frame-src https://www.google.com");
   await expectNoHorizontalOverflow(page);

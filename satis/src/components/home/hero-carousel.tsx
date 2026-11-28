@@ -128,7 +128,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
                           aria-label={`${dotIndex + 1}. etkinlik: ${s.name}`}
                           aria-current={isDotCurrent ? "true" : undefined}
                           onClick={() => setActive(dotIndex)}
-                          className="inline-flex min-h-9 items-center justify-center bg-transparent p-0"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center bg-transparent p-0"
                         >
                           <span
                             className={cn(

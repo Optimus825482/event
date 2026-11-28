@@ -37,7 +37,7 @@ export default function RefundPage() {
 
       <p className="text-sm text-muted">
         Kişisel verilerin işlenmesine ilişkin esaslar için{" "}
-        <Link href="/kvkk" className="text-gold-bright underline">
+        <Link href="/kvkk" className="inline-block -my-3 py-3 text-gold-bright underline">
           KVKK Aydınlatma Metni
         </Link>{" "}
         sayfamızı inceleyebilirsiniz.

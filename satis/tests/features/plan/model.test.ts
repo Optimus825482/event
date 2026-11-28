@@ -102,7 +102,7 @@ describe("buildPlanModel", () => {
     }));
   it("bütün satılan loca boşken alınabilir, kısmen doluysa dolu sayılır", () => {
     expect(model({ a1: 5, l1: 6 }).tables[1]).toMatchObject({
-      status: "available", width: 48, height: 36, ariaLabel: "Loca L1, VIP, yalnızca bütün olarak 6 kişilik",
+      status: "available", width: 70, height: 48, ariaLabel: "Loca L1, VIP, yalnızca bütün olarak 6 kişilik",
     });
     expect(model({ a1: 5, l1: 4 }).tables[1]).toMatchObject({ status: "sold_out" });
   });

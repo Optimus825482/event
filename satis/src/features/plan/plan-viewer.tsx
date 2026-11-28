@@ -24,7 +24,7 @@ export type PlanViewerProps = {
 };
 
 const BROWSE_3D_HINT =
-  "Döndürmek için sürükleyin, yakınlaşmak için tekerleği ya da iki parmağınızı kullanın. Masaya dokununca o masadan sahne görüşü gösterilir.";
+  "Döndürmek için sürükleyin; yakınlaşmak için tekerleği ya da + / − düğmelerini kullanın. Masaya dokununca o masadan sahne görüşü gösterilir.";
 
 const UNAVAILABLE_3D_MESSAGE: Record<ThreeDUnavailableReason, string> = {
   no_webgl:
@@ -63,7 +63,7 @@ export function PlanViewer({
             variant="glass"
             aria-pressed={view.show3d}
             onClick={() => view.setMode(view.show3d ? "2d" : "3d")}
-            className="min-h-9 px-3.5 py-1.5 text-xs font-semibold"
+            className="min-h-10 px-3.5 py-1.5 text-xs font-semibold"
           >
             {view.show3d ? "2B görünüm" : "3B görünüm"}
           </Button>
@@ -72,7 +72,7 @@ export function PlanViewer({
       {view.detecting ? (
         <div
           role="status"
-          className="flex h-[calc(100dvh-13rem)] min-h-[420px] w-full items-center justify-center rounded-[16px] border border-line-gold bg-bg text-sm text-muted sm:h-[calc(100dvh-10.5rem)] sm:min-h-[540px]"
+          className="flex h-[calc(100dvh-13rem)] min-h-[min(420px,100dvh)] w-full items-center justify-center rounded-[16px] border border-line-gold bg-bg text-sm text-muted sm:h-[calc(100dvh-10.5rem)] sm:min-h-[min(540px,100dvh)]"
         >
           3B salon yükleniyor…
         </div>

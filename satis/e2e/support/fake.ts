@@ -7,9 +7,10 @@ type FakeFile = {
   events: { gala: EventDetail; bahar: EventDetail; kapali: EventDetail; masa: EventDetail };
 };
 
-/** Global kurulumun yazdığı sahte çekirdek durumu. */
+/** Global kurulumun yazdığı sahte çekirdek durumu; SATIS_STATE_DIR paralel koşularda ayrı dizine işaret eder. */
 export function fakeState(): FakeFile {
-  return JSON.parse(readFileSync(resolve(import.meta.dirname, "../.state/fake.json"), "utf8")) as FakeFile;
+  const stateDir = process.env.SATIS_STATE_DIR ?? ".state";
+  return JSON.parse(readFileSync(resolve(import.meta.dirname, "..", stateDir, "fake.json"), "utf8")) as FakeFile;
 }
 
 export function tableId(event: EventDetail, label: string): string {

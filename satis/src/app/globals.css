@@ -159,6 +159,16 @@ h3 {
   }
 }
 
+/* iOS Safari, 16 px altındaki form alanına odaklanınca sayfayı kendi kendine yakınlaştırır.
+   Dokunmatik cihazlarda ve telefon genişliklerinde metin alanlarını 16 px'e sabitle. */
+@media (pointer: coarse), (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Kipli pencere (yerel <dialog>) arka planı ve kaydırma kilidi. */
 dialog:modal {
   overscroll-behavior: contain;

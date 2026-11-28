@@ -165,14 +165,14 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
               onChange={(event) => {
                 if (!busy.current) setAcceptTerms(event.target.checked);
               }}
-              className="mt-1 size-5 shrink-0 accent-gold"
+              className="size-10 shrink-0 accent-gold"
             />
             <span>
-              <Link href="/kvkk" target="_blank" rel="noopener" className="text-gold underline">
+              <Link href="/kvkk" target="_blank" rel="noopener" className="inline-block -my-3 py-3 text-gold underline">
                 KVKK Aydınlatma Metni
               </Link>
               {"'ni ve "}
-              <Link href="/mesafeli-satis" target="_blank" rel="noopener" className="text-gold underline">
+              <Link href="/mesafeli-satis" target="_blank" rel="noopener" className="inline-block -my-3 py-3 text-gold underline">
                 Mesafeli Satış Sözleşmesi
               </Link>
               {"'ni okudum, kabul ediyorum."}

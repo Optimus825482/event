@@ -7,7 +7,8 @@ export const TABLE_SIZE = 40;
 export type SaleCategory = NonNullable<PlanTablePublic["category"]>;
 
 export function tableDims(shape: PlanTablePublic["shape"], isLoca: boolean): { width: number; height: number } {
-  if (isLoca) return { width: 48, height: 36 };
+  // Loca kutusu prototipte tam boyut 4.67×3.2 m (hall.js:278); 15 px/m → 70×48 px.
+  if (isLoca) return { width: 70, height: 48 };
   if (shape === "rectangle") return { width: TABLE_SIZE, height: 24 };
   return { width: TABLE_SIZE, height: TABLE_SIZE };
 }

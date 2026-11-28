@@ -158,7 +158,7 @@ function TableDialogBody({
 
       {sale && table.status === "available" ? (
         <details className="mx-5 mt-3 rounded-[14px] border border-line bg-surface-raised">
-          <summary className="cursor-pointer px-4 py-2.5 text-xs font-semibold tracking-wider text-gold-bright uppercase select-none hover:text-ivory">
+          <summary className="flex min-h-10 cursor-pointer items-center px-4 py-2.5 text-xs font-semibold tracking-wider text-gold-bright uppercase select-none hover:text-ivory">
             Sandalyeleri değiştir
           </summary>
           <div className="border-t border-line p-3">

@@ -83,9 +83,9 @@ test("biletimi bul: PNR + soyad e-bilete götürür, PNR adrese yazılmaz", asyn
   const pnr = await payAndReadPnr(page, "A4", "Demir");
   await page.goto("/biletimi-bul");
   await expect(page.getByRole("heading", { level: 1, name: "Biletim (PNR)" })).toBeVisible();
-  await page.getByLabel("PNR").fill(pnr);
-  await page.getByLabel("Soyad").fill("demir");
-  await page.getByRole("button", { name: "Biletimi bul" }).click();
+  await page.getByLabel("PNR Kodu").fill(pnr);
+  await page.getByLabel("Misafir Soyadı").fill("demir");
+  await page.getByRole("button", { name: "Bileti Sorgula" }).click();
   await expect(page).toHaveURL(/\/bilet\//);
   expect(page.url()).not.toContain(pnr.replace("-", ""));
   await expect(page.getByText(`PNR ${pnr}`)).toBeVisible();
@@ -95,9 +95,9 @@ test("biletimi bul: PNR + soyad e-bilete götürür, PNR adrese yazılmaz", asyn
 test("yanlış soyad tek mesaj verir", async ({ page }) => {
   const pnr = await payAndReadPnr(page, "A2", "Demir");
   await page.goto("/biletimi-bul");
-  await page.getByLabel("PNR").fill(pnr);
-  await page.getByLabel("Soyad").fill("Yılmaz");
-  await page.getByRole("button", { name: "Biletimi bul" }).click();
+  await page.getByLabel("PNR Kodu").fill(pnr);
+  await page.getByLabel("Misafir Soyadı").fill("Yılmaz");
+  await page.getByRole("button", { name: "Bileti Sorgula" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "PNR ya da soyad hatalı." })).toHaveText(
     "PNR ya da soyad hatalı.",
   );

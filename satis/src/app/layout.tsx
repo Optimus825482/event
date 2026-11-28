@@ -12,7 +12,8 @@ export const metadata: Metadata = {
   description: "Merit Royal etkinlik biletleri",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+// interactive-widget: iOS Safari'de klavye açılınca düzen görünümünü küçültür; form alanları klavye altında kalmaz.
+export const viewport: Viewport = { width: "device-width", initialScale: 1, interactiveWidget: "resizes-content" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Nonce'u proxy üretir; okumak sayfaları istek başına dinamik yapar (CSP için gerekli).

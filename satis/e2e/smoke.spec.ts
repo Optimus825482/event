@@ -4,12 +4,18 @@ import { expectNoHorizontalOverflow } from "./support/layout";
 
 test("ana sayfa satıştaki etkinliği durumuyla listeler ve 375 px'te taşmaz", async ({ page }) => {
   await page.goto("/");
-  const card = page.getByRole("article").filter({ hasText: "Yılbaşı Galası" });
-  await expect(card.getByText("Başlangıç: 1.500,00 ₺")).toBeVisible();
-  await expect(card.getByRole("link", { name: "Bilet Al" })).toHaveAttribute(
-    "href",
-    `/etkinlik/${fakeState().events.gala.id}#bilet-al`,
-  );
+  const gala = fakeState().events.gala;
+  const card = page.getByRole("article").filter({ hasText: gala.artistName ?? gala.name });
+  // Kartta fiyat satırı yok; başlangıç fiyatı üst karuseldeki slaytta yazılır.
+  await expect(card.getByText(/Başlangıç/)).toHaveCount(0);
+  await expect(card.getByText(`${gala.artistName ?? gala.name}`)).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "En yakın etkinlikler" })
+      .getByText("Başlangıç: 1.500,00 ₺")
+      .first(),
+  ).toBeVisible();
+  await expect(card.getByRole("link", { name: "Bilet Al" })).toHaveAttribute("href", `/etkinlik/${gala.id}#bilet-al`);
   await expect(page.getByRole("article").filter({ hasText: "Bahar Konseri" }).getByText("Satış yakında")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });

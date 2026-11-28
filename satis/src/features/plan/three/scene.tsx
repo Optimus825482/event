@@ -145,7 +145,7 @@ function InstancedTables({
 
     if (roundRef.current) {
       roundTables.forEach((t, i) => {
-        dummy.position.set(t.x, t.floorY + 0.325, t.z);
+        dummy.position.set(t.x, t.floorY + 0.38, t.z);
         dummy.rotation.set(0, t.rotationY, 0);
         dummy.scale.set(t.width, 0.65, t.depth);
         dummy.updateMatrix();
@@ -161,7 +161,9 @@ function InstancedTables({
     if (boxRef.current) {
       boxTables.forEach((t, i) => {
         const h = t.isLoca ? 0.16 : 0.65;
-        dummy.position.set(t.x, t.floorY + h / 2, t.z);
+        // Loca kutusu prototipte merkez y+0.06 (hall.js:278); diğer kutular tabana oturur (h/2).
+        const yOffset = t.isLoca ? 0.06 : h / 2;
+        dummy.position.set(t.x, t.floorY + yOffset, t.z);
         dummy.rotation.set(0, t.rotationY, 0);
         dummy.scale.set(t.width, h, t.depth);
         dummy.updateMatrix();
@@ -462,6 +464,10 @@ export default function Scene3D({
   );
 
   const wallVis = useMemo(() => wallVisibility(scene.room, camPos, pov), [scene.room, camPos, pov]);
+  // Tek krem tavan yalnız kamera oda içinde ve göz yüksekliği < 7.6 m iken görünür (MERR hall.js:382).
+  // Yüksek/dışarıdaki genel bakış presetlerinde gizlidir; z-fighting yapan ikinci tavan kaldırıldı.
+  const roofVisible =
+    camPos[1] < 7.6 && Math.abs(camPos[0]) < scene.room.width / 2 && Math.abs(camPos[2]) < scene.room.depth / 2;
 
   return (
     <div className="relative h-full w-full bg-bg">
@@ -482,7 +488,7 @@ export default function Scene3D({
           <color attach="background" args={[BALLROOM.background]} />
           <BallroomLights />
           <BallroomFloor width={scene.room.width} depth={scene.room.depth} />
-          <Chandeliers width={scene.room.width} depth={scene.room.depth} visible={pov} />
+          <Chandeliers width={scene.room.width} depth={scene.room.depth} visible={roofVisible} />
           {scene.decor.map((e) => (
             <DecorMesh key={e.id} element={e} />
           ))}

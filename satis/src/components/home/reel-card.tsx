@@ -39,7 +39,7 @@ export function ReelCard({ event }: { event: EventCardData }): React.JSX.Element
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-linear-to-t from-bg via-bg/90 to-transparent p-4 pt-16">
         <p className="text-[11.5px] font-medium text-gold-bright">{`${dateLabel} · ${timeLabel}`}</p>
         <h3 className="font-serif text-[22px] leading-[1.1] font-bold text-ivory">
-          <Link href={`/etkinlik/${event.id}`} className="no-underline hover:text-gold-bright">
+          <Link href={`/etkinlik/${event.id}`} className="inline-block -my-2.5 py-2.5 no-underline hover:text-gold-bright">
             {event.artistName ?? event.name}
           </Link>
         </h3>
@@ -48,11 +48,11 @@ export function ReelCard({ event }: { event: EventCardData }): React.JSX.Element
         ) : null}
         <div className="pt-2">
           {open ? (
-            <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-8 w-full px-3.5 py-1.5 text-xs">
+            <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-10 w-full px-3.5 py-1.5 text-xs">
               Bilet Al
             </ButtonLink>
           ) : (
-            <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-8 w-full px-3.5 py-1.5 text-xs">
+            <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-10 w-full px-3.5 py-1.5 text-xs">
               Detaylar
             </ButtonLink>
           )}

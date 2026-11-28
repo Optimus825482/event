@@ -301,7 +301,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
               aria-label="Kişi sayısını azalt"
               disabled={state.partySize <= 1}
               onClick={() => runAction({ type: "setPartySize", partySize: state.partySize - 1 })}
-              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex size-10 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
             >
               −
             </button>
@@ -314,7 +314,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
               aria-label="Kişi sayısını artır"
               disabled={state.partySize >= limit}
               onClick={() => runAction({ type: "setPartySize", partySize: state.partySize + 1 })}
-              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex size-10 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
             >
               +
             </button>

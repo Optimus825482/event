@@ -140,11 +140,11 @@ export function CalendarGrid({ events }: { events: EventCardData[] }): React.JSX
                       {event.minPrice !== null ? `${formatMoney(event.minPrice, event.currency)}'den` : "—"}
                     </span>
                     <div className="flex gap-2">
-                      <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-9 px-3.5 py-1.5 text-xs">
+                      <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-10 px-3.5 py-1.5 text-xs">
                         Detaylar
                       </ButtonLink>
                       {open ? (
-                        <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-9 px-3.5 py-1.5 text-xs">
+                        <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-10 px-3.5 py-1.5 text-xs">
                           Bilet Al
                         </ButtonLink>
                       ) : null}

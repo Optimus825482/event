@@ -62,7 +62,7 @@ const CAMERA_BUTTONS: { type: CameraCommand["type"]; label: string; symbol?: str
 ];
 
 export const DEFAULT_3D_HINT =
-  "Sol tık/sürükle: Döndür · Sağ tık: Sağa sola kaydır · Tekerlek: Yakınlaştır. Masaya tıklayınca sahne görünümü ve detaylar açılır.";
+  "Sürükle: Döndür · Tekerlek veya + / − düğmeleri: Yakınlaştır. Masaya dokununca sahne görünümü ve detaylar açılır.";
 
 /** Planın 3B balo salonu görünümü (tembel yüklenir, hata sınırıyla sarılıdır). */
 export function Plan3D({
@@ -127,7 +127,7 @@ export function Plan3D({
         data-testid="plan-3d-scene"
         data-ready={ready ? "true" : "false"}
         data-camera={cameraTag}
-        className="relative h-[calc(100dvh-13rem)] min-h-[420px] w-full overflow-hidden rounded-[16px] border border-line-gold bg-bg sm:h-[calc(100dvh-10.5rem)] sm:min-h-[540px]"
+        className="relative h-[calc(100dvh-13rem)] min-h-[min(420px,100dvh)] w-full overflow-hidden rounded-[16px] border border-line-gold bg-bg sm:h-[calc(100dvh-10.5rem)] sm:min-h-[min(540px,100dvh)]"
       >
         {hovered ? (
           <div

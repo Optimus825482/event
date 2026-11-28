@@ -63,7 +63,7 @@ export default async function SalonPage({ params, searchParams }: PageProps) {
         <ButtonLink
           href={`/etkinlik/${event.id}`}
           variant="ghost"
-          className="min-h-9 border border-line px-4 py-1.5 text-sm font-semibold"
+          className="min-h-10 border border-line px-4 py-1.5 text-sm font-semibold"
         >
           ← Etkinlik detayı
         </ButtonLink>

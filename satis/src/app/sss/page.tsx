@@ -24,7 +24,7 @@ function AnswerText({ text }: { text: string }) {
         <Fragment key={i}>
           {part}
           {i < parts.length - 1 ? (
-            <Link href={match.href} className="text-gold-bright underline">
+            <Link href={match.href} className="inline-block -my-3 py-3 text-gold-bright underline">
               {match.label}
             </Link>
           ) : null}
@@ -44,7 +44,7 @@ export default function FaqPage() {
             open={i === 0}
             className="rounded-[16px] border border-line bg-surface-raised p-5"
           >
-            <summary className="cursor-pointer font-serif text-xl text-ivory">{item.q}</summary>
+            <summary className="cursor-pointer py-2 font-serif text-xl text-ivory">{item.q}</summary>
             <p className="mt-3 text-sm leading-relaxed text-muted">
               <AnswerText text={item.a} />
             </p>

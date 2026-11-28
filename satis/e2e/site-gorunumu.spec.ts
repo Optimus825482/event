@@ -11,8 +11,25 @@ test("başlıkta altın logo yüklenir ve ana sayfaya bağlanır; sekme simgeler
   const home = page.getByRole("banner").getByRole("link", { name: "Merit Entertainment — Ana sayfa" });
   await expect(home).toHaveAttribute("href", "/");
   const logo = home.locator("img");
-  await expect.poll(() => logo.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
-  expect(await logo.evaluate((el) => el.getBoundingClientRect().height)).toBe(46);
+  // Dev sunucunun ilk derlemede sayfayı yeniden yüklemesi evaluate'i kesebilir; kesinti durumlarında poll bekler.
+  await expect
+    .poll(async () => {
+      try {
+        return await logo.evaluate((el: HTMLImageElement) => el.naturalWidth);
+      } catch {
+        return 0;
+      }
+    })
+    .toBeGreaterThan(0);
+  await expect
+    .poll(async () => {
+      try {
+        return await logo.evaluate((el) => el.getBoundingClientRect().height);
+      } catch {
+        return -1;
+      }
+    })
+    .toBe(46);
 
   for (const rel of ["icon", "apple-touch-icon"]) {
     const href = await page.locator(`head link[rel="${rel}"]`).first().getAttribute("href");
@@ -72,9 +89,36 @@ test("ana sayfadaki etkinlik kartı tanıtım medyasını ve azaltılmış harek
   await page.goto("/");
   const reel = page.getByRole("article").filter({ has: page.locator(`a[href="/etkinlik/${gala.id}"]`) });
   const image = reel.getByRole("img", { name: gala.artistName! });
+  // Kart lazy yükleniyor: doğrulamadan önce görünüme getirilir ve görsel yüklene kadar beklenir.
+  await image.scrollIntoViewIfNeeded();
+  await expect.poll(() => image.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
   for (const [preference, expected] of [["no-preference", FAKE_IMAGES.hero], ["reduce", FAKE_IMAGES.artist]] as const) {
     await page.emulateMedia({ reducedMotion: preference });
     await expect.poll(() => image.evaluate((el: HTMLImageElement) => new URL(el.currentSrc).pathname))
       .toBe(`/api/gorsel/${expected}`);
+  }
+});
+
+test("mobilde metin alanları en az 16 px: iOS odak yakınlaştırması tetiklenmez", async ({ page }) => {
+  const routes = ["/takvim", "/etkinlikler", "/biletimi-bul", `/etkinlik/${gala.id}/salon?kisi=2`];
+  for (const route of routes) {
+    await page.goto(route);
+    const fields = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea"),
+      )
+        .filter((el) => {
+          const style = getComputedStyle(el);
+          return style.display !== "none" && style.visibility !== "hidden" && el.getClientRects().length > 0;
+        })
+        .map((el) => ({
+          type: el instanceof HTMLInputElement ? el.type : el.tagName.toLowerCase(),
+          size: parseFloat(getComputedStyle(el).fontSize),
+        })),
+    );
+    for (const field of fields) {
+      if (["checkbox", "radio", "range", "color"].includes(field.type)) continue;
+      expect(field.size, `${route} ${field.type} alanı 16 px olmalı`).toBeGreaterThanOrEqual(16);
+    }
   }
 });

@@ -15,3 +15,5 @@ next-env.d.ts
 /test-results-cross/
 /e2e-cross/.state.json
 /.next-load/
+/test-results-paralel/
+/e2e/.state-paralel/

@@ -51,7 +51,7 @@ function BallroomWall({ spec }: { spec: WallSpec }) {
   );
 }
 
-/** Salon duvarları (kesit görünümü: kamera duvarın dışındaysa o duvar gizlenir) ve masadan bakış kasetli tavanı. */
+/** Salon duvarları (kesit görünümü: kamera duvarın dışındaysa o duvar gizlenir). Tavan tekildir ve ballroom.tsx'te çizilir. */
 export function SceneWalls({
   canvasWidth,
   canvasHeight,
@@ -67,38 +67,10 @@ export function SceneWalls({
 }) {
   const walls = useMemo(() => wallLayout(canvasWidth, canvasHeight), [canvasWidth, canvasHeight]);
   const vis = wallVisibility(room, cameraPosition, pov);
-  const beamX = useMemo(
-    () => [-0.35 * room.width, -0.125 * room.width, 0.125 * room.width, 0.35 * room.width],
-    [room.width],
-  );
-  const beamZ = useMemo(
-    () => [-0.35 * room.depth, -0.12 * room.depth, 0.12 * room.depth, 0.35 * room.depth],
-    [room.depth],
-  );
 
   return (
     <group name="venue-walls" userData={{ height: WALL_HEIGHT }}>
       {walls.map((spec) => (vis[spec.side] ? <BallroomWall key={spec.side} spec={spec} /> : null))}
-      {pov ? (
-        <group>
-          <mesh position={[0, WALL_HEIGHT + 0.1, 0]}>
-            <boxGeometry args={[room.width + 1.2, 0.3, room.depth + 1.2]} />
-            <meshStandardMaterial color={BALLROOM.pilaster} roughness={0.85} />
-          </mesh>
-          {beamX.map((x) => (
-            <mesh key={`bx-${x}`} position={[x, WALL_HEIGHT - 0.14, 0]}>
-              <boxGeometry args={[0.13, 0.16, room.depth]} />
-              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
-            </mesh>
-          ))}
-          {beamZ.map((z) => (
-            <mesh key={`bz-${z}`} position={[0, WALL_HEIGHT - 0.14, z]}>
-              <boxGeometry args={[room.width, 0.16, 0.13]} />
-              <meshStandardMaterial color={BALLROOM.trim} roughness={0.35} metalness={0.46} />
-            </mesh>
-          ))}
-        </group>
-      ) : null}
     </group>
   );
 }

@@ -75,8 +75,8 @@ function drawScreen(
   ctx.font = "bold 33px sans-serif";
   ctx.fillText("MERIT ENTERTAINMENT", inset, 116, 440);
 
-  ctx.fillStyle = BALLROOM.warmWhite;
-  ctx.font = "bold 92px Georgia, serif";
+  ctx.fillStyle = BALLROOM.screenTitle;
+  ctx.font = "bold 99px Georgia, serif";
   ctx.fillText(title.slice(0, 40), 63, 295, portrait ? 602 : 1010);
 
   ctx.fillStyle = BALLROOM.screenBorder;

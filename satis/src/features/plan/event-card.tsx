@@ -52,11 +52,11 @@ export function EventCard({
           <p className="text-[13px] text-ivory">{`Başlangıç: ${formatMoney(event.minPrice, event.currency)}`}</p>
         ) : null}
         <div className="mt-auto flex gap-2 pt-3.5">
-          <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-9 flex-1 px-4 py-2 text-[12.5px]">
+          <ButtonLink href={`/etkinlik/${event.id}`} variant="glass" className="min-h-10 flex-1 px-4 py-2 text-[12.5px]">
             Detaylar
           </ButtonLink>
           {open ? (
-            <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-9 flex-1 px-4 py-2 text-[12.5px]">
+            <ButtonLink href={`/etkinlik/${event.id}#bilet-al`} variant="gold" className="min-h-10 flex-1 px-4 py-2 text-[12.5px]">
               Bilet Al
             </ButtonLink>
           ) : null}
