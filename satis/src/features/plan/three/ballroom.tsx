@@ -34,21 +34,19 @@ function useCarpetTexture(width: number, depth: number): CanvasTexture | null {
     if (!ctx) return null;
     ctx.fillStyle = BALLROOM.carpet;
     ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 320; i++) {
+      ctx.fillStyle = BALLROOM.carpetFlecks[i % 4]!;
+      ctx.fillRect((i * 7919) % 256, (i * i * 167 + i * 3) % 256, 6 + i % 17, 2 + i % 8);
+    }
     ctx.strokeStyle = BALLROOM.carpetLine;
     ctx.lineWidth = 1.5;
-    for (let i = 0; i <= 256; i += 64) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, 256);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(256, i);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i + 64, 64);
-      ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      ctx.save();
+      ctx.translate((i % 2) * 128 + 64, Math.floor(i / 2) * 128 + 64);
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeRect(-34, -34, 68, 68);
+      ctx.strokeRect(-26, -26, 52, 52);
+      ctx.restore();
     }
     const tex = new CanvasTexture(c);
     tex.wrapS = RepeatWrapping;
@@ -115,11 +113,9 @@ export function BallroomFloor({ width, depth }: { width: number; depth: number }
 export function BallroomLights() {
   return (
     <>
-      <ambientLight color={BALLROOM.warmWhite} intensity={1.35} />
-      <hemisphereLight args={[BALLROOM.hemiSky, BALLROOM.hemiGround, 1.05]} />
-      <directionalLight color={BALLROOM.warmLight} position={[16, 38, 22]} intensity={1.45} />
-      <pointLight color={BALLROOM.warmPoint} position={[0, 14, 2]} intensity={260} distance={64} decay={2} />
-      <pointLight color={BALLROOM.gold} position={[0, 10, -22]} intensity={320} distance={56} decay={2} />
+      <hemisphereLight args={[BALLROOM.hemiSky, BALLROOM.hemiGround, 2.15]} />
+      <directionalLight color={BALLROOM.warmLight} position={[-8, 22, 6]} intensity={2.3} />
+      <directionalLight color={BALLROOM.fillLight} position={[9, 13, -24]} intensity={0.65} />
     </>
   );
 }

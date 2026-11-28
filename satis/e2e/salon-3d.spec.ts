@@ -2,11 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { PerspectiveCamera, Vector3 } from "three";
 import type { EventDetail } from "../src/lib/core/contract";
 import { buildPlanModel } from "../src/features/plan/model";
-import { detailPose, FOV_HALL, maxDistance, orbitMove } from "../src/features/plan/three/camera";
+import { overviewPose } from "../src/features/plan/three/camera";
 import { PROCEED_LABEL } from "../src/features/plan/picks";
 import { formatStageMetrics, tableStageMetrics } from "../src/features/plan/stage-metrics";
 import { buildScene } from "../src/features/plan/three/scene-data";
-import { towardStage } from "../src/features/plan/three/stage";
 import { addDiamondEvent, gotoListedEvent } from "./support/diamond";
 import { fakeState, tableId } from "./support/fake";
 
@@ -36,12 +35,11 @@ async function sceneReady(page: Page) {
   return scene;
 }
 
-async function expectSightlinePhoto(page: Page, label: string) {
-  const panel = page.getByRole("region", { name: "Sahne görüşü" });
-  const img = panel.getByRole("img");
-  await expect(img).toHaveAttribute("src", `/sightline/diamond/${label}.webp`);
-  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
-  await expect(panel.getByText(`Masa ${label} · Sahne görüşü`)).toBeVisible();
+async function expectTablePerspective(page: Page, label: string) {
+  const panel = page.getByRole("dialog", { name: `Masa ${label}` });
+  const view = panel.getByRole("img", { name: `Masa ${label} konumundan sahneye bakış` });
+  await expect(view.locator("canvas")).toBeVisible();
+  await expect(panel.getByText(`Masa ${label} — Sahne Görünümü`)).toBeVisible();
 }
 
 test("satış kapalıyken de 3B salon açılır; masaya dokununca o masanın sahne görüşü fotoğrafı gelir", async ({ page }) => {
@@ -49,21 +47,13 @@ test("satış kapalıyken de 3B salon açılır; masaya dokununca o masanın sah
   await gotoListedEvent(page, `/etkinlik/${closed.id}/salon`);
   const scene = await sceneReady(page);
   await expect(page.getByRole("img", { name: "Salon planı (3B)" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Sahne görüşü" }).getByRole("img")).toHaveAttribute(
-    "src",
-    "/sightline/diamond/overview.webp",
-  );
-
-  // Listeden M-40 seçilince kamera ona yakınlaşır; oradan görünen başka bir masaya 3B'de dokunulur.
-  const m40Id = tableId(closed, "M-40");
   await page.getByLabel("Masa veya loca").selectOption({ label: "Masa M-40" });
-  await expect(scene).toHaveAttribute("data-camera", `detail:${m40Id}`, { timeout: 10_000 });
-  await expectSightlinePhoto(page, "M-40");
+  await expect(scene).toHaveAttribute("data-camera", "overview");
+  await expectTablePerspective(page, "M-40");
   // Satış kapalı: masa penceresi bilgi, fotoğraf ve satış durumunu gösterir; ödemeye geçiş yoktur.
   const m40Dialog = page.getByRole("dialog", { name: "Masa M-40" });
-  await expect(m40Dialog.getByRole("img")).toHaveAttribute("src", "/sightline/diamond/M-40.webp");
   await expect(m40Dialog.getByText("Satış kapalı")).toBeVisible();
-  await expect(m40Dialog.getByRole("button", { name: PROCEED_LABEL })).toHaveCount(0);
+  await expect(m40Dialog.getByRole("button", { name: PROCEED_LABEL })).toBeDisabled();
   await m40Dialog.getByRole("button", { name: "Kapat", exact: true }).click();
   await expect(m40Dialog).toBeHidden();
 
@@ -73,31 +63,23 @@ test("satış kapalıyken de 3B salon açılır; masaya dokununca o masanın sah
     tables: closed.plan.tables.map((t) => ({ id: t.id, free: t.seatNos.length, freeSeats: [...t.seatNos] })),
   };
   const model = buildPlanModel(closed.plan, closed.prices, availability, closed.sale.mode);
-  const data = buildScene({ model, picks: [], activeTableId: m40Id });
-  const m40 = data.tables.find((t) => t.key === m40Id)!;
-  // İki kez uzaklaştırınca komşu masalar kadraja girer (kamera düğmesi uçuşsuz, belirlenimli konum verir).
-  const bar = page.getByRole("group", { name: "Kamera" });
-  await bar.getByRole("button", { name: "Uzaklaştır" }).click();
-  await bar.getByRole("button", { name: "Uzaklaştır" }).click();
-  await expect(scene).toHaveAttribute("data-camera", "free");
-  const detail = detailPose({ x: m40.x, z: m40.z }, m40.floorY, towardStage(data.stage, { x: m40.x, z: m40.z }));
-  const pose = orbitMove(orbitMove(detail, "out", maxDistance(data.room)), "out", maxDistance(data.room));
+  const data = buildScene({ model, picks: [], activeTableId: null });
+  const pose = overviewPose(data.room, false);
   await scene.scrollIntoViewIfNeeded();
   const box = (await scene.boundingBox())!;
-  const cam = new PerspectiveCamera(FOV_HALL, box.width / box.height, 0.1, 1000);
+  const cam = new PerspectiveCamera(pose.fov, box.width / box.height, 0.1, 1000);
   cam.position.set(...pose.position);
   cam.lookAt(...pose.target);
   cam.updateMatrixWorld();
   // Kadrajda, ekran ortasına en yakın ikinci masa (M-40'ın kendisi değil).
   const [other, ndc] = data.tables
-    .filter((t) => t.key !== m40Id && !t.isLoca)
+    .filter((t) => t.label !== "M-40" && t.selectable && !t.isLoca)
     .map((t) => [t, new Vector3(t.x, t.floorY + 0.65, t.z).project(cam)] as const)
     .filter(([, p]) => Math.abs(p.x) < 0.7 && Math.abs(p.y) < 0.7 && p.z < 1)
     .sort(([, a], [, b]) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y))[0]!;
   await page.mouse.click(box.x + ((ndc.x + 1) / 2) * box.width, box.y + ((1 - ndc.y) / 2) * box.height);
 
-  await expect(scene).toHaveAttribute("data-camera", `detail:${other.key}`, { timeout: 10_000 });
-  await expectSightlinePhoto(page, other.label);
+  await expectTablePerspective(page, other.label);
   await expect(page.getByRole("button", { name: "Devam et" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Sandalye \d+/ })).toHaveCount(0);
 
@@ -114,7 +96,7 @@ test("satış kapalıyken 2B planda da masaya dokununca sahne görüşü değiş
 
   await page.getByRole("button", { name: "2B görünüm" }).click();
   await page.getByRole("group", { name: "Salon planı" }).getByRole("button", { name: /^Masa M-90,/ }).click();
-  await expectSightlinePhoto(page, "M-90");
+  await expectTablePerspective(page, "M-90");
 });
 
 test("açık satışta salon kişi sayısı seçilmeden açılmaz: pencereye döner, seçilen sayıyla 3B salon açılır", async ({ page }) => {
@@ -127,23 +109,20 @@ test("açık satışta salon kişi sayısı seçilmeden açılmaz: pencereye dö
   await dialog.getByRole("button", { name: "Masa seçimine geç →" }).click();
   await expect(page).toHaveURL(`/etkinlik/${open.id}/salon?kisi=3`);
   await sceneReady(page);
-  await expect(page.getByRole("region", { name: "Sahne görüşü" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Bilet seçimi" }).getByLabel("Kişi sayısı")).toHaveValue("3");
-  await expect(page.getByRole("region", { name: "Seçiminiz" }).getByText("0/3 kişi seçildi")).toBeVisible();
+  await expect(page.getByRole("status").getByText("3 Kişi", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").getByText("0/3 kişi seçildi")).toBeVisible();
 });
 
-test("açık satışta masa seçilince sahne görüşü fotoğrafı gelir ve masadan bakış da sunulur", async ({ page }) => {
+test("açık satışta masa seçilince mobil ve masaüstünde gerçek kamera açısı ve ödeme sunulur", async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   await gotoListedEvent(page, `/etkinlik/${open.id}/salon?kisi=2`);
   const scene = await sceneReady(page);
-  await page.getByRole("region", { name: "Masa bulucu" }).getByRole("button", { name: /^Masa M-40 ·/ }).click();
-  await expectSightlinePhoto(page, "M-40");
+  await page.getByLabel("Masa numarası ara").fill("M-40");
+  await page.getByRole("region", { name: "Masa arama sonuçları" }).getByRole("button", { name: /^Masa M-40/ }).click();
+  await expectTablePerspective(page, "M-40");
 
   // Masa penceresi: sahne görüşü fotoğrafı, plandaki sahneye göre mesafe · açı, önseçili 2 sandalye.
   const dialog = page.getByRole("dialog", { name: "Masa M-40" });
-  const photo = dialog.getByRole("img");
-  await expect(photo).toHaveAttribute("src", "/sightline/diamond/M-40.webp");
-  await expect.poll(() => photo.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
   await expect(dialog.getByText("Masa M-40 — Sahne Görünümü")).toBeVisible();
   const availability = {
     at: new Date().toISOString(),
@@ -158,11 +137,27 @@ test("açık satışta masa seçilince sahne görüşü fotoğrafı gelir ve mas
   await expect(dialog.getByRole("button", { name: PROCEED_LABEL })).toBeEnabled();
   await expect(dialog.getByText(/KDV/)).toHaveCount(0);
 
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const perspective = dialog.locator("figure canvas");
+    const button = dialog.getByRole("button", { name: "Masadan Sahneye Bak" });
+    const event = dialog.getByText("Etkinlik", { exact: true });
+    const pay = dialog.getByRole("button", { name: "Ödeme Yap" });
+    const close = dialog.getByRole("button", { name: "Kapat", exact: true });
+    const boxes = await Promise.all([perspective, button, event, pay, close].map((el) => el.boundingBox()));
+    expect(boxes.every(Boolean)).toBe(true);
+    expect(boxes[0]!.y + boxes[0]!.height).toBeLessThanOrEqual(boxes[1]!.y + 1);
+    expect(boxes[1]!.y + boxes[1]!.height).toBeLessThanOrEqual(boxes[2]!.y);
+    expect(boxes[2]!.y).toBeLessThan(boxes[3]!.y);
+    expect(boxes[3]!.y).toBe(boxes[4]!.y);
+    await testInfo.attach(`M-40-${width}`, { body: await dialog.screenshot(), contentType: "image/png" });
+  }
+
   await dialog.getByRole("button", { name: "Masadan Sahneye Bak" }).click();
   await expect(dialog).toBeHidden();
   await expect(scene).toHaveAttribute("data-camera", `seat:${tableId(open, "M-40")}`, { timeout: 10_000 });
   // Sahneye bakmak seçimi bırakmaz.
-  await expect(page.getByRole("region", { name: "Seçiminiz" }).getByText("2/2 kişi seçildi")).toBeVisible();
+  await expect(page.getByRole("status").getByText("2/2 kişi seçildi")).toBeVisible();
 });
 
 test("kamera düğmeleri tuvalin dışındadır ve genel görünüme döndürür", async ({ page }) => {

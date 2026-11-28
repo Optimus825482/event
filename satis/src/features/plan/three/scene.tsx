@@ -34,6 +34,7 @@ export type CameraCommand = { type: "overview" | "stage" | "loca" | "top" | Orbi
 export type HoverInfo = { table: SceneTable; x: number; y: number };
 
 export type SceneProps = {
+  stillView?: { pose: CameraPose; label: string };
   scene: SceneData;
   canvas: { width: number; height: number };
   activeTableId: string | null;
@@ -419,11 +420,12 @@ export default function Scene3D({
   onCameraChange,
   describedBy,
   command = null,
+  stillView,
 }: SceneProps) {
   const orbitRef = useRef<OrbitHandle | null>(null);
-  const initialPose = useMemo(() => overviewPose(scene.room, false), [scene.room]);
+  const initialPose = useMemo(() => stillView?.pose ?? overviewPose(scene.room, false), [stillView, scene.room]);
   const [camPos, setCamPos] = useState<Vec3>(initialPose.position);
-  const [pov, setPov] = useState(false);
+  const [pov, setPov] = useState(Boolean(stillView));
 
   const activeTable = useMemo(
     () => (activeTableId ? (scene.tables.find((t) => t.key === activeTableId) ?? null) : null),
@@ -467,14 +469,15 @@ export default function Scene3D({
 
   return (
     <div className="relative h-full w-full bg-bg">
-      <div role="img" aria-label="Salon planı (3B)" aria-describedby={describedBy} className="h-full w-full">
+      <div role="img" aria-label={stillView?.label ?? "Salon planı (3B)"} aria-describedby={describedBy} className="h-full w-full">
         <Canvas
           frameloop="demand"
           dpr={[1, 1.65]}
           camera={{ position: initialPose.position, fov: initialPose.fov }}
           gl={{ antialias: true, powerPreference: "low-power", toneMapping: ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
           style={{ touchAction: "pan-y" }}
-          onCreated={() => {
+          onCreated={({ camera }) => {
+            if (stillView) camera.lookAt(...stillView.pose.target);
             onReady?.();
             onCameraChange?.("overview");
           }}
@@ -501,7 +504,7 @@ export default function Scene3D({
               document.body.style.cursor = "";
             }}
           />
-          <TableLabels tables={scene.tables} />
+          {!stillView && <TableLabels tables={scene.tables} />}
           <SeatLabels chairs={activeChairs} visible={nearActive} />
           <SceneWalls
             canvasWidth={canvas.width}
@@ -510,32 +513,36 @@ export default function Scene3D({
             cameraPosition={camPos}
             pov={pov}
           />
-          <OrbitControls
-            ref={orbitRef as never}
-            makeDefault
-            enableDamping
-            dampingFactor={0.05}
-            enablePan
-            screenSpacePanning={false}
-            panSpeed={0.9}
-            target={initialPose.target}
-            minDistance={MIN_DISTANCE}
-            maxDistance={maxDistance(scene.room)}
-            maxPolarAngle={Math.PI / 2 - 0.012}
-            onEnd={(e) => {
-              const cam = (e?.target as { object?: PerspectiveCamera } | undefined)?.object;
-              if (cam) setCamPos([cam.position.x, cam.position.y, cam.position.z]);
-            }}
-          />
-          <CameraController
-            scene={scene}
-            seatView={seatView}
-            command={command}
-            orbitRef={orbitRef}
-            onPoseDone={(tag) => onCameraChange?.(tag)}
-            onPovChange={setPov}
-            onCamPos={setCamPos}
-          />
+          {!stillView && (
+            <>
+              <OrbitControls
+                ref={orbitRef as never}
+                makeDefault
+                enableDamping
+                dampingFactor={0.05}
+                enablePan
+                screenSpacePanning={false}
+                panSpeed={0.9}
+                target={initialPose.target}
+                minDistance={MIN_DISTANCE}
+                maxDistance={maxDistance(scene.room)}
+                maxPolarAngle={Math.PI / 2 - 0.012}
+                onEnd={(e) => {
+                  const cam = (e?.target as { object?: PerspectiveCamera } | undefined)?.object;
+                  if (cam) setCamPos([cam.position.x, cam.position.y, cam.position.z]);
+                }}
+              />
+              <CameraController
+                scene={scene}
+                seatView={seatView}
+                command={command}
+                orbitRef={orbitRef}
+                onPoseDone={(tag) => onCameraChange?.(tag)}
+                onPovChange={setPov}
+                onCamPos={setCamPos}
+              />
+            </>
+          )}
         </Canvas>
       </div>
     </div>

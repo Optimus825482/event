@@ -4,19 +4,21 @@ import { PosterFallback } from "@/components/poster-fallback";
 import { ButtonLink } from "@/components/ui/button";
 import { saleStateLabel } from "@/features/plan/sale-state";
 import type { EventCard as EventCardData } from "@/lib/core/contract";
-import { imageUrl } from "@/lib/image-url";
+import { heroMediaUrl, imageUrl } from "@/lib/image-url";
 import { formatEventDate, formatEventTime } from "@/lib/time-zone";
 
 export function ReelCard({ event }: { event: EventCardData }): React.JSX.Element {
   const open = event.saleState === "open";
   const src = imageUrl(event.artistImage ?? event.coverImage);
+  const motion = heroMediaUrl(event.heroImage);
   const dateLabel = formatEventDate(event.startsAt);
   const timeLabel = formatEventTime(event.startsAt);
 
   return (
     <article className="group relative aspect-[9/14] overflow-hidden rounded-[16px] border border-line bg-bg transition-all hover:-translate-y-[3px] hover:border-gold">
       <EventImage
-        src={src}
+        src={motion ?? src}
+        stillSrc={motion ? src : null}
         alt={event.artistName ?? event.name}
         className="h-full w-full object-cover object-[center_20%] transition-transform duration-300 group-hover:scale-[1.03]"
         fallback={

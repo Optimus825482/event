@@ -571,6 +571,7 @@ export function createFakeCore(options: { secret?: string; now?: () => number } 
           saleState: detail.saleState,
           coverImage: detail.coverImage,
           artistImage: detail.artistImage,
+          heroImage: detail.site.heroImage,
           isDemo: detail.isDemo,
         }));
         return { status: 200, body: { events: list } };

@@ -28,8 +28,8 @@ export default async function HomePage() {
     <main>
       <h1 className="sr-only">Konser ve Gala Biletleri</h1>
       <HeroCarousel slides={slides} />
-      <section aria-labelledby="gelecek-baslik" className="page-gutter mx-auto max-w-[1320px] py-12 sm:py-16">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <section aria-labelledby="gelecek-baslik" className="page-gutter mx-auto max-w-[1320px] pt-[60px] pb-[76px]">
+        <div className="mb-[26px] flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">
             <p className="eyebrow">{SITE_NAME}</p>
             <h2 id="gelecek-baslik" className="text-[clamp(30px,4vw,44px)] text-ivory">

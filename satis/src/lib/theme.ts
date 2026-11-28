@@ -6,6 +6,7 @@ export const COLORS = {
   footer: "#06070a",
   line: "#24262c",
   lineGold: "#352e16",
+  selection: "#60a5fa",
   gold: "#d4af37",
   goldBright: "#f0d068",
   ivory: "#f7f5f0",

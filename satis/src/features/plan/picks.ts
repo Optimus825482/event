@@ -18,7 +18,7 @@ export type HoldItem = { tableId: string; quantity: number; seatNos?: number[] }
 export type Readiness = { ready: true; items: HoldItem[] } | { ready: false; reason: string | null };
 
 /** Masa penceresindeki ödemeye geçiş düğmesi. */
-export const PROCEED_LABEL = "Seç & Ödemeye Geç →";
+export const PROCEED_LABEL = "Ödeme Yap";
 export const PARTY_FULL_NOTICE = "Kişi sayınız doldu. Başka sandalye için önce seçtiklerinizden birini bırakın.";
 export const TABLE_LIMIT_NOTICE = "Bir siparişte en çok 5 masadan seçim yapılabilir.";
 export const orderLimitNotice = (max: number) => `Tek siparişte en çok ${max} bilet alınabilir.`;

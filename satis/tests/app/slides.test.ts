@@ -34,6 +34,14 @@ describe("slides", () => {
     expect(toHeroSlides([ev(1)])[0]!.image).toBeNull();
   });
 
+  it("yönetimdeki tanıtım videosunu ve sabit afişini birlikte sunar", () => {
+    const [slide] = toHeroSlides([ev(1, { heroImage: FAKE_IMAGES.heroVideo, coverImage: FAKE_IMAGES.cover })]);
+    expect(slide).toMatchObject({
+      motion: `/api/gorsel/${FAKE_IMAGES.heroVideo}`,
+      image: `/api/gorsel/${FAKE_IMAGES.cover}`,
+    });
+  });
+
   it("etiketler sunucuda Kıbrıs saatiyle hazırlanır", () => {
     expect(toHeroSlides([ev(5, { saleState: "closed" })])[0]).toMatchObject({
       dateLabel: "15 Ocak 2027 Cuma",

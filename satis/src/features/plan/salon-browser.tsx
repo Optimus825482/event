@@ -93,6 +93,8 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
       </div>
 
       <TableDialog
+        model={model}
+        artworkUrl={artworkUrl}
         open={dialogOpen}
         table={table}
         eventName={event.name}

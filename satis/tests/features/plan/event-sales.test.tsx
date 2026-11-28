@@ -201,7 +201,7 @@ describe("EventSales", () => {
     expect(inDialog().getByText("Satış kapalı")).toBeTruthy();
     expect(inDialog().getByText("Masa A1 — Sahne Görünümü")).toBeTruthy();
     expect(inDialog().queryByRole("group", { name: /sandalyeleri/ })).toBeNull();
-    expect(inDialog().queryByRole("button", { name: PROCEED_LABEL })).toBeNull();
+    expect(inDialog().getByRole("button", { name: PROCEED_LABEL })).toHaveProperty("disabled", true);
     expect(screen.queryByRole("button", { name: "Devam et" })).toBeNull();
     fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -226,14 +226,13 @@ describe("EventSales", () => {
     expect(dialog().getAttribute("aria-modal")).toBe("true");
     expect(screen.getByRole("dialog", { name: "Masa A1" })).toBeTruthy();
     expect(d.getByText("8 kişilik yer müsait")).toBeTruthy();
-    expect(d.getByText("MASA")).toBeTruthy();
+    expect(d.getByRole("heading", { name: "Masa A1" })).toBeTruthy();
     expect(d.getByText("Yılbaşı Galası · 22:00")).toBeTruthy();
     expect(d.getByText("Masa A1 · 2 Kişi · Sandalye 1, 2")).toBeTruthy();
     expect(d.getByText("Kişi Başı Fiyat").nextElementSibling?.textContent).toBe("1.500,00 ₺");
     expect(d.getByText("Toplam Tutar").nextElementSibling?.textContent).toBe("3.000,00 ₺");
     expect(d.queryByText(/KDV/)).toBeNull();
     expect(d.getByRole("button", { name: "Kapat" })).toBeTruthy();
-    expect(d.getByRole("button", { name: "Pencereyi kapat" })).toBeTruthy();
   });
 
   it("numaralı masada kişi sayısı kadar boş sandalye önseçilir ve hemen ödemeye geçilebilir", async () => {
@@ -262,7 +261,7 @@ describe("EventSales", () => {
     expect(screen.getByRole("status").textContent).toContain("0/2 kişi seçildi");
 
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    fireEvent.click(inDialog().getByRole("button", { name: "Pencereyi kapat" }));
+    fireEvent.click(inDialog().getByRole("button", { name: "Kapat" }));
     expect(screen.getByRole("status").textContent).toContain("0/2 kişi seçildi");
 
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
@@ -453,12 +452,12 @@ describe("EventSales", () => {
     expect(key3).not.toBe(key1);
   });
 
-  it("sahne görüşü pencerede gösterilir; 3B yokken ne panelde ne pencerede masadan bakış düğmesi vardır", () => {
+  it("sahne görüşü pencerede gösterilir; 3B yokken masadan bakış düğmesi pasiftir", () => {
     render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
-    expect(inDialog().getByText("Bu konum için sahne fotoğrafı yok.")).toBeTruthy();
+    expect(inDialog().getByText("Bu konum için kayıtlı sahne görseli yok.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "3B'de masadan bak" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Masadan Sahneye Bak" })).toBeNull();
+    expect(inDialog().getByRole("button", { name: "Masadan Sahneye Bak" })).toHaveProperty("disabled", true);
   });
 
   it("pencere sahne görüşü fotoğrafını ve plandaki sahneye göre mesafe · açıyı gösterir; sahne yoksa açı yazılmaz", () => {

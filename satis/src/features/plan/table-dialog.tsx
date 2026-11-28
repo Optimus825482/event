@@ -1,15 +1,19 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import type { SightlineSet } from "@/lib/core/contract";
 import { formatMoney } from "@/lib/format";
 import { ActiveTableCard } from "./active-table-card";
-import type { PlanTableModel } from "./model";
+import { SceneBoundary } from "./plan-3d";
+import type { PlanModel, PlanTableModel } from "./model";
 import { PROCEED_LABEL, type Readiness, type TablePick } from "./picks";
 import { resolveTableSightlineSrc } from "./sightline";
 import { SightlineImage } from "./sightline-panel";
+
+const TablePerspective = dynamic(() => import("./table-perspective"), { ssr: false });
 
 export type TableDialogSale = {
   pick: TablePick | null;
@@ -27,6 +31,8 @@ export type TableDialogSale = {
 export type TableDialogProps = {
   open: boolean;
   table: PlanTableModel | null;
+  model: PlanModel;
+  artworkUrl: string | null;
   eventName: string;
   eventTime: string;
   sightlineSet: SightlineSet | null;
@@ -79,7 +85,7 @@ export function TableDialog({ open, table, ...rest }: TableDialogProps) {
   const titleId = useId();
   return (
     <Modal open={open && table !== null} onClose={rest.onClose} labelledBy={titleId} className="max-w-[560px]">
-      {table ? <TableDialogBody titleId={titleId} table={table} {...rest} /> : null}
+      {table ? <TableDialogBody key={table.id} titleId={titleId} table={table} {...rest} /> : null}
     </Modal>
   );
 }
@@ -87,6 +93,8 @@ export function TableDialog({ open, table, ...rest }: TableDialogProps) {
 function TableDialogBody({
   titleId,
   table,
+  model,
+  artworkUrl,
   eventName,
   eventTime,
   sightlineSet,
@@ -100,6 +108,7 @@ function TableDialogBody({
   closedLabel,
   children,
 }: BodyProps) {
+  const [previewFailed, setPreviewFailed] = useState(false);
   const name = kindName(table);
   const sightlineImgSrc = resolveTableSightlineSrc(sightlineSet, { label: table.label, isLoca: table.isLoca });
   const canProceed = sale !== null && sale.readiness.ready && !sale.pending && sale.total !== null;
@@ -107,46 +116,36 @@ function TableDialogBody({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-4 border-b border-line px-5 pb-3.5 pt-5">
-        <div className="min-w-0">
-          <h2 id={titleId} className="text-[28px] leading-tight text-ivory">
-            {name}
-          </h2>
-          <p className="mt-1 text-sm text-muted">{availabilityText(table)}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="rounded-full border border-gold bg-glass px-2.5 py-0.5 text-[11px] font-bold tracking-[0.14em] text-gold">
-            {table.isLoca ? "LOCA" : "MASA"}
-          </span>
-          <button
-            type="button"
-            aria-label="Pencereyi kapat"
-            onClick={onClose}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-line bg-surface-raised text-xl text-muted transition-colors hover:border-gold hover:text-ivory"
-          >
-            <span aria-hidden="true">×</span>
-          </button>
-        </div>
-      </div>
-
-      <figure className="mx-5 mt-4 overflow-hidden rounded-[14px] border border-line-gold bg-bg">
-        <SightlineImage
-          src={sightlineImgSrc}
-          alt={`${name} konumundan sahnenin temsili görünümü`}
-          fallback="Bu konum için sahne fotoğrafı yok."
-        >
-          <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col gap-0.5 bg-linear-to-t from-bg via-bg/80 to-transparent px-3.5 pb-2.5 pt-10 text-xs">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="font-semibold text-ivory">{`${name} — Sahne Görünümü`}</span>
-              {metrics ? <span className="shrink-0 font-bold text-gold-bright">{metrics}</span> : null}
+      <figure className="relative overflow-hidden bg-bg">
+        <div className="relative aspect-video w-full">
+          {canLookIn3d && !previewFailed ? (
+            <div className="pointer-events-none absolute inset-0">
+              <SceneBoundary onFail={() => setPreviewFailed(true)}>
+                <TablePerspective model={model} tableId={table.id} title={eventName} artworkUrl={artworkUrl}
+                  label={`${name} konumundan sahneye bakış`} onFail={() => setPreviewFailed(true)} />
+              </SceneBoundary>
             </div>
-            <span className="text-[11px] text-muted">Krokiye göre yaklaşık açı</span>
+          ) : (
+            <SightlineImage src={sightlineImgSrc} alt={`${name} için kayıtlı sahne görünümü`}
+              fallback="Bu konum için kayıtlı sahne görseli yok." />
+          )}
+          <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-bg to-transparent px-5 pt-8 pb-2 text-sm font-semibold text-ivory">
+            {`${name} — Sahne Görünümü`}
           </figcaption>
-        </SightlineImage>
+        </div>
       </figure>
-
+      <div className="px-5 pt-3">
+        <Button variant="glass" className="w-full border-gold text-gold-bright" onClick={onLookIn3d} disabled={!canLookIn3d}>
+          Masadan Sahneye Bak
+        </Button>
+      </div>
+      <div className="px-5 pt-4">
+        <h2 id={titleId} className="text-[28px] leading-tight text-ivory">{name}</h2>
+        <p className="text-sm text-muted">{availabilityText(table)}</p>
+      </div>
       <dl className="mx-5 mt-3">
         <Row label="Etkinlik">{`${eventName} · ${eventTime}`}</Row>
+        {metrics ? <Row label="Sahneye mesafe ve açı">{metrics}</Row> : null}
         {sale ? <Row label="Seçim">{selectionText(table, sale.pick)}</Row> : null}
         {sale && sale.otherPicks.length > 0 ? <Row label="Diğer seçimler">{sale.otherPicks.join(" / ")}</Row> : null}
         {unitPrice ? <Row label="Kişi Başı Fiyat">{formatMoney(unitPrice, currency)}</Row> : null}
@@ -183,17 +182,10 @@ function TableDialogBody({
       ) : null}
       {!sale && closedLabel ? <p className="mx-5 mt-3 text-sm font-semibold text-ivory">{closedLabel}</p> : null}
 
-      <div className="flex flex-col gap-2 p-5 sm:flex-row sm:flex-wrap">
-        {canLookIn3d ? (
-          <Button variant="glass" className="border-gold text-gold-bright sm:flex-1" onClick={onLookIn3d}>
-            Masadan Sahneye Bak
-          </Button>
-        ) : null}
-        {sale ? (
-          <Button variant="gold" className="sm:flex-[2]" disabled={!canProceed} onClick={sale.onProceed}>
-            {sale.pending ? "Yeriniz ayrılıyor…" : PROCEED_LABEL}
-          </Button>
-        ) : null}
+      <div className="grid grid-cols-2 gap-2 p-5">
+        <Button variant="gold" disabled={!canProceed} onClick={sale?.onProceed}>
+          {sale?.pending ? "Yeriniz ayrılıyor…" : PROCEED_LABEL}
+        </Button>
         <Button variant="ghost" className="sm:flex-1" onClick={onClose}>
           Kapat
         </Button>

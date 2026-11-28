@@ -41,18 +41,11 @@ test("alt bilgi: logo, iletişim ve yeni sekmede açılan sosyal medya bağlant�
   await expectNoHorizontalOverflow(page);
 });
 
-test("hakkımızda: bölümler, kısa bilgiler ve görseller yüklenir; 375 px'te taşmaz", async ({ page }) => {
+test("hakkımızda: prototipteki üç tanıtım kartı görünür; 375 px'te taşmaz", async ({ page }) => {
   await page.goto("/hakkimizda");
   await expect(page.getByRole("heading", { level: 1, name: "Merit Entertainment" })).toBeVisible();
-  for (const name of ["Organizasyonun kurgusu", "Merit ayrıcalığı", "Sahnelerimiz"]) {
+  for (const name of ["Modern Organizasyon Alanları", "Ses, Işık & Sahne Teknolojisi", "Seçkin Misafir Deneyimi"]) {
     await expect(page.getByRole("heading", { level: 2, name })).toBeVisible();
-  }
-  await expect(page.getByRole("region", { name: "Merit International" }).getByText("1988")).toBeVisible();
-  const images = page.locator('main img[src^="/hakkimizda/"]');
-  await expect(images).toHaveCount(4);
-  for (const img of await images.all()) {
-    await img.scrollIntoViewIfNeeded();
-    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
   }
   await expectHeadingOrder(page);
   await expectNoHorizontalOverflow(page);
@@ -72,5 +65,16 @@ test("etkinlik üst görseli tanıtım görselidir; azaltılmış harekette kapa
       `/api/gorsel/${expected}`,
     );
     await context.close();
+  }
+});
+
+test("ana sayfadaki etkinlik kartı tanıtım medyasını ve azaltılmış harekette sanatçı afişini gösterir", async ({ page }) => {
+  await page.goto("/");
+  const reel = page.getByRole("article").filter({ has: page.locator(`a[href="/etkinlik/${gala.id}"]`) });
+  const image = reel.getByRole("img", { name: gala.artistName! });
+  for (const [preference, expected] of [["no-preference", FAKE_IMAGES.hero], ["reduce", FAKE_IMAGES.artist]] as const) {
+    await page.emulateMedia({ reducedMotion: preference });
+    await expect.poll(() => image.evaluate((el: HTMLImageElement) => new URL(el.currentSrc).pathname))
+      .toBe(`/api/gorsel/${expected}`);
   }
 });

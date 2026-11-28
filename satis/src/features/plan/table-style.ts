@@ -21,6 +21,6 @@ export const TABLE_STYLES: Record<TableVisual, { fill: ColorName; stroke: ColorN
   vip: { fill: "gold", stroke: "goldBright", text: "onGold" },
   sold_out: { fill: "disabledBg", stroke: "line", text: "disabledText" },
   not_sellable: { fill: "surface", stroke: "line", text: "muted" },
-  picked: { fill: "gold", stroke: "ivory", text: "onGold" },
-  active: { fill: "goldBright", stroke: "ivory", text: "onGold" },
+  picked: { fill: "selection", stroke: "ivory", text: "onGold" },
+  active: { fill: "selection", stroke: "ivory", text: "onGold" },
 };

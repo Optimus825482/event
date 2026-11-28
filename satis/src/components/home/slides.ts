@@ -1,6 +1,6 @@
 import type { EventCard as EventCardData } from "@/lib/core/contract";
 import { formatMoney } from "@/lib/format";
-import { imageUrl } from "@/lib/image-url";
+import { heroMediaUrl, imageUrl } from "@/lib/image-url";
 import { formatEventDate, formatEventTime } from "@/lib/time-zone";
 import { saleStateLabel } from "@/features/plan/sale-state";
 
@@ -18,6 +18,7 @@ export type HeroSlide = {
   open: boolean;
   stateLabel: string;
   image: string | null;
+  motion: string | null;
   isDemo: boolean;
 };
 
@@ -31,6 +32,7 @@ export function toHeroSlides(events: EventCardData[]): HeroSlide[] {
     priceLabel: event.minPrice !== null ? formatMoney(event.minPrice, event.currency) : null,
     open: event.saleState === "open",
     stateLabel: saleStateLabel(event.saleState),
+    motion: heroMediaUrl(event.heroImage),
     image: imageUrl(event.artistImage ?? event.coverImage),
     isDemo: event.isDemo,
   }));

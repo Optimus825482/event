@@ -43,7 +43,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
     <section
       aria-roledescription="karusel"
       aria-label="En yakın etkinlikler"
-      className="hero-glow border-b border-line"
+      className="hero-glow"
       onMouseEnter={() => setHoverOrFocus(true)}
       onMouseLeave={() => setHoverOrFocus(false)}
       onFocus={() => setHoverOrFocus(true)}
@@ -51,7 +51,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHoverOrFocus(false);
       }}
     >
-      <div className="page-gutter mx-auto max-w-[1320px] py-10 sm:py-14">
+      <div className="page-gutter mx-auto max-w-[1320px] pt-[clamp(36px,5vw,68px)] pb-[52px]">
         {slides.map((slide, i) => {
           const isCurrent = i === safeIndex;
           return (
@@ -145,7 +145,8 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }): React.JSX.Ele
 
               <div className="relative mx-auto aspect-[9/11] max-h-[540px] w-full max-w-[440px] overflow-hidden rounded-[22px] border border-line-gold bg-surface-raised shadow-2xl">
                 <EventImage
-                  src={slide.image}
+                  src={isCurrent ? slide.motion ?? slide.image : slide.image}
+                  stillSrc={isCurrent && slide.motion ? slide.image : null}
                   alt={slide.artistName ?? slide.name}
                   priority={i === 0}
                   className="h-full w-full object-cover object-[center_15%]"
