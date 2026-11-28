@@ -6,7 +6,8 @@ import { PX_PER_METER, roomSize, tableBody, toMeters } from "./metric";
 import { chairSpots, chairState, type ChairState } from "./seating";
 import { stageInfo, towardStage, type StageInfo } from "./stage";
 
-export const LOCA_FLOOR_Y = 0.12;
+/** 2. kat loca balkonu döşeme yüksekliği (MERR/plan-data.js: y = 4.35m). */
+export const LOCA_FLOOR_Y = 4.35;
 
 export type SceneState = "free" | "partial" | "full" | "closed";
 

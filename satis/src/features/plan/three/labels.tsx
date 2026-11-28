@@ -108,7 +108,7 @@ export function TableLabels({ tables }: { tables: readonly SceneTable[] }) {
     return {
       texture: buildAtlas(labels, BALLROOM.labelText, maxAniso, BALLROOM.labelOutline),
       geometry: buildQuads(
-        tables.map((t) => ({ x: t.x, y: t.floorY + 0.665, z: t.z, size: 1.15 })),
+        tables.map((t) => ({ x: t.x, y: t.floorY + (t.isLoca ? 0.175 : 0.665), z: t.z, size: 1.15 })),
         rows,
       ),
     };

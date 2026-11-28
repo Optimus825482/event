@@ -217,40 +217,90 @@ export function StageRig({ stage }: { stage: StageInfo }) {
   );
 }
 
-/** Kavisli opera-loca krem korkuluk, pirinç küpeşte ve kaide (paylaşılan materyaller + dispose). */
+/** 2. kat loca balkonu döşemesi, ön korkuluk, pirinç küpeşte, yan bölme ve arka sehpa (MERR referansına göre). */
 export function LocaArchitecture({ tables }: { tables: readonly SceneTable[] }) {
   const locas = useMemo(() => tables.filter((t) => t.isLoca), [tables]);
+  const balconyBounds = useMemo(() => {
+    if (locas.length === 0) return null;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    let floorY = locas[0]!.floorY;
+    for (const t of locas) {
+      floorY = t.floorY;
+      minX = Math.min(minX, t.x - t.width / 2);
+      maxX = Math.max(maxX, t.x + t.width / 2);
+      minZ = Math.min(minZ, t.z - t.depth / 2);
+      maxZ = Math.max(maxZ, t.z + t.depth / 2);
+    }
+    const width = Math.max(4, maxX - minX + 1.4);
+    const depth = Math.max(3.6, maxZ - minZ + 2.2);
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2 + 0.4;
+    const frontZ = centerZ - depth / 2;
+    return { width, depth, centerX, centerZ, frontZ, floorY };
+  }, [locas]);
+
   const materials = useMemo(() => {
-    const deckMat = new MeshStandardMaterial({ color: BALLROOM.deck, roughness: 0.7 });
+    const panelMat = new MeshStandardMaterial({ color: BALLROOM.panel, roughness: 0.78 });
     const creamMat = new MeshStandardMaterial({ color: BALLROOM.cream, roughness: 0.6, metalness: 0.08, side: DoubleSide });
     const trimMat = new MeshStandardMaterial({ color: BALLROOM.trim, roughness: 0.28, metalness: 0.82 });
-    return { deckMat, creamMat, trimMat };
+    const travertineMat = new MeshStandardMaterial({ color: BALLROOM.travertine, roughness: 0.81, metalness: 0.05 });
+    return { panelMat, creamMat, trimMat, travertineMat };
   }, []);
 
   useEffect(() => {
     return () => {
-      materials.deckMat.dispose();
+      materials.panelMat.dispose();
       materials.creamMat.dispose();
       materials.trimMat.dispose();
+      materials.travertineMat.dispose();
     };
   }, [materials]);
 
-  if (locas.length === 0) return null;
+  if (!balconyBounds) return null;
 
   return (
     <group>
+      {/* 2. kat balkon ana kiriş, pirinç ön şerit ve döşeme paneli (MERR hall.js: 3.94 / 4.19 / 4.34) */}
+      <mesh
+        position={[balconyBounds.centerX, balconyBounds.floorY - 0.41, balconyBounds.centerZ]}
+        material={materials.creamMat}
+      >
+        <boxGeometry args={[balconyBounds.width + 0.4, 0.75, balconyBounds.depth + 0.25]} />
+      </mesh>
+      <mesh
+        position={[balconyBounds.centerX, balconyBounds.floorY - 0.16, balconyBounds.frontZ - 0.08]}
+        material={materials.trimMat}
+      >
+        <boxGeometry args={[balconyBounds.width + 0.4, 0.12, 0.18]} />
+      </mesh>
+      <mesh
+        position={[balconyBounds.centerX, balconyBounds.floorY - 0.01, balconyBounds.centerZ + 0.05]}
+        material={materials.panelMat}
+      >
+        <boxGeometry args={[balconyBounds.width, 0.09, balconyBounds.depth]} />
+      </mesh>
+
+      {/* Her loca için ön korkuluk, pirinç küpeşte, yan bölme ve arka sehpa */}
       {locas.map((t) => {
-        const r = Math.max(1.6, t.width * 0.55);
+        const w = Math.max(2.4, t.width);
+        const d = Math.max(2.2, t.depth);
+        const railZ = -d / 2 - 0.25;
         return (
           <group key={t.key} position={[t.x, t.floorY, t.z]} rotation={[0, t.rotationY, 0]}>
-            <mesh position={[0, 0.05, 0]} rotation={[0, Math.PI / 2, 0]} material={materials.deckMat}>
-              <cylinderGeometry args={[r - 0.03, r * 0.88, 0.28, 22, 1, false, 0, Math.PI]} />
+            <mesh position={[0, 0.31, railZ]} material={materials.creamMat}>
+              <boxGeometry args={[w + 0.07, 0.56, 0.24]} />
             </mesh>
-            <mesh position={[0, 0.52, 0]} rotation={[0, Math.PI / 2, 0]} material={materials.creamMat}>
-              <cylinderGeometry args={[r, r * 0.92, 0.95, 22, 1, true, 0, Math.PI]} />
+            <mesh position={[0, 0.61, railZ]} material={materials.trimMat}>
+              <boxGeometry args={[w + 0.15, 0.07, 0.28]} />
             </mesh>
-            <mesh position={[0, 1.02, 0]} rotation={[Math.PI / 2, 0, Math.PI]} material={materials.trimMat}>
-              <torusGeometry args={[r, 0.075, 8, 24, Math.PI]} />
+            <mesh position={[-w / 2 - 0.08, 0.43, -0.08]} material={materials.creamMat}>
+              <boxGeometry args={[0.12, 0.83, d + 0.1]} />
+            </mesh>
+            <mesh position={[0, 0.31, d / 2 - 0.57]} material={materials.travertineMat}>
+              <boxGeometry args={[Math.min(1.15, w * 0.35), 0.49, 0.52]} />
             </mesh>
           </group>
         );

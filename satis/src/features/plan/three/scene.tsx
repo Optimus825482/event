@@ -161,9 +161,10 @@ function InstancedTables({
 
     if (boxRef.current) {
       boxTables.forEach((t, i) => {
-        dummy.position.set(t.x, t.floorY + 0.325, t.z);
+        const h = t.isLoca ? 0.16 : 0.65;
+        dummy.position.set(t.x, t.floorY + h / 2, t.z);
         dummy.rotation.set(0, t.rotationY, 0);
-        dummy.scale.set(t.width, 0.65, t.depth);
+        dummy.scale.set(t.width, h, t.depth);
         dummy.updateMatrix();
         boxRef.current!.setMatrixAt(i, dummy.matrix);
         boxRef.current!.setColorAt(i, color.set(t.dimmed ? BALLROOM.dimmed : t.color));
