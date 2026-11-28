@@ -4,7 +4,7 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ACESFilmicToneMapping, Color, DoubleSide, type InstancedMesh, Object3D, PerspectiveCamera } from "three";
-import { BallroomFloor, BallroomLights, Chairs, Chandeliers, LocaArchitecture, StageBeams, StageRig } from "./ballroom";
+import { BallroomFloor, BallroomLights, Chairs, Chandeliers, LocaArchitecture, StageRig } from "./ballroom";
 import {
   type CameraPose,
   CHAIR_PICK_DISTANCE,
@@ -26,7 +26,7 @@ import { BALLROOM } from "./palette";
 import { chairHit, type SceneData, type SceneDecor, type SceneTable } from "./scene-data";
 import { StageScreen } from "./screen";
 import { SceneWalls } from "./walls";
-import { WALL_HEIGHT, wallVisibility } from "./walls-geometry";
+import { wallVisibility } from "./walls-geometry";
 
 export type SeatView = { tableId: string; nonce: number };
 /** Kamera düğmeleri (tuvalin dışında, `Plan3D` içinde) bu komutu üretir; nonce değişince uygulanır. */
@@ -119,7 +119,6 @@ function DecorMesh({ element }: { element: SceneDecor }) {
           </mesh>
         ) : null}
       </group>
-      {kind === "stage" ? <StageBeams position={[x, z]} width={Math.max(width, depth)} base={h} /> : null}
     </group>
   );
 }
@@ -230,11 +229,7 @@ function InstancedTables({
                 scale={isBox ? [1.88, 1.4, 1] : [1, 1, 1]}
               >
                 <ringGeometry args={[1.36, 1.52, 48]} />
-                <meshBasicMaterial color={BALLROOM.ring} transparent opacity={0.92} side={DoubleSide} toneMapped={false} />
-              </mesh>
-              <mesh position={[0, 0.4, 0]} scale={[t.width * 0.56, 0.8, t.depth * 0.56]}>
-                <cylinderGeometry args={[1, 1.02, 1, 24, 1, true]} />
-                <meshBasicMaterial color={BALLROOM.bodyGlow} transparent opacity={0.45} side={DoubleSide} depthWrite={false} />
+                <meshBasicMaterial color={BALLROOM.ring} side={DoubleSide} toneMapped={false} />
               </mesh>
             </group>
           );
@@ -485,16 +480,15 @@ export default function Scene3D({
         >
           <ContextLossGuard onLost={onContextLost} />
           <color attach="background" args={[BALLROOM.background]} />
-          <fogExp2 attach="fog" args={[BALLROOM.background, 0.0055]} />
           <BallroomLights />
           <BallroomFloor width={scene.room.width} depth={scene.room.depth} />
-          <Chandeliers width={scene.room.width} height={WALL_HEIGHT + 2.5} visible />
+          <Chandeliers width={scene.room.width} depth={scene.room.depth} visible={pov} />
           {scene.decor.map((e) => (
             <DecorMesh key={e.id} element={e} />
           ))}
           <StageRig stage={scene.stage} />
           <StageScreen stage={scene.stage} room={scene.room} artworkUrl={artworkUrl} title={title} wallVis={wallVis} />
-          <LocaArchitecture tables={scene.tables} />
+          <LocaArchitecture tables={scene.tables} roomWidth={scene.room.width} />
           <SceneLines lines={scene.lines} />
           <InstancedTables tables={scene.tables} onTable={onTable} onHoverTable={onHoverTable} />
           <Chairs

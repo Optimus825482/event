@@ -33,13 +33,14 @@ export function wallVisibility(
 ): Record<WallSide, boolean> {
   if (pov) return { back: true, left: true, right: true, front: true };
   const [cx, , cz] = cameraPosition;
-  const xEdge = room.width / 2 + WALL_MARGIN;
-  const zEdge = room.depth / 2 + WALL_MARGIN;
+  const xCut = room.width * 0.3;
+  const zBackCut = -room.depth * 0.48;
+  const zFrontCut = room.depth * 0.4;
   return {
-    back: cz >= -zEdge,
-    front: cz <= zEdge,
-    left: cx >= -xEdge,
-    right: cx <= xEdge,
+    back: cz > zBackCut,
+    front: cz < zFrontCut,
+    left: cx > -xCut,
+    right: cx < xCut,
   };
 }
 

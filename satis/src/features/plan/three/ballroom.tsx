@@ -5,7 +5,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
   CanvasTexture,
   Color,
-  ConeGeometry,
   CylinderGeometry,
   DoubleSide,
   type InstancedMesh,
@@ -13,10 +12,8 @@ import {
   MeshStandardMaterial,
   Object3D,
   RepeatWrapping,
-  SphereGeometry,
   SRGBColorSpace,
 } from "three";
-import { chandelierPositions } from "./layout";
 import { BALLROOM } from "./palette";
 import type { SceneChair, SceneTable } from "./scene-data";
 import type { StageInfo } from "./stage";
@@ -120,58 +117,80 @@ export function BallroomLights() {
   );
 }
 
-/** 3 katmanlı kristal tel kafes avizeler (paylaşılan geometri/materyal + dispose). */
+const HANGING_LAMPS: readonly [number, number][] = [
+  [0, -0.21],
+  [-0.27, -0.1],
+  [0.27, -0.1],
+  [-0.27, 0.24],
+  [0.27, 0.24],
+  [0, 0.33],
+];
+
+/** MERR tavan kirişleri ve 6 sıcak altın avize; genel bakışta gizli, masadan bakışta (POV) görünür. */
 export function Chandeliers({
   width,
-  height,
-  visible = true,
+  depth = 42,
+  visible = false,
 }: {
   width: number;
-  height: number;
+  depth?: number;
+  height?: number;
   visible?: boolean;
 }) {
   const resources = useMemo(() => {
-    const tier1Geo = new CylinderGeometry(2.1, 1.5, 1.3, 24, 1, true);
-    const tier2Geo = new CylinderGeometry(1.4, 0.7, 1.0, 20, 1, true);
-    const coreGeo = new SphereGeometry(0.65, 14, 14);
-    const tier1Mat = new MeshStandardMaterial({
-      color: BALLROOM.crystal,
-      emissive: BALLROOM.gold,
-      emissiveIntensity: 0.8,
-      wireframe: true,
-    });
-    const tier2Mat = new MeshStandardMaterial({
-      color: BALLROOM.crystal,
-      emissive: BALLROOM.goldBright,
-      emissiveIntensity: 0.9,
-      wireframe: true,
-    });
-    const coreMat = new MeshBasicMaterial({ color: BALLROOM.crystalCore });
-    return { tier1Geo, tier2Geo, coreGeo, tier1Mat, tier2Mat, coreMat };
+    const shadeGeo = new CylinderGeometry(0.85, 0.44, 0.38, 14);
+    const creamMat = new MeshStandardMaterial({ color: BALLROOM.cream, roughness: 0.81 });
+    const trimMat = new MeshStandardMaterial({ color: BALLROOM.trim, roughness: 0.81, metalness: 0.46 });
+    const lampMat = new MeshBasicMaterial({ color: BALLROOM.goldLight });
+    return { shadeGeo, creamMat, trimMat, lampMat };
   }, []);
 
   useEffect(() => {
     return () => {
-      resources.tier1Geo.dispose();
-      resources.tier2Geo.dispose();
-      resources.coreGeo.dispose();
-      resources.tier1Mat.dispose();
-      resources.tier2Mat.dispose();
-      resources.coreMat.dispose();
+      resources.shadeGeo.dispose();
+      resources.creamMat.dispose();
+      resources.trimMat.dispose();
+      resources.lampMat.dispose();
     };
   }, [resources]);
 
   if (!visible) return null;
+  const xBeams = [-0.36, -0.125, 0.125, 0.36].map((f) => f * width);
+  const zBeams = [-0.38, -0.12, 0.16, 0.4].map((f) => f * depth);
+
   return (
-    <>
-      {chandelierPositions(width).map((x) => (
-        <group key={x} position={[x, height, -2]}>
-          <mesh geometry={resources.tier1Geo} material={resources.tier1Mat} />
-          <mesh position={[0, -1.1, 0]} geometry={resources.tier2Geo} material={resources.tier2Mat} />
-          <mesh geometry={resources.coreGeo} material={resources.coreMat} />
-        </group>
+    <group>
+      {/* Tavan plakası ve pirinç kaset kirişler */}
+      <mesh position={[0, 7.85, 0.5]} material={resources.creamMat}>
+        <boxGeometry args={[width + 1.2, 0.3, depth + 4]} />
+      </mesh>
+      {xBeams.map((x) => (
+        <mesh key={`xb-${x}`} position={[x, 7.61, 0]} material={resources.trimMat}>
+          <boxGeometry args={[0.13, 0.16, depth]} />
+        </mesh>
       ))}
-    </>
+      {zBeams.map((z) => (
+        <mesh key={`zb-${z}`} position={[0, 7.61, z]} material={resources.trimMat}>
+          <boxGeometry args={[width - 2, 0.16, 0.13]} />
+        </mesh>
+      ))}
+      {/* 6 asılı altın avize */}
+      {HANGING_LAMPS.map(([fx, fz]) => {
+        const x = fx * width;
+        const z = fz * depth;
+        return (
+          <group key={`${fx}-${fz}`} position={[x, 0, z]}>
+            <mesh position={[0, 7.3, 0]} material={resources.trimMat}>
+              <boxGeometry args={[0.04, 0.62, 0.04]} />
+            </mesh>
+            <mesh position={[0, 6.84, 0]} geometry={resources.shadeGeo} material={resources.lampMat} />
+            <mesh position={[0, 6.98, 0]} material={resources.trimMat}>
+              <boxGeometry args={[1.42, 0.07, 0.2]} />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
   );
 }
 
@@ -218,7 +237,7 @@ export function StageRig({ stage }: { stage: StageInfo }) {
 }
 
 /** 2. kat loca balkonu döşemesi, ön korkuluk, pirinç küpeşte, yan bölme ve arka sehpa (MERR referansına göre). */
-export function LocaArchitecture({ tables }: { tables: readonly SceneTable[] }) {
+export function LocaArchitecture({ tables, roomWidth }: { tables: readonly SceneTable[]; roomWidth?: number }) {
   const locas = useMemo(() => tables.filter((t) => t.isLoca), [tables]);
   const balconyBounds = useMemo(() => {
     if (locas.length === 0) return null;
@@ -234,13 +253,13 @@ export function LocaArchitecture({ tables }: { tables: readonly SceneTable[] }) 
       minZ = Math.min(minZ, t.z - t.depth / 2);
       maxZ = Math.max(maxZ, t.z + t.depth / 2);
     }
-    const width = Math.max(4, maxX - minX + 1.4);
+    const width = Math.max(roomWidth ? roomWidth - 1.1 : 4, maxX - minX + 1.4);
     const depth = Math.max(3.6, maxZ - minZ + 2.2);
-    const centerX = (minX + maxX) / 2;
+    const centerX = roomWidth ? 0 : (minX + maxX) / 2;
     const centerZ = (minZ + maxZ) / 2 + 0.4;
     const frontZ = centerZ - depth / 2;
     return { width, depth, centerX, centerZ, frontZ, floorY };
-  }, [locas]);
+  }, [locas, roomWidth]);
 
   const materials = useMemo(() => {
     const panelMat = new MeshStandardMaterial({ color: BALLROOM.panel, roughness: 0.78 });
@@ -306,56 +325,6 @@ export function LocaArchitecture({ tables }: { tables: readonly SceneTable[] }) 
         );
       })}
     </group>
-  );
-}
-
-/** Sahne üstü sabit açılı hacimsel spot ışıkları (`frameloop="demand"` ile uyumlu, paylaşılan geometri/materyal). */
-export function StageBeams({ position, width, base }: { position: [number, number]; width: number; base: number }) {
-  const offsets = useMemo(() => {
-    const count = width > 6 ? 4 : 2;
-    return Array.from({ length: count }, (_, i) => ((i + 0.5) / count - 0.5) * width * 0.8);
-  }, [width]);
-  const beamHeight = 10;
-
-  const resources = useMemo(() => {
-    const geo = new ConeGeometry(1.8, beamHeight, 16, 1, true);
-    const goldMat = new MeshBasicMaterial({
-      color: BALLROOM.gold,
-      transparent: true,
-      opacity: 0.07,
-      side: DoubleSide,
-      depthWrite: false,
-    });
-    const blueMat = new MeshBasicMaterial({
-      color: BALLROOM.beamBlue,
-      transparent: true,
-      opacity: 0.07,
-      side: DoubleSide,
-      depthWrite: false,
-    });
-    return { geo, goldMat, blueMat };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      resources.geo.dispose();
-      resources.goldMat.dispose();
-      resources.blueMat.dispose();
-    };
-  }, [resources]);
-
-  return (
-    <>
-      {offsets.map((dx, i) => (
-        <mesh
-          key={dx}
-          geometry={resources.geo}
-          material={i % 2 === 0 ? resources.goldMat : resources.blueMat}
-          position={[position[0] + dx, base + beamHeight / 2, position[1]]}
-          rotation={[0.24, 0, (i - (offsets.length - 1) / 2) * 0.14]}
-        />
-      ))}
-    </>
   );
 }
 
