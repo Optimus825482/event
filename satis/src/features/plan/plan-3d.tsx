@@ -5,6 +5,7 @@ import { Component, useCallback, useId, useMemo, useState, type ReactNode } from
 import type { PlanModel } from "./model";
 import type { TablePick } from "./picks";
 import type { CameraCommand, HoverInfo, SeatView } from "./three/scene";
+import { BALLROOM } from "./three/palette";
 import { buildScene } from "./three/scene-data";
 
 const Scene3D = dynamic(() => import("./three/scene"), {
@@ -13,7 +14,7 @@ const Scene3D = dynamic(() => import("./three/scene"), {
 
 type BoundaryProps = { onFail: () => void; children: ReactNode };
 
-class SceneBoundary extends Component<BoundaryProps, { failed: boolean }> {
+export class SceneBoundary extends Component<BoundaryProps, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -49,11 +50,15 @@ export type Plan3DProps = {
   hint?: string;
 };
 
-const CAMERA_BUTTONS: { type: "overview" | "stage" | "loca" | "top"; label: string }[] = [
-  { type: "overview", label: "Genel Bakış" },
+const CAMERA_BUTTONS: { type: CameraCommand["type"]; label: string; symbol?: string }[] = [
+  { type: "left", label: "Sola döndür", symbol: "↶" },
+  { type: "right", label: "Sağa döndür", symbol: "↷" },
+  { type: "in", label: "Yakınlaştır", symbol: "+" },
+  { type: "out", label: "Uzaklaştır", symbol: "−" },
+  { type: "overview", label: "Genel" },
   { type: "stage", label: "Sahne Önü" },
   { type: "loca", label: "Loca Balkonu" },
-  { type: "top", label: "Kuş Bakışı" },
+  { type: "top", label: "Üstten" },
 ];
 
 export const DEFAULT_3D_HINT =
@@ -82,7 +87,6 @@ export function Plan3D({
   const [ready, setReady] = useState(false);
   const [cameraTag, setCameraTag] = useState("overview");
   const [command, setCommand] = useState<CameraCommand | null>(null);
-  const [localSeatView, setLocalSeatView] = useState<SeatView | null>(null);
   const [hovered, setHovered] = useState<HoverInfo | null>(null);
   const helpId = useId();
 
@@ -91,61 +95,40 @@ export function Plan3D({
     onReady?.();
   }, [onReady]);
 
-  const effectiveSeatView =
-    localSeatView && (!seatView || localSeatView.nonce >= seatView.nonce) ? localSeatView : seatView;
-
-  const triggerSeatPov = () => {
-    const targetId =
-      activeTableId ??
-      picks[0]?.tableId ??
-      scene.tables.find((t) => t.selectable)?.key ??
-      scene.tables[0]?.key ??
-      null;
-    if (!targetId) return;
-    const nextNonce = Math.max(seatView?.nonce ?? 0, localSeatView?.nonce ?? 0) + 1;
-    setLocalSeatView({ tableId: targetId, nonce: nextNonce });
-  };
-
   return (
     <div className="flex flex-col gap-2">
+      <div
+        role="group"
+        aria-label="Kamera"
+        className="flex flex-wrap items-center gap-1.5 [&_button]:min-h-10 [&_button]:min-w-10"
+      >
+        {CAMERA_BUTTONS.map((b) => {
+          const pressed = cameraTag === b.type;
+          return (
+            <button
+              key={b.type}
+              type="button"
+              aria-label={b.label}
+              title={b.label}
+              aria-pressed={b.symbol ? undefined : pressed}
+              onClick={() => setCommand((c) => ({ type: b.type, nonce: (c?.nonce ?? 0) + 1 }))}
+              className={
+                pressed
+                  ? "cursor-pointer rounded-[10px] border border-gold bg-surface/90 px-3 py-1.5 text-xs font-semibold text-gold-bright backdrop-blur-md transition-colors"
+                  : "cursor-pointer rounded-[10px] border border-line bg-surface/85 px-3 py-1.5 text-xs font-semibold text-ivory backdrop-blur-md transition-colors hover:border-gold hover:text-gold-bright"
+              }
+            >
+              {b.symbol ?? b.label}
+            </button>
+          );
+        })}
+      </div>
       <div
         data-testid="plan-3d-scene"
         data-ready={ready ? "true" : "false"}
         data-camera={cameraTag}
         className="relative h-[min(64dvh,480px)] min-h-[360px] w-full overflow-hidden rounded-[20px] border border-line-gold bg-bg sm:h-[clamp(480px,72dvh,720px)]"
       >
-        <div
-          role="group"
-          aria-label="Kamera açıları"
-          className="absolute top-2.5 right-2.5 left-2.5 z-10 flex flex-wrap gap-1.5 sm:top-3.5 sm:right-auto sm:left-3.5"
-        >
-          {CAMERA_BUTTONS.map((b) => {
-            const pressed = cameraTag === b.type;
-            return (
-              <button
-                key={b.type}
-                type="button"
-                aria-pressed={pressed}
-                onClick={() => setCommand((c) => ({ type: b.type, nonce: (c?.nonce ?? 0) + 1 }))}
-                className={
-                  pressed
-                    ? "cursor-pointer rounded-[10px] border border-gold bg-surface/90 px-3 py-1.5 text-xs font-semibold text-gold-bright backdrop-blur-md transition-colors"
-                    : "cursor-pointer rounded-[10px] border border-line bg-surface/85 px-3 py-1.5 text-xs font-semibold text-ivory backdrop-blur-md transition-colors hover:border-gold hover:text-gold-bright"
-                }
-              >
-                {b.label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            aria-pressed={cameraTag.startsWith("seat:")}
-            onClick={triggerSeatPov}
-            className="cursor-pointer rounded-[10px] border border-gold bg-surface/90 px-3 py-1.5 text-xs font-semibold text-gold-bright backdrop-blur-md transition-colors hover:bg-gold hover:text-on-gold"
-          >
-            Masadan Sahneye Bak
-          </button>
-        </div>
         {hovered ? (
           <div
             role="status"
@@ -171,7 +154,7 @@ export function Plan3D({
             activeTableId={activeTableId}
             artworkUrl={artworkUrl}
             title={title}
-            seatView={effectiveSeatView}
+            seatView={seatView}
             onTable={onTable}
             onSeat={onSeat}
             onHoverTable={setHovered}
@@ -185,23 +168,23 @@ export function Plan3D({
         <div className="pointer-events-none absolute right-2.5 bottom-2.5 left-2.5 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface/85 px-3.5 py-2 text-xs text-muted backdrop-blur-md sm:right-3.5 sm:bottom-3 sm:left-3.5">
           <div className="flex flex-wrap items-center gap-3.5">
             <span className="inline-flex items-center gap-1.5">
-              <i aria-hidden="true" className="size-2 rounded-full bg-ivory" />
-              Masa
+              <i aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: BALLROOM.tableOpen }} />
+              Müsait
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <i aria-hidden="true" className="size-2 rounded-full bg-gold" />
-              Loca
+              <i aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: BALLROOM.tableStage }} />
+              VIP / Premium
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <i aria-hidden="true" className="size-2 rounded-full bg-disabled-bg" />
-              Dolu
+              <i aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: BALLROOM.tableFull }} />
+              Müsait değil
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <i aria-hidden="true" className="size-2 rounded-full bg-gold-bright" />
+              <i aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: BALLROOM.tablePick }} />
               Seçili
             </span>
           </div>
-          <span>Sürükle: Döndür · Tekerlek: Yakınlaştır</span>
+          <span className="hidden sm:inline">Sürükle: Döndür · Tekerlek: Yakınlaştır</span>
         </div>
       </div>
       <p id={helpId} className="text-sm text-muted">

@@ -80,7 +80,7 @@ export function ActiveTableCard({
           </span>
         </div>
       )}
-      <div role="group" aria-label={`${title} sandalyeleri`} className="grid grid-cols-6 gap-2">
+      <div role="group" aria-label={`${title} sandalyeleri`} className="grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-2">
         {table.seatNos.map((seatNo) => {
           const isPicked = pickedSet.has(seatNo);
           const isFree = freeSet.has(seatNo);

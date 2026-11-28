@@ -86,7 +86,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
     () => buildPlanModel(event.plan, event.prices, availability, event.sale.mode),
     [event.plan, event.prices, availability, event.sale.mode],
   );
-  const artworkUrl = useMemo(() => imageUrl(event.site.heroImage ?? event.artistImage), [event.site.heroImage, event.artistImage]);
+  const artworkUrl = useMemo(() => imageUrl(event.site.heroImage) ?? imageUrl(event.artistImage) ?? imageUrl(event.coverImage), [event.site.heroImage, event.artistImage, event.coverImage]);
 
   // Satış kapalıyken de salon 3B gezilir ve masadan sahne görüşü gösterilir; yalnızca seçim/tutma yoktur.
   if (event.sale.state !== "open") {
@@ -225,26 +225,26 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
                 }
               >
                 {f.value === "table" ? <span aria-hidden="true" className="size-2 rounded-full bg-ivory" /> : null}
-                {f.value === "loca" ? <span aria-hidden="true" className="size-2 rounded-full bg-gold" /> : null}
+                {f.value === "loca" ? <span aria-hidden="true" className="size-2 rounded-full bg-selection" /> : null}
                 {f.label}
               </button>
             );
           })}
 
-          <div className="relative">
+          <div className="relative w-full min-[480px]:w-auto">
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Masa no ara (örn. 45)"
               aria-label="Masa numarası ara"
-              className="min-h-10 w-[min(100%,195px)] rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs text-ivory placeholder:text-muted focus:border-gold"
+              className="min-h-10 w-full rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs text-ivory placeholder:text-muted focus:border-gold min-[480px]:w-[195px]"
             />
             {trimmedQuery ? (
               <div
                 role="region"
                 aria-label="Masa arama sonuçları"
-                className="absolute top-full left-0 z-30 mt-1.5 max-h-60 w-64 overflow-y-auto rounded-2xl border border-line-gold bg-surface p-1.5 shadow-2xl"
+                className="absolute top-full left-0 z-30 mt-1.5 max-h-60 w-[min(16rem,calc(100vw-2.5rem))] overflow-y-auto rounded-2xl border border-line-gold bg-surface p-1.5 shadow-2xl"
               >
                 {finderTables.length === 0 ? (
                   <p className="px-3 py-2 text-xs text-muted">Eşleşen masa yok.</p>
@@ -276,14 +276,14 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
               onClick={() => openTable(activeTable.id)}
               className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-gold bg-glass px-3.5 py-1.5 text-xs font-semibold text-gold-bright transition-colors hover:border-gold"
             >
-              <span aria-hidden="true" className="size-2 rounded-full bg-gold" />
+              <span aria-hidden="true" className="size-2 rounded-full bg-selection" />
               {`Seçili: ${activeTable.isLoca ? "Loca" : "Masa"} ${activeTable.label}`}
             </button>
           ) : null}
 
           <div
             aria-label="Kişi sayısı"
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-gold bg-surface px-3 py-1 text-xs font-semibold text-ivory tabular-nums"
+            className="inline-flex min-h-10 flex-wrap items-center gap-2 rounded-full border border-line-gold bg-surface px-3 py-1 text-xs font-semibold text-ivory tabular-nums"
           >
             <span className="text-muted">Kişi Sayısı:</span>
             <button
@@ -291,11 +291,11 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
               aria-label="Kişi sayısını azalt"
               disabled={state.partySize <= 1}
               onClick={() => runAction({ type: "setPartySize", partySize: state.partySize - 1 })}
-              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
             >
               −
             </button>
-            <span role="status" className="inline-flex items-center gap-1.5">
+            <span role="status" className="inline-flex flex-wrap items-center gap-1.5">
               <b className="min-w-4 text-center">{`${state.partySize} Kişi`}</b>
               <span className="text-gold-bright">{`· ${selectedCount}/${state.partySize} kişi seçildi`}</span>
             </span>
@@ -304,7 +304,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
               aria-label="Kişi sayısını artır"
               disabled={state.partySize >= limit}
               onClick={() => runAction({ type: "setPartySize", partySize: state.partySize + 1 })}
-              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised text-sm font-bold text-ivory hover:border-gold disabled:cursor-not-allowed disabled:opacity-45"
             >
               +
             </button>
@@ -344,6 +344,8 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
       ) : null}
 
       <TableDialog
+        model={model}
+        artworkUrl={artworkUrl}
         open={dialogTable !== null}
         table={dialogTable}
         eventName={event.name}

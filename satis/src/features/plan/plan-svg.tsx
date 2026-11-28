@@ -26,6 +26,7 @@ export const FILL: Record<ColorName, string> = {
   surface: "fill-surface",
   surfaceRaised: "fill-surface-raised",
   line: "fill-line",
+  selection: "fill-selection",
   gold: "fill-gold",
   goldBright: "fill-gold-bright",
   ivory: "fill-ivory",
@@ -42,6 +43,7 @@ export const STROKE: Record<ColorName, string> = {
   surface: "stroke-surface",
   surfaceRaised: "stroke-surface-raised",
   line: "stroke-line",
+  selection: "stroke-selection",
   gold: "stroke-gold",
   goldBright: "stroke-gold-bright",
   ivory: "stroke-ivory",
@@ -205,13 +207,17 @@ function TableNode({
 }
 
 /** 2B masa yerleşim planı: yakınlaştırma/kaydırma ve erişilebilir masa seçimi. */
-export function PlanSvg({ model, pickedIds, activeId, dimmedIds, selectedId, onSelect, height = 420 }: PlanSvgProps) {
+export function PlanSvg({ model, pickedIds, activeId, dimmedIds, selectedId, onSelect, height }: PlanSvgProps) {
   const { ref, view, zoomIn, zoomOut, fit } = usePanZoom(model.canvas);
   const resolvedActive = activeId ?? selectedId ?? null;
 
   return (
     <div className="relative w-full overflow-hidden rounded-xl border border-line bg-bg">
-      <div ref={ref} className="w-full touch-pan-y select-none" style={{ height }}>
+      <div
+        ref={ref}
+        className={cn("w-full touch-pan-y select-none", height === undefined && "h-[340px] sm:h-[420px]")}
+        style={height !== undefined ? { height } : undefined}
+      >
         <svg role="group" aria-label="Salon planı" width="100%" height="100%" className="block">
           <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
             <rect width={model.canvas.width} height={model.canvas.height} strokeWidth={2} className="fill-surface stroke-line" />
