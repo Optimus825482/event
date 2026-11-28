@@ -484,4 +484,40 @@ describe("EventSales", () => {
     fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
     expect(inDialog().queryByText(/\dm · /)).toBeNull();
   });
+
+  it("holdAction sipariş döndürdüğünde sayfa değiştirmeden ödeme penceresini açar", async () => {
+    holdActionMock.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        orderToken: "tok-modal",
+        serverNow: "2026-12-01T10:00:00Z",
+        order: {
+          orderId: "ord-1",
+          eventId: "evt-1",
+          eventName: "Yılbaşı Galası",
+          startsAt: "2026-12-31T20:00:00Z",
+          status: "pending",
+          holdExpiresAt: "2026-12-01T10:10:00Z",
+          currency: "TRY",
+          total: "3000.00",
+          isDemo: false,
+          pnr: null,
+          items: [{ tableId: "a1", tableLabel: "A1", category: "standard", quantity: 2, unitPrice: "1500.00" }],
+          tickets: [],
+          orderToken: "tok-modal",
+          demoNotice: null,
+        },
+      },
+    });
+
+    render(<EventSales event={makeEvent()} initialAvailability={mockAvailability} initialPartySize={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan-A1" }));
+    await act(async () => {
+      fireEvent.click(proceedButton());
+    });
+
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Ödeme", hidden: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Öde", hidden: true })).toBeTruthy();
+  });
 });

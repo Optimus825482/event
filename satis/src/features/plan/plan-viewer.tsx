@@ -72,7 +72,7 @@ export function PlanViewer({
       {view.detecting ? (
         <div
           role="status"
-          className="flex h-[min(64dvh,480px)] min-h-[360px] w-full items-center justify-center rounded-[20px] border border-line-gold bg-bg text-sm text-muted sm:h-[clamp(480px,72dvh,720px)]"
+          className="flex h-[calc(100dvh-13rem)] min-h-[420px] w-full items-center justify-center rounded-[16px] border border-line-gold bg-bg text-sm text-muted sm:h-[calc(100dvh-10.5rem)] sm:min-h-[540px]"
         >
           3B salon yükleniyor…
         </div>

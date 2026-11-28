@@ -77,7 +77,7 @@ export function SalonBrowser({ event, model, view, artworkUrl }: SalonBrowserPro
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-3 rounded-[20px] border border-line-gold bg-surface p-2.5 sm:p-4">
+      <div className="flex flex-col gap-3 rounded-[16px] border border-line-gold bg-surface p-1.5 sm:p-2.5">
         <PlanViewer
           model={model}
           view={view}

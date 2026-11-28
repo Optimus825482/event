@@ -29,7 +29,7 @@ beforeEach(() => {
 describe("holdFlow", () => {
   it("tutma belirteç döner ve güvenilir IP iletilir", async () => {
     const res = await holdFlow(core, input("A1", 2), { clientIp: "203.0.113.7" });
-    expect(res).toEqual({ ok: true, data: { orderToken: expect.any(String) } });
+    expect(res).toMatchObject({ ok: true, data: { orderToken: expect.any(String), order: expect.objectContaining({ orderToken: expect.any(String) }) } });
     expect(fake.requests.at(-1)?.clientIp).toBe("203.0.113.7");
     expect(fake.free(ev.id, id("A1"))).toBe(6);
   });
@@ -37,7 +37,7 @@ describe("holdFlow", () => {
     const i = input("A2", 2);
     const a = await holdFlow(core, i, ctx);
     const b = await holdFlow(core, i, ctx);
-    expect(b).toEqual(a);
+    expect(b).toMatchObject({ ok: true, data: { orderToken: a.ok ? a.data.orderToken : "" } });
     expect(fake.free(ev.id, id("A2"))).toBe(6);
   });
   it("yetersiz sandalyede kalan sayıyı ve Türkçe mesajı döner", async () => {
@@ -66,7 +66,7 @@ describe("holdFlow", () => {
 
   it("seatNos çekirdeğe aynen iletilir", async () => {
     const res = await holdFlow(core, input("A1", 2, crypto.randomUUID(), [4, 7]), ctx);
-    expect(res).toEqual({ ok: true, data: { orderToken: expect.any(String) } });
+    expect(res).toMatchObject({ ok: true, data: { orderToken: expect.any(String) } });
     expect(fake.freeSeats(ev.id, id("A1"))).toEqual([1, 2, 3, 5, 6, 8]);
   });
 
@@ -92,7 +92,7 @@ describe("holdFlow", () => {
       },
       ctx,
     );
-    expect(res).toEqual({ ok: true, data: { orderToken: expect.any(String) } });
+    expect(res).toMatchObject({ ok: true, data: { orderToken: expect.any(String) } });
     expect(fake.free(ev.id, id("A1"))).toBe(6);
     expect(fake.free(ev.id, id("A2"))).toBe(6);
   });

@@ -18,6 +18,10 @@ type Props = {
   holdExpiresAt: string;
   serverNow: string;
   demo: boolean;
+  /** Modal içi kullanımda Vazgeç sonrası sayfaya yönlendirmek yerine çağrılır. */
+  onRelease?: () => void;
+  /** Modal içi kullanımda süre dolduğunda çağrılır. */
+  onExpire?: () => void;
   /** Geri sayımın altında, formun üstünde gösterilen (ör. DEMO) bildirimler. */
   children?: ReactNode;
 };
@@ -33,7 +37,7 @@ const FIELDS: { name: Field; label: string; type: string; autoComplete: string; 
 
 
 /** Geri sayım + alıcı formu; ödeme ve bırakma tek istekle ilerler (çift tıklama korumalı). */
-export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, demo, children }: Props) {
+export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, demo, onRelease, onExpire, children }: Props) {
   const router = useRouter();
   const [values, setValues] = useState({ firstName: "", lastName: "", email: "", phone: "" });
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -46,7 +50,8 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
 
   const markExpired = () => {
     setExpired(true);
-    router.refresh();
+    if (onExpire) onExpire();
+    else router.refresh();
   };
 
   // Doğrulama hatasında odak ilk geçersiz alana taşınır.
@@ -91,7 +96,8 @@ export function PaymentForm({ orderToken, eventId, holdExpiresAt, serverNow, dem
     try {
       const result = await releaseAction(orderToken);
       if (result.ok || result.code === "order_not_found" || result.code === "hold_expired") {
-        router.replace(`/etkinlik/${eventId}`);
+        if (onRelease) onRelease();
+        else router.replace(`/etkinlik/${eventId}`);
         return;
       }
       if (result.code === "already_paid") {

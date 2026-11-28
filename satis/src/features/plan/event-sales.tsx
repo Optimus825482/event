@@ -5,7 +5,8 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { holdAction } from "@/features/checkout/actions";
-import type { Availability, EventDetail } from "@/lib/core/contract";
+import { CheckoutDialog } from "@/features/checkout/checkout-dialog";
+import type { Availability, EventDetail, OrderResponse } from "@/lib/core/contract";
 import { ERROR_MESSAGES } from "@/lib/core/errors";
 import { imageUrl } from "@/lib/image-url";
 import { formatEventTime } from "@/lib/time-zone";
@@ -77,6 +78,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [dialogTableId, setDialogTableId] = useState<string | null>(null);
+  const [checkout, setCheckout] = useState<{ order: OrderResponse; serverNow: string } | null>(null);
   /** Pencere açılırken yapılan önseçim; pencere dokunulmadan kapanırsa geri alınır. */
   const autoRef = useRef<TablePick | null>(null);
 
@@ -189,6 +191,14 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
         clientKey: keyRef.current.key,
       });
       if (result.ok) {
+        if (result.data.order) {
+          autoRef.current = null;
+          setDialogTableId(null);
+          setCheckout({ order: result.data.order, serverNow: result.data.serverNow });
+          refresh();
+          setPending(false);
+          return;
+        }
         router.push(`/odeme/${result.data.orderToken}`);
         return;
       }
@@ -321,7 +331,7 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
       {!dialogTable && messages ? <div className="flex flex-col gap-2">{messages}</div> : null}
 
       {/* Tam genişlik salon arenası */}
-      <div className="flex flex-col gap-3 rounded-[20px] border border-line-gold bg-surface p-2.5 sm:p-4">
+      <div className="flex flex-col gap-3 rounded-[16px] border border-line-gold bg-surface p-1.5 sm:p-2.5">
         <PlanViewer
           model={model}
           view={view}
@@ -378,6 +388,27 @@ export function EventSales({ event, initialAvailability, initialPartySize }: Eve
       >
         {dialogTable ? messages : null}
       </TableDialog>
+
+      <CheckoutDialog
+        open={checkout !== null}
+        order={checkout?.order ?? null}
+        serverNow={checkout?.serverNow ?? ""}
+        categoryLabels={Object.fromEntries(event.prices.map((p) => [p.category, p.label]))}
+        saleDemo={event.sale.demo}
+        onClose={() => {
+          setCheckout(null);
+          refresh();
+        }}
+        onRelease={() => {
+          keyRef.current = null;
+          setCheckout(null);
+          refresh();
+        }}
+        onExpire={() => {
+          keyRef.current = null;
+          refresh();
+        }}
+      />
     </div>
   );
 }

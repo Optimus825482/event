@@ -5,7 +5,7 @@ import { clientIp } from "@/lib/client-ip";
 import { getCore } from "@/lib/core/client";
 import { messageFor } from "@/lib/core/errors";
 import { env } from "@/lib/env";
-import { holdFlow, payFlow, releaseFlow } from "./flows";
+import { holdFlow, payFlow, releaseFlow, type HoldOrderData } from "./flows";
 import type { ActionResult } from "./result";
 import { isOrderTokenShape } from "./token";
 
@@ -20,7 +20,7 @@ export async function holdAction(input: {
   eventId: string;
   items: { tableId: string; quantity: number; seatNos?: number[] }[];
   clientKey: string;
-}): Promise<ActionResult<{ orderToken: string }>> {
+}): Promise<ActionResult<HoldOrderData>> {
   return holdFlow(getCore(), input, await writeContext());
 }
 

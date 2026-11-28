@@ -1,20 +1,27 @@
 import type { CoreClient, WriteContext } from "@/lib/core/client";
+import type { OrderResponse } from "@/lib/core/contract";
 import { CoreError, messageFor } from "@/lib/core/errors";
 import { failure, type ActionResult } from "./result";
 import { buyerSchema, holdInputSchema } from "./schemas";
+
+export type HoldOrderData = {
+  orderToken: string;
+  order: OrderResponse;
+  serverNow: string;
+};
 
 /** Masa tutma: girdi doğrulanır (geçersizse çekirdeğe gidilmez), kalemler çekirdeğe iletilir. */
 export async function holdFlow(
   core: Pick<CoreClient, "createHold">,
   raw: unknown,
   ctx: WriteContext,
-): Promise<ActionResult<{ orderToken: string }>> {
+): Promise<ActionResult<HoldOrderData>> {
   const parsed = holdInputSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, code: "invalid", message: messageFor({ code: "invalid" }) };
   const { eventId, items, clientKey } = parsed.data;
   try {
     const order = await core.createHold({ eventId, items, clientKey }, ctx);
-    return { ok: true, data: { orderToken: order.orderToken } };
+    return { ok: true, data: { orderToken: order.orderToken, order, serverNow: new Date().toISOString() } };
   } catch (error) {
     return failure(error);
   }
